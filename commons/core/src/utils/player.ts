@@ -1,3 +1,4 @@
+import { XGWaterMarkPlugin } from '@commons/core/components/player/plugins';
 import { merge } from 'lodash-es';
 import videoJs from 'video.js';
 import { IPlayerOptions, IPluginOptions, Sniffer } from 'xgplayer';
@@ -124,6 +125,8 @@ export class XPlayerPreset {
         if (Sniffer.os.isIpad) {
             this.plugins.push(PCPlugin);
         }
+
+        this.plugins.push(XGWaterMarkPlugin);
     }
 }
 

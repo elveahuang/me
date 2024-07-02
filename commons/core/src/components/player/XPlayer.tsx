@@ -27,6 +27,7 @@ export const XPlayer: FC<XPlayerProps> = (props: XPlayerProps) => {
             const playerOptions: XPlayerOptions = merge(
                 {
                     el: videoRef.current,
+                    fullscreenTarget: videoRef.current,
                     url: props.options.src,
                 },
                 options,
