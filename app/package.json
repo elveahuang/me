@@ -47,14 +47,14 @@
         "passport-local": "^1.0.0",
         "path": "^0.12.7",
         "radash": "^12.1.0",
-        "redis": "^4.6.14",
+        "redis": "^4.6.15",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
         "typeorm": "^0.3.20",
         "uuid": "^10.0.0"
     },
     "devDependencies": {
-        "@nestjs/cli": "^10.4.0",
+        "@nestjs/cli": "^10.4.1",
         "@nestjs/schematics": "^10.1.2",
         "@types/bcrypt": "^5.0.2",
         "@types/lodash": "^4.17.6",

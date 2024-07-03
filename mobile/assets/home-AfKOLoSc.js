@@ -1,1 +1,0 @@
-import{j as r,L as s}from"./index-LwYREiGh.js";import{N as e}from"./nav-bar-D27GW6gU.js";const a=()=>r.jsxs("div",{className:"text-center",children:[r.jsx(e,{back:null,children:"标题"}),r.jsx("br",{}),r.jsx(s,{to:"/demo",children:"Demo"}),r.jsx("br",{}),r.jsx(s,{to:"/about",children:"About"})]});export{a as default};
