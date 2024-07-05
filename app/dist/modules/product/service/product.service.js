@@ -13,16 +13,62 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductService = void 0;
-const product_entity_1 = require("../entity/product.entity");
+const entity_service_1 = require("../../../commons/service/entity.service");
+const types_1 = require("../../../commons/types");
+const utils_1 = require("../../../commons/utils");
+const product_entity_1 = require("../domain/entity/product.entity");
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
-let ProductService = class ProductService {
+const radash_1 = require("radash");
+const typeorm_2 = require("typeorm");
+let ProductService = class ProductService extends entity_service_1.EntityService {
     productRepository;
     constructor(productRepository) {
+        super(productRepository);
         this.productRepository = productRepository;
     }
-    async findAll() {
-        return this.productRepository.find();
+    async checkCode(dto) {
+        const count = await this.getRepository().count({
+            where: {
+                code: dto.code,
+            },
+        });
+        return count <= 0;
+    }
+    async search(pagination = types_1.defaultPagination) {
+        const { page, size } = pagination;
+        const qb = this.getRepository()
+            .createQueryBuilder('p')
+            .take(size)
+            .skip((page - 1) * size)
+            .where({
+            active: true,
+        });
+        if (!(0, radash_1.isEmpty)(pagination.q)) {
+            const q = (0, utils_1.generateLike)(pagination.q);
+            qb.andWhere(new typeorm_2.Brackets((qb) => {
+                qb.where({ code: (0, typeorm_2.Like)(q) })
+                    .orWhere({ title: (0, typeorm_2.Like)(q) })
+                    .orWhere({ content: (0, typeorm_2.Like)(q) });
+            }));
+        }
+        return qb.getManyAndCount();
+    }
+    async saveProduct(dto) {
+        const entity = new product_entity_1.ProductEntity();
+        entity.id = dto.id;
+        entity.code = dto.code;
+        entity.title = dto.title;
+        entity.content = dto.content;
+        await this.getRepository().save(entity);
+    }
+    toDetailsDto(entity) {
+        return {
+            id: entity.id,
+            code: entity.code,
+            title: entity.title,
+            content: entity.content,
+        };
     }
 };
 exports.ProductService = ProductService;

@@ -19,7 +19,7 @@ let ProductAppController = class ProductAppController {
         this.productService = productService;
     }
     async list() {
-        return await this.productService.findAll();
+        return [];
     }
 };
 exports.ProductAppController = ProductAppController;
