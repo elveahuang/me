@@ -10,7 +10,7 @@
         "start:prod": "node dist/main"
     },
     "dependencies": {
-        "@alicloud/dingtalk": "^2.1.28",
+        "@alicloud/dingtalk": "^2.1.29",
         "@fastify/static": "^7.0.4",
         "@fastify/view": "^9.1.0",
         "@larksuiteoapi/node-sdk": "^1.30.0",
@@ -41,7 +41,7 @@
         "lodash": "^4.17.21",
         "log4js": "^6.9.1",
         "minio": "^8.0.1",
-        "mongoose": "^8.4.5",
+        "mongoose": "^8.5.0",
         "mysql2": "^3.10.2",
         "nestjs-i18n": "^10.4.5",
         "passport": "^0.7.0",
@@ -71,5 +71,5 @@
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.5.3"
     },
-    "packageManager": "pnpm@9.4.0"
+    "packageManager": "pnpm@9.5.0"
 }
