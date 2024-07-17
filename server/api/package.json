@@ -1,0 +1,28 @@
+{
+    "name": "@server/api",
+    "private": true,
+    "version": "24.1.0",
+    "scripts": {
+        "develop": "strapi develop",
+        "start": "strapi start",
+        "build": "strapi build",
+        "strapi": "strapi"
+    },
+    "dependencies": {
+        "@strapi/strapi": "^5.0.0-0",
+        "@strapi/plugin-users-permissions": "^5.0.0-0",
+        "@strapi/plugin-cloud": "^5.0.0-0",
+        "@strapi/typescript-utils": "^5.0.0-0",
+        "@strapi/database": "^5.0.0-0",
+        "codemirror": "^6.0.1",
+        "mysql2": "^3.10.3",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^6.25.0",
+        "styled-components": "^6.1.11"
+    },
+    "strapi": {
+        "uuid": "0b196778-1f93-439b-a30f-46370790b96d"
+    },
+    "packageManager": "pnpm@9.5.0"
+}

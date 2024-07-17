@@ -1,0 +1,15 @@
+:root {
+    --primary-color: red;
+    --secondary-color: blue;
+}
+
+.page-layout {
+    @apply h-full w-full;
+
+    .page-main {
+    }
+
+    .page-footer {
+        @apply absolute bottom-0 left-0 w-full;
+    }
+}
