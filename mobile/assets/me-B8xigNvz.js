@@ -1,1 +1,0 @@
-import{j as r,L as s}from"./index-DMvVr1eT.js";import{N as t}from"./nav-bar-BFRQQkE5.js";const o=()=>r.jsxs("div",{children:[r.jsx(t,{back:null,children:"标题"}),r.jsx(s,{to:"/about",children:"Me"})]});export{o as default};
