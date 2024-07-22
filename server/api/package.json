@@ -18,11 +18,11 @@
         "mysql2": "^3.10.3",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
-        "react-router-dom": "^6.25.0",
-        "styled-components": "^6.1.11"
+        "react-router-dom": "^6.25.1",
+        "styled-components": "^6.1.12"
     },
     "strapi": {
         "uuid": "0b196778-1f93-439b-a30f-46370790b96d"
     },
-    "packageManager": "pnpm@9.5.0"
+    "packageManager": "pnpm@9.6.0"
 }

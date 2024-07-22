@@ -119,6 +119,7 @@ const AnnouncementIndexPage = () => {
     const handleFormSubmit = async (values: Announcement): Promise<void> => {
         console.log(`handleFormSubmit...`);
         console.log(values);
+        console.log(entityFormModel);
         announcementSaveApi(entityFormModel).then((result: R<string>): void => {
             if (result.code == '200') {
                 setEntityFormModalOpen(false);
