@@ -15,7 +15,7 @@
         "@strapi/typescript-utils": "^5.0.0-0",
         "@strapi/database": "^5.0.0-0",
         "codemirror": "^6.0.1",
-        "mysql2": "^3.10.3",
+        "mysql2": "^3.11.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^6.25.1",
