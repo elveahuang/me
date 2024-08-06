@@ -1,10 +1,11 @@
 import { useAppSelector } from '@commons/core/store';
 import { getEditorOptions } from '@commons/core/utils/editor.ts';
 import { Locale } from '@commons/core/utils/locale.ts';
+import { useMount } from 'ahooks';
 import { AiEditor, AiEditorOptions } from 'aieditor';
 import 'aieditor/dist/style.css';
 import { isFunction } from 'lodash-es';
-import { MutableRefObject, Ref, forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, MutableRefObject, Ref, useEffect, useImperativeHandle, useRef } from 'react';
 
 export type AEditorProps = {
     options?: any;
@@ -28,7 +29,8 @@ export const AEditor = forwardRef((props: AEditorProps, ref: Ref<AEditorRef>) =>
         }
         return '';
     };
-    useEffect((): void => {
+
+    useMount((): void => {
         if (!editorDivRef.current) {
             return;
         }
@@ -46,7 +48,13 @@ export const AEditor = forwardRef((props: AEditorProps, ref: Ref<AEditorRef>) =>
             } as AiEditorOptions;
             editorRef.current = new AiEditor(getEditorOptions(options));
         }
-    }, []);
+    });
+
+    useEffect((): void => {
+        if (editorRef.current) {
+            editorRef.current.setContent(content);
+        }
+    }, [content]);
 
     useImperativeHandle(ref, (): AEditorRef => {
         return {

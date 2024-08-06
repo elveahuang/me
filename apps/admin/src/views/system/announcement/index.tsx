@@ -93,34 +93,33 @@ const AnnouncementIndexPage = () => {
     };
     // 数据表单
     const [entityFormModalOpen, setEntityFormModalOpen] = useState<boolean>(false);
-    const [entityFormModalTitle, setEntityFormModalTitle] = useState<string>('');
-    const [entityFormModel, setEntityFormModel] = useState<Announcement>({});
-    const [entityForm] = Form.useForm();
+    const [entityFormModalTitle, setEntityFormModalTitle] = useState<string>();
+    const [entityFormModel, setEntityFormModel] = useState<Announcement>({ ...defaultAnnouncement });
+    const [entityForm] = Form.useForm<Announcement>();
     const showEntityFormModal = async (id: number = 0): Promise<void> => {
         if (id && id > 0) {
-            setEntityFormModalTitle(t('common:announcement_pages_edit_title'));
             await announcementDetailsApi({ id: id }).then((result: R<Announcement>): void => {
-                console.log(result.data);
-                Object.assign(entityFormModel, { ...result.data });
-                console.log(entityFormModel);
-                setEntityFormModel((model) => ({ ...model, ...result.data }));
+                const model: Announcement = Object.assign(entityFormModel, result.data);
+                setEntityFormModalTitle(t('common:announcement_pages_edit_title'));
+                setEntityFormModel(model);
+                entityForm.setFieldsValue(model);
+                setEntityFormModalOpen(true);
             });
-            setEntityFormModalOpen(true);
         } else {
+            const model: Announcement = Object.assign(entityFormModel, defaultAnnouncement);
             setEntityFormModalTitle(t('common:announcement_pages_add_title'));
-            Object.assign(entityFormModel, { ...defaultAnnouncement });
-            setEntityFormModel({ ...entityFormModel, ...defaultAnnouncement });
+            setEntityFormModel(model);
+            entityForm.setFieldsValue(model);
             setEntityFormModalOpen(true);
         }
     };
     const handleFormCancel = (): void => {
+        console.log(`handleFormCancel...`);
         setEntityFormModalOpen(false);
     };
     const handleFormSubmit = async (values: Announcement): Promise<void> => {
         console.log(`handleFormSubmit...`);
-        console.log(values);
-        console.log(entityFormModel);
-        announcementSaveApi(entityFormModel).then((result: R<string>): void => {
+        announcementSaveApi(values).then((result: R<string>): void => {
             if (result.code == '200') {
                 setEntityFormModalOpen(false);
                 dataTableRef.current.refresh();
@@ -165,6 +164,8 @@ const AnnouncementIndexPage = () => {
                 open={entityFormModalOpen}
                 title={entityFormModalTitle}
                 width={980}
+                forceRender
+                destroyOnClose={true}
                 onOk={(): void => {
                     entityForm.submit();
                 }}
@@ -176,9 +177,8 @@ const AnnouncementIndexPage = () => {
                     {...defaultFormLayout}
                     form={entityForm}
                     className={'entity-form'}
-                    initialValues={entityFormModel}
+                    initialValues={defaultAnnouncement}
                     onFinish={handleFormSubmit}
-                    onFinishFailed={(): void => {}}
                 >
                     <Form.Item name="title" label={t('common:field_title')} rules={[{ required: true, message: t('common:field_title_validation') }]}>
                         <Input placeholder={t('common:field_title_placeholder')} />
@@ -191,11 +191,13 @@ const AnnouncementIndexPage = () => {
                         <AppEditor
                             content={entityFormModel.content}
                             onChange={(content: string): void => {
+                                setEntityFormModel({ ...entityFormModel, ...{ content: content } });
                                 entityForm.setFieldValue('content', content);
                             }}
                         />
                     </Form.Item>
                 </Form>
+                {entityFormModel.content}
             </Modal>
         </>
     );

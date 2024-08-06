@@ -8,6 +8,7 @@ import { AnnouncementEntity } from '@/modules/announcement/domain/entity/announc
 import { AnnouncementService } from '@/modules/announcement/service/announcement.service';
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
+import { FindManyOptions } from 'typeorm/find-options/FindManyOptions';
 
 @Controller('/api/admin/announcement')
 export class AnnouncementAdminController extends BaseController {
@@ -19,7 +20,12 @@ export class AnnouncementAdminController extends BaseController {
     @ApiOperation({ summary: '资讯列表' })
     @Post('/list')
     async list(@Body() dto: AnnouncementListDto): Promise<R<Page<AnnouncementEntity>>> {
-        return Web.page(await this.announcementService.findByPage(dto));
+        const options: FindManyOptions<AnnouncementEntity> = {
+            where: {
+                active: 1,
+            },
+        } as FindManyOptions<AnnouncementEntity>;
+        return Web.page(await this.announcementService.findByPage(dto, options));
     }
 
     @Anonymous()
@@ -30,6 +36,7 @@ export class AnnouncementAdminController extends BaseController {
     }
 
     @Anonymous()
+    @ApiOperation({ summary: '保存资讯' })
     @Post('/save')
     async save(@Body() dto: AnnouncementSaveDto): Promise<R> {
         this.announcementService.saveAnnouncement(dto).then();
