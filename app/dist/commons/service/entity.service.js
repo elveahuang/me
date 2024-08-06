@@ -14,19 +14,12 @@ class EntityService extends base_service_1.BaseService {
     getRepository() {
         return this.repository;
     }
-    async searchByPage(pagination = types_1.defaultPagination, options = {}) {
-        const { page, size } = pagination;
-        return await this.getRepository().findAndCount({
-            skip: (page - 1) * size,
-            take: size,
-            ...options,
-        });
-    }
-    async findByPage(request = types_1.defaultPagination) {
+    async findByPage(request = types_1.defaultPagination, options = {}) {
         const { page, size } = request;
         const result = await this.getRepository().findAndCount({
             skip: (page - 1) * size,
             take: size,
+            ...options,
         });
         return (0, utils_1.toPage)(result[0], result[1], request);
     }

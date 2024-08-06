@@ -1,1 +1,0 @@
-import{r as s,l as t,j as e,L as r}from"./index-BFM1HuBN.js";const l=()=>(s.useEffect(()=>{t("Index.useEffect...")},[]),e.jsxs("div",{className:"text-center",children:[e.jsx(r,{to:"/profile",children:"Profile"}),e.jsx("br",{}),e.jsx(r,{to:"/player",children:"Player"})]}));export{l as default};

@@ -29,7 +29,12 @@ let AnnouncementAdminController = class AnnouncementAdminController extends base
         this.announcementService = announcementService;
     }
     async list(dto) {
-        return web_1.Web.page(await this.announcementService.findByPage(dto));
+        const options = {
+            where: {
+                active: 1,
+            },
+        };
+        return web_1.Web.page(await this.announcementService.findByPage(dto, options));
     }
     async details(id) {
         return web_1.Web.success(await this.announcementService.findById(id));
@@ -64,6 +69,7 @@ __decorate([
 ], AnnouncementAdminController.prototype, "details", null);
 __decorate([
     (0, anonymous_decorator_1.Anonymous)(),
+    (0, swagger_1.ApiOperation)({ summary: '保存资讯' }),
     (0, common_1.Post)('/save'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
