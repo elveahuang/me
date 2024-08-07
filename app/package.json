@@ -27,7 +27,7 @@
         "@nestjs/typeorm": "^10.0.2",
         "ali-oss": "^6.20.0",
         "bcrypt": "^5.1.1",
-        "cache-manager": "^5.7.5",
+        "cache-manager": "^5.7.6",
         "cache-manager-redis-store": "^3.0.1",
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.1",
@@ -71,5 +71,5 @@
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.5.4"
     },
-    "packageManager": "pnpm@9.6.0"
+    "packageManager": "pnpm@9.7.0"
 }
