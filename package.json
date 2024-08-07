@@ -67,13 +67,13 @@
         "@reduxjs/toolkit": "^2.2.7",
         "@stomp/rx-stomp": "^2.0.0",
         "@stomp/stompjs": "^7.0.0",
-        "@tanstack/react-form": "^0.27.0",
+        "@tanstack/react-form": "^0.28.0",
         "@tanstack/react-query": "^5.51.21",
         "@tanstack/react-table": "^8.20.1",
         "@tanstack/react-virtual": "^3.8.4",
-        "@tiptap/pm": "^2.5.8",
-        "@tiptap/react": "^2.5.8",
-        "@tiptap/starter-kit": "^2.5.8",
+        "@tiptap/pm": "^2.5.9",
+        "@tiptap/react": "^2.5.9",
+        "@tiptap/starter-kit": "^2.5.9",
         "ahooks": "^3.8.0",
         "aieditor": "^1.0.13",
         "animate.css": "^4.1.1",
@@ -163,7 +163,7 @@
         "eslint-plugin-jsx-a11y": "^6.9.0",
         "eslint-plugin-n": "^17.10.2",
         "eslint-plugin-prettier": "^5.2.1",
-        "eslint-plugin-promise": "^7.0.0",
+        "eslint-plugin-promise": "^7.1.0",
         "eslint-plugin-react": "^7.35.0",
         "eslint-plugin-react-hooks": "^4.6.2",
         "fs-extra": "^11.2.0",
@@ -205,5 +205,5 @@
         "*.{ts,tsx,mts,js,jsx,cjs,mjs,vue}": "eslint --fix",
         "*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}": "prettier --write"
     },
-    "packageManager": "pnpm@9.6.0"
+    "packageManager": "pnpm@9.7.0"
 }
