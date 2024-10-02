@@ -1,0 +1,9 @@
+{
+    "eslint.enable": true,
+    "eslint.options": {
+        "extensions": [".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]
+    },
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    }
+}
