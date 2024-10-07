@@ -14,7 +14,7 @@
     },
     "devDependencies": {
         "@types/node": "^22.7.4",
-        "@types/react": "^18.3.10",
+        "@types/react": "^18.3.11",
         "@types/react-dom": "^18.3.0",
         "@vitejs/plugin-react": "^4.3.2",
         "@vitejs/plugin-react-swc": "^3.7.1",
