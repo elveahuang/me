@@ -1,0 +1,48 @@
+{
+    "name": "apps/server",
+    "type": "project",
+    "require": {
+        "php": ">=8.0.0",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-zip": "*",
+        "firebase/php-jwt": "^6",
+        "topthink/framework": "^8",
+        "topthink/think-orm": "^3",
+        "topthink/think-cors": "^1",
+        "topthink/think-helper": "^3",
+        "topthink/think-captcha": "^3",
+        "topthink/think-throttle": "^2",
+        "topthink/think-filesystem": "^2",
+        "w7corp/easywechat": "^6"
+    },
+    "require-dev": {
+        "symfony/var-dumper": "^7",
+        "topthink/think-trace": "^1"
+    },
+    "autoload": {
+        "psr-4": {
+            "app\\": "app"
+        }
+    },
+    "config": {
+        "preferred-install": "dist"
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "@php think service:discover",
+            "@php think vendor:publish"
+        ],
+        "start": [
+            "Composer\\Config::disableProcessTimeout",
+            "php -dxdebug.mode=debug -t public -S 0.0.0.0:8888"
+        ]
+    },
+    "repositories": {
+        "packagist": {
+            "type": "composer",
+            "url": "https://mirrors.aliyun.com/composer/"
+        }
+    }
+}
