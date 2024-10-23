@@ -1,0 +1,33 @@
+.transition-element {
+    transition:
+        opacity 0.5s ease,
+        max-height 0.5s ease;
+    overflow: hidden;
+    opacity: 0;
+    max-height: 0;
+}
+
+.transition-element-visible {
+    opacity: 1;
+    max-height: 50px;
+}
+
+.linkBox {
+    cursor: pointer;
+    margin-bottom: 12px;
+    font-size: 16px;
+    font-weight: normal;
+    line-height: 24px;
+    display: flex;
+    align-items: center;
+    letter-spacing: 0;
+    color: red;
+    background: blue;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+
+    .linkBox_content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+}

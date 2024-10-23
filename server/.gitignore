@@ -1,0 +1,14 @@
+*.log
+.env
+.DS_Store
+Thumbs.db
+/.idea
+/.vscode
+/vendor
+/.settings
+/.buildpath
+/.project
+/public/admin
+/public/mobile
+/public/webapp
+/public/www

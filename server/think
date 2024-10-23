@@ -1,0 +1,14 @@
+#!/usr/bin/env php
+<?php
+declare (strict_types=1);
+
+namespace think;
+
+use Exception;
+
+require __DIR__ . '/vendor/autoload.php';
+
+try {
+    (new App())->console->run();
+} catch (Exception $e) {
+}
