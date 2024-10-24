@@ -3,9 +3,8 @@ declare (strict_types=1);
 
 namespace app\middleware;
 
-use app\common\Context;
-use app\Request;
 use Closure;
+use think\Request;
 use think\Response;
 
 class Application
@@ -18,7 +17,6 @@ class Application
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $request->context = new Context();
         return $next($request);
     }
 
