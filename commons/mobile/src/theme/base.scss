@@ -1,0 +1,26 @@
+:root {
+    --primary-color: red;
+    --secondary-color: blue;
+}
+
+.page-layout {
+    @apply h-full w-full;
+
+    .page-main {
+    }
+
+    .page-footer {
+        @apply absolute bottom-0 left-0 w-full;
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 布局样式
+// ---------------------------------------------------------------------------------------------------------------------
+
+html,
+body,
+.app,
+.app-container {
+    @apply m-0 h-full min-h-full overflow-hidden p-0;
+}
