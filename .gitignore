@@ -1,0 +1,10 @@
+.idea
+.DS_Store
+node_modules
+build
+dist
+vendor
+out
+temp
+libpag.wasm
+**/public/wasm

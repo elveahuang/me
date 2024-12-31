@@ -1,0 +1,13 @@
+.shortVideoContainer {
+    width: 100%;
+    height: 100%;
+}
+
+.shortVideoSwiper {
+    width: 100%;
+    height: 100%;
+}
+
+.shortVideoSwiperSlide {
+    @apply flex content-center items-center bg-amber-500 text-center;
+}
