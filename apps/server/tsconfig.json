@@ -1,0 +1,16 @@
+{
+    "extends": "@commons/config/typescript/next.json",
+    "compilerOptions": {
+        "ignoreDeprecations": "6.0",
+        "plugins": [{ "name": "typescript-plugin-css-modules" }, { "name": "next" }],
+        "baseUrl": ".",
+        "paths": {
+            "@payload-config": ["./src/payload/payload.config.ts"],
+            "@payload-types": ["./src/payload/payload-types.ts"],
+            "@payload-schema": ["./src/payload/payload-schema.ts"],
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+    "exclude": ["node_modules"]
+}

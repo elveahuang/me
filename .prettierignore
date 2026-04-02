@@ -1,0 +1,9 @@
+dist
+auto-imports.d.ts
+payload-types.ts
+payload-schema.ts
+importMap.js
+node_modules
+logs
+.next
+.idea

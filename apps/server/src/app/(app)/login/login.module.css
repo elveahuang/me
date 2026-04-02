@@ -1,0 +1,9 @@
+@reference "tailwindcss";
+
+.page-container {
+    @apply flex content-center items-center justify-center;
+}
+
+.login-card {
+    @apply my-36 content-center items-center sm:w-full md:w-9/12 lg:w-6/12 xl:w-4/12;
+}

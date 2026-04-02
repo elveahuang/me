@@ -1,0 +1,9 @@
+{
+    "extends": "@commons/config/typescript/react.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {}
+    },
+    "include": ["./src/**/*.js", "./src/**/*.jsx", "./src/**/*.ts", "./src/**/*.tsx", "./src/**/*.d.ts", "./src/**/*.vue"],
+    "exclude": ["node_modules"]
+}

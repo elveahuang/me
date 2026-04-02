@@ -1,0 +1,51 @@
+{
+    "version": "26.1.0",
+    "name": "@commons/config",
+    "private": true,
+    "publishConfig": {
+        "access": "public"
+    },
+    "exports": {
+        "./typescript/react.json": "./src/typescript/react.json",
+        "./typescript/node.json": "./src/typescript/node.json",
+        "./typescript/next.json": "./src/typescript/next.json",
+        "./typescript/base.json": "./src/typescript/base.json",
+        "./stylelint/base": "./src/stylelint/stylelint.config.mjs",
+        "./prettier/base": "./src/prettier/prettier.config.mjs",
+        "./eslint/base": "./src/eslint/eslint.config.mjs",
+        "./commitlint/base": "./src/commitlint/commitlint.config.mjs"
+    },
+    "dependencies": {
+        "@commitlint/cli": "^20.5.0",
+        "@commitlint/config-conventional": "^20.5.0",
+        "@eslint/js": "^10.0.1",
+        "@eslint/markdown": "^8.0.1",
+        "@typescript-eslint/eslint-plugin": "^8.58.0",
+        "@typescript-eslint/parser": "^8.58.0",
+        "eslint": "^10.1.0",
+        "eslint-config-next": "^16.2.2",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-html": "^8.1.4",
+        "eslint-plugin-jsx-a11y": "^6.10.2",
+        "eslint-plugin-prettier": "^5.5.5",
+        "eslint-plugin-react": "^7.37.5",
+        "eslint-plugin-react-hooks": "^7.0.1",
+        "globals": "^17.4.0",
+        "prettier": "^3.8.1",
+        "prettier-plugin-organize-imports": "^4.3.0",
+        "prettier-plugin-tailwindcss": "^0.7.2",
+        "stylelint": "^17.6.0",
+        "stylelint-config-html": "^1.1.0",
+        "stylelint-config-recess-order": "^7.7.0",
+        "stylelint-config-standard": "^40.0.0",
+        "stylelint-config-standard-vue": "^1.0.0",
+        "stylelint-order": "^8.1.1",
+        "stylelint-prettier": "^5.0.3",
+        "typescript": "^6.0.2",
+        "typescript-eslint": "^8.58.0",
+        "typescript-plugin-css-modules": "^5.2.0"
+    },
+    "peerDependencies": {
+        "eslint": "^9.39.2"
+    }
+}

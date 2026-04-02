@@ -1,0 +1,15 @@
+{
+    "recommendations": [
+        "christian-kohler.npm-intellisense",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "editorconfig.editorconfig",
+        "isudox.vscode-jetbrains-keybindings",
+        "bradlc.vscode-tailwindcss",
+        "yoavbls.pretty-ts-errors",
+        "pkief.material-icon-theme",
+        "ecmel.vscode-html-css",
+        "christian-kohler.path-intellisense",
+        "ms-vscode.live-server"
+    ]
+}

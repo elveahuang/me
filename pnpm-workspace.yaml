@@ -1,0 +1,21 @@
+packages:
+    - apps/*
+    - packages/*
+
+onlyBuiltDependencies:
+    - '@parcel/watcher'
+    - '@prisma/client'
+    - '@swc/core'
+    - agent-browser
+    - better-sqlite3
+    - bufferutil
+    - canvas
+    - core-js
+    - edgedriver
+    - es5-ext
+    - esbuild
+    - geckodriver
+    - less
+    - sharp
+    - unrs-resolver
+    - utf-8-validate
