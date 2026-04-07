@@ -4,7 +4,7 @@
     "private": true,
     "dependencies": {
         "@ai-sdk/openai": "^3.0.50",
-        "@ai-sdk/react": "^3.0.149",
+        "@ai-sdk/react": "^3.0.151",
         "@heroui/react": "^3.0.2",
         "@heroui/styles": "^3.0.2",
         "@tanstack/react-form": "^1.28.6",
@@ -12,7 +12,7 @@
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.23",
         "ahooks": "^3.9.7",
-        "ai": "^6.0.147",
+        "ai": "^6.0.149",
         "aieditor": "^1.4.2",
         "async-validator": "^4.2.5",
         "axios": "^1.14.0",
