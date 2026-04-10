@@ -38,7 +38,7 @@
         "react-dom": "^19.2.5",
         "react-native": "^0.85.0",
         "react-native-gesture-handler": "^2.31.1",
-        "react-native-keyboard-controller": "^1.21.4",
+        "react-native-keyboard-controller": "^1.21.5",
         "react-native-reanimated": "^4.3.0",
         "react-native-safe-area-context": "^5.7.0",
         "react-native-screens": "^4.24.0",
