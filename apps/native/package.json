@@ -15,9 +15,9 @@
     "dependencies": {
         "@expo/metro-runtime": "^55.0.9",
         "@gorhom/bottom-sheet": "^5.2.9",
-        "@json-render/core": "^0.16.0",
-        "@json-render/react-native": "^0.16.0",
-        "expo": "^55.0.13",
+        "@json-render/core": "^0.17.0",
+        "@json-render/react-native": "^0.17.0",
+        "expo": "^55.0.14",
         "expo-blur": "^55.0.14",
         "expo-constants": "^55.0.13",
         "expo-font": "^55.0.6",
@@ -26,7 +26,7 @@
         "expo-image": "^55.0.8",
         "expo-linear-gradient": "^55.0.13",
         "expo-linking": "^55.0.12",
-        "expo-router": "^55.0.11",
+        "expo-router": "^55.0.12",
         "expo-splash-screen": "^55.0.17",
         "expo-status-bar": "^55.0.5",
         "expo-symbols": "^55.0.7",
@@ -55,7 +55,7 @@
         "@types/node": "^25.6.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
-        "babel-preset-expo": "^55.0.16",
+        "babel-preset-expo": "^55.0.17",
         "tailwindcss": "^4.2.2",
         "typescript": "^6.0.2"
     }
