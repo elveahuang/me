@@ -1,0 +1,10 @@
+{
+    "tab_size": 4,
+    "context_servers": {
+        "heroui": {
+            "command": "npx",
+            "args": ["-y", "@heroui/react-mcp@latest"],
+            "env": {}
+        }
+    }
+}

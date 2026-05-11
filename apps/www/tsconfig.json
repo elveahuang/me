@@ -1,0 +1,12 @@
+{
+    "extends": "@commons/config/typescript/react.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@/commons/*": ["../../packages/core/src/*"],
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+    "exclude": ["node_modules"]
+}

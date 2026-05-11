@@ -1,0 +1,15 @@
+packages:
+    - apps/*
+    - packages/*
+
+allowBuilds:
+    '@parcel/watcher': true
+    '@prisma/client': true
+    agent-browser: true
+    better-sqlite3: true
+    canvas: true
+    core-js: true
+    es5-ext: true
+    esbuild: true
+    sharp: true
+    unrs-resolver: true

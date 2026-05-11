@@ -1,0 +1,5 @@
+.idea
+.next
+.expo
+node_modules
+dist

@@ -1,0 +1,13 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "default_agent": "plan",
+    "model": "deepseek/deepseek-v4-pro",
+    "autoupdate": true,
+    "enabled_providers": ["deepseek", "openrouter", "opencode"],
+    "mcp": {
+        "heroui-react": {
+            "type": "local",
+            "command": ["npx", "-y", "@heroui/react-mcp@latest"]
+        }
+    }
+}

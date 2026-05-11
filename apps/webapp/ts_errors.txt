@@ -1,0 +1,82 @@
+src/app/(app)/[slug]/page.tsx(33,27): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(33,51): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(34,33): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(41,17): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/app/(app)/[slug]/page.tsx(42,25): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(42,40): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/[slug]/page.tsx(45,43): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(45,57): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/[slug]/page.tsx(45,78): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(45,92): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/[slug]/page.tsx(80,18): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(80,37): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(81,44): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/[slug]/page.tsx(85,54): error TS18048: 'pageData' is possibly 'undefined'.
+src/app/(app)/components/AppNavbar.tsx(3,10): error TS2305: Module '"@heroui/react"' has no exported member 'Navbar'.
+src/app/(app)/components/AppNavbar.tsx(3,18): error TS2305: Module '"@heroui/react"' has no exported member 'NavbarBrand'.
+src/app/(app)/components/AppNavbar.tsx(3,31): error TS2305: Module '"@heroui/react"' has no exported member 'NavbarContent'.
+src/app/(app)/components/AppNavbar.tsx(3,46): error TS2305: Module '"@heroui/react"' has no exported member 'NavbarItem'.
+src/app/(app)/components/AppNavbar.tsx(55,69): error TS2322: Type '"flat"' is not assignable to type '"outline" | "primary" | "secondary" | "danger" | "danger-soft" | "ghost" | "tertiary" | undefined'.
+src/app/(app)/layout.tsx(30,54): error TS2322: Type '{ link: { type?: "custom" | "reference" | null | undefined; reference?: { relationTo: "pages"; value: string | Page; } | { relationTo: "posts"; value: string | Post; } | null | undefined; url?: string | ... 1 more ... | undefined; label: string; }; id?: string | ... 1 more ... | undefined; }[] | null | undefined' is not assignable to type 'NavLink[] | null | undefined'.
+  Type '{ link: { type?: "custom" | "reference" | null | undefined; reference?: { relationTo: "pages"; value: string | Page; } | { relationTo: "posts"; value: string | Post; } | null | undefined; url?: string | ... 1 more ... | undefined; label: string; }; id?: string | ... 1 more ... | undefined; }[]' is not assignable to type 'NavLink[]'.
+    Type '{ link: { type?: "custom" | "reference" | null | undefined; reference?: { relationTo: "pages"; value: string | Page; } | { relationTo: "posts"; value: string | Post; } | null | undefined; url?: string | ... 1 more ... | undefined; label: string; }; id?: string | ... 1 more ... | undefined; }' is not assignable to type 'NavLink'.
+      Types of property 'id' are incompatible.
+        Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+          Type 'null' is not assignable to type 'string | undefined'.
+src/app/(app)/posts/[slug]/page.tsx(32,27): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(32,51): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(33,33): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(40,17): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/app/(app)/posts/[slug]/page.tsx(42,32): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(43,25): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(43,40): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(46,43): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(46,57): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(46,78): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(46,92): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(86,78): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(89,34): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(90,48): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(98,26): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(98,41): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(98,57): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(98,71): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(99,39): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(99,53): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/[slug]/page.tsx(99,69): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/[slug]/page.tsx(104,41): error TS18048: 'postData' is possibly 'undefined'.
+src/app/(app)/posts/components/PostCard.tsx(3,16): error TS2305: Module '"@heroui/react"' has no exported member 'CardBody'.
+src/app/(app)/posts/components/PostCard.tsx(3,50): error TS2305: Module '"@heroui/react"' has no exported member 'Image'.
+src/app/(app)/posts/components/PostCard.tsx(3,71): error TS2305: Module '"@heroui/react"' has no exported member 'User'.
+src/app/(app)/posts/components/PostCard.tsx(37,55): error TS2322: Type '"primary"' is not assignable to type '"default" | "success" | "warning" | "accent" | "danger" | undefined'.
+src/app/(app)/posts/components/PostCard.tsx(37,81): error TS2322: Type '"flat"' is not assignable to type '"primary" | "secondary" | "tertiary" | "soft" | undefined'.
+src/app/(app)/posts/components/PostCard.tsx(57,65): error TS2322: Type '"faded"' is not assignable to type '"primary" | "secondary" | "tertiary" | "soft" | undefined'.
+src/app/(app)/posts/components/PostCard.tsx(73,80): error TS2322: Type '"light"' is not assignable to type '"outline" | "primary" | "secondary" | "danger" | "danger-soft" | "ghost" | "tertiary" | undefined'.
+src/app/(app)/posts/page.tsx(34,45): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/page.tsx(34,71): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(app)/posts/page.tsx(37,60): error TS2339: Property 'image' does not exist on type '{ title?: string | null | undefined; description?: string | null | undefined; }'.
+src/app/(payload)/api/[...slug]/route.ts(4,8): error TS2882: Cannot find module or type declarations for side-effect import of '@payloadcms/next/css'.
+src/app/(payload)/api/graphql-playground/route.ts(4,8): error TS2882: Cannot find module or type declarations for side-effect import of '@payloadcms/next/css'.
+src/app/(payload)/layout.tsx(4,8): error TS2882: Cannot find module or type declarations for side-effect import of '@payloadcms/next/css'.
+src/core/auth/index.ts(53,14): error TS2322: Type 'Auth<{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { ...; } | undefined; }>' is not assignable to type 'Auth<BetterAuthOptions>'.
+  Types of property '$context' are incompatible.
+    Type 'Promise<PluginContext<{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { ...; } | undefined; }> & InfoContext & { ...; }>' is not assignable to type 'Promise<PluginContext<BetterAuthOptions> & InfoContext & { options: BetterAuthOptions; trustedOrigins: string[]; ... 25 more ...; runInBackgroundOrAwait: (promise: void | Promise<...>) => unknown; }>'.
+      Type 'PluginContext<{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { ...; } | undefined; }> & InfoContext & { ...; }' is not assignable to type 'PluginContext<BetterAuthOptions> & InfoContext & { options: BetterAuthOptions; trustedOrigins: string[]; ... 25 more ...; runInBackgroundOrAwait: (promise: void | Promise<...>) => unknown; }'.
+        Type 'PluginContext<{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { ...; } | undefined; }> & InfoContext & { ...; }' is not assignable to type '{ options: BetterAuthOptions; trustedOrigins: string[]; trustedProviders: string[]; isTrustedOrigin: (url: string, settings?: { allowRelativePaths: boolean; } | undefined) => boolean; ... 23 more ...; runInBackgroundOrAwait: (promise: void | Promise<...>) => unknown; }'.
+          Types of property 'adapter' are incompatible.
+            Type 'DBAdapter<{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { ...; } | undefined; }>' is not assignable to type 'DBAdapter<BetterAuthOptions>'.
+              Type 'BetterAuthOptions' is not assignable to type '{ plugins: BetterAuthPlugin[]; appName?: string | undefined; baseURL?: BaseURLConfig | undefined; basePath?: string | undefined; secret?: string | undefined; ... 19 more ...; experimental?: { joins?: boolean; }; }'.
+                Types of property 'plugins' are incompatible.
+                  Type '[] | BetterAuthPlugin[] | undefined' is not assignable to type 'BetterAuthPlugin[]'.
+                    Type 'undefined' is not assignable to type 'BetterAuthPlugin[]'.
+src/core/components/blocks/BlockRenderer.tsx(85,33): error TS2741: Property 'title' is missing in type '{ blockType: string; key: number; }' but required in type 'HeroBlockProps'.
+src/core/components/blocks/BlockRenderer.tsx(87,33): error TS2741: Property 'title' is missing in type '{ blockType: string; key: number; }' but required in type 'CTABlockProps'.
+src/core/components/blocks/BlockRenderer.tsx(89,33): error TS2741: Property 'features' is missing in type '{ blockType: string; key: number; }' but required in type 'FeaturesBlockProps'.
+src/core/components/blocks/BlockRenderer.tsx(91,33): error TS2741: Property 'testimonials' is missing in type '{ blockType: string; key: number; }' but required in type 'TestimonialsBlockProps'.
+src/core/components/blocks/BlockRenderer.tsx(93,33): error TS2741: Property 'images' is missing in type '{ blockType: string; key: number; }' but required in type 'GalleryBlockProps'.
+src/core/components/header.tsx(3,30): error TS2307: Cannot find module '@/app/(auth)/actions' or its corresponding type declarations.
+src/core/components/header.tsx(9,28): error TS2307: Cannot find module 'next-auth/react' or its corresponding type declarations.
+src/core/components/providers.tsx(6,10): error TS2305: Module '"@heroui/react"' has no exported member 'HeroUIProvider'.
+src/core/components/ThemeSwitch.tsx(10,13): error TS2339: Property 'isDarkMode' does not exist on type 'ThemeContextType'.

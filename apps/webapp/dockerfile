@@ -1,0 +1,14 @@
+# 镜像
+FROM node:20-alpine AS base
+FROM base AS builder
+
+RUN apk add --no-cache curl && corepack enable && corepack prepare pnpm@latest --activate
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置时区
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+RUN echo 'Asia/Shanghai' > /etc/timezone
+
+ENTRYPOINT ["java", "-server", "-Xms512M", "-Xmx512M", "-Dfile.encoding=UTF-8", "-XX:+HeapDumpOnOutOfMemoryError", "-jar", "/app/app.jar" ]
