@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "compilerOptions": {
+        "jsx": "preserve",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "plugins": [
+            {
+                "name": "typescript-plugin-css-modules"
+            },
+            {
+                "name": "next"
+            }
+        ]
+    },
+    "extends": "./base.json"
+}

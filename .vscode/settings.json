@@ -1,0 +1,9 @@
+{
+    "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "always"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true,
+    "oxc.fmt.configPath": "oxlint.config.ts",
+    "recommendations": ["oxc.oxc-vscode"]
+}
