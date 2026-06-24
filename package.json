@@ -23,7 +23,7 @@
         "@a2ui/web_core": "^0.10.3",
         "@ai-sdk/deepseek": "^2.0.39",
         "@ai-sdk/openai": "^3.0.74",
-        "@ai-sdk/react": "^3.0.210",
+        "@ai-sdk/react": "^3.0.211",
         "@comark/html": "^0.4.0",
         "@comark/react": "^0.4.0",
         "@embedpdf/react-pdf-viewer": "^2.14.4",
@@ -47,7 +47,7 @@
         "@tiptap/react": "^3.27.1",
         "@tiptap/starter-kit": "^3.27.1",
         "@xyflow/react": "^12.11.1",
-        "ai": "^6.0.208",
+        "ai": "^6.0.209",
         "async-validator": "^4.2.5",
         "axios": "^1.18.1",
         "class-variance-authority": "^0.7.1",
@@ -114,5 +114,5 @@
         "typescript-plugin-css-modules": "^5.2.0",
         "vite-plus": "^0.2.1"
     },
-    "packageManager": "pnpm@11.8.0"
+    "packageManager": "pnpm@11.9.0"
 }
