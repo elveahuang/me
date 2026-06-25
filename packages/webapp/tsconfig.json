@@ -13,12 +13,9 @@
         "paths": {
             "@commons/core/*": ["../commons/src/*"],
             "@/*": ["./src/*"],
-            "void/db": ["./.void/db.d.ts"],
             "@schema": ["./db/schema.ts"],
-            "@schema/*": ["./db/schema/*"],
-            "void/routes": ["./.void/routes.d.ts"]
+            "@schema/*": ["./db/schema/*"]
         }
     },
-    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db"],
-    "files": ["./.void/routes.d.ts", "./.void/db.d.ts"]
+    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db"]
 }
