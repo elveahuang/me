@@ -1,0 +1,16 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["void/env", "vite/client"],
+        "jsx": "react-jsx"
+    },
+    "files": ["routes.d.ts", "db.d.ts"],
+    "extends": "./base.json",
+    "include": ["**/*.ts", "**/*.tsx"]
+}

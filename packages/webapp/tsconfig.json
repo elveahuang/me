@@ -1,0 +1,15 @@
+{
+    "extends": "@repo/config/typescript/void.json",
+    "files": ["routes.d.ts", "db.d.ts"],
+    "compilerOptions": {
+        "paths": {
+            "#/*": ["./*"],
+            "@/*": ["./*"],
+            "void/db": ["./db.d.ts"],
+            "@schema": ["./db/schema.ts"],
+            "@schema/*": ["./db/schema/*"],
+            "void/routes": ["./routes.d.ts"]
+        }
+    },
+    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db"]
+}

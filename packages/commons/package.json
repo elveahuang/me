@@ -1,0 +1,25 @@
+{
+    "name": "@repo/commons",
+    "version": "26.3.0",
+    "private": true,
+    "exports": {
+        "./theme/core": "./src/theme/core.css"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@repo/config": "workspace:*",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "tailwind-merge": "^3.6.0",
+        "tailwind-variants": "^3.2.2",
+        "tailwindcss": "^4.3.3"
+    },
+    "devDependencies": {
+        "@types/node": "^26.1.1",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "typescript": "6.0.3"
+    }
+}
