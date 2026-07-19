@@ -7,6 +7,9 @@ import { voidPlugin } from 'void';
 
 /** @type {import('vite').UserConfig} */
 export default defineConfig({
+    resolve: {
+        tsconfigPaths: true,
+    },
     plugins: [
         babel({
             presets: [reactCompilerPreset()],

@@ -1,15 +1,46 @@
 {
-    "extends": "@repo/config/typescript/void.json",
-    "files": ["routes.d.ts", "db.d.ts"],
-    "compilerOptions": {
-        "paths": {
-            "#/*": ["./*"],
-            "@/*": ["./*"],
-            "void/db": ["./db.d.ts"],
-            "@schema": ["./db/schema.ts"],
-            "@schema/*": ["./db/schema/*"],
-            "void/routes": ["./routes.d.ts"]
-        }
+  "extends": [
+    "@repo/config/typescript/void.json",
+    "./.void/tsconfig.json"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "#/*": [
+        "./*"
+      ],
+      "@/*": [
+        "./*"
+      ],
+      "void/db": [
+        "./.void/db.d.ts"
+      ],
+      "@schema": [
+        "./db/schema.ts"
+      ],
+      "@schema/*": [
+        "./db/schema/*"
+      ],
+      "void/routes": [
+        "./.void/routes.d.ts"
+      ]
     },
-    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db"]
+    "types": [
+      "void/env"
+    ]
+  },
+  "files": [
+    "./routes.d.ts",
+    "./db.d.ts",
+    "./.void/routes.d.ts",
+    "./.void/db.d.ts"
+  ],
+  "include": [
+    "src",
+    "pages",
+    "routes",
+    "middleware",
+    "crons",
+    "queues",
+    "db"
+  ]
 }

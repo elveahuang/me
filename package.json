@@ -28,7 +28,7 @@
         "@comark/react": "^0.5.1",
         "@embedpdf/react-pdf-viewer": "^2.14.4",
         "@embedpdf/snippet": "^2.14.4",
-        "@iconify/json": "^2.2.501",
+        "@iconify/json": "^2.2.502",
         "@iconify/react": "^6.0.2",
         "@json-render/core": "^0.19.0",
         "@json-render/react": "^0.19.0",
@@ -115,5 +115,5 @@
         "typescript-plugin-css-modules": "^5.2.0",
         "vite-plus": "^0.2.5"
     },
-    "packageManager": "pnpm@11.14.0"
+    "packageManager": "pnpm@11.15.0"
 }
