@@ -1,0 +1,13 @@
+node_modules
+dist
+temp
+.idea
+.nitro
+.output
+.tanstack
+.void
+.wrangler
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local

@@ -1,0 +1,13 @@
+{
+    "version": "7",
+    "dialect": "postgresql",
+    "entries": [
+        {
+            "idx": 0,
+            "version": "7",
+            "when": 1784215753498,
+            "tag": "20260716152913_nifty_jasper_sitwell",
+            "breakpoints": true
+        }
+    ]
+}

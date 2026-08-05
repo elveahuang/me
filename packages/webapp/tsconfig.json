@@ -1,0 +1,13 @@
+{
+    "extends": ["@repo/config/typescript/tsr.json"],
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "paths": {
+            "#/*": ["./src/*"],
+            "@/*": ["./src/*"],
+            "@schema": ["./src/db/schema.ts"],
+            "@schema/*": ["./src/db/schema/*"]
+        }
+    },
+    "include": ["**/*.ts", "**/*.tsx", "vite.config.mjs", "drizzle.config.mjs"]
+}
