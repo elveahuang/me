@@ -1,14 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
-
-export const Route = createFileRoute('/')({ component: Home });
-
-function Home() {
-    return (
-        <div className='p-8'>
-            <h1 className='text-4xl font-bold'>Welcome to TanStack Start</h1>
-            <p className='mt-4 text-lg'>
-                Edit <code>src/routes/index.tsx</code> to get started.
-            </p>
-        </div>
-    );
-}
+import { createFileRoute, redirect } from '@tanstack/react-router';
+export const Route = createFileRoute('/')({
+    beforeLoad: async () => {
+        const { fetchSession } = await import('@/lib/session');
+        const session = await fetchSession();
+        if (session) throw redirect({ to: '/chat', search: {} });
+        throw redirect({ to: '/login', search: {} });
+    },
+});

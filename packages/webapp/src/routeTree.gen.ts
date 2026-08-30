@@ -10,11 +10,87 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAgentsRouteImport } from './routes/admin.agents'
+import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as ApiAgentsRouteImport } from './routes/api/agents'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiConversationsRouteImport } from './routes/api/conversations'
 import { Route as ApiHelloRouteImport } from './routes/api/hello'
+import { Route as ApiMeRouteImport } from './routes/api/me'
+import { Route as ApiAdminAgentsRouteImport } from './routes/api/admin/agents'
+import { Route as ApiAdminSkillsRouteImport } from './routes/api/admin/skills'
+import { Route as ApiAdminStatsRouteImport } from './routes/api/admin/stats'
+import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiConversationsIdRouteImport } from './routes/api/conversations.$id'
+import { Route as ApiAdminAgentsIdRouteImport } from './routes/api/admin/agents.$id'
+import { Route as ApiAdminSkillsIdRouteImport } from './routes/api/admin/skills.$id'
+import { Route as ApiAdminUsersIdRouteImport } from './routes/api/admin/users.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAgentsRoute = AdminAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSkillsRoute = AdminSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const ApiAgentsRoute = ApiAgentsRouteImport.update({
+  id: '/api/agents',
+  path: '/api/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiConversationsRoute = ApiConversationsRouteImport.update({
+  id: '/api/conversations',
+  path: '/api/conversations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHelloRoute = ApiHelloRouteImport.update({
@@ -22,31 +98,225 @@ const ApiHelloRoute = ApiHelloRouteImport.update({
   path: '/api/hello',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMeRoute = ApiMeRouteImport.update({
+  id: '/api/me',
+  path: '/api/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminAgentsRoute = ApiAdminAgentsRouteImport.update({
+  id: '/api/admin/agents',
+  path: '/api/admin/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminSkillsRoute = ApiAdminSkillsRouteImport.update({
+  id: '/api/admin/skills',
+  path: '/api/admin/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminStatsRoute = ApiAdminStatsRouteImport.update({
+  id: '/api/admin/stats',
+  path: '/api/admin/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiConversationsIdRoute = ApiConversationsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiConversationsRoute,
+} as any)
+const ApiAdminAgentsIdRoute = ApiAdminAgentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiAdminAgentsRoute,
+} as any)
+const ApiAdminSkillsIdRoute = ApiAdminSkillsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiAdminSkillsRoute,
+} as any)
+const ApiAdminUsersIdRoute = ApiAdminUsersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiAdminUsersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/chat': typeof ChatRoute
+  '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
+  '/admin/agents': typeof AdminAgentsRoute
+  '/admin/skills': typeof AdminSkillsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/api/agents': typeof ApiAgentsRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/hello': typeof ApiHelloRoute
+  '/api/me': typeof ApiMeRoute
+  '/admin/': typeof AdminIndexRoute
+  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
+  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
+  '/api/admin/stats': typeof ApiAdminStatsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/conversations/$id': typeof ApiConversationsIdRoute
+  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
+  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
+  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
+  '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
+  '/admin/agents': typeof AdminAgentsRoute
+  '/admin/skills': typeof AdminSkillsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/api/agents': typeof ApiAgentsRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/hello': typeof ApiHelloRoute
+  '/api/me': typeof ApiMeRoute
+  '/admin': typeof AdminIndexRoute
+  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
+  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
+  '/api/admin/stats': typeof ApiAdminStatsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/conversations/$id': typeof ApiConversationsIdRoute
+  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
+  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
+  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/chat': typeof ChatRoute
+  '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
+  '/admin/agents': typeof AdminAgentsRoute
+  '/admin/skills': typeof AdminSkillsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/api/agents': typeof ApiAgentsRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/hello': typeof ApiHelloRoute
+  '/api/me': typeof ApiMeRoute
+  '/admin/': typeof AdminIndexRoute
+  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
+  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
+  '/api/admin/stats': typeof ApiAdminStatsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/conversations/$id': typeof ApiConversationsIdRoute
+  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
+  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
+  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/hello'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/chat'
+    | '/login'
+    | '/register'
+    | '/admin/agents'
+    | '/admin/skills'
+    | '/admin/users'
+    | '/api/agents'
+    | '/api/chat'
+    | '/api/conversations'
+    | '/api/hello'
+    | '/api/me'
+    | '/admin/'
+    | '/api/admin/agents'
+    | '/api/admin/skills'
+    | '/api/admin/stats'
+    | '/api/admin/users'
+    | '/api/auth/$'
+    | '/api/conversations/$id'
+    | '/api/admin/agents/$id'
+    | '/api/admin/skills/$id'
+    | '/api/admin/users/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/hello'
-  id: '__root__' | '/' | '/api/hello'
+  to:
+    | '/'
+    | '/chat'
+    | '/login'
+    | '/register'
+    | '/admin/agents'
+    | '/admin/skills'
+    | '/admin/users'
+    | '/api/agents'
+    | '/api/chat'
+    | '/api/conversations'
+    | '/api/hello'
+    | '/api/me'
+    | '/admin'
+    | '/api/admin/agents'
+    | '/api/admin/skills'
+    | '/api/admin/stats'
+    | '/api/admin/users'
+    | '/api/auth/$'
+    | '/api/conversations/$id'
+    | '/api/admin/agents/$id'
+    | '/api/admin/skills/$id'
+    | '/api/admin/users/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/chat'
+    | '/login'
+    | '/register'
+    | '/admin/agents'
+    | '/admin/skills'
+    | '/admin/users'
+    | '/api/agents'
+    | '/api/chat'
+    | '/api/conversations'
+    | '/api/hello'
+    | '/api/me'
+    | '/admin/'
+    | '/api/admin/agents'
+    | '/api/admin/skills'
+    | '/api/admin/stats'
+    | '/api/admin/users'
+    | '/api/auth/$'
+    | '/api/conversations/$id'
+    | '/api/admin/agents/$id'
+    | '/api/admin/skills/$id'
+    | '/api/admin/users/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  ChatRoute: typeof ChatRoute
+  LoginRoute: typeof LoginRoute
+  RegisterRoute: typeof RegisterRoute
+  ApiAgentsRoute: typeof ApiAgentsRoute
+  ApiChatRoute: typeof ApiChatRoute
+  ApiConversationsRoute: typeof ApiConversationsRouteWithChildren
   ApiHelloRoute: typeof ApiHelloRoute
+  ApiMeRoute: typeof ApiMeRoute
+  ApiAdminAgentsRoute: typeof ApiAdminAgentsRouteWithChildren
+  ApiAdminSkillsRoute: typeof ApiAdminSkillsRouteWithChildren
+  ApiAdminStatsRoute: typeof ApiAdminStatsRoute
+  ApiAdminUsersRoute: typeof ApiAdminUsersRouteWithChildren
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +328,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/agents': {
+      id: '/admin/agents'
+      path: '/agents'
+      fullPath: '/admin/agents'
+      preLoaderRoute: typeof AdminAgentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/skills': {
+      id: '/admin/skills'
+      path: '/skills'
+      fullPath: '/admin/skills'
+      preLoaderRoute: typeof AdminSkillsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/api/agents': {
+      id: '/api/agents'
+      path: '/api/agents'
+      fullPath: '/api/agents'
+      preLoaderRoute: typeof ApiAgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/conversations': {
+      id: '/api/conversations'
+      path: '/api/conversations'
+      fullPath: '/api/conversations'
+      preLoaderRoute: typeof ApiConversationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/hello': {
       id: '/api/hello'
       path: '/api/hello'
@@ -65,12 +412,158 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHelloRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/me': {
+      id: '/api/me'
+      path: '/api/me'
+      fullPath: '/api/me'
+      preLoaderRoute: typeof ApiMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/agents': {
+      id: '/api/admin/agents'
+      path: '/api/admin/agents'
+      fullPath: '/api/admin/agents'
+      preLoaderRoute: typeof ApiAdminAgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/skills': {
+      id: '/api/admin/skills'
+      path: '/api/admin/skills'
+      fullPath: '/api/admin/skills'
+      preLoaderRoute: typeof ApiAdminSkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/stats': {
+      id: '/api/admin/stats'
+      path: '/api/admin/stats'
+      fullPath: '/api/admin/stats'
+      preLoaderRoute: typeof ApiAdminStatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/conversations/$id': {
+      id: '/api/conversations/$id'
+      path: '/$id'
+      fullPath: '/api/conversations/$id'
+      preLoaderRoute: typeof ApiConversationsIdRouteImport
+      parentRoute: typeof ApiConversationsRoute
+    }
+    '/api/admin/agents/$id': {
+      id: '/api/admin/agents/$id'
+      path: '/$id'
+      fullPath: '/api/admin/agents/$id'
+      preLoaderRoute: typeof ApiAdminAgentsIdRouteImport
+      parentRoute: typeof ApiAdminAgentsRoute
+    }
+    '/api/admin/skills/$id': {
+      id: '/api/admin/skills/$id'
+      path: '/$id'
+      fullPath: '/api/admin/skills/$id'
+      preLoaderRoute: typeof ApiAdminSkillsIdRouteImport
+      parentRoute: typeof ApiAdminSkillsRoute
+    }
+    '/api/admin/users/$id': {
+      id: '/api/admin/users/$id'
+      path: '/$id'
+      fullPath: '/api/admin/users/$id'
+      preLoaderRoute: typeof ApiAdminUsersIdRouteImport
+      parentRoute: typeof ApiAdminUsersRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminAgentsRoute: typeof AdminAgentsRoute
+  AdminSkillsRoute: typeof AdminSkillsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAgentsRoute: AdminAgentsRoute,
+  AdminSkillsRoute: AdminSkillsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ApiConversationsRouteChildren {
+  ApiConversationsIdRoute: typeof ApiConversationsIdRoute
+}
+
+const ApiConversationsRouteChildren: ApiConversationsRouteChildren = {
+  ApiConversationsIdRoute: ApiConversationsIdRoute,
+}
+
+const ApiConversationsRouteWithChildren =
+  ApiConversationsRoute._addFileChildren(ApiConversationsRouteChildren)
+
+interface ApiAdminAgentsRouteChildren {
+  ApiAdminAgentsIdRoute: typeof ApiAdminAgentsIdRoute
+}
+
+const ApiAdminAgentsRouteChildren: ApiAdminAgentsRouteChildren = {
+  ApiAdminAgentsIdRoute: ApiAdminAgentsIdRoute,
+}
+
+const ApiAdminAgentsRouteWithChildren = ApiAdminAgentsRoute._addFileChildren(
+  ApiAdminAgentsRouteChildren,
+)
+
+interface ApiAdminSkillsRouteChildren {
+  ApiAdminSkillsIdRoute: typeof ApiAdminSkillsIdRoute
+}
+
+const ApiAdminSkillsRouteChildren: ApiAdminSkillsRouteChildren = {
+  ApiAdminSkillsIdRoute: ApiAdminSkillsIdRoute,
+}
+
+const ApiAdminSkillsRouteWithChildren = ApiAdminSkillsRoute._addFileChildren(
+  ApiAdminSkillsRouteChildren,
+)
+
+interface ApiAdminUsersRouteChildren {
+  ApiAdminUsersIdRoute: typeof ApiAdminUsersIdRoute
+}
+
+const ApiAdminUsersRouteChildren: ApiAdminUsersRouteChildren = {
+  ApiAdminUsersIdRoute: ApiAdminUsersIdRoute,
+}
+
+const ApiAdminUsersRouteWithChildren = ApiAdminUsersRoute._addFileChildren(
+  ApiAdminUsersRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
+  ChatRoute: ChatRoute,
+  LoginRoute: LoginRoute,
+  RegisterRoute: RegisterRoute,
+  ApiAgentsRoute: ApiAgentsRoute,
+  ApiChatRoute: ApiChatRoute,
+  ApiConversationsRoute: ApiConversationsRouteWithChildren,
   ApiHelloRoute: ApiHelloRoute,
+  ApiMeRoute: ApiMeRoute,
+  ApiAdminAgentsRoute: ApiAdminAgentsRouteWithChildren,
+  ApiAdminSkillsRoute: ApiAdminSkillsRouteWithChildren,
+  ApiAdminStatsRoute: ApiAdminStatsRoute,
+  ApiAdminUsersRoute: ApiAdminUsersRouteWithChildren,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

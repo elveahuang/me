@@ -1,1 +1,18 @@
 @import 'tailwindcss';
+@import '@heroui/styles';
+@plugin "@tailwindcss/typography";
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+/* 助手消息正文排版（Comark 渲染容器） */
+.assistant-prose {
+    @apply prose prose-sm max-w-none prose-pre:rounded-lg prose-pre:bg-gray-950 prose-code:before:hidden prose-code:after:hidden;
+}
