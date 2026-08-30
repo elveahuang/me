@@ -269,6 +269,35 @@ async function main() {
     await jsonFetch(adminJar, `/api/admin/agents/${mcpAgent.id}`, { method: 'PATCH', body: JSON.stringify({ mcpServerIds: [] }) });
     check('删除 MCP 服务器并解挂', mcpDelete.res.status === 200);
 
+    // 8.6 停用的 MCP 服务器不应影响对话（容错）
+    const mcpDisabled = await jsonFetch(adminJar, '/api/admin/mcp', {
+        method: 'POST',
+        body: JSON.stringify({
+            name: `停用MCP-${UNIQUE}`,
+            transport: 'http',
+            url: 'https://mcp.invalid/endpoint',
+            enabled: false,
+        }),
+    });
+    await jsonFetch(adminJar, `/api/admin/agents/${mcpAgent.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ mcpServerIds: [mcpDisabled.body.id] }),
+    });
+    const disabledChat = await streamChat(adminJar, {
+        agentId: mcpAgent.id,
+        messages: [{ id: `s-${UNIQUE}-dis`, role: 'user', parts: [{ type: 'text', text: '回复：在' }] }],
+    });
+    check('停用的 MCP 服务器不影响对话', disabledChat.status === 200 && disabledChat.text.length > 0, `status=${disabledChat.status}`);
+
+    // 会话删除
+    const delConv = await jsonFetch(adminJar, `/api/conversations/${disabledChat.conversationId}`, { method: 'DELETE' });
+    check('删除会话', delConv.res.status === 200);
+    const delGone = await jsonFetch(adminJar, `/api/conversations/${disabledChat.conversationId}`);
+    check('删除后的会话不可访问', delGone.res.status === 404);
+    await jsonFetch(adminJar, `/api/admin/agents/${mcpAgent.id}`, { method: 'PATCH', body: JSON.stringify({ mcpServerIds: [] }) });
+    const mcpDisabledDelete = await jsonFetch(adminJar, `/api/admin/mcp/${mcpDisabled.body.id}`, { method: 'DELETE' });
+    check('清理停用 MCP 服务器', mcpDisabledDelete.res.status === 200);
+
     // 9. 普通用户：注册 → 对话（带工具的通用助手）→ 会话落库
     const userJar = {};
     const signUp = await jsonFetch(userJar, '/api/auth/sign-up/email', {
