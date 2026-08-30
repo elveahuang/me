@@ -330,6 +330,13 @@ async function main() {
     const anon = await jsonFetch({}, '/api/agents');
     check('未登录 401', anon.res.status === 401);
 
+    // 13. 注册边界：重复邮箱必须被拒绝
+    const dup = await jsonFetch({}, '/api/auth/sign-up/email', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Dup', email: 'admin@example.com', password: 'admin123456' }),
+    });
+    check('重复邮箱注册被拒绝', dup.res.status >= 400, `status=${dup.res.status}`);
+
     console.log(`\n=== 结果：${passed} 通过，${failed} 失败 ===`);
     if (failures.length > 0) {
         console.log('失败项：');
