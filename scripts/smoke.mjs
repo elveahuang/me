@@ -222,6 +222,7 @@ async function main() {
         autoConfig.res.status === 200 && typeof autoConfig.body?.name === 'string' && typeof autoConfig.body?.model === 'string',
         `status=${autoConfig.res.status}`,
     );
+    check('AI 自动配置草案包含全量配置维度', Array.isArray(autoConfig.body?.mcpServerIds), 'mcpServerIds 字段缺失');
 
     // 8.5 MCP 服务器：创建（stdio echo 测试服务器）→ 测试连接 → 挂载 → 对话 → 清理
     const mcpScriptPath = new URL('./test-mcp-server.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
