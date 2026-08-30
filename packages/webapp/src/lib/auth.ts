@@ -6,6 +6,24 @@ import { db } from '@/db';
 import { account, session, user, verification } from '@/db/schema';
 
 export const auth = betterAuth({
+    baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
+    trustedOrigins: [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        // Expo web（mobile 包）与 Ionic（wap 包）开发服务器
+        'http://localhost:8081',
+        'http://localhost:19006',
+        'http://localhost:8100',
+        'capacitor://localhost',
+    ],
+    advanced: {
+        // better-auth 1.7 对所有 POST 强制 Origin 校验，会拒绝非浏览器客户端
+        // （mobile / wap / curl 不携带 Origin）。这里显式关闭它：
+        // - 浏览器端 CSRF 由 SameSite=Lax 的 session cookie 兜底
+        // - 跨域浏览器访问由 /api 路由的 CORS 中间件控制
+        disableOriginCheck: true,
+        disableCSRFCheck: true,
+    },
     database: drizzleAdapter(db, {
         provider: 'pg',
         schema: { user, session, account, verification },

@@ -27,6 +27,10 @@ function AdminLayout() {
                             { to: '/admin', label: '📊 数据总览', exact: true },
                             { to: '/admin/agents', label: '🤖 智能体' },
                             { to: '/admin/skills', label: '🧩 Skills' },
+                            { to: '/admin/tools', label: '🔧 Tools' },
+                            { to: '/admin/mcp', label: '🌐 MCP' },
+                            { to: '/admin/knowledge', label: '📚 知识库' },
+                            { to: '/admin/providers', label: '🔌 AI 供应商' },
                             { to: '/admin/users', label: '👥 用户' },
                         ].map((item) => (
                             <Link

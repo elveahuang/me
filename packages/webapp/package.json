@@ -9,7 +9,7 @@
         "db:seed": "tsx src/db/seed.ts",
         "typecheck": "tsc --noEmit",
         "dev": "vite",
-        "build": "vite build",
+        "build": "vite build && node ../../scripts/fix-nitro-chunks.cjs",
         "start": "vite preview"
     },
     "dependencies": {
@@ -24,6 +24,7 @@
         "@heroui/styles": "^3.2.4",
         "@json-render/core": "^0.20.0",
         "@json-render/react": "^0.20.0",
+        "@modelcontextprotocol/sdk": "^1.30.0",
         "@repo/commons": "workspace:*",
         "@repo/config": "workspace:*",
         "@tanstack/react-query": "^5.102.8",

@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -16,6 +17,7 @@ const SkillPatchSchema = z.object({
 
 export const Route = createFileRoute('/api/admin/skills/$id')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             PATCH: async ({ request, params }: RouteParams) => {
                 try {

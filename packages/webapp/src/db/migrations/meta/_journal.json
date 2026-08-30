@@ -8,6 +8,20 @@
       "when": 1788107483731,
       "tag": "0000_uneven_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788108860068,
+      "tag": "0001_curly_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788115626841,
+      "tag": "0002_empty_hex",
+      "breakpoints": true
     }
   ]
 }

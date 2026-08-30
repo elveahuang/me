@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { fetch as expoFetch } from 'expo/fetch';
 import { JSX, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { API_BASE_URL } from '@/lib/config';
@@ -37,7 +37,7 @@ async function streamChat(
     body: object,
     onDelta: (text: string) => void,
     signal?: AbortSignal,
-): Promise<void> {
+): Promise<{ conversationId: number | null }> {
     const res = await expoFetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
@@ -53,6 +53,9 @@ async function streamChat(
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new ApiError(res.status, data.error ?? `请求失败 (${res.status})`);
     }
+
+    // 服务端在首次对话时会新建会话并通过该头回传 ID
+    const headerId = res.headers.get('x-conversation-id');
 
     const reader = res.body?.getReader();
     if (!reader) throw new Error('当前环境不支持流式响应');
@@ -79,6 +82,8 @@ async function streamChat(
             }
         }
     }
+
+    return { conversationId: headerId ? Number(headerId) : null };
 }
 
 export default function ChatScreen(): JSX.Element {
@@ -92,10 +97,49 @@ export default function ChatScreen(): JSX.Element {
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading-history' | 'loading-agent' | 'streaming'>('loading-agent');
     const [error, setError] = useState<string | null>(null);
+    const [historyVisible, setHistoryVisible] = useState(false);
+    const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+    const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
     const conversationIdRef = useRef<number | null>(null);
     const listRef = useRef<FlatList<ChatMessage>>(null);
 
-    // 加载智能体信息（标题）+ 该智能体最近的会话
+    const loadConversation = useCallback(
+        async (id: number) => {
+            if (token === null) return;
+            setStatus('loading-history');
+            try {
+                const detail = await api<{ messages: StoredMessage[] }>(`/api/conversations/${id}`, token);
+                conversationIdRef.current = id;
+                setActiveConversationId(id);
+                setMessages(
+                    detail.messages.map((m) => ({
+                        id: m.id,
+                        role: m.role === 'assistant' ? 'assistant' : 'user',
+                        text: m.parts
+                            .filter((p) => p.type === 'text')
+                            .map((p) => p.text ?? '')
+                            .join('\n'),
+                    })),
+                );
+            } catch (e) {
+                setError(e instanceof Error ? e.message : '加载会话失败');
+            } finally {
+                setStatus('idle');
+            }
+        },
+        [token],
+    );
+
+    const startNewConversation = useCallback(() => {
+        conversationIdRef.current = null;
+        setActiveConversationId(null);
+        setMessages([]);
+        setInput('');
+        setError(null);
+        setStatus('idle');
+    }, []);
+
+    // 加载智能体信息（标题）+ 默认续接该智能体最近的会话
     useEffect(() => {
         if (!Number.isInteger(agentId) || agentId <= 0 || token === null) return;
         (async () => {
@@ -106,20 +150,11 @@ export default function ChatScreen(): JSX.Element {
                 navigation.setOptions({ title: found ? `${found.emoji} ${found.name}` : '对话' });
 
                 const conversations = await api<ConversationSummary[]>('/api/conversations', token);
+                setConversations(conversations.filter((c) => c.agentId === agentId));
                 const latest = conversations.find((c) => c.agentId === agentId);
                 if (latest) {
-                    conversationIdRef.current = latest.id;
-                    const detail = await api<{ messages: StoredMessage[] }>(`/api/conversations/${latest.id}`, token);
-                    setMessages(
-                        detail.messages.map((m) => ({
-                            id: m.id,
-                            role: m.role === 'assistant' ? 'assistant' : 'user',
-                            text: m.parts
-                                .filter((p) => p.type === 'text')
-                                .map((p) => p.text ?? '')
-                                .join('\n'),
-                        })),
-                    );
+                    await loadConversation(latest.id);
+                    return;
                 }
             } catch (e) {
                 setError(e instanceof Error ? e.message : '加载失败');
@@ -127,7 +162,17 @@ export default function ChatScreen(): JSX.Element {
                 setStatus('idle');
             }
         })();
-    }, [agentId, token, navigation]);
+    }, [agentId, token, navigation, loadConversation]);
+
+    const refreshConversations = useCallback(async () => {
+        if (token === null) return;
+        try {
+            const all = await api<ConversationSummary[]>('/api/conversations', token);
+            setConversations(all.filter((c) => c.agentId === agentId));
+        } catch {
+            // 列表刷新失败不阻塞对话
+        }
+    }, [agentId, token]);
 
     const send = useCallback(async () => {
         const text = input.trim();
@@ -141,7 +186,7 @@ export default function ChatScreen(): JSX.Element {
         setStatus('streaming');
 
         try {
-            await streamChat(
+            const { conversationId: newConversationId } = await streamChat(
                 token,
                 {
                     agentId,
@@ -159,6 +204,10 @@ export default function ChatScreen(): JSX.Element {
                     setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta } : m)));
                 },
             );
+            if (newConversationId !== null && conversationIdRef.current === null) {
+                conversationIdRef.current = newConversationId;
+                setActiveConversationId(newConversationId);
+            }
         } catch (e) {
             const message = e instanceof Error ? e.message : '发送失败';
             setError(message);
@@ -167,11 +216,37 @@ export default function ChatScreen(): JSX.Element {
             );
         } finally {
             setStatus('idle');
+            void refreshConversations();
         }
-    }, [agentId, input, messages, status, token]);
+    }, [agentId, input, messages, status, token, refreshConversations]);
 
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className='flex-1 bg-gray-50'>
+            {/* 会话操作栏 */}
+            <View className='flex-row items-center justify-end gap-2 border-b border-gray-200 bg-white px-4 py-2'>
+                {activeConversationId !== null ? (
+                    <Text className='mr-auto text-xs text-gray-400'>会话 #{activeConversationId}</Text>
+                ) : (
+                    <Text className='mr-auto text-xs text-gray-400'>新对话</Text>
+                )}
+                <Pressable
+                    className='rounded-lg border border-gray-200 px-3 py-1.5'
+                    onPress={() => {
+                        void refreshConversations();
+                        setHistoryVisible(true);
+                    }}
+                >
+                    <Text className='text-xs text-gray-600'>历史会话</Text>
+                </Pressable>
+                <Pressable
+                    className='rounded-lg border border-gray-200 px-3 py-1.5'
+                    onPress={startNewConversation}
+                    disabled={status === 'streaming'}
+                >
+                    <Text className='text-xs text-blue-600'>+ 新对话</Text>
+                </Pressable>
+            </View>
+
             <FlatList
                 ref={listRef}
                 data={messages}
@@ -230,6 +305,52 @@ export default function ChatScreen(): JSX.Element {
                     )}
                 </Pressable>
             </View>
+
+            {/* 历史会话弹层 */}
+            <Modal visible={historyVisible} animationType='slide' transparent onRequestClose={() => setHistoryVisible(false)}>
+                <Pressable className='flex-1 justify-end bg-black/40' onPress={() => setHistoryVisible(false)}>
+                    <Pressable className='max-h-[70%] rounded-t-2xl bg-white pb-6' onPress={() => {}}>
+                        <View className='flex-row items-center justify-between border-b border-gray-100 px-5 py-4'>
+                            <Text className='text-base font-semibold text-gray-900'>历史会话</Text>
+                            <Pressable onPress={() => setHistoryVisible(false)}>
+                                <Text className='text-sm text-gray-400'>关闭</Text>
+                            </Pressable>
+                        </View>
+                        <FlatList
+                            data={conversations}
+                            keyExtractor={(item) => String(item.id)}
+                            renderItem={({ item }) => (
+                                <Pressable
+                                    className={`flex-row items-center justify-between px-5 py-3.5 ${
+                                        activeConversationId === item.id ? 'bg-blue-50' : ''
+                                    }`}
+                                    onPress={() => {
+                                        setHistoryVisible(false);
+                                        void loadConversation(item.id);
+                                    }}
+                                >
+                                    <View className='flex-1'>
+                                        <Text className='text-sm text-gray-800' numberOfLines={1}>
+                                            {item.title || '新对话'}
+                                        </Text>
+                                        <Text className='mt-0.5 text-xs text-gray-400'>
+                                            {new Date(item.updatedAt).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                    {activeConversationId === item.id ? (
+                                        <Text className='text-xs text-blue-600'>当前</Text>
+                                    ) : null}
+                                </Pressable>
+                            )}
+                            ListEmptyComponent={
+                                <View className='items-center py-10'>
+                                    <Text className='text-sm text-gray-400'>暂无历史会话</Text>
+                                </View>
+                            }
+                        />
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }

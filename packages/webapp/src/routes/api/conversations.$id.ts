@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { conversations, messages } from '@schema';
@@ -9,6 +10,7 @@ type RouteParams = { request: Request; params: { id: string } };
 /** 单个会话：读取完整消息 / 删除会话（仅限本人） */
 export const Route = createFileRoute('/api/conversations/$id')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             GET: async ({ request, params }: RouteParams) => {
                 try {

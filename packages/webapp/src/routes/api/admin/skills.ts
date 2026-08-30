@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -14,6 +15,7 @@ const SkillBodySchema = z.object({
 
 export const Route = createFileRoute('/api/admin/skills')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             GET: async ({ request }) => {
                 try {

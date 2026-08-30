@@ -6,6 +6,8 @@
         "mobile:start": "pnpm run --filter @repo/mobile dev",
         "mobile:build:dev": "pnpm run --filter @repo/mobile build:dev",
         "mobile:build:pro": "pnpm run --filter @repo/mobile build:pro",
+        "wap:start": "pnpm run --filter @repo/wap dev",
+        "wap:build": "pnpm run --filter @repo/wap build",
         "webapp:start": "pnpm run --filter @repo/webapp dev",
         "webapp:db:generate": "pnpm run --filter @repo/webapp db:generate",
         "webapp:db:migrate": "pnpm run --filter @repo/webapp db:migrate",

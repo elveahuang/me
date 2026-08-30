@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -13,6 +14,7 @@ const CreateBodySchema = z.object({
 /** 当前用户的会话列表 */
 export const Route = createFileRoute('/api/conversations')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             GET: async ({ request }) => {
                 try {

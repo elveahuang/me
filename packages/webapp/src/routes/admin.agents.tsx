@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '@/lib/client-api';
-import { MODEL_PRESETS } from '@/lib/ai';
 
 interface AdminAgent {
     id: number;
@@ -12,14 +11,42 @@ interface AdminAgent {
     description: string;
     systemPrompt: string;
     model: string;
+    providerId: number | null;
     enabled: boolean;
     skillIds: number[];
+    toolIds: number[];
+    knowledgeBaseIds: number[];
+    mcpServerIds: number[];
 }
 
 interface AdminSkill {
     id: number;
     name: string;
-    description: string;
+    enabled: boolean;
+}
+
+interface AdminTool {
+    id: number;
+    name: string;
+    enabled: boolean;
+}
+
+interface AdminMcpServer {
+    id: number;
+    name: string;
+    enabled: boolean;
+}
+
+interface KnowledgeBaseOption {
+    id: number;
+    name: string;
+}
+
+interface AdminProvider {
+    id: number;
+    name: string;
+    hasKey: boolean;
+    embeddingModel: string | null;
     enabled: boolean;
 }
 
@@ -28,10 +55,17 @@ const EMPTY_FORM: Omit<AdminAgent, 'id'> = {
     emoji: '🤖',
     description: '',
     systemPrompt: '',
-    model: MODEL_PRESETS[0].id,
+    model: 'deepseek:deepseek-chat',
+    providerId: null,
     enabled: true,
     skillIds: [],
+    toolIds: [],
+    knowledgeBaseIds: [],
+    mcpServerIds: [],
 };
+
+const inputClass =
+    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 export const Route = createFileRoute('/admin/agents')({
     component: AdminAgentsPage,
@@ -46,6 +80,26 @@ function AdminAgentsPage() {
     const { data: skills = [] } = useQuery({
         queryKey: ['admin', 'skills'],
         queryFn: () => api<AdminSkill[]>('/api/admin/skills'),
+    });
+    const { data: tools = [] } = useQuery({
+        queryKey: ['admin', 'tools'],
+        queryFn: () => api<AdminTool[]>('/api/admin/tools'),
+    });
+    const { data: providers = [] } = useQuery({
+        queryKey: ['admin', 'providers'],
+        queryFn: () => api<AdminProvider[]>('/api/admin/providers'),
+    });
+    const { data: knowledgeBases = [] } = useQuery({
+        queryKey: ['admin', 'knowledge'],
+        queryFn: () => api<KnowledgeBaseOption[]>('/api/admin/knowledge'),
+    });
+    const { data: mcpServers = [] } = useQuery({
+        queryKey: ['admin', 'mcp'],
+        queryFn: () => api<AdminMcpServer[]>('/api/admin/mcp'),
+    });
+    const { data: builtinProviders = [] } = useQuery({
+        queryKey: ['admin', 'builtin-providers'],
+        queryFn: () => api<{ id: string; label: string }[]>('/api/admin/builtin-providers'),
     });
 
     const [editing, setEditing] = useState<AdminAgent | null>(null);
@@ -71,7 +125,7 @@ function AdminAgentsPage() {
                         <tr>
                             <th className='px-4 py-3'>智能体</th>
                             <th className='px-4 py-3'>模型</th>
-                            <th className='px-4 py-3'>Skills</th>
+                            <th className='px-4 py-3'>Skills / Tools / 知识库</th>
                             <th className='px-4 py-3'>状态</th>
                             <th className='px-4 py-3 text-right'>操作</th>
                         </tr>
@@ -85,10 +139,19 @@ function AdminAgentsPage() {
                                     </div>
                                     <div className='max-w-md truncate text-xs text-gray-400'>{agent.description}</div>
                                 </td>
-                                <td className='px-4 py-3 font-mono text-xs text-gray-600'>{agent.model}</td>
+                                <td className='px-4 py-3 font-mono text-xs text-gray-600'>
+                                    {providerLabel(agent.providerId, providers)}
+                                    <span className='mx-1 text-gray-300'>/</span>
+                                    {agent.model}
+                                </td>
                                 <td className='px-4 py-3 text-xs text-gray-600'>
-                                    {agent.skillIds
-                                        .map((id) => skills.find((s) => s.id === id)?.name)
+                                    {[
+                                        agent.skillIds.map((id) => skills.find((s) => s.id === id)?.name).filter(Boolean).length > 0
+                                            ? `Skills×${agent.skillIds.length}`
+                                            : null,
+                                        agent.toolIds.length > 0 ? `Tools×${agent.toolIds.length}` : null,
+                                        agent.knowledgeBaseIds.length > 0 ? `知识库×${agent.knowledgeBaseIds.length}` : null,
+                                    ]
                                         .filter(Boolean)
                                         .join('、') || '—'}
                                 </td>
@@ -135,6 +198,11 @@ function AdminAgentsPage() {
                 open={creating}
                 agent={null}
                 skills={skills}
+                tools={tools}
+                providers={providers}
+                knowledgeBases={knowledgeBases}
+                builtinProviders={builtinProviders}
+                mcpServers={mcpServers}
                 onClose={() => setCreating(false)}
                 onSaved={() => {
                     setCreating(false);
@@ -145,6 +213,11 @@ function AdminAgentsPage() {
                 open={editing !== null}
                 agent={editing}
                 skills={skills}
+                tools={tools}
+                providers={providers}
+                knowledgeBases={knowledgeBases}
+                builtinProviders={builtinProviders}
+                mcpServers={mcpServers}
                 onClose={() => setEditing(null)}
                 onSaved={() => {
                     setEditing(null);
@@ -155,42 +228,115 @@ function AdminAgentsPage() {
     );
 }
 
+function providerLabel(providerId: number | null, providers: AdminProvider[]) {
+    if (providerId === null) return '内置';
+    return providers.find((p) => p.id === providerId)?.name ?? `#${providerId}`;
+}
+
 function AgentFormModal({
     open,
     agent,
     skills,
+    tools,
+    providers,
+    knowledgeBases,
+    builtinProviders,
+    mcpServers,
     onClose,
     onSaved,
 }: {
     open: boolean;
     agent: AdminAgent | null;
     skills: AdminSkill[];
+    tools: AdminTool[];
+    providers: AdminProvider[];
+    knowledgeBases: KnowledgeBaseOption[];
+    builtinProviders: { id: string; label: string }[];
+    mcpServers: AdminMcpServer[];
     onClose: () => void;
     onSaved: () => void;
 }) {
-    const [form, setForm] = useState(EMPTY_FORM);
+    const [form, setForm] = useState<Omit<AdminAgent, 'id'>>(EMPTY_FORM);
     const [formAgentId, setFormAgentId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [autoConfiguring, setAutoConfiguring] = useState(false);
+    const [autoDescription, setAutoDescription] = useState('');
 
-    // 打开时同步表单（区分“新建”与“编辑某个智能体”）
     const openKey = `${open}:${agent?.id ?? 'new'}`;
     const [lastKey, setLastKey] = useState('');
     if (openKey !== lastKey) {
         setLastKey(openKey);
-        setForm(agent ? { ...agent, skillIds: [...agent.skillIds] } : EMPTY_FORM);
+        setForm(
+            agent
+                ? { ...agent, skillIds: [...agent.skillIds], toolIds: [...agent.toolIds], knowledgeBaseIds: [...agent.knowledgeBaseIds], mcpServerIds: [...agent.mcpServerIds] }
+                : EMPTY_FORM,
+        );
         setFormAgentId(agent?.id ?? null);
         setError(null);
+        setAutoDescription('');
     }
 
     if (!open) return null;
+
+    const runAutoConfig = async () => {
+        if (autoDescription.trim().length < 5) {
+            setError('请先在下方填写智能体用途描述（至少 5 个字）');
+            return;
+        }
+        setAutoConfiguring(true);
+        setError(null);
+        try {
+            const draft = await api<{
+                name: string;
+                emoji: string;
+                description: string;
+                systemPrompt: string;
+                providerId: number | null;
+                model: string;
+                skillIds: number[];
+                toolIds: number[];
+                mcpServerIds: number[];
+            }>('/api/admin/agents/auto-config', {
+                method: 'POST',
+                body: JSON.stringify({ description: autoDescription.trim() }),
+            });
+            setForm((prev) => ({
+                ...prev,
+                name: draft.name,
+                emoji: draft.emoji,
+                description: draft.description,
+                systemPrompt: draft.systemPrompt,
+                providerId: draft.providerId,
+                model: draft.model,
+                skillIds: draft.skillIds,
+                toolIds: draft.toolIds,
+                mcpServerIds: draft.mcpServerIds,
+            }));
+            setForm((prev) => ({
+                ...prev,
+                name: draft.name,
+                emoji: draft.emoji,
+                description: draft.description,
+                systemPrompt: draft.systemPrompt,
+                providerId: draft.providerId,
+                model: draft.model,
+                skillIds: draft.skillIds,
+                toolIds: draft.toolIds,
+            }));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : '自动配置失败');
+        } finally {
+            setAutoConfiguring(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         setError(null);
         try {
-            const body = JSON.stringify({ ...form, skillIds: form.skillIds });
+            const body = JSON.stringify(form);
             if (formAgentId !== null) {
                 await api(`/api/admin/agents/${formAgentId}`, { method: 'PATCH', body });
             } else {
@@ -204,17 +350,31 @@ function AgentFormModal({
         }
     };
 
+    const toggleId = (list: number[], id: number) =>
+        list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+
     return (
         <Modal title={formAgentId !== null ? '编辑智能体' : '新建智能体'} onClose={onClose}>
             <form className='space-y-3' onSubmit={handleSubmit}>
+                {/* AI 自动配置 */}
+                <div className='rounded-lg border border-blue-200 bg-blue-50/60 p-3'>
+                    <label className='mb-1 block text-xs font-medium text-blue-700'>AI 自动配置：描述你想要的智能体，AI 生成配置草案（可再手动调整）</label>
+                    <div className='flex gap-2'>
+                        <input
+                            value={autoDescription}
+                            onChange={(e) => setAutoDescription(e.target.value)}
+                            className={inputClass}
+                            placeholder='例如：一个帮我整理每日新闻并生成摘要卡片的助手'
+                        />
+                        <Button type='button' variant='ghost' className='shrink-0' isDisabled={autoConfiguring} onPress={() => void runAutoConfig()}>
+                            {autoConfiguring ? '配置中…' : '✨ 自动配置'}
+                        </Button>
+                    </div>
+                </div>
+
                 <div className='grid grid-cols-[80px_1fr] gap-3'>
                     <Field label='Emoji'>
-                        <input
-                            value={form.emoji}
-                            onChange={(e) => setForm({ ...form, emoji: e.target.value })}
-                            className={inputClass}
-                            maxLength={8}
-                        />
+                        <input value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} className={inputClass} maxLength={8} />
                     </Field>
                     <Field label='名称'>
                         <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} />
@@ -223,15 +383,38 @@ function AgentFormModal({
                 <Field label='描述'>
                     <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputClass} />
                 </Field>
-                <Field label='模型'>
-                    <select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className={inputClass}>
-                        {MODEL_PRESETS.map((m) => (
-                            <option key={m.id} value={m.id}>
-                                {m.label}（{m.id}）
-                            </option>
-                        ))}
-                    </select>
-                </Field>
+                <div className='grid grid-cols-2 gap-3'>
+                    <Field label='供应商'>
+                        <select
+                            value={form.providerId ?? ''}
+                            onChange={(e) => setForm({ ...form, providerId: e.target.value ? Number(e.target.value) : null })}
+                            className={inputClass}
+                        >
+                            {builtinProviders.length === 0 ? <option value=''>内置（未配置 key）</option> : null}
+                            {builtinProviders.map((b) => (
+                                <option key={b.id} value=''>
+                                    {b.label}
+                                </option>
+                            ))}
+                            {providers
+                                .filter((p) => p.enabled)
+                                .map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}
+                                    </option>
+                                ))}
+                        </select>
+                    </Field>
+                    <Field label='模型 ID'>
+                        <input
+                            required
+                            value={form.model}
+                            onChange={(e) => setForm({ ...form, model: e.target.value })}
+                            className={inputClass}
+                            placeholder={form.providerId === null ? 'deepseek:deepseek-chat' : 'qwen-max / glm-4 / ...'}
+                        />
+                    </Field>
+                </div>
                 <Field label='系统提示词（人设与规则）'>
                     <textarea
                         value={form.systemPrompt}
@@ -254,18 +437,82 @@ function AgentFormModal({
                                     <input
                                         type='checkbox'
                                         checked={checked}
-                                        onChange={(e) =>
-                                            setForm({
-                                                ...form,
-                                                skillIds: e.target.checked ? [...form.skillIds, s.id] : form.skillIds.filter((id) => id !== s.id),
-                                            })
-                                        }
+                                        onChange={() => setForm({ ...form, skillIds: toggleId(form.skillIds, s.id) })}
                                     />
                                     {s.name}
                                 </label>
                             );
                         })}
-                        {skills.length === 0 ? <span className='text-xs text-gray-400'>暂无 Skill，可先到「Skills」页创建</span> : null}
+                        {skills.length === 0 ? <span className='text-xs text-gray-400'>暂无 Skill</span> : null}
+                    </div>
+                </Field>
+                <Field label='挂载 Tools'>
+                    <div className='flex flex-wrap gap-2'>
+                        {tools.map((t) => {
+                            const checked = form.toolIds.includes(t.id);
+                            return (
+                                <label
+                                    key={t.id}
+                                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                                        checked ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600'
+                                    }`}
+                                >
+                                    <input
+                                        type='checkbox'
+                                        checked={checked}
+                                        onChange={() => setForm({ ...form, toolIds: toggleId(form.toolIds, t.id) })}
+                                    />
+                                    🔧 {t.name}
+                                </label>
+                            );
+                        })}
+                        {tools.length === 0 ? <span className='text-xs text-gray-400'>暂无 Tool</span> : null}
+                    </div>
+                </Field>
+                <Field label='挂载知识库（RAG）'>
+                    <div className='flex flex-wrap gap-2'>
+                        {knowledgeBases.map((kb) => {
+                            const checked = form.knowledgeBaseIds.includes(kb.id);
+                            return (
+                                <label
+                                    key={kb.id}
+                                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                                        checked ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-600'
+                                    }`}
+                                >
+                                    <input
+                                        type='checkbox'
+                                        checked={checked}
+                                        onChange={() => setForm({ ...form, knowledgeBaseIds: toggleId(form.knowledgeBaseIds, kb.id) })}
+                                    />
+                                    📚 {kb.name}
+                                </label>
+                            );
+                        })}
+                        {knowledgeBases.length === 0 ? <span className='text-xs text-gray-400'>暂无知识库</span> : null}
+                    </div>
+                </Field>
+                <Field label='挂载 MCP 服务器'>
+                    <div className='flex flex-wrap gap-2'>
+                        {mcpServers.map((m) => {
+                            const checked = form.mcpServerIds.includes(m.id);
+                            return (
+                                <label
+                                    key={m.id}
+                                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                                        checked ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600'
+                                    }`}
+                                >
+                                    <input
+                                        type='checkbox'
+                                        checked={checked}
+                                        onChange={() => setForm({ ...form, mcpServerIds: toggleId(form.mcpServerIds, m.id) })}
+                                    />
+                                    🔌 {m.name}
+                                </label>
+                            );
+                        })}
+                        {mcpServers.length === 0 ? <span className='text-xs text-gray-400'>暂无 MCP 服务器</span> : null}
                     </div>
                 </Field>
                 <label className='flex items-center gap-2 text-sm text-gray-700'>
@@ -285,9 +532,6 @@ function AgentFormModal({
         </Modal>
     );
 }
-
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (

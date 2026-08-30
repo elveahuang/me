@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { count, desc, eq, gte } from 'drizzle-orm';
 import { db } from '@/db';
 import { agents, conversations, messages, skills, user } from '@schema';
@@ -7,6 +8,7 @@ import { errorResponse, json, requireAdmin } from '@/lib/api';
 /** 管理端仪表盘统计 */
 export const Route = createFileRoute('/api/admin/stats')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             GET: async ({ request }) => {
                 try {

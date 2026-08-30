@@ -159,10 +159,10 @@ function ChatPage() {
                             key={`${activeAgent.id}:${activeConversationId ?? 'new'}`}
                             agent={activeAgent}
                             conversationId={activeConversationId}
-                            user={user}
                             onFirstMessageCreated={(id) => {
                                 navigate({ to: '/chat', search: { agentId: activeAgent.id, conversationId: id }, replace: true });
-                            }}                        />
+                            }}
+                        />
                     ) : (
                         <div className='flex h-full items-center justify-center text-gray-400'>选择一个智能体开始对话</div>
                     )}
@@ -175,7 +175,6 @@ function ChatPage() {
 interface ChatViewProps {
     agent: AgentSummary;
     conversationId: number | null;
-    user: SessionUser;
     onFirstMessageCreated: (conversationId: number) => void;
 }
 
@@ -223,6 +222,10 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
         transport,
         onFinish: () => {
             void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            // 流结束后再把新会话同步进 URL（流中导航会 remount 组件、中断流式）
+            if (createdRef.current !== null && createdRef.current !== conversationId) {
+                onFirstMessageCreated(createdRef.current);
+            }
         },
     });
 
@@ -266,8 +269,12 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                                 <p className='mt-2 text-sm'>给 {agent.name} 发送第一条消息</p>
                             </div>
                         ) : null}
-                        {chat.messages.map((message) => (
-                            <MessageBubble key={message.id} message={message} streaming={chat.status === 'streaming'} />
+                        {chat.messages.map((message, index) => (
+                            <MessageBubble
+                                key={message.id}
+                                message={message}
+                                streaming={chat.status === 'streaming' && index === chat.messages.length - 1}
+                            />
                         ))}
                     </div>
                 )}

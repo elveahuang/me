@@ -4,7 +4,7 @@ config({ path: ['.env.local', '.env'] });
 
 async function main() {
     const { db } = await import('./index');
-    const { agents, agentSkills, skills, user } = await import('./schema');
+    const { agents, agentSkills, agentTools, skills, tools, user } = await import('./schema');
     const { auth } = await import('../lib/auth');
     const { eq } = await import('drizzle-orm');
 
@@ -59,7 +59,30 @@ async function main() {
         console.log(`已创建 Skill: ${seed.name}`);
     }
 
-    // 3. 智能体
+    // 3. 内置 Tool 示例
+    const toolSeeds = [
+        {
+            name: '查询当前时间',
+            description: '获取服务器当前的 UTC 时间，回答时间相关问题或做时间计算前调用',
+            type: 'builtin_time',
+            config: {},
+            enabled: true,
+        },
+    ];
+    let timeToolId: number | null = null;
+    for (const seed of toolSeeds) {
+        const found = await db.select().from(tools).where(eq(tools.name, seed.name));
+        if (found[0]) {
+            timeToolId = found[0].id;
+            continue;
+        }
+        const created = (await db.insert(tools).values(seed).returning())[0];
+        if (!created) throw new Error(`创建 Tool 失败: ${seed.name}`);
+        timeToolId = created.id;
+        console.log(`已创建 Tool: ${seed.name}`);
+    }
+
+    // 4. 智能体
     const agentSeeds = [
         {
             name: '通用助手',
@@ -67,8 +90,10 @@ async function main() {
             description: '日常问答、写作、翻译样样都行的通用智能体',
             systemPrompt: '你是一个乐于助人的中文智能助手，回答准确、简洁、有条理。',
             model: 'deepseek:deepseek-chat',
+            providerId: null,
             enabled: true,
             skillIdx: [0, 1],
+            withTimeTool: true,
         },
         {
             name: '数据看板助手',
@@ -76,8 +101,10 @@ async function main() {
             description: '擅长把数字整理成卡片和指标展示',
             systemPrompt: '你是一个数据分析助手，擅长把数据整理成清晰的指标卡。收到数据问题时，先给结论再用组件展示关键指标。',
             model: 'deepseek:deepseek-chat',
+            providerId: null,
             enabled: true,
             skillIdx: [0],
+            withTimeTool: false,
         },
         {
             name: '文案写作助手',
@@ -85,8 +112,10 @@ async function main() {
             description: '营销文案、标题、社媒帖子创作',
             systemPrompt: '你是一位资深文案策划，文风灵活，擅长提供多个候选方案并说明适用场景。',
             model: 'openai:gpt-4o-mini',
+            providerId: null,
             enabled: true,
             skillIdx: [1],
+            withTimeTool: false,
         },
     ];
 
@@ -96,7 +125,7 @@ async function main() {
             console.log(`智能体已存在: ${seed.name}`);
             continue;
         }
-        const { skillIdx, ...values } = seed;
+        const { skillIdx, withTimeTool, ...values } = seed;
         const created = (await db.insert(agents).values(values).returning())[0];
         if (!created) throw new Error(`创建智能体失败: ${seed.name}`);
         const links = skillIdx
@@ -104,6 +133,9 @@ async function main() {
             .filter((l): l is { agentId: number; skillId: number } => typeof l.skillId === 'number');
         if (links.length > 0) {
             await db.insert(agentSkills).values(links);
+        }
+        if (withTimeTool && timeToolId !== null) {
+            await db.insert(agentTools).values({ agentId: created.id, toolId: timeToolId });
         }
         console.log(`已创建智能体: ${seed.name}`);
     }

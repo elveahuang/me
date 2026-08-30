@@ -10,5 +10,20 @@ export default defineConfig({
     resolve: {
         tsconfigPaths: true,
     },
-    plugins: [devtools(), nitro({ rollupConfig: { external: [/^@sentry\//] } }), tailwindcss(), tanstackStart(), viteReact()],
+    plugins: [
+        devtools(),
+        nitro({
+            // 规避 nitro beta + vite 8 (rolldown) 的跨 chunk 导出损坏问题：
+            // 服务端产物输出为单一 chunk。
+            rollupConfig: {
+                external: [/^@sentry\//],
+                output: {
+                    inlineDynamicImports: true,
+                },
+            },
+        }),
+        tailwindcss(),
+        tanstackStart(),
+        viteReact(),
+    ],
 });

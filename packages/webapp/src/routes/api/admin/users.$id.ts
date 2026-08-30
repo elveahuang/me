@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { corsMiddleware } from '@/lib/cors';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
@@ -16,6 +17,7 @@ const UserPatchSchema = z.object({
 /** 更新用户角色 / 封禁状态（用户 ID 为文本，不可操作自己） */
 export const Route = createFileRoute('/api/admin/users/$id')({
     server: {
+        middleware: [corsMiddleware],
         handlers: {
             PATCH: async ({ request, params }: RouteParams) => {
                 try {
