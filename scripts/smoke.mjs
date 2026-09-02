@@ -367,6 +367,19 @@ async function main() {
     });
     check('重复邮箱注册被拒绝', dup.res.status >= 400, `status=${dup.res.status}`);
 
+    // 14. 防滥用：超大消息体必须被拒绝（>512KB）
+    const oversized = await streamChat(userJar, {
+        agentId: generalAgent.id,
+        messages: [
+            {
+                id: `s-${UNIQUE}-big`,
+                role: 'user',
+                parts: [{ type: 'text', text: 'x'.repeat(600 * 1024) }],
+            },
+        ],
+    });
+    check('超大消息体被拒绝（400）', oversized.status === 400, `status=${oversized.status}`);
+
     console.log(`\n=== 结果：${passed} 通过，${failed} 失败 ===`);
     if (failures.length > 0) {
         console.log('失败项：');

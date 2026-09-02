@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { agents, conversations } from '@schema';
 import { errorResponse, HttpError, json, readJson, requireUser } from '@/lib/api';
+import { corsResponseHeaders } from '@/lib/cors';
+import { rateLimit } from '@/lib/rate-limit';
 
 const CreateBodySchema = z.object({
     agentId: z.number().int().positive(),
@@ -40,6 +42,13 @@ export const Route = createFileRoute('/api/conversations')({
             POST: async ({ request }) => {
                 try {
                     const session = await requireUser(request);
+                    const limited = rateLimit(`conv-create:${session.user.id}`, 20, 60_000);
+                    if (!limited.ok) {
+                        return Response.json(
+                            { error: `创建过于频繁，请 ${limited.retryAfterSec} 秒后再试` },
+                            { status: 429, headers: { 'retry-after': String(limited.retryAfterSec), ...corsResponseHeaders() } },
+                        );
+                    }
                     const body = CreateBodySchema.safeParse(await readJson<unknown>(request));
                     if (!body.success) throw new HttpError(400, '请求参数错误');
 

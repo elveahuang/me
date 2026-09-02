@@ -21,6 +21,7 @@ import { errorResponse, HttpError, readJson, requireUser } from '@/lib/api';
 import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
 import { buildMcpToolSets } from '@/lib/mcp';
 import { buildSystemPrompt } from '@/lib/prompt';
+import { rateLimit } from '@/lib/rate-limit';
 import { retrieveKnowledge } from '@/lib/rag';
 import { buildToolSet } from '@/lib/tools';
 
@@ -111,7 +112,9 @@ const ChatBodySchema = z.object({
             }),
         )
         .min(1)
-        .max(80),
+        .max(80)
+        // 请求体体积上限（512KB），防止超大 parts 滥用
+        .refine((v) => JSON.stringify(v).length <= 512 * 1024, { message: '消息体积过大' }),
 });
 
 export const Route = createFileRoute('/api/chat')({
@@ -121,6 +124,15 @@ export const Route = createFileRoute('/api/chat')({
             POST: async ({ request }) => {
                 try {
                     const session = await requireUser(request);
+
+                    // 限流：每个用户每分钟最多 30 次对话请求
+                    const limited = rateLimit(`chat:${session.user.id}`, 30, 60_000);
+                    if (!limited.ok) {
+                        return Response.json(
+                            { error: `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试` },
+                            { status: 429, headers: { 'retry-after': String(limited.retryAfterSec), ...corsResponseHeaders() } },
+                        );
+                    }
 
                     const body = await readJson<unknown>(request);
                     const parsed = ChatBodySchema.safeParse(body);
