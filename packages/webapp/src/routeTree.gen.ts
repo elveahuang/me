@@ -25,7 +25,6 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as ApiAgentsRouteImport } from './routes/api/agents'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiConversationsRouteImport } from './routes/api/conversations'
-import { Route as ApiHelloRouteImport } from './routes/api/hello'
 import { Route as ApiMeRouteImport } from './routes/api/me'
 import { Route as AdminKnowledgeIdRouteImport } from './routes/admin.knowledge.$id'
 import { Route as ApiAdminAgentsRouteImport } from './routes/api/admin/agents'
@@ -129,11 +128,6 @@ const ApiChatRoute = ApiChatRouteImport.update({
 const ApiConversationsRoute = ApiConversationsRouteImport.update({
   id: '/api/conversations',
   path: '/api/conversations',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiHelloRoute = ApiHelloRouteImport.update({
-  id: '/api/hello',
-  path: '/api/hello',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMeRoute = ApiMeRouteImport.update({
@@ -277,7 +271,6 @@ export interface FileRoutesByFullPath {
   '/api/agents': typeof ApiAgentsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/hello': typeof ApiHelloRoute
   '/api/me': typeof ApiMeRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
@@ -319,7 +312,6 @@ export interface FileRoutesByTo {
   '/api/agents': typeof ApiAgentsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/hello': typeof ApiHelloRoute
   '/api/me': typeof ApiMeRoute
   '/admin': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
@@ -363,7 +355,6 @@ export interface FileRoutesById {
   '/api/agents': typeof ApiAgentsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/hello': typeof ApiHelloRoute
   '/api/me': typeof ApiMeRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
@@ -408,7 +399,6 @@ export interface FileRouteTypes {
     | '/api/agents'
     | '/api/chat'
     | '/api/conversations'
-    | '/api/hello'
     | '/api/me'
     | '/admin/'
     | '/admin/knowledge/$id'
@@ -450,7 +440,6 @@ export interface FileRouteTypes {
     | '/api/agents'
     | '/api/chat'
     | '/api/conversations'
-    | '/api/hello'
     | '/api/me'
     | '/admin'
     | '/admin/knowledge/$id'
@@ -493,7 +482,6 @@ export interface FileRouteTypes {
     | '/api/agents'
     | '/api/chat'
     | '/api/conversations'
-    | '/api/hello'
     | '/api/me'
     | '/admin/'
     | '/admin/knowledge/$id'
@@ -530,7 +518,6 @@ export interface RootRouteChildren {
   ApiAgentsRoute: typeof ApiAgentsRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiConversationsRoute: typeof ApiConversationsRouteWithChildren
-  ApiHelloRoute: typeof ApiHelloRoute
   ApiMeRoute: typeof ApiMeRoute
   ApiAdminAgentsRoute: typeof ApiAdminAgentsRouteWithChildren
   ApiAdminBuiltinProvidersRoute: typeof ApiAdminBuiltinProvidersRoute
@@ -656,13 +643,6 @@ declare module '@tanstack/react-router' {
       path: '/api/conversations'
       fullPath: '/api/conversations'
       preLoaderRoute: typeof ApiConversationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/hello': {
-      id: '/api/hello'
-      path: '/api/hello'
-      fullPath: '/api/hello'
-      preLoaderRoute: typeof ApiHelloRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/me': {
@@ -1015,7 +995,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAgentsRoute: ApiAgentsRoute,
   ApiChatRoute: ApiChatRoute,
   ApiConversationsRoute: ApiConversationsRouteWithChildren,
-  ApiHelloRoute: ApiHelloRoute,
   ApiMeRoute: ApiMeRoute,
   ApiAdminAgentsRoute: ApiAdminAgentsRouteWithChildren,
   ApiAdminBuiltinProvidersRoute: ApiAdminBuiltinProvidersRoute,

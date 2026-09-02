@@ -31,8 +31,21 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         ],
     }),
     shellComponent: RootDocument,
+    notFoundComponent: NotFound,
     component: () => <Outlet />,
 });
+
+function NotFound() {
+    return (
+        <div className='flex min-h-dvh flex-col items-center justify-center gap-3 bg-gray-50'>
+            <div className='text-6xl'>🤖</div>
+            <p className='text-lg font-semibold text-gray-900'>页面不存在</p>
+            <a href='/' className='text-sm text-blue-600 hover:underline'>
+                返回首页
+            </a>
+        </div>
+    );
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
     return (
