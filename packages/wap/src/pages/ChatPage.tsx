@@ -106,6 +106,7 @@ export function ChatPage() {
     const [conversations, setConversations] = useState<ConversationSummary[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
     const conversationIdRef = useRef<number | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     const refreshConversations = useCallback(async () => {
@@ -182,6 +183,11 @@ export function ChatPage() {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    const stopStreaming = useCallback(() => {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+    }, []);
+
     const send = async () => {
         const text = input.trim();
         if (!text || status === 'streaming' || token === null) return;
@@ -191,6 +197,9 @@ export function ChatPage() {
         const assistantId = `a-${Date.now()}`;
         setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '' }]);
         setStatus('streaming');
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             const { conversationId: newConversationId } = await streamChat(
@@ -204,15 +213,26 @@ export function ChatPage() {
                     ],
                 },
                 (delta) => setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta } : m))),
+                controller.signal,
             );
             if (newConversationId !== null && conversationIdRef.current === null) {
                 conversationIdRef.current = newConversationId;
                 setActiveConversationId(newConversationId);
             }
         } catch (e) {
-            const message = e instanceof Error ? e.message : '发送失败';
-            setMessages((prev) => prev.map((m) => (m.id === assistantId && m.text === '' ? { ...m, text: `⚠️ ${message}` } : m)));
+            const aborted = controller.signal.aborted;
+            if (!aborted) {
+                void presentToast({ message: e instanceof Error ? e.message : '发送失败', duration: 2500, color: 'danger' });
+            }
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === assistantId && m.text === ''
+                        ? { ...m, text: aborted ? '（已停止生成）' : `⚠️ ${e instanceof Error ? e.message : '发送失败'}` }
+                        : m,
+                ),
+            );
         } finally {
+            abortControllerRef.current = null;
             setStatus('idle');
             void refreshConversations();
         }
@@ -227,17 +247,16 @@ export function ChatPage() {
                     </IonButtons>
                     <IonTitle>{agent ? `${agent.emoji} ${agent.name}` : '对话'}</IonTitle>
                     <IonButtons slot='end'>
-                        <IonButton disabled={status === 'streaming'} onClick={() => { void refreshConversations(); setHistoryVisible(true); }}>
-                            历史
-                        </IonButton>
-                        <IonButton
-                            disabled={status === 'streaming'}
-                            onClick={() => {
-                                startNewConversation();
-                            }}
-                        >
-                            新对话
-                        </IonButton>
+                        {status === 'streaming' ? (
+                            <IonButton onClick={stopStreaming}>停止</IonButton>
+                        ) : (
+                            <>
+                                <IonButton onClick={() => { void refreshConversations(); setHistoryVisible(true); }}>
+                                    历史
+                                </IonButton>
+                                <IonButton onClick={startNewConversation}>新对话</IonButton>
+                            </>
+                        )}
                     </IonButtons>
                 </IonToolbar>
             </IonHeader>

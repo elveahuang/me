@@ -298,6 +298,11 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                     <Button type='submit' isDisabled={chat.status === 'submitted' || chat.status === 'streaming' || !input.trim()}>
                         发送
                     </Button>
+                    {chat.status === 'submitted' || chat.status === 'streaming' ? (
+                        <Button type='button' variant='ghost' onPress={() => chat.stop()}>
+                            停止
+                        </Button>
+                    ) : null}
                 </form>
                 {statusText ? <p className='mx-auto mt-2 max-w-3xl text-xs text-gray-400'>{statusText}</p> : null}
             </div>

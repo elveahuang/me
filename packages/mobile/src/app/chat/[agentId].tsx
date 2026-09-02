@@ -101,6 +101,7 @@ export default function ChatScreen(): JSX.Element {
     const [conversations, setConversations] = useState<ConversationSummary[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
     const conversationIdRef = useRef<number | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
     const listRef = useRef<FlatList<ChatMessage>>(null);
 
     const loadConversation = useCallback(
@@ -174,6 +175,11 @@ export default function ChatScreen(): JSX.Element {
         }
     }, [agentId, token]);
 
+    const stopStreaming = useCallback(() => {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+    }, []);
+
     const send = useCallback(async () => {
         const text = input.trim();
         if (!text || status === 'streaming' || token === null) return;
@@ -184,6 +190,9 @@ export default function ChatScreen(): JSX.Element {
         const assistantId = `a-${Date.now()}`;
         setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '' }]);
         setStatus('streaming');
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             const { conversationId: newConversationId } = await streamChat(
@@ -203,18 +212,27 @@ export default function ChatScreen(): JSX.Element {
                 (delta) => {
                     setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta } : m)));
                 },
+                controller.signal,
             );
             if (newConversationId !== null && conversationIdRef.current === null) {
                 conversationIdRef.current = newConversationId;
                 setActiveConversationId(newConversationId);
             }
         } catch (e) {
-            const message = e instanceof Error ? e.message : '发送失败';
-            setError(message);
+            const aborted = controller.signal.aborted;
+            if (!aborted) {
+                const message = e instanceof Error ? e.message : '发送失败';
+                setError(message);
+            }
             setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId && m.text === '' ? { ...m, text: `⚠️ ${message}` } : m)),
+                prev.map((m) =>
+                    m.id === assistantId && (m.text === '' || controller.signal.aborted)
+                        ? { ...m, text: m.text === '' ? (aborted ? '（已停止生成）' : `⚠️ ${e instanceof Error ? e.message : '发送失败'}`) : m.text }
+                        : m,
+                ),
             );
         } finally {
+            abortControllerRef.current = null;
             setStatus('idle');
             void refreshConversations();
         }
@@ -304,6 +322,11 @@ export default function ChatScreen(): JSX.Element {
                         <Text className='text-sm font-semibold text-white'>发送</Text>
                     )}
                 </Pressable>
+                {status === 'streaming' ? (
+                    <Pressable className='items-center justify-center rounded-xl border border-gray-300 px-4 py-3' onPress={stopStreaming}>
+                        <Text className='text-sm text-gray-600'>停止</Text>
+                    </Pressable>
+                ) : null}
             </View>
 
             {/* 历史会话弹层 */}
