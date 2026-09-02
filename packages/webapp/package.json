@@ -9,7 +9,7 @@
         "db:seed": "tsx src/db/seed.ts",
         "typecheck": "tsc --noEmit",
         "dev": "vite",
-        "build": "vite build && node ../../scripts/fix-nitro-chunks.cjs",
+        "build": "vite build",
         "start": "vite preview"
     },
     "dependencies": {

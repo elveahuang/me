@@ -30,7 +30,7 @@ packages/
   mobile/   # Expo SDK 57 + expo-router + uniwind；REST + Bearer token 对接 webapp API
   wap/      # Ionic 9.0.1 + React Router 6 + Capacitor 7；同样对接 webapp API
   config/   # 共享 tsconfig / eslint / prettier 配置
-scripts/    # smoke.mjs 端到端冒烟测试 / fix-nitro-chunks.cjs 构建修补
+scripts/    # 仓库脚手架脚本（init / build / update）
 ```
 
 ## 快速开始
@@ -76,16 +76,6 @@ pnpm run wap:build           # 产出 dist/，可用 npx cap add ios/android + c
 - API 地址通过 `packages/wap/src/lib/config.ts` 或构建时 `VITE_API_URL` 配置
 - 鉴权与 mobile 相同（Bearer token，存 localStorage）
 
-### 5. 端到端冒烟测试
-
-```shell
-node scripts/smoke.mjs http://localhost:3000   # 对运行中的 webapp 执行 40 项全链路检查
-```
-
-覆盖：认证（注册/登录/Bearer/重复邮箱拒绝）、智能体与会话 CRUD、真实 AI 流式对话、
-Tool calling、MCP 服务器（stdio echo 端到端回显）、RAG 检索、权限隔离、CORS、长上下文截断。
-`scripts/test-mcp-server.mjs` 是配套的 stdio 测试 MCP 服务器（echo 工具）。
-
 ## 技术要点
 
 - 服务端路由：TanStack Start 文件路由的 `server.handlers`（`src/routes/api/**`），
@@ -104,5 +94,5 @@ Tool calling、MCP 服务器（stdio echo 端到端回显）、RAG 检索、权�
 - react-native 0.87 移除了 `rn-get-polyfills`，而 Expo CLI 57 仍会加载它（web 平台），
   已用 `patches/react-native@0.87.1.patch` 修复（`pnpm-workspace.yaml` 的 `patchedDependencies`）
 - nitro 3 beta + vite 8 (rolldown) 多 chunk 构建存在导出损坏问题，
-  webapp 构建已配置服务端单 chunk 输出（`vite.config.mjs`），并附带 `scripts/fix-nitro-chunks.cjs` 兜底
+  webapp 构建已配置服务端单 chunk 输出（`vite.config.mjs`）规避
 
