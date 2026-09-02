@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { corsMiddleware } from '@/lib/cors';
 import { count, desc, eq, gte } from 'drizzle-orm';
 import { db } from '@/db';
-import { agents, conversations, messages, skills, user } from '@schema';
+import { agents, aiProviders, conversations, mcpServers, messages, skills, tools, user } from '@schema';
 import { errorResponse, json, requireAdmin } from '@/lib/api';
 
 /** 管理端仪表盘统计 */
@@ -15,23 +15,50 @@ export const Route = createFileRoute('/api/admin/stats')({
                     await requireAdmin(request);
 
                     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                    const [[usersCount], [agentsCount], [skillsCount], [conversationsCount], [messagesCount], [activeConversations]] =
-                        await Promise.all([
-                            db.select({ value: count() }).from(user),
-                            db.select({ value: count() }).from(agents),
-                            db.select({ value: count() }).from(skills),
-                            db.select({ value: count() }).from(conversations),
-                            db.select({ value: count() }).from(messages),
-                            db
-                                .select({ value: count() })
-                                .from(conversations)
-                                .where(gte(conversations.updatedAt, dayAgo)),
-                        ]);
+                    const [
+                        [usersCount],
+                        [agentsCount],
+                        [skillsCount],
+                        [conversationsCount],
+                        [messagesCount],
+                        [activeConversations],
+                        [providersCount],
+                        [providersEnabled],
+                        [toolsCount],
+                        [mcpCount],
+                    ] = await Promise.all([
+                        db.select({ value: count() }).from(user),
+                        db.select({ value: count() }).from(agents),
+                        db.select({ value: count() }).from(skills),
+                        db.select({ value: count() }).from(conversations),
+                        db.select({ value: count() }).from(messages),
+                        db
+                            .select({ value: count() })
+                            .from(conversations)
+                            .where(gte(conversations.updatedAt, dayAgo)),
+                        db.select({ value: count() }).from(aiProviders),
+                        db.select({ value: count() }).from(aiProviders).where(eq(aiProviders.enabled, true)),
+                        db.select({ value: count() }).from(tools),
+                        db.select({ value: count() }).from(mcpServers),
+                    ]);
 
                     const recentUsers = await db
                         .select({ id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt })
                         .from(user)
                         .orderBy(desc(user.createdAt))
+                        .limit(5);
+
+                    const recentConversations = await db
+                        .select({
+                            id: conversations.id,
+                            title: conversations.title,
+                            agentName: agents.name,
+                            agentEmoji: agents.emoji,
+                            updatedAt: conversations.updatedAt,
+                        })
+                        .from(conversations)
+                        .innerJoin(agents, eq(conversations.agentId, agents.id))
+                        .orderBy(desc(conversations.updatedAt))
                         .limit(5);
 
                     const modelUsage = await db
@@ -49,8 +76,13 @@ export const Route = createFileRoute('/api/admin/stats')({
                             conversations: conversationsCount?.value ?? 0,
                             messages: messagesCount?.value ?? 0,
                             activeConversations24h: activeConversations?.value ?? 0,
+                            providers: providersCount?.value ?? 0,
+                            providersEnabled: providersEnabled?.value ?? 0,
+                            tools: toolsCount?.value ?? 0,
+                            mcpServers: mcpCount?.value ?? 0,
                         },
                         recentUsers,
+                        recentConversations,
                         modelUsage: modelUsage.map((row) => ({ model: row.model, conversations: Number(row.value) })),
                         generatedAt: new Date().toISOString(),
                     });
