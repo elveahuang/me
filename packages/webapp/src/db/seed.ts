@@ -4,8 +4,11 @@ config({ path: ['.env.local', '.env'] });
 
 async function main() {
     const { db } = await import('./index');
-    const { agents, agentSkills, agentTools, skills, tools, user } = await import('./schema');
+    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, skills, tools, user } = await import(
+        './schema'
+    );
     const { auth } = await import('../lib/auth');
+    const { ingestDocument } = await import('../lib/rag');
     const { eq } = await import('drizzle-orm');
 
     // 1. 管理员账号
@@ -138,6 +141,57 @@ async function main() {
             await db.insert(agentTools).values({ agentId: created.id, toolId: timeToolId });
         }
         console.log(`已创建智能体: ${seed.name}`);
+    }
+
+    // 4. 示例知识库（关键词检索模式，未配置 embedding 供应商）
+    const guideKbName = '平台使用指南';
+    let guideKbId: number | null = null;
+    const existingKb = await db.select().from(knowledgeBases).where(eq(knowledgeBases.name, guideKbName));
+    if (existingKb[0]) {
+        guideKbId = existingKb[0].id;
+        console.log('知识库已存在: 平台使用指南');
+    } else {
+        const kb = (await db.insert(knowledgeBases).values({ name: guideKbName, description: '本平台的用法与能力说明（示例 RAG 数据）' }).returning())[0];
+        if (!kb) throw new Error('创建知识库失败');
+        guideKbId = kb.id;
+
+        const guideDoc = (await db
+            .insert(knowledgeDocuments)
+            .values({
+                kbId: kb.id,
+                title: 'ME 平台使用指南',
+                content: [
+                    'ME 平台是一个全栈 AI 智能体平台，支持网页端、移动端（Expo）与 Ionic/Capacitor 客户端三种入口，数据与账号互通。',
+                    '',
+                    '## 智能体',
+                    '智能体由管理员在后台创建，配置人设（系统提示词）、模型、供应商，并可挂载 Skills、Tools、MCP 服务器与知识库。用户在对话页选择智能体即可开始对话。',
+                    '',
+                    '## Skills 与 Tools',
+                    'Skill 是可复用的指令块，决定智能体的行为方式；Tool 是智能体可调用的工具（内置时间工具或自定义 HTTP 工具），调用遵循 ReAct 循环。',
+                    '',
+                    '## MCP 与知识库',
+                    'MCP（Model Context Protocol）服务器提供的外部工具可直接挂载到智能体。知识库支持文档切块入库，对话时自动检索相关内容作为参考。',
+                    '',
+                    '## 数据说明',
+                    '所有对话按会话保存，可随时切换回历史会话继续；平台对每个用户有接口频率限制以保障服务稳定。',
+                ].join('\n'),
+            })
+            .returning())[0];
+        if (!guideDoc) throw new Error('创建指南文档失败');
+        const ingested = await ingestDocument({ kbId: kb.id, documentId: guideDoc.id, content: guideDoc.content });
+        console.log(`已创建知识库: ${guideKbName}（${ingested.chunkCount} 块）`);
+    }
+
+    // 把示例知识库挂到通用助手
+    if (guideKbId !== null) {
+        const [general] = await db.select().from(agents).where(eq(agents.name, '通用助手'));
+        if (general) {
+            const existing = await db.select().from(agentKnowledge).where(eq(agentKnowledge.agentId, general.id));
+            if (!existing.some((l) => l.kbId === guideKbId)) {
+                await db.insert(agentKnowledge).values({ agentId: general.id, kbId: guideKbId });
+                console.log('已挂载知识库到: 通用助手');
+            }
+        }
     }
 
     console.log('Seed 完成 ✅');

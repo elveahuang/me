@@ -11,7 +11,9 @@
 - **MCP Tools**：接入 Model Context Protocol 服务器（Streamable HTTP / SSE / stdio 三种传输），挂载到智能体后其工具自动进入 ReAct 循环；支持一键「测试连接」枚举远端工具
 - **自定义 AI 供应商**：接入任意 OpenAI 兼容协议供应商（DeepSeek / Moonshot / Ollama / OpenRouter 等），密钥服务端保存、界面掩码展示
 - **AI 自动配置**：输入智能体用途描述，AI 自动生成名称/人设/模型/Skills/Tools/MCP/知识库 配置草案，初步形成完整的 ReAct Agent
-- **RAG 知识库**：文档自动切块入库；配置了 Embedding 供应商走向量检索，否则退化为关键词匹配；对话时检索相关内容注入上下文
+- **RAG 知识库**：文档自动切块入库；配置了 Embedding 供应商走向量检索，否则退化为关键词匹配；对话时检索相关内容注入上下文（seed 自带「平台使用指南」示例知识库）
+- **对话体验**：流式输出可随时停止（webapp/mobile/wap 三端），服务端中断安全（保留已生成内容）
+- **防滥用**：对话接口按用户限流（30 次/分）、超大消息体拒绝（512KB 上限）、会话创建限流（20 次/分）
 - **AI 渲染管线**：助手回复用 Comark（Markdown + 组件语法 + 流式 autoClose）渲染，
   `json-render` 代码块（由 @json-render/core 的 catalog 生成提示词驱动）渲染成 Card / Stat / Badge / Alert 组件
 - **三端用户侧**：webapp、mobile（Expo）、wap（Ionic 9 + React Router + Capacitor）各自实现注册登录、智能体列表、会话管理与流式对话
@@ -92,6 +94,7 @@ Tool calling、MCP 服务器（stdio echo 端到端回显）、RAG 检索、权�
   （不依赖 AI SDK v7 已弃用的 response `onFinish`）；`messages.seq`（bigserial）保证排序稳定
 - MCP：`src/lib/mcp.ts` 按请求连接 MCP 服务器（Streamable HTTP/SSE/stdio），`listTools` 动态转换为
   AI SDK `dynamicTool`（工具名加 `mcp{serverId}_` 前缀防冲突），聊天结束后统一关闭连接
+- 限流：`src/lib/rate-limit.ts` 内存滑动窗口（单实例足够，多实例部署需换共享存储）
 - json-render：`src/lib/catalog.ts` 同时供服务端 `catalog.prompt()` 生成提示词、
   客户端 Comark `jsonRender()` 插件渲染 ```json-render 代码块
 - CORS：OPTIONS 预检由 `src/lib/cors.ts` 中间件短路，实际响应头由 `json()`/聊天流统一附加；
