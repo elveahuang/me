@@ -8,8 +8,9 @@
 - **与智能体对话**：AI SDK v7（Vercel）流式对话，消息落库（PostgreSQL + Drizzle ORM），上下文窗口截断（最近 24 条）
 - **Skill 系统**：可复用的指令块，挂载到智能体后注入系统提示词（管理端 CRUD）
 - **Tool 系统**：后台可配置的 AI 工具（AI SDK tool calling），内置时间工具 + 自定义 HTTP 工具（URL/请求体支持 `{{参数}}` 模板）
+- **MCP Tools**：接入 Model Context Protocol 服务器（Streamable HTTP / SSE / stdio 三种传输），挂载到智能体后其工具自动进入 ReAct 循环；支持一键「测试连接」枚举远端工具
 - **自定义 AI 供应商**：接入任意 OpenAI 兼容协议供应商（DeepSeek / Moonshot / Ollama / OpenRouter 等），密钥服务端保存、界面掩码展示
-- **AI 自动配置**：输入智能体用途描述，AI 自动生成名称/人设/模型/Skills/Tools 配置草案
+- **AI 自动配置**：输入智能体用途描述，AI 自动生成名称/人设/模型/Skills/Tools/MCP/知识库 配置草案，初步形成完整的 ReAct Agent
 - **RAG 知识库**：文档自动切块入库；配置了 Embedding 供应商走向量检索，否则退化为关键词匹配；对话时检索相关内容注入上下文
 - **AI 渲染管线**：助手回复用 Comark（Markdown + 组件语法 + 流式 autoClose）渲染，
   `json-render` 代码块（由 @json-render/core 的 catalog 生成提示词驱动）渲染成 Card / Stat / Badge / Alert 组件
@@ -76,8 +77,12 @@ pnpm run wap:build           # 产出 dist/，可用 npx cap add ios/android + c
 ### 5. 端到端冒烟测试
 
 ```shell
-node scripts/smoke.mjs http://localhost:3000   # 对运行中的 webapp 执行 28 项全链路检查
+node scripts/smoke.mjs http://localhost:3000   # 对运行中的 webapp 执行 40 项全链路检查
 ```
+
+覆盖：认证（注册/登录/Bearer/重复邮箱拒绝）、智能体与会话 CRUD、真实 AI 流式对话、
+Tool calling、MCP 服务器（stdio echo 端到端回显）、RAG 检索、权限隔离、CORS、长上下文截断。
+`scripts/test-mcp-server.mjs` 是配套的 stdio 测试 MCP 服务器（echo 工具）。
 
 ## 技术要点
 
@@ -85,6 +90,8 @@ node scripts/smoke.mjs http://localhost:3000   # 对运行中的 webapp 执行 2
   AI 聊天为 `POST /api/chat`（AI SDK UI message stream，SSE），通过 `x-conversation-id` 响应头回传新建会话 ID
 - 聊天持久化：客户端消息按 UIMessage id 幂等落库；助手消息由服务端自行 tee 消费 UI 流后落库
   （不依赖 AI SDK v7 已弃用的 response `onFinish`）；`messages.seq`（bigserial）保证排序稳定
+- MCP：`src/lib/mcp.ts` 按请求连接 MCP 服务器（Streamable HTTP/SSE/stdio），`listTools` 动态转换为
+  AI SDK `dynamicTool`（工具名加 `mcp{serverId}_` 前缀防冲突），聊天结束后统一关闭连接
 - json-render：`src/lib/catalog.ts` 同时供服务端 `catalog.prompt()` 生成提示词、
   客户端 Comark `jsonRender()` 插件渲染 ```json-render 代码块
 - CORS：OPTIONS 预检由 `src/lib/cors.ts` 中间件短路，实际响应头由 `json()`/聊天流统一附加；
