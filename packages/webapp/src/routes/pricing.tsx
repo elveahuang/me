@@ -36,6 +36,14 @@ interface CreateOrderResult {
     provider: string;
     mode: 'mock' | 'qrcode' | 'jsapi' | 'redirect';
     payUrl?: string | null;
+    jsapiParams?: {
+        appId: string;
+        timeStamp: string;
+        nonceStr: string;
+        package: string;
+        signType: 'RSA';
+        paySign: string;
+    };
     amountCents: number;
     planCode: string;
     period: 'monthly' | 'yearly';
@@ -309,16 +317,33 @@ function PayModal({
     const [mockPaying, setMockPaying] = useState(false);
     const [payError, setPayError] = useState<string | null>(null);
     const refreshedRef = useRef(false);
+    const jsapiInvokedRef = useRef(false);
 
-    // 待支付订单每 2 秒轮询一次；Modal 关闭（组件卸载）后自动停止
+    // 待支付订单每 2 秒轮询一次；到达终态或 Modal 关闭（组件卸载）后停止
     const { data: latest } = useQuery({
         queryKey: ['billing', 'order', order.orderNo],
         queryFn: () => api<OrderStatusResult>(`/api/billing/orders/${order.orderNo}`),
-        refetchInterval: 2000,
+        refetchInterval: (query) => {
+            const s = query.state.data?.status;
+            return s && s !== 'pending' ? false : 2000;
+        },
     });
 
     const status = latest?.status ?? order.status;
     const mode = latest?.mode ?? order.mode;
+
+    // 微信内 JSAPI 支付：拉起 WeixinJSBridge 收银台（幂等，仅一次）
+    useEffect(() => {
+        if (mode !== 'jsapi' || jsapiInvokedRef.current) return;
+        const bridge = (window as { WeixinJSBridge?: { invoke: (api: string, params: string, cb: (res: { err_msg?: string }) => void) => void } }).WeixinJSBridge;
+        if (!bridge || !order.jsapiParams) return;
+        jsapiInvokedRef.current = true;
+        bridge.invoke('getBrandWCPayRequest', JSON.stringify(order.jsapiParams), (res) => {
+            if (res?.err_msg && !res.err_msg.includes('ok')) {
+                console.warn('[pay] JSAPI 拉起失败:', res.err_msg);
+            }
+        });
+    }, [mode, order.jsapiParams]);
 
     // 支付成功后刷新会员状态与订单列表（只触发一次）
     useEffect(() => {

@@ -361,7 +361,7 @@ export const userMemberships = pgTable(
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
-    (t) => [index('user_memberships_user_id_idx').on(t.userId)],
+    (t) => [index('user_memberships_user_id_idx').on(t.userId), uniqueIndex('user_memberships_order_id_idx').on(t.orderId)],
 );
 
 /** 每日用量计数（配额控制）：periodKey 形如 2026-09-06（按 UTC+8 归日） */

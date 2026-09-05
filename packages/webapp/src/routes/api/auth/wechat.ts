@@ -1,6 +1,6 @@
 import { HttpError } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
-import { buildWechatAuthorizeUrl, isWechatOAuthConfigured } from '@/lib/wechat';
+import { buildWechatAuthorizeUrl, isWechatOAuthConfigured, resolveWechatRedirect } from '@/lib/wechat';
 import { createFileRoute } from '@tanstack/react-router';
 import crypto from 'node:crypto';
 
@@ -20,10 +20,9 @@ export const Route = createFileRoute('/api/auth/wechat')({
                     if (!isWechatOAuthConfigured()) throw new HttpError(501, '微信登录未配置（WECHAT_OAUTH_APP_ID / WECHAT_OAUTH_APP_SECRET）');
 
                     const url = new URL(request.url);
-                    const redirect = url.searchParams.get('redirect') ?? '/chat';
-                    if (!redirect.startsWith('/') && !redirect.startsWith(process.env.MOBILE_APP_URL ?? '##none##')) {
-                        throw new HttpError(400, '非法的回跳地址');
-                    }
+                    const target = resolveWechatRedirect(url.searchParams.get('redirect'));
+                    if (!target) throw new HttpError(400, '非法的回跳地址');
+                    const redirect = target.kind === 'mobile' ? target.url : target.path;
 
                     const state = crypto.randomBytes(16).toString('hex');
                     const redirectUri =

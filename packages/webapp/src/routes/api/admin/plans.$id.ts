@@ -44,6 +44,10 @@ export const Route = createFileRoute('/api/admin/plans/$id')({
                 try {
                     await requireAdmin(request);
                     const id = parseId(params.id, '套餐 ID');
+                    const [plan] = await db.select().from(membershipPlans).where(eq(membershipPlans.id, id));
+                    if (!plan) throw new HttpError(404, '套餐不存在');
+                    // free 档是配额兜底依据，删除会导致全站配额失效
+                    if (plan.code === 'free') throw new HttpError(400, '免费套餐不可删除（可编辑或下架）');
                     const [referenced] = await db.select({ id: orders.id }).from(orders).where(eq(orders.planId, id)).limit(1);
                     if (referenced) throw new HttpError(400, '该套餐已有订单记录，请改为下架（enabled=false）');
                     const deleted = await db.delete(membershipPlans).where(eq(membershipPlans.id, id)).returning({ id: membershipPlans.id });

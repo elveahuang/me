@@ -49,7 +49,7 @@ interface OrderRecord {
 interface CreateOrderResult {
     orderNo: string;
     status: string;
-    mode: 'mock' | 'qrcode' | 'jsapi';
+    mode: 'mock' | 'qrcode' | 'jsapi' | 'redirect';
     payUrl?: string | null;
     amountCents: number;
     planCode: string;
@@ -149,9 +149,9 @@ export function MembershipPage() {
         })();
     }, [token, t]);
 
-    // 扫码/微信内支付：每 2 秒轮询订单状态，离开页面时 cleanup 清理
+    // 扫码/微信内/H5 跳转支付：每 2 秒轮询订单状态，离开页面时 cleanup 清理
     useEffect(() => {
-        if (!payingOrder || (payingOrder.mode !== 'qrcode' && payingOrder.mode !== 'jsapi')) return;
+        if (!payingOrder || (payingOrder.mode !== 'qrcode' && payingOrder.mode !== 'jsapi' && payingOrder.mode !== 'redirect')) return;
         const orderNo = payingOrder.orderNo;
         const timer = setInterval(() => {
             void (async () => {
@@ -194,10 +194,13 @@ export function MembershipPage() {
                     void presentToast({ message: t('membership.mockPayAbnormal'), duration: 2500, color: 'warning' });
                 }
                 refreshAll();
+            } else if (order.mode === 'redirect' && order.payUrl) {
+                // H5 支付：跳转微信 App 完成支付，返回后进入轮询面板等待结果
+                setPayingOrder(order);
+                window.location.href = order.payUrl;
             } else {
                 // qrcode / jsapi：展示支付引导并轮询订单状态
                 setPayingOrder(order);
-                void refreshOrders();
             }
         } catch (e) {
             void presentToast({ message: e instanceof Error ? e.message : t('membership.orderFailed'), duration: 2500, color: 'danger' });
@@ -269,19 +272,30 @@ export function MembershipPage() {
                                 </p>
                             </div>
 
-                            {/* 支付引导（扫码 / 微信内支付） */}
+                            {/* 支付引导（H5 跳转 / 扫码 / 微信内支付） */}
                             {payingOrder ? (
                                 <div style={{ ...cardStyle, borderColor: 'var(--ion-color-primary, #3880ff)' }}>
                                     <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
-                                        {payingOrder.mode === 'qrcode' ? t('membership.qrcodePayTitle') : t('membership.jsapiPayTitle')}
+                                        {payingOrder.mode === 'qrcode'
+                                            ? t('membership.qrcodePayTitle')
+                                            : payingOrder.mode === 'redirect'
+                                              ? t('membership.redirectPayTitle')
+                                              : t('membership.jsapiPayTitle')}
                                     </div>
                                     {payingOrder.mode === 'qrcode' ? (
                                         <p style={{ margin: '0 0 6px', fontSize: 13, wordBreak: 'break-all', color: 'var(--ion-color-medium)' }}>
                                             {payingOrder.payUrl || t('membership.noPayUrl')}
                                         </p>
+                                    ) : payingOrder.mode === 'redirect' ? (
+                                        <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ion-color-medium)' }}>{t('membership.redirectPayHint')}</p>
                                     ) : (
                                         <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ion-color-medium)' }}>{t('membership.jsapiPayHint')}</p>
                                     )}
+                                    {payingOrder.mode === 'redirect' && payingOrder.payUrl ? (
+                                        <IonButton size='small' style={{ marginTop: 4 }} onClick={() => (window.location.href = payingOrder.payUrl!)}>
+                                            {t('membership.redirectPayButton')}
+                                        </IonButton>
+                                    ) : null}
                                     <p style={{ margin: 0, fontSize: 13, color: 'var(--ion-color-medium)' }}>
                                         {t('membership.pendingAmount', { amount: formatYuan(payingOrder.amountCents) })}
                                     </p>

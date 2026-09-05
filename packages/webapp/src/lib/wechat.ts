@@ -95,32 +95,50 @@ export async function findWechatAccount(openid: string): Promise<{ userId: strin
 /**
  * 创建或绑定微信用户：
  * - 已绑定 → 直接返回 userId
- * - 未绑定 → 新建用户（邮箱用微信占位地址，不可用于密码登录）并写入 account 绑定
+ * - 未绑定 → 事务内新建用户（邮箱用微信占位地址，不可用于密码登录）并写入 account 绑定
+ * 并发安全：微信回调可能双发，email 由 openid 确定性生成，onConflictDoNothing + 回查保证幂等。
  */
 export async function upsertWechatUser(openid: string, profile: { nickname?: string; headimgurl?: string }): Promise<string> {
     const existing = await findWechatAccount(openid);
     if (existing) return existing.userId;
 
-    const userId = crypto.randomUUID();
     const name = profile.nickname?.trim() || '微信用户';
     const email = `wx_${openid.slice(0, 16)}@wechat.local`;
-    await db.insert(user).values({
-        id: userId,
-        name,
-        email,
-        emailVerified: true,
-        image: profile.headimgurl ?? null,
+
+    return db.transaction(async (tx) => {
+        await tx
+            .insert(user)
+            .values({
+                id: crypto.randomUUID(),
+                name,
+                email,
+                emailVerified: true,
+                image: profile.headimgurl ?? null,
+            })
+            // 并发回调撞 email 唯一约束时忽略，回查复用已有用户
+            .onConflictDoNothing({ target: user.email });
+
+        const [created] = await tx.select({ id: user.id }).from(user).where(eq(user.email, email));
+        if (!created) throw new Error('微信用户创建失败');
+
+        // 已有绑定时不再重复插入（防并发双插 account）
+        const [bound] = await tx
+            .select({ userId: account.userId })
+            .from(account)
+            .where(and(eq(account.providerId, 'wechat'), eq(account.accountId, openid)));
+        if (!bound) {
+            await tx.insert(account).values({
+                id: crypto.randomUUID(),
+                accountId: openid,
+                providerId: 'wechat',
+                issuer: 'https://open.weixin.qq.com',
+                userId: created.id,
+                accessToken: null,
+                scope: 'snsapi_userinfo',
+            });
+        }
+        return created.id;
     });
-    await db.insert(account).values({
-        id: crypto.randomUUID(),
-        accountId: openid,
-        providerId: 'wechat',
-        issuer: 'https://open.weixin.qq.com',
-        userId,
-        accessToken: null,
-        scope: 'snsapi_userinfo',
-    });
-    return userId;
 }
 
 /** 创建 better-auth 会话（直接写 session 表；webapp 侧以 Cookie 下发，移动端以 Bearer 使用） */
@@ -151,4 +169,27 @@ export async function getWechatOpenid(userId: string): Promise<string | null> {
         .from(account)
         .where(and(eq(account.userId, userId), eq(account.providerId, 'wechat')));
     return row?.accountId ?? null;
+}
+
+export type WechatRedirectTarget = { kind: 'web'; path: string } | { kind: 'mobile'; url: string } | null;
+
+/**
+ * 校验 OAuth 回跳地址（防开放重定向 / 防 #token 泄漏到外部域）：
+ * - 绝对 URL：仅当 origin 与 MOBILE_APP_URL 完全一致时按移动端处理
+ * - 相对路径：必须以单个 / 开头（排除 //evil.com 与 /\evil.com 协议相对绕过）
+ * - 其余一律返回 null
+ */
+export function resolveWechatRedirect(raw: string | null): WechatRedirectTarget {
+    const value = raw ?? '/chat';
+    const mobileBase = process.env.MOBILE_APP_URL;
+    if (mobileBase && /^https?:\/\//i.test(value)) {
+        try {
+            if (new URL(value).origin === new URL(mobileBase).origin) return { kind: 'mobile', url: value };
+        } catch {
+            // URL 解析失败按非法处理
+        }
+        return null;
+    }
+    if (value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\')) return { kind: 'web', path: value };
+    return null;
 }

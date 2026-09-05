@@ -31,7 +31,9 @@ export const Route = createFileRoute('/api/billing/orders/$orderNo')({
                         if (remote === 'SUCCESS') {
                             const paid = await activateMembership(order.orderNo);
                             status = paid.status;
-                        } else if (Date.now() - new Date(order.createdAt).getTime() > ORDER_TTL_MS) {
+                        } else if ((remote === 'NOTPAY' || remote === 'CLOSED') && Date.now() - new Date(order.createdAt).getTime() > ORDER_TTL_MS) {
+                            // 仅在渠道明确未支付时才超时关单；查询失败（null/UNKNOWN）跳过，
+                            // 避免用户已支付却被本地关单、回调到达后无法开通
                             await provider.closeOrder(order.orderNo);
                             await db.update(orders).set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
                             status = 'closed';

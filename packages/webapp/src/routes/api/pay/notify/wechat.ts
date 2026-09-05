@@ -1,7 +1,10 @@
 import { json } from '@/lib/api';
 import { activateMembership } from '@/lib/billing';
+import { db } from '@/db';
 import { WechatPayProvider } from '@/lib/payments/wechat';
+import { orders } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
+import { eq } from 'drizzle-orm';
 
 type RouteParams = { request: Request };
 
@@ -34,8 +37,18 @@ export const Route = createFileRoute('/api/pay/notify/wechat')({
                     }
 
                     if (result.eventType === 'TRANSACTION.SUCCESS') {
-                        const data = result.decryptedData as { out_trade_no?: string; transaction_id?: string } | undefined;
+                        const data = result.decryptedData as
+                            | { out_trade_no?: string; transaction_id?: string; amount?: { payer_total?: number } }
+                            | undefined;
                         if (data?.out_trade_no) {
+                            // 防御纵深：回调金额与订单不一致时拒绝开通
+                            if (typeof data.amount?.payer_total === 'number') {
+                                const [order] = await db.select({ amountCents: orders.amountCents }).from(orders).where(eq(orders.orderNo, data.out_trade_no));
+                                if (order && order.amountCents !== data.amount.payer_total) {
+                                    console.error('[wechat-pay] 回调金额不一致:', data.out_trade_no, data.amount.payer_total, '!=', order.amountCents);
+                                    return json({ code: 'FAIL', message: '金额不一致' }, 500);
+                                }
+                            }
                             await activateMembership(data.out_trade_no, data.transaction_id);
                         }
                     }

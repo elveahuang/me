@@ -2,7 +2,7 @@ import { db } from '@/db';
 import { ensureBuiltinModelAvailable, resolveModel, resolveProviderModel } from '@/lib/ai';
 import { errorResponse, HttpError, readJson, requireUser } from '@/lib/api';
 import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
-import { assertChatQuota, recordChatUsage } from '@/lib/billing';
+import { consumeChatQuota } from '@/lib/billing';
 import { buildMcpToolSets } from '@/lib/mcp';
 import { buildSystemPrompt } from '@/lib/prompt';
 import { retrieveKnowledge } from '@/lib/rag';
@@ -135,8 +135,8 @@ export const Route = createFileRoute('/api/chat')({
                         );
                     }
 
-                    // 会员配额：超出套餐每日额度时拒绝（402，提示升级）
-                    await assertChatQuota(session.user.id);
+                    // 会员配额：原子检查并消耗一次当日额度（超出抛 402，提示升级）
+                    await consumeChatQuota(session.user.id);
 
                     const body = await readJson<unknown>(request);
                     const parsed = ChatBodySchema.safeParse(body);
@@ -273,9 +273,6 @@ export const Route = createFileRoute('/api/chat')({
 
                     const toolSet = buildToolSet(toolRows.map((row) => row.tool));
                     Object.assign(toolSet, mcpToolSet);
-
-                    // 记一次对话用量（配额断言已通过）
-                    await recordChatUsage(session.user.id);
 
                     // 7. 流式生成
                     const result = streamText({

@@ -13,11 +13,20 @@ export type BillingPeriod = 'monthly' | 'yearly';
 /** 订单支付超时（2 小时未支付自动关单展示） */
 export const ORDER_TTL_MS = 2 * 60 * 60 * 1000;
 
-/** 会员有效期：按周期顺延；已有未过期会员时从当前到期时间续期 */
+/** 免费档兜底配额（membership_plans 缺 free 行时使用，防全站无限对话） */
+export const DEFAULT_DAILY_QUOTA = 20;
+
+/** 会员有效期：按周期顺延；已有未过期会员时从当前到期时间续期。月末日期 clamp 到目标月最后一天 */
 function addPeriod(from: Date, period: BillingPeriod): Date {
     const next = new Date(from);
-    if (period === 'yearly') next.setFullYear(next.getFullYear() + 1);
-    else next.setMonth(next.getMonth() + 1);
+    const day = next.getDate();
+    if (period === 'yearly') {
+        next.setMonth(next.getMonth() + 12);
+    } else {
+        next.setMonth(next.getMonth() + 1);
+    }
+    // setMonth 溢出时会跳到下下月（如 1/31 + 1 月 → 3/3），回退到目标月最后一天
+    if (next.getDate() !== day) next.setDate(0);
     return next;
 }
 
@@ -108,7 +117,8 @@ export async function getMembershipStatus(userId: string): Promise<MembershipSta
         }
     }
 
-    const quota = plan?.chatQuotaPerDay ?? null;
+    // 无套餐记录时用硬编码兜底配额，防止 free 档被误删导致全站不限量
+    const quota = plan ? plan.chatQuotaPerDay : DEFAULT_DAILY_QUOTA;
     const usedToday = quota === null ? 0 : await getTodayUsage(userId);
     return { plan, expiresAt: current?.expiresAt.toISOString() ?? null, chatQuotaPerDay: quota, usedToday };
 }
@@ -122,23 +132,31 @@ export async function getTodayUsage(userId: string, now = new Date()): Promise<n
     return row?.count ?? 0;
 }
 
-/** 配额检查：抛 402（需升级套餐）语义错误 */
-export async function assertChatQuota(userId: string): Promise<void> {
+/**
+ * 原子地消耗一次对话配额：检查 + 计数在单条 UPDATE 内完成，杜绝"检查→记账"窗口被并发击穿。
+ * 超出配额抛 402；配额为 null（不限量）直接放行。发起即计费（含失败请求，防滥用）。
+ */
+export async function consumeChatQuota(userId: string, now = new Date()): Promise<void> {
     const status = await getMembershipStatus(userId);
-    if (status.chatQuotaPerDay !== null && status.usedToday >= status.chatQuotaPerDay) {
-        throw new HttpError(402, `今日免费额度已用完（${status.chatQuotaPerDay} 次），升级会员可获得更多额度`);
+    const quota = status.chatQuotaPerDay;
+    if (quota === null) return;
+    if (status.usedToday >= quota) {
+        throw new HttpError(402, `今日额度已用完（${quota} 次），升级会员可获得更多额度`);
     }
-}
-
-/** 记一次对话用量（幂等 upsert） */
-export async function recordChatUsage(userId: string, now = new Date()): Promise<void> {
-    await db
+    const periodKey = usagePeriodKey(now);
+    const inserted = await db
         .insert(usageCounters)
-        .values({ userId, periodKey: usagePeriodKey(now), count: 1 })
+        .values({ userId, periodKey, count: 1 })
         .onConflictDoUpdate({
             target: [usageCounters.userId, usageCounters.periodKey],
             set: { count: sql`${usageCounters.count} + 1`, updatedAt: new Date() },
-        });
+            // 并发护栏：计数已达配额时不更新（返回 0 行）
+            setWhere: sql`${usageCounters.count} < ${quota}`,
+        })
+        .returning({ count: usageCounters.count });
+    if (!inserted[0]) {
+        throw new HttpError(402, `今日额度已用完（${quota} 次），升级会员可获得更多额度`);
+    }
 }
 
 /** 生成商户订单号 */
@@ -193,6 +211,7 @@ export async function createOrder(params: {
 /**
  * 支付成功 → 开通会员（幂等：订单已是 paid 直接返回）。
  * 续费从当前到期时间顺延；新购/过期从现在开始。
+ * 并发安全：订单状态更新带 status='pending' 条件守卫，回调重试与前端轮询并发时只有一个事务生效。
  */
 export async function activateMembership(orderNo: string, providerTradeNo?: string): Promise<typeof orders.$inferSelect> {
     const [order] = await db.select().from(orders).where(eq(orders.orderNo, orderNo));
@@ -201,23 +220,27 @@ export async function activateMembership(orderNo: string, providerTradeNo?: stri
     if (order.status !== 'pending') throw new HttpError(400, `订单状态为 ${order.status}，不能开通`);
 
     const now = new Date();
-    const [current] = await db
-        .select()
-        .from(userMemberships)
-        .where(and(eq(userMemberships.userId, order.userId), gt(userMemberships.expiresAt, now)))
-        .orderBy(desc(userMemberships.expiresAt))
-        .limit(1);
-
-    // 同档或更高档续期从当前到期时间顺延；低档/新购从现在开始
-    const base = current ? current.expiresAt : now;
-    const expiresAt = addPeriod(base, order.period === 'yearly' ? 'yearly' : 'monthly');
-
     const updated = await db.transaction(async (tx) => {
-        const [o] = await tx
+        // 当前会员（含并发中其他事务刚开通的）在事务内读取，保证续期基准一致
+        const [current] = await tx
+            .select()
+            .from(userMemberships)
+            .where(and(eq(userMemberships.userId, order.userId), gt(userMemberships.expiresAt, now)))
+            .orderBy(desc(userMemberships.expiresAt))
+            .limit(1);
+
+        // 同档或更高档续期从当前到期时间顺延；低档/新购从现在开始
+        const base = current ? current.expiresAt : now;
+        const expiresAt = addPeriod(base, order.period === 'yearly' ? 'yearly' : 'monthly');
+
+        // 条件更新：0 行说明并发中已被处理，直接走幂等返回
+        const [claimed] = await tx
             .update(orders)
             .set({ status: 'paid', paidAt: now, providerTradeNo: providerTradeNo ?? order.providerTradeNo, updatedAt: now })
-            .where(eq(orders.id, order.id))
+            .where(and(eq(orders.id, order.id), eq(orders.status, 'pending')))
             .returning();
+        if (!claimed) return null;
+
         await tx.insert(userMemberships).values({
             userId: order.userId,
             planId: order.planId,
@@ -227,9 +250,15 @@ export async function activateMembership(orderNo: string, providerTradeNo?: stri
             expiresAt,
             orderId: order.id,
         });
-        return o;
+        return claimed;
     });
-    if (!updated) throw new HttpError(500, '订单更新失败');
+
+    if (!updated) {
+        // 另一并发事务已开通：重新读取订单返回（幂等）
+        const [paid] = await db.select().from(orders).where(eq(orders.orderNo, orderNo));
+        if (!paid || paid.status !== 'paid') throw new HttpError(409, '订单状态冲突，请稍后重试');
+        return paid;
+    }
     return updated;
 }
 

@@ -112,5 +112,8 @@
         "tailwindNote": "Konsta UI 组件由 Tailwind CSS 构建，与本包的 Tailwind v4 入口共用一套工具类。",
         "resetSearch": "重置搜索",
         "primaryButton": "主按钮"
-    }
+    },
+    "membership.redirectPayTitle": "即将跳转微信支付",
+    "membership.redirectPayHint": "已为你发起 H5 支付，支付完成后返回本页等待确认",
+    "membership.redirectPayButton": "重新跳转微信支付"
 }

@@ -108,5 +108,6 @@
     "admin.nav.providers": "🔌 AI 供应商",
     "admin.nav.plans": "💳 套餐",
     "admin.nav.orders": "🧾 订单",
-    "admin.nav.users": "👥 用户"
+    "admin.nav.users": "👥 用户",
+    "login.wechat": "微信登录"
 }

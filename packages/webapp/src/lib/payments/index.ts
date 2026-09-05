@@ -1,3 +1,4 @@
+import { HttpError } from '@/lib/api';
 import { MockPayProvider } from './mock';
 import type { PaymentProvider } from './types';
 import { WechatPayProvider } from './wechat';
@@ -13,10 +14,10 @@ function register(provider: PaymentProvider) {
 register(WechatPayProvider.shared());
 register(new MockPayProvider());
 
-/** 按编码取渠道；未注册抛 400 语义错误 */
+/** 按编码取渠道；未注册按 400 语义抛出（渠道编码来自客户端输入） */
 export function getPaymentProvider(code: string): PaymentProvider {
     const provider = providers.get(code);
-    if (!provider) throw new Error(`未知的支付渠道: ${code}`);
+    if (!provider) throw new HttpError(400, `未知的支付渠道: ${code}`);
     return provider;
 }
 

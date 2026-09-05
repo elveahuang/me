@@ -108,5 +108,6 @@
     "admin.nav.providers": "🔌 AI Providers",
     "admin.nav.plans": "💳 Plans",
     "admin.nav.orders": "🧾 Orders",
-    "admin.nav.users": "👥 Users"
+    "admin.nav.users": "👥 Users",
+    "login.wechat": "Continue with WeChat"
 }

@@ -20,10 +20,11 @@ export function WechatCallbackPage() {
         }
     }, [loading, token, router]);
 
-    // 2 秒后仍无登录态：展示失败提示与返回登录按钮
+    // 2 秒后登录流程已结束仍无 token：展示失败提示与返回登录按钮
+    // （loading 期间网络慢属正常，不能提前判失败）
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (loading || !token) setFailed(true);
+            if (!loading && !token) setFailed(true);
         }, 2000);
         return () => clearTimeout(timer);
     }, [loading, token]);

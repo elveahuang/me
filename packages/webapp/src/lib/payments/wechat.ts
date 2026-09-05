@@ -92,7 +92,23 @@ export class WechatPayProvider implements PaymentProvider {
             };
         }
 
-        // 桌面/移动浏览器：Native 扫码支付
+        // 移动端浏览器：H5 支付（跳转微信 App 完成支付后回到引导页）
+        if (/Mobi|Android|iPhone|iPad/i.test(ctx.userAgent)) {
+            const result = (await client.h5.create({
+                out_trade_no: ctx.orderNo,
+                description: ctx.description,
+                amount_cents: ctx.amountCents,
+                payer_client_ip: ctx.clientIp ?? '127.0.0.1',
+                h5_info: {
+                    type: 'Wap',
+                    app_name: 'ME',
+                    app_url: process.env.BETTER_AUTH_URL ?? 'https://localhost:3000',
+                },
+            })) as { h5_url: string };
+            return { provider: this.code, mode: 'redirect', payUrl: result.h5_url };
+        }
+
+        // 桌面浏览器：Native 扫码支付
         const result = (await client.native.create({
             out_trade_no: ctx.orderNo,
             description: ctx.description,

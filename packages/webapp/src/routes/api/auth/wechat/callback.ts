@@ -1,8 +1,10 @@
 import { HttpError } from '@/lib/api';
-import { createWechatSession, exchangeWechatCode, fetchWechatUserInfo, sessionCookie, upsertWechatUser } from '@/lib/wechat';
+import { createWechatSession, exchangeWechatCode, fetchWechatUserInfo, resolveWechatRedirect, sessionCookie, upsertWechatUser } from '@/lib/wechat';
 import { createFileRoute } from '@tanstack/react-router';
 
 type RouteParams = { request: Request };
+
+const CLEAR_STATE_COOKIE = 'wechat_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
 
 function htmlPage(message: string, status: number, extraHeaders?: Record<string, string>): Response {
     return new Response(`<meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center;color:#333">${message}</body>`, {
@@ -51,24 +53,27 @@ export const Route = createFileRoute('/api/auth/wechat/callback')({
                         ip: request.headers.get('x-forwarded-for')?.split(',')[0] ?? undefined,
                     });
 
-                    const mobileBase = process.env.MOBILE_APP_URL;
-                    if (mobileBase && redirect.startsWith(mobileBase)) {
+                    // 回跳地址在发起时已校验过一次，回调侧再校验（防 state cookie 被篡改）
+                    const target = resolveWechatRedirect(redirect);
+                    if (!target) return htmlPage('非法的回跳地址', 400, { 'set-cookie': CLEAR_STATE_COOKIE });
+
+                    if (target.kind === 'mobile') {
                         // 移动端：token 通过 URL fragment 传递（不会进入服务器/代理日志）
-                        const sep = redirect.includes('#') ? '' : '#';
+                        const sep = target.url.includes('#') ? '' : '#';
                         return new Response(null, {
                             status: 302,
-                            headers: { location: `${redirect}${sep}token=${sessionToken}` },
+                            headers: { location: `${target.url}${sep}token=${sessionToken}`, 'set-cookie': CLEAR_STATE_COOKIE },
                         });
                     }
 
                     return new Response(null, {
                         status: 302,
-                        headers: { location: redirect, 'set-cookie': sessionCookie(sessionToken) },
+                        headers: { location: target.path, 'set-cookie': `${sessionCookie(sessionToken)}, ${CLEAR_STATE_COOKIE}` },
                     });
                 } catch (e) {
-                    if (e instanceof HttpError) return htmlPage(e.message, e.status);
+                    if (e instanceof HttpError) return htmlPage(e.message, e.status, { 'set-cookie': CLEAR_STATE_COOKIE });
                     console.error('[wechat-oauth] 回调处理失败:', e);
-                    return htmlPage('微信登录失败，请稍后重试', 500);
+                    return htmlPage('微信登录失败，请稍后重试', 500, { 'set-cookie': CLEAR_STATE_COOKIE });
                 }
             },
         },

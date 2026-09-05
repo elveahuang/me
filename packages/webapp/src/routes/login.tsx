@@ -2,7 +2,7 @@ import { authClient } from '@/lib/auth-client';
 import { fetchSession } from '@/lib/session';
 import { Button } from '@heroui/react';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export const Route = createFileRoute('/login')({
@@ -19,6 +19,15 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [wechatEnabled, setWechatEnabled] = useState(false);
+
+    // 微信公众号登录是否可用（服务端配置了凭据才显示入口）
+    useEffect(() => {
+        fetch('/api/auth/wechat/status')
+            .then((r) => r.json())
+            .then((d: { enabled?: boolean }) => setWechatEnabled(Boolean(d.enabled)))
+            .catch(() => setWechatEnabled(false));
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -73,6 +82,14 @@ function LoginPage() {
                         {loading ? t('login.submitting') : t('login.submit')}
                     </Button>
                 </form>
+                {wechatEnabled ? (
+                    <a
+                        href='/api/auth/wechat?redirect=/chat'
+                        className='mt-3 block w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50'
+                    >
+                        {t('login.wechat')}
+                    </a>
+                ) : null}
                 <p className='mt-4 text-center text-sm text-gray-500'>
                     {t('login.noAccount')}{' '}
                     <Link to='/register' className='font-medium text-blue-600 hover:underline'>
