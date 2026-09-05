@@ -79,9 +79,13 @@ function KnowledgeDetailPage() {
     });
 
     const reindexDocument = useMutation({
-        mutationFn: (docId: number) => api(`/api/admin/knowledge/${kbId}/documents/${docId}`, { method: 'POST' }),
-        onSuccess: () => {
-            setMessage('已重建该文档的向量索引');
+        mutationFn: (docId: number) => api<{ ok?: boolean; chunkCount?: number; embedded?: boolean; error?: string }>(`/api/admin/knowledge/${kbId}/documents/${docId}`, { method: 'POST' }),
+        onSuccess: (result) => {
+            setMessage(
+                result.error
+                    ? `重建向量失败：${result.error}（文档已标记为错误状态，可修复后重试）`
+                    : `已重建该文档的向量索引（${result.chunkCount ?? 0} 块）`,
+            );
             void invalidate();
         },
         onError: (e) => setError(e instanceof Error ? e.message : '重建失败'),

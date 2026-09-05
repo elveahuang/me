@@ -388,6 +388,10 @@ function AgentFormModal({
                             }
                             onChange={(e) => {
                                 const v = e.target.value;
+                                if (v === 'builtin') {
+                                    setForm((prev) => ({ ...prev, providerId: null }));
+                                    return;
+                                }
                                 if (v.startsWith('builtin:')) {
                                     const id = v.slice('builtin:'.length);
                                     setForm((prev) => ({

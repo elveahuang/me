@@ -1,5 +1,6 @@
 import { Block, BlockTitle, Button, App as KonstaApp, List, ListItem, Navbar, Page, Searchbar, Toggle } from 'konsta/react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Konsta UI 备选组件演示页。
@@ -7,32 +8,36 @@ import { useState } from 'react';
  * 后续页面可按需切换或混用（组件 import 来源不同即可）。
  */
 export function KonstaDemoPage() {
+    const { t } = useTranslation();
     const [dark, setDark] = useState(false);
     const [search, setSearch] = useState('');
 
     return (
         <KonstaApp theme='ios' dark={dark} safeAreas>
             <Page>
-                <Navbar title='Konsta UI 演示' />
-                <BlockTitle>开关（跟随暗色模式）</BlockTitle>
+                <Navbar title={t('demo.title')} />
+                <BlockTitle>{t('demo.togglesTitle')}</BlockTitle>
                 <List strongIos outlineIos>
-                    <ListItem title='暗色模式' after={<Toggle component='div' checked={dark} onChange={() => setDark(!dark)} />} />
+                    <ListItem
+                        title={t('demo.darkMode')}
+                        after={<Toggle component='div' checked={dark} onChange={() => setDark(!dark)} />}
+                    />
                 </List>
-                <BlockTitle>搜索</BlockTitle>
-                <Searchbar value={search} placeholder='搜索…' onInput={(e) => setSearch((e.target as HTMLInputElement).value)} />
-                <BlockTitle>列表</BlockTitle>
+                <BlockTitle>{t('demo.searchTitle')}</BlockTitle>
+                <Searchbar value={search} placeholder={t('demo.searchPlaceholder')} onInput={(e) => setSearch((e.target as HTMLInputElement).value)} />
+                <BlockTitle>{t('demo.listTitle')}</BlockTitle>
                 <List strongIos outlineIos>
-                    <ListItem title=' Ionic 风格页面' footer='主组件层' />
-                    <ListItem title='Konsta UI 页面（本页）' footer='备选组件层' />
-                    <ListItem title='示例项' after='详情' />
+                    <ListItem title={t('demo.ionicItem')} footer={t('demo.ionicFooter')} />
+                    <ListItem title={t('demo.konstaItem')} footer={t('demo.konstaFooter')} />
+                    <ListItem title={t('demo.sampleItem')} after={t('demo.details')} />
                 </List>
                 <Block strongIos outlineIos>
-                    <p className='mb-2'>Konsta UI 组件由 Tailwind CSS 构建，与本包的 Tailwind v4 入口共用一套工具类。</p>
+                    <p className='mb-2'>{t('demo.tailwindNote')}</p>
                     <div className='flex gap-2'>
                         <Button outline rounded onClick={() => setSearch('')}>
-                            重置搜索
+                            {t('demo.resetSearch')}
                         </Button>
-                        <Button rounded>主按钮</Button>
+                        <Button rounded>{t('demo.primaryButton')}</Button>
                     </div>
                 </Block>
             </Page>

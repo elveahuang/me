@@ -2,6 +2,7 @@ import type { SessionUser } from '@/components/app-header';
 import { AppHeader } from '@/components/app-header';
 import { fetchSession, isAdminRole } from '@/lib/session';
 import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 
 export const Route = createFileRoute('/admin')({
     beforeLoad: async () => {
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/admin')({
 });
 
 function AdminLayout() {
+    const { t } = useTranslation();
     const { session } = Route.useRouteContext();
     const user = session.user as SessionUser;
 
@@ -24,14 +26,16 @@ function AdminLayout() {
                 <aside className='w-56 shrink-0 border-r border-gray-200 bg-white p-3'>
                     <nav className='space-y-1 text-sm'>
                         {[
-                            { to: '/admin', label: '📊 数据总览', exact: true },
-                            { to: '/admin/agents', label: '🤖 智能体' },
-                            { to: '/admin/skills', label: '🧩 Skills' },
-                            { to: '/admin/tools', label: '🔧 Tools' },
-                            { to: '/admin/mcp', label: '🌐 MCP' },
-                            { to: '/admin/knowledge', label: '📚 知识库' },
-                            { to: '/admin/providers', label: '🔌 AI 供应商' },
-                            { to: '/admin/users', label: '👥 用户' },
+                            { to: '/admin', label: t('admin.nav.overview'), exact: true },
+                            { to: '/admin/agents', label: t('admin.nav.agents') },
+                            { to: '/admin/skills', label: t('admin.nav.skills') },
+                            { to: '/admin/tools', label: t('admin.nav.tools') },
+                            { to: '/admin/mcp', label: t('admin.nav.mcp') },
+                            { to: '/admin/knowledge', label: t('admin.nav.knowledge') },
+                            { to: '/admin/providers', label: t('admin.nav.providers') },
+                            { to: '/admin/plans', label: t('admin.nav.plans') },
+                            { to: '/admin/orders', label: t('admin.nav.orders') },
+                            { to: '/admin/users', label: t('admin.nav.users') },
                         ].map((item) => (
                             <Link
                                 key={item.to}

@@ -5,7 +5,7 @@ config({ path: ['.env.local', '.env'] });
 
 async function main() {
     const { db } = await import('./index');
-    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, skills, tools, user } = await import('./schema');
+    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, membershipPlans, skills, tools, user } = await import('./schema');
     const { auth } = await import('../lib/auth');
     const { ingestDocument } = await import('../lib/rag');
     const { eq } = await import('drizzle-orm');
@@ -27,6 +27,43 @@ async function main() {
         }
     }
     await db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId));
+
+    // 1.5 会员套餐
+    const planSeeds = [
+        {
+            code: 'free',
+            name: '免费版',
+            description: '注册即用，体验全部智能体能力',
+            chatQuotaPerDay: 20,
+            monthlyPriceCents: 0,
+            yearlyPriceCents: null,
+            sortOrder: 0,
+        },
+        {
+            code: 'pro',
+            name: '专业版',
+            description: '每日 200 次对话，适合个人重度使用',
+            chatQuotaPerDay: 200,
+            monthlyPriceCents: 2900,
+            yearlyPriceCents: 29000,
+            sortOrder: 1,
+        },
+        {
+            code: 'max',
+            name: '旗舰版',
+            description: '不限对话次数，优先体验新功能',
+            chatQuotaPerDay: null,
+            monthlyPriceCents: 9900,
+            yearlyPriceCents: 99000,
+            sortOrder: 2,
+        },
+    ];
+    for (const seed of planSeeds) {
+        const found = await db.select().from(membershipPlans).where(eq(membershipPlans.code, seed.code));
+        if (found[0]) continue;
+        await db.insert(membershipPlans).values(seed);
+        console.log(`已创建套餐: ${seed.name}（${seed.code}）`);
+    }
 
     // 2. Skills
     const skillSeeds = [

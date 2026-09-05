@@ -21,6 +21,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         (async () => {
+            // 微信登录回跳：URL hash 携带 token=...（服务端 302 回跳注入），优先消费。
+            // 走与 signIn 相同的存储逻辑（setToken + GET /api/me 拉用户），然后清掉 hash 避免刷新重复消费。
+            const hash = window.location.hash;
+            const hashToken = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash).get('token');
+            if (hashToken) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                try {
+                    const me = await api<{ user: SessionUser }>('/api/me', hashToken);
+                    setToken(hashToken);
+                    setTokenState(hashToken);
+                    setUser(me.user);
+                } catch {
+                    setToken(null);
+                }
+                setLoading(false);
+                return;
+            }
+
             const stored = getToken();
             if (stored) {
                 try {

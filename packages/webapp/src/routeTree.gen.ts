@@ -13,11 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAgentsRouteImport } from './routes/admin.agents'
 import { Route as AdminKnowledgeRouteImport } from './routes/admin.knowledge'
 import { Route as AdminMcpRouteImport } from './routes/admin.mcp'
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
+import { Route as AdminPlansRouteImport } from './routes/admin.plans'
 import { Route as AdminProvidersRouteImport } from './routes/admin.providers'
 import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
 import { Route as AdminToolsRouteImport } from './routes/admin.tools'
@@ -26,28 +29,40 @@ import { Route as ApiAgentsRouteImport } from './routes/api/agents'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiConversationsRouteImport } from './routes/api/conversations'
 import { Route as ApiMeRouteImport } from './routes/api/me'
+import { Route as ApiPlansRouteImport } from './routes/api/plans'
 import { Route as AdminKnowledgeIdRouteImport } from './routes/admin.knowledge.$id'
 import { Route as ApiAdminAgentsRouteImport } from './routes/api/admin/agents'
 import { Route as ApiAdminBuiltinProvidersRouteImport } from './routes/api/admin/builtin-providers'
 import { Route as ApiAdminKnowledgeRouteImport } from './routes/api/admin/knowledge'
 import { Route as ApiAdminMcpRouteImport } from './routes/api/admin/mcp'
+import { Route as ApiAdminOrdersRouteImport } from './routes/api/admin/orders'
+import { Route as ApiAdminPlansRouteImport } from './routes/api/admin/plans'
 import { Route as ApiAdminProvidersRouteImport } from './routes/api/admin/providers'
 import { Route as ApiAdminSkillsRouteImport } from './routes/api/admin/skills'
 import { Route as ApiAdminStatsRouteImport } from './routes/api/admin/stats'
 import { Route as ApiAdminToolsRouteImport } from './routes/api/admin/tools'
 import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAuthWechatRouteImport } from './routes/api/auth/wechat'
+import { Route as ApiBillingMembershipRouteImport } from './routes/api/billing/membership'
+import { Route as ApiBillingOrdersRouteImport } from './routes/api/billing/orders'
 import { Route as ApiConversationsIdRouteImport } from './routes/api/conversations.$id'
 import { Route as ApiAdminAgentsIdRouteImport } from './routes/api/admin/agents.$id'
 import { Route as ApiAdminAgentsAutoConfigRouteImport } from './routes/api/admin/agents/auto-config'
 import { Route as ApiAdminKnowledgeIdRouteImport } from './routes/api/admin/knowledge.$id'
 import { Route as ApiAdminMcpIdRouteImport } from './routes/api/admin/mcp.$id'
+import { Route as ApiAdminPlansIdRouteImport } from './routes/api/admin/plans.$id'
 import { Route as ApiAdminProvidersIdRouteImport } from './routes/api/admin/providers.$id'
 import { Route as ApiAdminSkillsIdRouteImport } from './routes/api/admin/skills.$id'
 import { Route as ApiAdminToolsIdRouteImport } from './routes/api/admin/tools.$id'
 import { Route as ApiAdminUsersIdRouteImport } from './routes/api/admin/users.$id'
+import { Route as ApiAuthWechatCallbackRouteImport } from './routes/api/auth/wechat/callback'
+import { Route as ApiAuthWechatStatusRouteImport } from './routes/api/auth/wechat/status'
+import { Route as ApiBillingOrdersOrderNoRouteImport } from './routes/api/billing/orders.$orderNo'
+import { Route as ApiPayNotifyWechatRouteImport } from './routes/api/pay/notify/wechat'
 import { Route as ApiAdminKnowledgeIdDocumentsRouteImport } from './routes/api/admin/knowledge.$id.documents'
 import { Route as ApiAdminMcpIdTestRouteImport } from './routes/api/admin/mcp.$id.test'
+import { Route as ApiBillingOrdersOrderNoMockPayRouteImport } from './routes/api/billing/orders.$orderNo.mock-pay'
 import { Route as ApiAdminKnowledgeIdDocumentsDocIdRouteImport } from './routes/api/admin/knowledge.$id.documents.$docId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -68,6 +83,11 @@ const ChatRoute = ChatRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
@@ -93,6 +113,16 @@ const AdminKnowledgeRoute = AdminKnowledgeRouteImport.update({
 const AdminMcpRoute = AdminMcpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPlansRoute = AdminPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProvidersRoute = AdminProvidersRouteImport.update({
@@ -135,6 +165,11 @@ const ApiMeRoute = ApiMeRouteImport.update({
   path: '/api/me',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPlansRoute = ApiPlansRouteImport.update({
+  id: '/api/plans',
+  path: '/api/plans',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminKnowledgeIdRoute = AdminKnowledgeIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -159,6 +194,16 @@ const ApiAdminKnowledgeRoute = ApiAdminKnowledgeRouteImport.update({
 const ApiAdminMcpRoute = ApiAdminMcpRouteImport.update({
   id: '/api/admin/mcp',
   path: '/api/admin/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminOrdersRoute = ApiAdminOrdersRouteImport.update({
+  id: '/api/admin/orders',
+  path: '/api/admin/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminPlansRoute = ApiAdminPlansRouteImport.update({
+  id: '/api/admin/plans',
+  path: '/api/admin/plans',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminProvidersRoute = ApiAdminProvidersRouteImport.update({
@@ -191,6 +236,21 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthWechatRoute = ApiAuthWechatRouteImport.update({
+  id: '/api/auth/wechat',
+  path: '/api/auth/wechat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBillingMembershipRoute = ApiBillingMembershipRouteImport.update({
+  id: '/api/billing/membership',
+  path: '/api/billing/membership',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBillingOrdersRoute = ApiBillingOrdersRouteImport.update({
+  id: '/api/billing/orders',
+  path: '/api/billing/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiConversationsIdRoute = ApiConversationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -217,6 +277,11 @@ const ApiAdminMcpIdRoute = ApiAdminMcpIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiAdminMcpRoute,
 } as any)
+const ApiAdminPlansIdRoute = ApiAdminPlansIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiAdminPlansRoute,
+} as any)
 const ApiAdminProvidersIdRoute = ApiAdminProvidersIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -237,6 +302,26 @@ const ApiAdminUsersIdRoute = ApiAdminUsersIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiAdminUsersRoute,
 } as any)
+const ApiAuthWechatCallbackRoute = ApiAuthWechatCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthWechatRoute,
+} as any)
+const ApiAuthWechatStatusRoute = ApiAuthWechatStatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => ApiAuthWechatRoute,
+} as any)
+const ApiBillingOrdersOrderNoRoute = ApiBillingOrdersOrderNoRouteImport.update({
+  id: '/$orderNo',
+  path: '/$orderNo',
+  getParentRoute: () => ApiBillingOrdersRoute,
+} as any)
+const ApiPayNotifyWechatRoute = ApiPayNotifyWechatRouteImport.update({
+  id: '/api/pay/notify/wechat',
+  path: '/api/pay/notify/wechat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminKnowledgeIdDocumentsRoute =
   ApiAdminKnowledgeIdDocumentsRouteImport.update({
     id: '/documents',
@@ -248,6 +333,12 @@ const ApiAdminMcpIdTestRoute = ApiAdminMcpIdTestRouteImport.update({
   path: '/test',
   getParentRoute: () => ApiAdminMcpIdRoute,
 } as any)
+const ApiBillingOrdersOrderNoMockPayRoute =
+  ApiBillingOrdersOrderNoMockPayRouteImport.update({
+    id: '/mock-pay',
+    path: '/mock-pay',
+    getParentRoute: () => ApiBillingOrdersOrderNoRoute,
+  } as any)
 const ApiAdminKnowledgeIdDocumentsDocIdRoute =
   ApiAdminKnowledgeIdDocumentsDocIdRouteImport.update({
     id: '/$docId',
@@ -260,10 +351,13 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/admin/agents': typeof AdminAgentsRoute
   '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
   '/admin/mcp': typeof AdminMcpRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/plans': typeof AdminPlansRoute
   '/admin/providers': typeof AdminProvidersRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/tools': typeof AdminToolsRoute
@@ -272,39 +366,54 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/me': typeof ApiMeRoute
+  '/api/plans': typeof ApiPlansRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
   '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
   '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
   '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
   '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
+  '/api/admin/orders': typeof ApiAdminOrdersRoute
+  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
   '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
   '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
   '/api/admin/stats': typeof ApiAdminStatsRoute
   '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
   '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
+  '/api/billing/membership': typeof ApiBillingMembershipRoute
+  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
   '/api/conversations/$id': typeof ApiConversationsIdRoute
   '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
   '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
   '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
   '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
+  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
   '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
   '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
   '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
   '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
+  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
+  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
+  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
+  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
   '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
   '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
+  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
   '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/admin/agents': typeof AdminAgentsRoute
   '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
   '/admin/mcp': typeof AdminMcpRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/plans': typeof AdminPlansRoute
   '/admin/providers': typeof AdminProvidersRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/tools': typeof AdminToolsRoute
@@ -313,29 +422,41 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/me': typeof ApiMeRoute
+  '/api/plans': typeof ApiPlansRoute
   '/admin': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
   '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
   '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
   '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
   '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
+  '/api/admin/orders': typeof ApiAdminOrdersRoute
+  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
   '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
   '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
   '/api/admin/stats': typeof ApiAdminStatsRoute
   '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
   '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
+  '/api/billing/membership': typeof ApiBillingMembershipRoute
+  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
   '/api/conversations/$id': typeof ApiConversationsIdRoute
   '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
   '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
   '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
   '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
+  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
   '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
   '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
   '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
   '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
+  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
+  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
+  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
+  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
   '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
   '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
+  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
   '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
 }
 export interface FileRoutesById {
@@ -344,10 +465,13 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/admin/agents': typeof AdminAgentsRoute
   '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
   '/admin/mcp': typeof AdminMcpRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/plans': typeof AdminPlansRoute
   '/admin/providers': typeof AdminProvidersRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/tools': typeof AdminToolsRoute
@@ -356,29 +480,41 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRoute
   '/api/conversations': typeof ApiConversationsRouteWithChildren
   '/api/me': typeof ApiMeRoute
+  '/api/plans': typeof ApiPlansRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
   '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
   '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
   '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
   '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
+  '/api/admin/orders': typeof ApiAdminOrdersRoute
+  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
   '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
   '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
   '/api/admin/stats': typeof ApiAdminStatsRoute
   '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
   '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
+  '/api/billing/membership': typeof ApiBillingMembershipRoute
+  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
   '/api/conversations/$id': typeof ApiConversationsIdRoute
   '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
   '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
   '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
   '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
+  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
   '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
   '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
   '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
   '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
+  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
+  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
+  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
+  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
   '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
   '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
+  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
   '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
 }
 export interface FileRouteTypes {
@@ -388,10 +524,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chat'
     | '/login'
+    | '/pricing'
     | '/register'
     | '/admin/agents'
     | '/admin/knowledge'
     | '/admin/mcp'
+    | '/admin/orders'
+    | '/admin/plans'
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/tools'
@@ -400,39 +539,54 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/conversations'
     | '/api/me'
+    | '/api/plans'
     | '/admin/'
     | '/admin/knowledge/$id'
     | '/api/admin/agents'
     | '/api/admin/builtin-providers'
     | '/api/admin/knowledge'
     | '/api/admin/mcp'
+    | '/api/admin/orders'
+    | '/api/admin/plans'
     | '/api/admin/providers'
     | '/api/admin/skills'
     | '/api/admin/stats'
     | '/api/admin/tools'
     | '/api/admin/users'
     | '/api/auth/$'
+    | '/api/auth/wechat'
+    | '/api/billing/membership'
+    | '/api/billing/orders'
     | '/api/conversations/$id'
     | '/api/admin/agents/$id'
     | '/api/admin/agents/auto-config'
     | '/api/admin/knowledge/$id'
     | '/api/admin/mcp/$id'
+    | '/api/admin/plans/$id'
     | '/api/admin/providers/$id'
     | '/api/admin/skills/$id'
     | '/api/admin/tools/$id'
     | '/api/admin/users/$id'
+    | '/api/auth/wechat/callback'
+    | '/api/auth/wechat/status'
+    | '/api/billing/orders/$orderNo'
+    | '/api/pay/notify/wechat'
     | '/api/admin/knowledge/$id/documents'
     | '/api/admin/mcp/$id/test'
+    | '/api/billing/orders/$orderNo/mock-pay'
     | '/api/admin/knowledge/$id/documents/$docId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/chat'
     | '/login'
+    | '/pricing'
     | '/register'
     | '/admin/agents'
     | '/admin/knowledge'
     | '/admin/mcp'
+    | '/admin/orders'
+    | '/admin/plans'
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/tools'
@@ -441,29 +595,41 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/conversations'
     | '/api/me'
+    | '/api/plans'
     | '/admin'
     | '/admin/knowledge/$id'
     | '/api/admin/agents'
     | '/api/admin/builtin-providers'
     | '/api/admin/knowledge'
     | '/api/admin/mcp'
+    | '/api/admin/orders'
+    | '/api/admin/plans'
     | '/api/admin/providers'
     | '/api/admin/skills'
     | '/api/admin/stats'
     | '/api/admin/tools'
     | '/api/admin/users'
     | '/api/auth/$'
+    | '/api/auth/wechat'
+    | '/api/billing/membership'
+    | '/api/billing/orders'
     | '/api/conversations/$id'
     | '/api/admin/agents/$id'
     | '/api/admin/agents/auto-config'
     | '/api/admin/knowledge/$id'
     | '/api/admin/mcp/$id'
+    | '/api/admin/plans/$id'
     | '/api/admin/providers/$id'
     | '/api/admin/skills/$id'
     | '/api/admin/tools/$id'
     | '/api/admin/users/$id'
+    | '/api/auth/wechat/callback'
+    | '/api/auth/wechat/status'
+    | '/api/billing/orders/$orderNo'
+    | '/api/pay/notify/wechat'
     | '/api/admin/knowledge/$id/documents'
     | '/api/admin/mcp/$id/test'
+    | '/api/billing/orders/$orderNo/mock-pay'
     | '/api/admin/knowledge/$id/documents/$docId'
   id:
     | '__root__'
@@ -471,10 +637,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chat'
     | '/login'
+    | '/pricing'
     | '/register'
     | '/admin/agents'
     | '/admin/knowledge'
     | '/admin/mcp'
+    | '/admin/orders'
+    | '/admin/plans'
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/tools'
@@ -483,29 +652,41 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/conversations'
     | '/api/me'
+    | '/api/plans'
     | '/admin/'
     | '/admin/knowledge/$id'
     | '/api/admin/agents'
     | '/api/admin/builtin-providers'
     | '/api/admin/knowledge'
     | '/api/admin/mcp'
+    | '/api/admin/orders'
+    | '/api/admin/plans'
     | '/api/admin/providers'
     | '/api/admin/skills'
     | '/api/admin/stats'
     | '/api/admin/tools'
     | '/api/admin/users'
     | '/api/auth/$'
+    | '/api/auth/wechat'
+    | '/api/billing/membership'
+    | '/api/billing/orders'
     | '/api/conversations/$id'
     | '/api/admin/agents/$id'
     | '/api/admin/agents/auto-config'
     | '/api/admin/knowledge/$id'
     | '/api/admin/mcp/$id'
+    | '/api/admin/plans/$id'
     | '/api/admin/providers/$id'
     | '/api/admin/skills/$id'
     | '/api/admin/tools/$id'
     | '/api/admin/users/$id'
+    | '/api/auth/wechat/callback'
+    | '/api/auth/wechat/status'
+    | '/api/billing/orders/$orderNo'
+    | '/api/pay/notify/wechat'
     | '/api/admin/knowledge/$id/documents'
     | '/api/admin/mcp/$id/test'
+    | '/api/billing/orders/$orderNo/mock-pay'
     | '/api/admin/knowledge/$id/documents/$docId'
   fileRoutesById: FileRoutesById
 }
@@ -514,21 +695,29 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   ChatRoute: typeof ChatRoute
   LoginRoute: typeof LoginRoute
+  PricingRoute: typeof PricingRoute
   RegisterRoute: typeof RegisterRoute
   ApiAgentsRoute: typeof ApiAgentsRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiConversationsRoute: typeof ApiConversationsRouteWithChildren
   ApiMeRoute: typeof ApiMeRoute
+  ApiPlansRoute: typeof ApiPlansRoute
   ApiAdminAgentsRoute: typeof ApiAdminAgentsRouteWithChildren
   ApiAdminBuiltinProvidersRoute: typeof ApiAdminBuiltinProvidersRoute
   ApiAdminKnowledgeRoute: typeof ApiAdminKnowledgeRouteWithChildren
   ApiAdminMcpRoute: typeof ApiAdminMcpRouteWithChildren
+  ApiAdminOrdersRoute: typeof ApiAdminOrdersRoute
+  ApiAdminPlansRoute: typeof ApiAdminPlansRouteWithChildren
   ApiAdminProvidersRoute: typeof ApiAdminProvidersRouteWithChildren
   ApiAdminSkillsRoute: typeof ApiAdminSkillsRouteWithChildren
   ApiAdminStatsRoute: typeof ApiAdminStatsRoute
   ApiAdminToolsRoute: typeof ApiAdminToolsRouteWithChildren
   ApiAdminUsersRoute: typeof ApiAdminUsersRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiAuthWechatRoute: typeof ApiAuthWechatRouteWithChildren
+  ApiBillingMembershipRoute: typeof ApiBillingMembershipRoute
+  ApiBillingOrdersRoute: typeof ApiBillingOrdersRouteWithChildren
+  ApiPayNotifyWechatRoute: typeof ApiPayNotifyWechatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -559,6 +748,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/register': {
@@ -594,6 +790,20 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/admin/mcp'
       preLoaderRoute: typeof AdminMcpRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/plans': {
+      id: '/admin/plans'
+      path: '/plans'
+      fullPath: '/admin/plans'
+      preLoaderRoute: typeof AdminPlansRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/providers': {
@@ -652,6 +862,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/plans': {
+      id: '/api/plans'
+      path: '/api/plans'
+      fullPath: '/api/plans'
+      preLoaderRoute: typeof ApiPlansRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/knowledge/$id': {
       id: '/admin/knowledge/$id'
       path: '/$id'
@@ -685,6 +902,20 @@ declare module '@tanstack/react-router' {
       path: '/api/admin/mcp'
       fullPath: '/api/admin/mcp'
       preLoaderRoute: typeof ApiAdminMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/orders': {
+      id: '/api/admin/orders'
+      path: '/api/admin/orders'
+      fullPath: '/api/admin/orders'
+      preLoaderRoute: typeof ApiAdminOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/plans': {
+      id: '/api/admin/plans'
+      path: '/api/admin/plans'
+      fullPath: '/api/admin/plans'
+      preLoaderRoute: typeof ApiAdminPlansRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/providers': {
@@ -729,6 +960,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/wechat': {
+      id: '/api/auth/wechat'
+      path: '/api/auth/wechat'
+      fullPath: '/api/auth/wechat'
+      preLoaderRoute: typeof ApiAuthWechatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/billing/membership': {
+      id: '/api/billing/membership'
+      path: '/api/billing/membership'
+      fullPath: '/api/billing/membership'
+      preLoaderRoute: typeof ApiBillingMembershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/billing/orders': {
+      id: '/api/billing/orders'
+      path: '/api/billing/orders'
+      fullPath: '/api/billing/orders'
+      preLoaderRoute: typeof ApiBillingOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/conversations/$id': {
       id: '/api/conversations/$id'
       path: '/$id'
@@ -764,6 +1016,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminMcpIdRouteImport
       parentRoute: typeof ApiAdminMcpRoute
     }
+    '/api/admin/plans/$id': {
+      id: '/api/admin/plans/$id'
+      path: '/$id'
+      fullPath: '/api/admin/plans/$id'
+      preLoaderRoute: typeof ApiAdminPlansIdRouteImport
+      parentRoute: typeof ApiAdminPlansRoute
+    }
     '/api/admin/providers/$id': {
       id: '/api/admin/providers/$id'
       path: '/$id'
@@ -792,6 +1051,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminUsersIdRouteImport
       parentRoute: typeof ApiAdminUsersRoute
     }
+    '/api/auth/wechat/callback': {
+      id: '/api/auth/wechat/callback'
+      path: '/callback'
+      fullPath: '/api/auth/wechat/callback'
+      preLoaderRoute: typeof ApiAuthWechatCallbackRouteImport
+      parentRoute: typeof ApiAuthWechatRoute
+    }
+    '/api/auth/wechat/status': {
+      id: '/api/auth/wechat/status'
+      path: '/status'
+      fullPath: '/api/auth/wechat/status'
+      preLoaderRoute: typeof ApiAuthWechatStatusRouteImport
+      parentRoute: typeof ApiAuthWechatRoute
+    }
+    '/api/billing/orders/$orderNo': {
+      id: '/api/billing/orders/$orderNo'
+      path: '/$orderNo'
+      fullPath: '/api/billing/orders/$orderNo'
+      preLoaderRoute: typeof ApiBillingOrdersOrderNoRouteImport
+      parentRoute: typeof ApiBillingOrdersRoute
+    }
+    '/api/pay/notify/wechat': {
+      id: '/api/pay/notify/wechat'
+      path: '/api/pay/notify/wechat'
+      fullPath: '/api/pay/notify/wechat'
+      preLoaderRoute: typeof ApiPayNotifyWechatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/knowledge/$id/documents': {
       id: '/api/admin/knowledge/$id/documents'
       path: '/documents'
@@ -805,6 +1092,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/mcp/$id/test'
       preLoaderRoute: typeof ApiAdminMcpIdTestRouteImport
       parentRoute: typeof ApiAdminMcpIdRoute
+    }
+    '/api/billing/orders/$orderNo/mock-pay': {
+      id: '/api/billing/orders/$orderNo/mock-pay'
+      path: '/mock-pay'
+      fullPath: '/api/billing/orders/$orderNo/mock-pay'
+      preLoaderRoute: typeof ApiBillingOrdersOrderNoMockPayRouteImport
+      parentRoute: typeof ApiBillingOrdersOrderNoRoute
     }
     '/api/admin/knowledge/$id/documents/$docId': {
       id: '/api/admin/knowledge/$id/documents/$docId'
@@ -832,6 +1126,8 @@ interface AdminRouteChildren {
   AdminAgentsRoute: typeof AdminAgentsRoute
   AdminKnowledgeRoute: typeof AdminKnowledgeRouteWithChildren
   AdminMcpRoute: typeof AdminMcpRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
+  AdminPlansRoute: typeof AdminPlansRoute
   AdminProvidersRoute: typeof AdminProvidersRoute
   AdminSkillsRoute: typeof AdminSkillsRoute
   AdminToolsRoute: typeof AdminToolsRoute
@@ -843,6 +1139,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAgentsRoute: AdminAgentsRoute,
   AdminKnowledgeRoute: AdminKnowledgeRouteWithChildren,
   AdminMcpRoute: AdminMcpRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
+  AdminPlansRoute: AdminPlansRoute,
   AdminProvidersRoute: AdminProvidersRoute,
   AdminSkillsRoute: AdminSkillsRoute,
   AdminToolsRoute: AdminToolsRoute,
@@ -939,6 +1237,18 @@ const ApiAdminMcpRouteWithChildren = ApiAdminMcpRoute._addFileChildren(
   ApiAdminMcpRouteChildren,
 )
 
+interface ApiAdminPlansRouteChildren {
+  ApiAdminPlansIdRoute: typeof ApiAdminPlansIdRoute
+}
+
+const ApiAdminPlansRouteChildren: ApiAdminPlansRouteChildren = {
+  ApiAdminPlansIdRoute: ApiAdminPlansIdRoute,
+}
+
+const ApiAdminPlansRouteWithChildren = ApiAdminPlansRoute._addFileChildren(
+  ApiAdminPlansRouteChildren,
+)
+
 interface ApiAdminProvidersRouteChildren {
   ApiAdminProvidersIdRoute: typeof ApiAdminProvidersIdRoute
 }
@@ -986,26 +1296,73 @@ const ApiAdminUsersRouteWithChildren = ApiAdminUsersRoute._addFileChildren(
   ApiAdminUsersRouteChildren,
 )
 
+interface ApiAuthWechatRouteChildren {
+  ApiAuthWechatCallbackRoute: typeof ApiAuthWechatCallbackRoute
+  ApiAuthWechatStatusRoute: typeof ApiAuthWechatStatusRoute
+}
+
+const ApiAuthWechatRouteChildren: ApiAuthWechatRouteChildren = {
+  ApiAuthWechatCallbackRoute: ApiAuthWechatCallbackRoute,
+  ApiAuthWechatStatusRoute: ApiAuthWechatStatusRoute,
+}
+
+const ApiAuthWechatRouteWithChildren = ApiAuthWechatRoute._addFileChildren(
+  ApiAuthWechatRouteChildren,
+)
+
+interface ApiBillingOrdersOrderNoRouteChildren {
+  ApiBillingOrdersOrderNoMockPayRoute: typeof ApiBillingOrdersOrderNoMockPayRoute
+}
+
+const ApiBillingOrdersOrderNoRouteChildren: ApiBillingOrdersOrderNoRouteChildren =
+  {
+    ApiBillingOrdersOrderNoMockPayRoute: ApiBillingOrdersOrderNoMockPayRoute,
+  }
+
+const ApiBillingOrdersOrderNoRouteWithChildren =
+  ApiBillingOrdersOrderNoRoute._addFileChildren(
+    ApiBillingOrdersOrderNoRouteChildren,
+  )
+
+interface ApiBillingOrdersRouteChildren {
+  ApiBillingOrdersOrderNoRoute: typeof ApiBillingOrdersOrderNoRouteWithChildren
+}
+
+const ApiBillingOrdersRouteChildren: ApiBillingOrdersRouteChildren = {
+  ApiBillingOrdersOrderNoRoute: ApiBillingOrdersOrderNoRouteWithChildren,
+}
+
+const ApiBillingOrdersRouteWithChildren =
+  ApiBillingOrdersRoute._addFileChildren(ApiBillingOrdersRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   ChatRoute: ChatRoute,
   LoginRoute: LoginRoute,
+  PricingRoute: PricingRoute,
   RegisterRoute: RegisterRoute,
   ApiAgentsRoute: ApiAgentsRoute,
   ApiChatRoute: ApiChatRoute,
   ApiConversationsRoute: ApiConversationsRouteWithChildren,
   ApiMeRoute: ApiMeRoute,
+  ApiPlansRoute: ApiPlansRoute,
   ApiAdminAgentsRoute: ApiAdminAgentsRouteWithChildren,
   ApiAdminBuiltinProvidersRoute: ApiAdminBuiltinProvidersRoute,
   ApiAdminKnowledgeRoute: ApiAdminKnowledgeRouteWithChildren,
   ApiAdminMcpRoute: ApiAdminMcpRouteWithChildren,
+  ApiAdminOrdersRoute: ApiAdminOrdersRoute,
+  ApiAdminPlansRoute: ApiAdminPlansRouteWithChildren,
   ApiAdminProvidersRoute: ApiAdminProvidersRouteWithChildren,
   ApiAdminSkillsRoute: ApiAdminSkillsRouteWithChildren,
   ApiAdminStatsRoute: ApiAdminStatsRoute,
   ApiAdminToolsRoute: ApiAdminToolsRouteWithChildren,
   ApiAdminUsersRoute: ApiAdminUsersRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiAuthWechatRoute: ApiAuthWechatRouteWithChildren,
+  ApiBillingMembershipRoute: ApiBillingMembershipRoute,
+  ApiBillingOrdersRoute: ApiBillingOrdersRouteWithChildren,
+  ApiPayNotifyWechatRoute: ApiPayNotifyWechatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

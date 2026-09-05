@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // Better Auth core tables (see https://better-auth.com/docs/concepts/database)
@@ -282,6 +282,101 @@ export const agentKnowledge = pgTable(
             .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
     },
     (t) => [primaryKey({ columns: [t.agentId, t.kbId] })],
+);
+
+// ---------------------------------------------------------------------------
+// 会员 / 订单 / 用量（付费 AI 应用基础）
+// ---------------------------------------------------------------------------
+
+/** 会员套餐：free 为免费档（注册即有），付费档通过订单开通 */
+export const membershipPlans = pgTable('membership_plans', {
+    id: serial('id').primaryKey(),
+    // 唯一编码，如 free / pro / max（订单与会员快照用，避免改名破坏历史数据）
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    // 每日对话配额；null 表示不限
+    chatQuotaPerDay: integer('chat_quota_per_day'),
+    // 单位：分。0 表示免费档
+    monthlyPriceCents: integer('monthly_price_cents').notNull().default(0),
+    yearlyPriceCents: integer('yearly_price_cents'),
+    enabled: boolean('enabled').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/** 支付订单 */
+export const orders = pgTable(
+    'orders',
+    {
+        id: serial('id').primaryKey(),
+        // 商户订单号（out_trade_no）：mo_ + 时间戳 + 随机
+        orderNo: text('order_no').notNull().unique(),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        planId: integer('plan_id')
+            .notNull()
+            .references(() => membershipPlans.id, { onDelete: 'restrict' }),
+        // 快照字段：下单时的套餐编码与金额，不受后续改价影响
+        planCode: text('plan_code').notNull(),
+        // monthly | yearly
+        period: text('period').notNull().default('monthly'),
+        amountCents: integer('amount_cents').notNull(),
+        // pending | paid | closed | refunded
+        status: text('status').notNull().default('pending'),
+        // 支付渠道：wechat | mock（开发环境模拟支付），预留 alipay 等
+        provider: text('provider').notNull().default('wechat'),
+        // 渠道方交易号（微信 transaction_id）
+        providerTradeNo: text('provider_trade_no'),
+        // Native 支付二维码链接等渠道返回的支付引导信息
+        payInfo: jsonb('pay_info'),
+        paidAt: timestamp('paid_at'),
+        // 订单关闭时间（未支付超时）
+        closedAt: timestamp('closed_at'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [index('orders_user_id_idx').on(t.userId), index('orders_status_idx').on(t.status)],
+);
+
+/** 用户会员记录：每次成功支付一条；生效会员 = expires_at 最晚且未过期的记录 */
+export const userMemberships = pgTable(
+    'user_memberships',
+    {
+        id: serial('id').primaryKey(),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        planId: integer('plan_id')
+            .notNull()
+            .references(() => membershipPlans.id, { onDelete: 'restrict' }),
+        planCode: text('plan_code').notNull(),
+        // active | expired
+        status: text('status').notNull().default('active'),
+        startsAt: timestamp('starts_at').notNull().defaultNow(),
+        expiresAt: timestamp('expires_at').notNull(),
+        orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [index('user_memberships_user_id_idx').on(t.userId)],
+);
+
+/** 每日用量计数（配额控制）：periodKey 形如 2026-09-06（按 UTC+8 归日） */
+export const usageCounters = pgTable(
+    'usage_counters',
+    {
+        id: bigserial('id', { mode: 'number' }).primaryKey(),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        periodKey: text('period_key').notNull(),
+        count: integer('count').notNull().default(0),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [uniqueIndex('usage_counters_user_period_idx').on(t.userId, t.periodKey)],
 );
 
 // ---------------------------------------------------------------------------

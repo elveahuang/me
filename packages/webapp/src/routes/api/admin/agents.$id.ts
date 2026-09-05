@@ -46,15 +46,6 @@ export const Route = createFileRoute('/api/admin/agents/$id')({
                         if (missing.length > 0) throw new HttpError(400, `${label}不存在: ${missing.join(', ')}`);
                     };
 
-                    const agent = (
-                        await db
-                            .update(agents)
-                            .set({ ...values, updatedAt: new Date() })
-                            .where(eq(agents.id, id))
-                            .returning()
-                    )[0];
-                    if (!agent) throw new HttpError(404, '智能体不存在');
-
                     if (skillIds) await assertIdsExist('Skill', skillIds, await db.select({ id: skills.id }).from(skills).where(inArray(skills.id, skillIds)));
                     if (toolIds) await assertIdsExist('Tool', toolIds, await db.select({ id: tools.id }).from(tools).where(inArray(tools.id, toolIds)));
                     if (knowledgeBaseIds)
@@ -70,8 +61,15 @@ export const Route = createFileRoute('/api/admin/agents/$id')({
                             await db.select({ id: mcpServers.id }).from(mcpServers).where(inArray(mcpServers.id, mcpServerIds)),
                         );
 
-                    // 删旧建新放在同一事务中，避免中途失败导致挂载被清空
-                    await db.transaction(async (tx) => {
+                    // 删旧建新放在同一事务中，避免中途失败导致挂载被清空；标量字段更新一并入事务防部分提交
+                    const agent = await db.transaction(async (tx) => {
+                        const [updated] = await tx
+                            .update(agents)
+                            .set({ ...values, updatedAt: new Date() })
+                            .where(eq(agents.id, id))
+                            .returning();
+                        if (!updated) throw new HttpError(404, '智能体不存在');
+
                         if (skillIds) {
                             await tx.delete(agentSkills).where(eq(agentSkills.agentId, id));
                             if (skillIds.length > 0) {
@@ -96,6 +94,7 @@ export const Route = createFileRoute('/api/admin/agents/$id')({
                                 await tx.insert(agentMcpServers).values(mcpServerIds.map((mcpServerId) => ({ agentId: id, mcpServerId })));
                             }
                         }
+                        return updated;
                     });
 
                     const skillLinks = await db.select().from(agentSkills).where(eq(agentSkills.agentId, id));

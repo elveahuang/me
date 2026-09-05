@@ -14,7 +14,9 @@ import {
     useIonToast,
 } from '@ionic/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import i18n from '../i18n';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { API_BASE_URL } from '../lib/config';
@@ -64,14 +66,14 @@ async function streamChat(
     });
     if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new ApiError(res.status, data.error ?? `请求失败 (${res.status})`);
+        throw new ApiError(res.status, data.error ?? i18n.t('chat.requestFailed', { status: res.status }));
     }
 
     // 服务端在首次对话时会新建会话并通过该头回传 ID
     const headerConversationId = res.headers.get('x-conversation-id');
 
     const reader = res.body?.getReader();
-    if (!reader) throw new Error('当前环境不支持流式响应');
+    if (!reader) throw new Error(i18n.t('chat.streamingUnsupported'));
     const decoder = new TextDecoder();
 
     let finished = false;
@@ -89,7 +91,7 @@ async function streamChat(
         if (chunk.type === 'text-delta' && chunk.delta) onDelta(chunk.delta);
         if (chunk.type === 'tool-input-available' && chunk.toolName) onToolCall(chunk.toolName);
         if (chunk.type === 'finish') finished = true;
-        if (chunk.type === 'error') throw new Error(chunk.errorText ?? '服务端返回错误');
+        if (chunk.type === 'error') throw new Error(chunk.errorText ?? i18n.t('chat.serverError'));
     };
     const processBuffer = (final: boolean) => {
         const lines = buffer.split(/\r?\n/);
@@ -108,12 +110,12 @@ async function streamChat(
         buffer += decoder.decode();
         processBuffer(true);
     } catch (e) {
-        if (e instanceof SyntaxError) throw new Error('收到无法解析的流数据');
+        if (e instanceof SyntaxError) throw new Error(i18n.t('chat.unparsableStream'));
         throw e;
     } finally {
         reader.releaseLock();
     }
-    if (!finished) throw new Error('连接中断，回复可能不完整');
+    if (!finished) throw new Error(i18n.t('chat.connectionInterrupted'));
 
     return { conversationId: headerConversationId ? Number(headerConversationId) : null };
 }
@@ -122,6 +124,7 @@ export function ChatPage() {
     const params = useParams<{ agentId: string }>();
     const agentId = Number(params.agentId);
     const { token } = useAuth();
+    const { t } = useTranslation();
     const [presentToast] = useIonToast();
 
     const [agent, setAgent] = useState<Agent | null>(null);
@@ -164,12 +167,12 @@ export function ChatPage() {
                     })),
                 );
             } catch (e) {
-                void presentToast({ message: e instanceof Error ? e.message : '加载会话失败', duration: 2500, color: 'danger' });
+                void presentToast({ message: e instanceof Error ? e.message : t('chat.loadConversationFailed'), duration: 2500, color: 'danger' });
             } finally {
                 setStatus('idle');
             }
         },
-        [token, presentToast],
+        [token, presentToast, t],
     );
 
     const startNewConversation = useCallback(() => {
@@ -199,11 +202,11 @@ export function ChatPage() {
                 }
                 setStatus('idle');
             } catch (e) {
-                void presentToast({ message: e instanceof Error ? e.message : '加载失败', duration: 2500, color: 'danger' });
+                void presentToast({ message: e instanceof Error ? e.message : t('common.loadFailed'), duration: 2500, color: 'danger' });
                 setStatus('idle');
             }
         })();
-    }, [agentId, token, loadConversation, presentToast]);
+    }, [agentId, token, loadConversation, presentToast, t]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -244,7 +247,7 @@ export function ChatPage() {
                         prev.map((m) => {
                             if (m.id !== assistantId) return m;
                             const sep = m.text === '' ? '' : String.fromCharCode(10);
-                            return { ...m, text: m.text + sep + '🔧 调用工具：' + toolName + '…' };
+                            return { ...m, text: m.text + sep + t('chat.callingTool', { tool: toolName }) };
                         }),
                     ),
                 controller.signal,
@@ -256,12 +259,12 @@ export function ChatPage() {
         } catch (e) {
             const aborted = controller.signal.aborted;
             if (!aborted) {
-                void presentToast({ message: e instanceof Error ? e.message : '发送失败', duration: 2500, color: 'danger' });
+                void presentToast({ message: e instanceof Error ? e.message : t('chat.sendFailed'), duration: 2500, color: 'danger' });
             }
             setMessages((prev) =>
                 prev.map((m) =>
                     m.id === assistantId && m.text === ''
-                        ? { ...m, text: aborted ? '（已停止生成）' : `⚠️ ${e instanceof Error ? e.message : '发送失败'}` }
+                        ? { ...m, text: aborted ? t('chat.stoppedGeneration') : `⚠️ ${e instanceof Error ? e.message : t('chat.sendFailed')}` }
                         : m,
                 ),
             );
@@ -279,10 +282,10 @@ export function ChatPage() {
                     <IonButtons slot='start'>
                         <IonBackButton defaultHref='/agents' />
                     </IonButtons>
-                    <IonTitle>{agent ? `${agent.emoji} ${agent.name}` : '对话'}</IonTitle>
+                    <IonTitle>{agent ? `${agent.emoji} ${agent.name}` : t('chat.title')}</IonTitle>
                     <IonButtons slot='end'>
                         {status === 'streaming' ? (
-                            <IonButton onClick={stopStreaming}>停止</IonButton>
+                            <IonButton onClick={stopStreaming}>{t('chat.stop')}</IonButton>
                         ) : (
                             <>
                                 <IonButton
@@ -291,9 +294,9 @@ export function ChatPage() {
                                         setHistoryVisible(true);
                                     }}
                                 >
-                                    历史
+                                    {t('chat.history')}
                                 </IonButton>
-                                <IonButton onClick={startNewConversation}>新对话</IonButton>
+                                <IonButton onClick={startNewConversation}>{t('chat.newConversation')}</IonButton>
                             </>
                         )}
                     </IonButtons>
@@ -303,10 +306,10 @@ export function ChatPage() {
                 {messages.length === 0 && status !== 'loading' ? (
                     <div style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>
                         <div style={{ fontSize: 40 }}>{agent?.emoji ?? '🤖'}</div>
-                        <p>发送第一条消息开始对话</p>
+                        <p>{t('chat.emptyHint')}</p>
                     </div>
                 ) : null}
-                {status === 'loading' ? <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>加载会话…</p> : null}
+                {status === 'loading' ? <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>{t('chat.loadingConversation')}</p> : null}
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {messages.map((message) =>
                         message.role === 'user' ? (
@@ -351,14 +354,14 @@ export function ChatPage() {
                     <IonTextarea
                         autoGrow
                         rows={1}
-                        placeholder='输入消息…'
+                        placeholder={t('chat.inputPlaceholder')}
                         value={input}
                         disabled={status === 'streaming'}
                         onIonChange={(e) => setInput(e.detail.value ?? '')}
                         style={{ border: '1px solid var(--ion-color-light-shade, #d7d8da)', borderRadius: 12, padding: '6px 12px' }}
                     />
                     <IonButton disabled={status === 'streaming' || input.trim() === ''} onClick={() => void send()}>
-                        发送
+                        {t('chat.send')}
                     </IonButton>
                 </div>
             </IonFooter>
@@ -367,9 +370,9 @@ export function ChatPage() {
             <IonModal isOpen={historyVisible} onDidDismiss={() => setHistoryVisible(false)}>
                 <IonHeader>
                     <IonToolbar>
-                        <IonTitle>历史会话</IonTitle>
+                        <IonTitle>{t('chat.historyTitle')}</IonTitle>
                         <IonButtons slot='end'>
-                            <IonButton onClick={() => setHistoryVisible(false)}>关闭</IonButton>
+                            <IonButton onClick={() => setHistoryVisible(false)}>{t('common.close')}</IonButton>
                         </IonButtons>
                     </IonToolbar>
                 </IonHeader>
@@ -386,11 +389,11 @@ export function ChatPage() {
                                     void loadConversation(c.id);
                                 }}
                             >
-                                {c.title || '新对话'}
+                                {c.title || t('chat.newConversation')}
                             </IonButton>
                         ))}
                         {conversations.length === 0 ? (
-                            <p style={{ textAlign: 'center', paddingTop: 40, color: 'var(--ion-color-medium)' }}>暂无历史会话</p>
+                            <p style={{ textAlign: 'center', paddingTop: 40, color: 'var(--ion-color-medium)' }}>{t('chat.noHistory')}</p>
                         ) : null}
                     </IonList>
                 </IonContent>

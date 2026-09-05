@@ -3,6 +3,7 @@ import { fetchSession } from '@/lib/session';
 import { Button } from '@heroui/react';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export const Route = createFileRoute('/register')({
     beforeLoad: async () => {
@@ -13,6 +14,7 @@ export const Route = createFileRoute('/register')({
 });
 
 function RegisterPage() {
+    const { t } = useTranslation();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -24,13 +26,13 @@ function RegisterPage() {
         setError(null);
         setLoading(true);
         const { error: signUpError } = await authClient.signUp.email({
-            name: name || email.split('@')[0] || '用户',
+            name: name || email.split('@')[0] || t('register.defaultName'),
             email,
             password,
         });
         setLoading(false);
         if (signUpError) {
-            setError(signUpError.message ?? '注册失败，请稍后再试');
+            setError(signUpError.message ?? t('register.errorFallback'));
             return;
         }
         window.location.href = '/chat';
@@ -39,12 +41,12 @@ function RegisterPage() {
     return (
         <div className='flex min-h-dvh items-center justify-center bg-gray-50 p-6'>
             <div className='w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm'>
-                <h1 className='text-2xl font-bold text-gray-900'>注册</h1>
-                <p className='mt-1 text-sm text-gray-500'>创建账号，开始与智能体对话。</p>
+                <h1 className='text-2xl font-bold text-gray-900'>{t('register.title')}</h1>
+                <p className='mt-1 text-sm text-gray-500'>{t('register.subtitle')}</p>
                 <form className='mt-6 space-y-4' onSubmit={handleSubmit}>
                     <div>
                         <label className='mb-1 block text-sm font-medium text-gray-700' htmlFor='name'>
-                            昵称
+                            {t('register.name')}
                         </label>
                         <input
                             id='name'
@@ -52,12 +54,12 @@ function RegisterPage() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             className='w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                            placeholder='可选'
+                            placeholder={t('register.namePlaceholder')}
                         />
                     </div>
                     <div>
                         <label className='mb-1 block text-sm font-medium text-gray-700' htmlFor='email'>
-                            邮箱
+                            {t('register.email')}
                         </label>
                         <input
                             id='email'
@@ -66,12 +68,12 @@ function RegisterPage() {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             className='w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                            placeholder='you@example.com'
+                            placeholder={t('register.emailPlaceholder')}
                         />
                     </div>
                     <div>
                         <label className='mb-1 block text-sm font-medium text-gray-700' htmlFor='password'>
-                            密码
+                            {t('register.password')}
                         </label>
                         <input
                             id='password'
@@ -81,18 +83,18 @@ function RegisterPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className='w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                            placeholder='至少 8 位'
+                            placeholder={t('register.passwordPlaceholder')}
                         />
                     </div>
                     {error ? <p className='text-sm text-red-600'>{error}</p> : null}
                     <Button type='submit' fullWidth isDisabled={loading}>
-                        {loading ? '注册中…' : '注册'}
+                        {loading ? t('register.submitting') : t('register.submit')}
                     </Button>
                 </form>
                 <p className='mt-4 text-center text-sm text-gray-500'>
-                    已有账号？{' '}
+                    {t('register.hasAccount')}{' '}
                     <Link to='/login' className='font-medium text-blue-600 hover:underline'>
-                        直接登录
+                        {t('register.goLogin')}
                     </Link>
                 </p>
             </div>

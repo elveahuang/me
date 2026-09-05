@@ -16,6 +16,9 @@ import '@ionic/react/css/typography.css';
 /* Tailwind v4 + Konsta UI（备选组件层）样式 */
 import './styles/tailwind.css';
 
+/* i18next 初始化（必须在渲染前执行） */
+import './i18n';
+
 import { AppRoutes } from './routes';
 
 setupIonicReact();

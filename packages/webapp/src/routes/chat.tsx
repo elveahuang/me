@@ -10,6 +10,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
 import { useEffect, memo, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface AgentSummary {
     id: number;
@@ -48,6 +49,7 @@ export const Route = createFileRoute('/chat')({
 });
 
 function ChatPage() {
+    const { t } = useTranslation();
     const { session } = Route.useRouteContext();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -86,7 +88,7 @@ function ChatPage() {
                 {/* 侧边栏：智能体 + 会话列表 */}
                 <aside className='flex w-72 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white'>
                     <section className='p-3'>
-                        <h2 className='px-1 pb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase'>智能体</h2>
+                        <h2 className='px-1 pb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase'>{t('chat.agents')}</h2>
                         <div className='space-y-1'>
                             {agents.map((agent) => (
                                 <button
@@ -103,19 +105,19 @@ function ChatPage() {
                                     <span className='truncate font-medium'>{agent.name}</span>
                                 </button>
                             ))}
-                            {agents.length === 0 ? <p className='px-3 py-2 text-sm text-gray-400'>暂无可用智能体</p> : null}
+                            {agents.length === 0 ? <p className='px-3 py-2 text-sm text-gray-400'>{t('chat.noAgents')}</p> : null}
                         </div>
                     </section>
                     <section className='flex min-h-0 flex-1 flex-col p-3 pt-0'>
                         <div className='flex items-center justify-between px-1 pb-2'>
-                            <h2 className='text-xs font-semibold tracking-wide text-gray-400 uppercase'>会话</h2>
+                            <h2 className='text-xs font-semibold tracking-wide text-gray-400 uppercase'>{t('chat.conversations')}</h2>
                             <Button
                                 size='sm'
                                 variant='ghost'
                                 isDisabled={!activeAgent || activeConversationId === null}
                                 onPress={() => selectConversation(null)}
                             >
-                                + 新对话
+                                {t('chat.newConversation')}
                             </Button>
                         </div>
                         <div className='min-h-0 flex-1 space-y-1 overflow-y-auto'>
@@ -129,11 +131,11 @@ function ChatPage() {
                                         }`}
                                     >
                                         <button type='button' className='min-w-0 flex-1 truncate text-left' onClick={() => selectConversation(c.id)}>
-                                            {c.title || '新对话'}
+                                            {c.title || t('chat.untitled')}
                                         </button>
                                         <button
                                             type='button'
-                                            aria-label='删除会话'
+                                            aria-label={t('chat.deleteConversation')}
                                             className='hidden shrink-0 text-gray-400 group-hover:block hover:text-red-500'
                                             onClick={async () => {
                                                 await api(`/api/conversations/${c.id}`, { method: 'DELETE' });
@@ -146,7 +148,7 @@ function ChatPage() {
                                     </div>
                                 ))}
                             {conversations.filter((c) => !activeAgent || c.agentId === activeAgent.id).length === 0 ? (
-                                <p className='px-3 py-2 text-sm text-gray-400'>还没有会话，发一条消息开始吧</p>
+                                <p className='px-3 py-2 text-sm text-gray-400'>{t('chat.noConversations')}</p>
                             ) : null}
                         </div>
                     </section>
@@ -164,7 +166,7 @@ function ChatPage() {
                             }}
                         />
                     ) : (
-                        <div className='flex h-full items-center justify-center text-gray-400'>选择一个智能体开始对话</div>
+                        <div className='flex h-full items-center justify-center text-gray-400'>{t('chat.selectAgent')}</div>
                     )}
                 </main>
             </div>
@@ -179,6 +181,7 @@ interface ChatViewProps {
 }
 
 function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProps) {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [input, setInput] = useState('');
     const createdRef = useRef<number | null>(conversationId);
@@ -245,7 +248,7 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
         chat.sendMessage({ text });
     };
 
-    const statusText = chat.status === 'submitted' ? '思考中…' : chat.status === 'streaming' ? '回复中…' : chat.error ? chat.error.message : null;
+    const statusText = chat.status === 'submitted' ? t('chat.thinking') : chat.status === 'streaming' ? t('chat.responding') : chat.error ? chat.error.message : null;
 
     return (
         <div className='flex h-full flex-col'>
@@ -259,13 +262,13 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
 
             <div className='min-h-0 flex-1 overflow-y-auto bg-gray-50 px-6 py-4'>
                 {loadingMessages && conversationId !== null ? (
-                    <div className='text-center text-sm text-gray-400'>加载会话…</div>
+                    <div className='text-center text-sm text-gray-400'>{t('chat.loadingConversation')}</div>
                 ) : (
                     <div className='mx-auto max-w-3xl space-y-4'>
                         {chat.messages.length === 0 ? (
                             <div className='pt-16 text-center text-gray-400'>
                                 <div className='text-4xl'>{agent.emoji}</div>
-                                <p className='mt-2 text-sm'>给 {agent.name} 发送第一条消息</p>
+                                <p className='mt-2 text-sm'>{t('chat.firstMessage', { name: agent.name })}</p>
                             </div>
                         ) : null}
                         {chat.messages.map((message, index) => (
@@ -287,15 +290,15 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                             }
                         }}
                         rows={2}
-                        placeholder='输入消息，Enter 发送，Shift+Enter 换行'
+                        placeholder={t('chat.inputPlaceholder')}
                         className='flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                     />
                     <Button type='submit' isDisabled={chat.status === 'submitted' || chat.status === 'streaming' || !input.trim()}>
-                        发送
+                        {t('chat.send')}
                     </Button>
                     {chat.status === 'submitted' || chat.status === 'streaming' ? (
                         <Button type='button' variant='ghost' onPress={() => chat.stop()}>
-                            停止
+                            {t('chat.stop')}
                         </Button>
                     ) : null}
                 </form>

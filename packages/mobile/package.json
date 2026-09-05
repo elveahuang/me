@@ -17,10 +17,12 @@
         "@capacitor/core": "^8.5.1",
         "@ionic/react": "^9.0.2",
         "@ionic/react-router": "^9.0.2",
+        "i18next": "26.4.2",
         "ionicons": "^8.1.0",
         "konsta": "^5.4.0",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
+        "react-i18next": "17.0.13",
         "react-router": "^6.30.0",
         "react-router-dom": "^6.30.0"
     },
