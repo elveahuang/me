@@ -36,14 +36,14 @@ scripts/    # 仓库脚手架脚本（init / build / update）
 
 ### 1. 数据库
 
-需要 PostgreSQL（默认 `postgres://root:root@localhost:5432/me`，可在 `packages/webapp/env.local` 的 `DATABASE_URL` 覆盖）：
+需要 PostgreSQL（默认 `postgres://root:root@localhost:5432/me`，可在 `packages/webapp/.env.local` 的 `DATABASE_URL` 覆盖）：
 
 ```shell
 pnpm run webapp:db:migrate   # drizzle-kit push，建表
 pnpm run webapp:db:seed      # 创建管理员 + 示例 Skills/Tool + 示例智能体
 ```
 
-Seed 产出的管理员：`admin@example.com / admin123456`（请上线前修改）。
+Seed 管理员邮箱默认 `admin@example.com`，口令通过环境变量 `ADMIN_INITIAL_PASSWORD` 指定（未设置时生成随机口令并仅在 seed 输出中显示一次）。
 
 ### 2. Webapp
 
@@ -51,7 +51,7 @@ Seed 产出的管理员：`admin@example.com / admin123456`（请上线前修改
 pnpm run webapp:start        # http://localhost:3000
 ```
 
-AI key（至少配一个）写入 `packages/webapp/env.local` 或环境变量：`DEEPSEEK_API_KEY` / `OPENAI_API_KEY`；
+AI key（至少配一个）写入 `packages/webapp/.env.local` 或环境变量：`DEEPSEEK_API_KEY` / `OPENAI_API_KEY`；
 并设置 `BETTER_AUTH_SECRET`、`BETTER_AUTH_URL=http://localhost:3000`。
 
 用户侧：`/login`、`/register`、`/chat`；管理侧：`/admin`（需 admin 角色）。
@@ -79,7 +79,7 @@ pnpm run mobile:build        # 产出 dist/，可用 npx cap add ios/android + p
 - json-render：`src/lib/catalog.ts` 同时供服务端 `catalog.prompt()` 生成提示词、
   客户端 Comark `jsonRender()` 插件渲染 ```json-render 代码块
 - CORS：OPTIONS 预检由 `src/lib/cors.ts` 中间件短路，实际响应头由 `json()`/聊天流统一附加；
-  允许来源可用 `CORS_ORIGINS` 环境变量覆盖（默认含 Expo/Ionic/Vite 本地端口）
+  仅对白名单内的来源回显 allow-origin，允许来源可用 `CORS_ORIGINS` 环境变量覆盖（默认含 Ionic/Vite/Capacitor 本地端口）
 - better-auth 1.7 会对所有 POST 强制 Origin 校验（拒绝 curl/移动端等非浏览器客户端），
   已显式关闭并改由 SameSite=Lax Cookie 兜底
 - nitro 3 beta + vite 8 (rolldown) 多 chunk 构建存在导出损坏问题，

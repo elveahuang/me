@@ -318,17 +318,6 @@ function AgentFormModal({
                 toolIds: draft.toolIds,
                 mcpServerIds: draft.mcpServerIds,
             }));
-            setForm((prev) => ({
-                ...prev,
-                name: draft.name,
-                emoji: draft.emoji,
-                description: draft.description,
-                systemPrompt: draft.systemPrompt,
-                providerId: draft.providerId,
-                model: draft.model,
-                skillIds: draft.skillIds,
-                toolIds: draft.toolIds,
-            }));
         } catch (err) {
             setError(err instanceof Error ? err.message : '自动配置失败');
         } finally {
@@ -390,13 +379,31 @@ function AgentFormModal({
                 <div className='grid grid-cols-2 gap-3'>
                     <Field label='供应商'>
                         <select
-                            value={form.providerId ?? ''}
-                            onChange={(e) => setForm({ ...form, providerId: e.target.value ? Number(e.target.value) : null })}
+                            value={
+                                form.providerId !== null
+                                    ? String(form.providerId)
+                                    : builtinProviders.some((b) => form.model.startsWith(`${b.id}:`))
+                                      ? `builtin:${form.model.split(':')[0]}`
+                                      : 'builtin'
+                            }
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v.startsWith('builtin:')) {
+                                    const id = v.slice('builtin:'.length);
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        providerId: null,
+                                        model: prev.model.startsWith(`${id}:`) ? prev.model : `${id}:`,
+                                    }));
+                                    return;
+                                }
+                                setForm({ ...form, providerId: v ? Number(v) : null });
+                            }}
                             className={inputClass}
                         >
-                            {builtinProviders.length === 0 ? <option value=''>内置（未配置 key）</option> : null}
+                            <option value='builtin'>{builtinProviders.length === 0 ? '内置（未配置 key）' : '内置供应商'}</option>
                             {builtinProviders.map((b) => (
-                                <option key={b.id} value=''>
+                                <option key={b.id} value={`builtin:${b.id}`}>
                                     {b.label}
                                 </option>
                             ))}

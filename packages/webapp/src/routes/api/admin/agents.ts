@@ -1,9 +1,9 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
-import { agentKnowledge, agentMcpServers, agents, agentSkills, agentTools } from '@schema';
+import { agentKnowledge, agentMcpServers, agents, agentSkills, agentTools, knowledgeBases, mcpServers, skills, tools } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
-import { asc } from 'drizzle-orm';
+import { asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const AgentBodySchema = z.object({
@@ -57,21 +57,45 @@ export const Route = createFileRoute('/api/admin/agents')({
                     if (!parsed.success) throw new HttpError(400, `参数错误: ${parsed.error.issues[0]?.message ?? ''}`);
                     const { skillIds, toolIds, knowledgeBaseIds, mcpServerIds, ...values } = parsed.data;
 
-                    const agent = (await db.insert(agents).values(values).returning())[0];
-                    if (!agent) throw new HttpError(500, '创建智能体失败');
-                    if (skillIds.length > 0) {
-                        await db.insert(agentSkills).values(skillIds.map((skillId) => ({ agentId: agent.id, skillId })));
-                    }
-                    if (toolIds.length > 0) {
-                        await db.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
-                    }
-                    if (knowledgeBaseIds.length > 0) {
-                        await db.insert(agentKnowledge).values(knowledgeBaseIds.map((kbId) => ({ agentId: agent.id, kbId })));
-                    }
-                    if (mcpServerIds.length > 0) {
-                        await db.insert(agentMcpServers).values(mcpServerIds.map((mcpServerId) => ({ agentId: agent.id, mcpServerId })));
-                    }
-                    return json({ ...agent, skillIds, toolIds, knowledgeBaseIds, mcpServerIds }, 201);
+                    // 关联 id 存在性校验：避免 FK 约束失败留下孤儿数据
+                    const assertIdsExist = async (label: string, ids: number[], existing: { id: number }[]) => {
+                        if (ids.length === 0) return;
+                        const found = new Set(existing.map((r) => r.id));
+                        const missing = ids.filter((i) => !found.has(i));
+                        if (missing.length > 0) throw new HttpError(400, `${label}不存在: ${missing.join(', ')}`);
+                    };
+                    await assertIdsExist('Skill', skillIds, await db.select({ id: skills.id }).from(skills).where(inArray(skills.id, skillIds)));
+                    await assertIdsExist('Tool', toolIds, await db.select({ id: tools.id }).from(tools).where(inArray(tools.id, toolIds)));
+                    await assertIdsExist(
+                        '知识库',
+                        knowledgeBaseIds,
+                        await db.select({ id: knowledgeBases.id }).from(knowledgeBases).where(inArray(knowledgeBases.id, knowledgeBaseIds)),
+                    );
+                    await assertIdsExist(
+                        'MCP 服务器',
+                        mcpServerIds,
+                        await db.select({ id: mcpServers.id }).from(mcpServers).where(inArray(mcpServers.id, mcpServerIds)),
+                    );
+
+                    // 建智能体与挂载关联放在同一事务中，避免中途失败留下孤儿数据
+                    const created = await db.transaction(async (tx) => {
+                        const agent = (await tx.insert(agents).values(values).returning())[0];
+                        if (!agent) throw new HttpError(500, '创建智能体失败');
+                        if (skillIds.length > 0) {
+                            await tx.insert(agentSkills).values(skillIds.map((skillId) => ({ agentId: agent.id, skillId })));
+                        }
+                        if (toolIds.length > 0) {
+                            await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
+                        }
+                        if (knowledgeBaseIds.length > 0) {
+                            await tx.insert(agentKnowledge).values(knowledgeBaseIds.map((kbId) => ({ agentId: agent.id, kbId })));
+                        }
+                        if (mcpServerIds.length > 0) {
+                            await tx.insert(agentMcpServers).values(mcpServerIds.map((mcpServerId) => ({ agentId: agent.id, mcpServerId })));
+                        }
+                        return agent;
+                    });
+                    return json({ ...created, skillIds, toolIds, knowledgeBaseIds, mcpServerIds }, 201);
                 } catch (e) {
                     return errorResponse(e);
                 }

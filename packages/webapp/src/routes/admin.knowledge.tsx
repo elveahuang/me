@@ -27,11 +27,10 @@ function AdminKnowledgePage() {
     const [creating, setCreating] = useState(false);
     const [form, setForm] = useState({ name: '', description: '' });
     const [error, setError] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'knowledge'] });
 
-    const createMutation = useMutation({
+    const { mutate: createKb, isPending: creatingKb } = useMutation({
         mutationFn: (body: string) => api('/api/admin/knowledge', { method: 'POST', body }),
         onSuccess: () => {
             setCreating(false);
@@ -96,9 +95,7 @@ function AdminKnowledgePage() {
                         className='space-y-3'
                         onSubmit={(e) => {
                             e.preventDefault();
-                            setSaving(true);
-                            createMutation.mutate(JSON.stringify(form));
-                            setSaving(false);
+                            createKb(JSON.stringify(form));
                         }}
                     >
                         <div>
@@ -114,7 +111,7 @@ function AdminKnowledgePage() {
                             <Button type='button' variant='ghost' onPress={() => setCreating(false)}>
                                 取消
                             </Button>
-                            <Button type='submit' isDisabled={saving}>
+                            <Button type='submit' isDisabled={creatingKb}>
                                 创建
                             </Button>
                         </div>

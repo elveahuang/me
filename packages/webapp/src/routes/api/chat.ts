@@ -22,7 +22,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router';
 import type { UIMessage, UIMessageChunk } from 'ai';
 import { convertToModelMessages, JsonToSseTransformStream, stepCountIs, streamText } from 'ai';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 /** 发送给模型的上下文窗口（最近 N 条消息），控制长会话的 token 成本 */
@@ -225,14 +225,15 @@ export const Route = createFileRoute('/api/chat')({
                             .onConflictDoNothing({ target: messagesTable.id });
                     }
 
-                    // 5. 从数据库取权威历史，窗口截断后转成模型消息
-                    const history = await db
-                        .select({ role: messagesTable.role, parts: messagesTable.parts })
-                        .from(messagesTable)
-                        .where(eq(messagesTable.conversationId, conv.id))
-                        .orderBy(asc(messagesTable.seq));
-
-                    const windowed = history.slice(-MAX_CONTEXT_MESSAGES);
+                    // 5. 从数据库取权威历史：只取最近 N 条（seq 倒序取后反转），避免长会话全量加载
+                    const windowed = (
+                        await db
+                            .select({ role: messagesTable.role, parts: messagesTable.parts })
+                            .from(messagesTable)
+                            .where(eq(messagesTable.conversationId, conv.id))
+                            .orderBy(desc(messagesTable.seq))
+                            .limit(MAX_CONTEXT_MESSAGES)
+                    ).reverse();
                     const uiMessages = windowed.map((m) => ({
                         id: '',
                         role: m.role as UIMessage['role'],

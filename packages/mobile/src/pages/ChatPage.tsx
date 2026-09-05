@@ -44,8 +44,14 @@ interface StoredMessage {
     parts: { type: string; text?: string }[];
 }
 
-/** 解析 AI SDK UI message stream（SSE），增量回调文本 */
-async function streamChat(token: string, body: object, onDelta: (text: string) => void, signal?: AbortSignal) {
+/** 解析 AI SDK UI message stream（SSE），增量回调文本与工具调用提示 */
+async function streamChat(
+    token: string,
+    body: object,
+    onDelta: (text: string) => void,
+    onToolCall: (toolName: string) => void,
+    signal?: AbortSignal,
+) {
     const res = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
@@ -67,27 +73,47 @@ async function streamChat(token: string, body: object, onDelta: (text: string) =
     const reader = res.body?.getReader();
     if (!reader) throw new Error('当前环境不支持流式响应');
     const decoder = new TextDecoder();
+
+    let finished = false;
     let buffer = '';
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-            if (!line.startsWith('data:')) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-            try {
-                const chunk = JSON.parse(payload) as { type: string; delta?: string; errorText?: string };
-                if (chunk.type === 'text-delta' && chunk.delta) onDelta(chunk.delta);
-                if (chunk.type === 'error' && chunk.errorText) throw new Error(chunk.errorText);
-            } catch (e) {
-                if (e instanceof SyntaxError) continue;
-                throw e;
-            }
+    const handleLine = (line: string) => {
+        if (!line.startsWith('data:')) return;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') return;
+        const chunk = JSON.parse(payload) as {
+            type: string;
+            delta?: string;
+            errorText?: string;
+            toolName?: string;
+        };
+        if (chunk.type === 'text-delta' && chunk.delta) onDelta(chunk.delta);
+        if (chunk.type === 'tool-input-available' && chunk.toolName) onToolCall(chunk.toolName);
+        if (chunk.type === 'finish') finished = true;
+        if (chunk.type === 'error') throw new Error(chunk.errorText ?? '服务端返回错误');
+    };
+    const processBuffer = (final: boolean) => {
+        const lines = buffer.split(/\r?\n/);
+        buffer = final ? '' : (lines.pop() ?? '');
+        for (const line of lines) handleLine(line);
+    };
+
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            processBuffer(false);
         }
+        // 流结束：flush 解码器并处理没有换行符结尾的最后一行
+        buffer += decoder.decode();
+        processBuffer(true);
+    } catch (e) {
+        if (e instanceof SyntaxError) throw new Error('收到无法解析的流数据');
+        throw e;
+    } finally {
+        reader.releaseLock();
     }
+    if (!finished) throw new Error('连接中断，回复可能不完整');
 
     return { conversationId: headerConversationId ? Number(headerConversationId) : null };
 }
@@ -132,8 +158,8 @@ export function ChatPage() {
                         id: m.id,
                         role: m.role === 'assistant' ? 'assistant' : 'user',
                         text: m.parts
-                            .filter((p) => p.type === 'text')
-                            .map((p) => p.text ?? '')
+                            .map((p) => (p.type === 'text' ? (p.text ?? '') : p.type.startsWith('tool-') ? `🔧 ${p.type.slice(5)}` : ''))
+                            .filter((t) => t !== '')
                             .join('\n'),
                     })),
                 );
@@ -213,6 +239,14 @@ export function ChatPage() {
                     ],
                 },
                 (delta) => setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta } : m))),
+                (toolName) =>
+                    setMessages((prev) =>
+                        prev.map((m) => {
+                            if (m.id !== assistantId) return m;
+                            const sep = m.text === '' ? '' : String.fromCharCode(10);
+                            return { ...m, text: m.text + sep + '🔧 调用工具：' + toolName + '…' };
+                        }),
+                    ),
                 controller.signal,
             );
             if (newConversationId !== null && conversationIdRef.current === null) {

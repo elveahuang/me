@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { config } from 'dotenv';
 
 config({ path: ['.env.local', '.env'] });
@@ -9,18 +10,21 @@ async function main() {
     const { ingestDocument } = await import('../lib/rag');
     const { eq } = await import('drizzle-orm');
 
-    // 1. 管理员账号
-    const adminEmail = 'admin@example.com';
-    const adminPassword = 'admin123456';
+    // 1. 管理员账号（口令来自环境变量，未配置则生成随机口令并仅本次打印）
+    const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@example.com';
     const [existing] = await db.select().from(user).where(eq(user.email, adminEmail));
     let adminId: string;
     if (existing) {
         adminId = existing.id;
         console.log(`管理员已存在: ${adminEmail}`);
     } else {
+        const adminPassword = process.env.ADMIN_INITIAL_PASSWORD ?? randomBytes(12).toString('base64url');
         const res = await auth.api.signUpEmail({ body: { name: 'Admin', email: adminEmail, password: adminPassword } });
         adminId = res.user.id;
-        console.log(`已创建管理员: ${adminEmail} / ${adminPassword}`);
+        console.log(`已创建管理员: ${adminEmail}`);
+        if (!process.env.ADMIN_INITIAL_PASSWORD) {
+            console.log(`初始口令（仅显示一次，请立即保存并修改）: ${adminPassword}`);
+        }
     }
     await db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId));
 
@@ -161,7 +165,7 @@ async function main() {
                     kbId: kb.id,
                     title: 'ME 平台使用指南',
                     content: [
-                        'ME 平台是一个全栈 AI 智能体平台，支持网页端、移动端（Expo）与 Ionic/Capacitor 客户端三种入口，数据与账号互通。',
+                        'ME 平台是一个全栈 AI 智能体平台，支持网页端与移动端（Ionic + Capacitor）两种入口，数据与账号互通。',
                         '',
                         '## 智能体',
                         '智能体由管理员在后台创建，配置人设（系统提示词）、模型、供应商，并可挂载 Skills、Tools、MCP 服务器与知识库。用户在对话页选择智能体即可开始对话。',

@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, memo, useMemo, useRef, useState } from 'react';
 
 interface AgentSummary {
     id: number;
@@ -305,7 +305,11 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
     );
 }
 
-function MessageBubble({ message, streaming }: { message: UIMessage; streaming: boolean }) {
+/**
+ * memo：流式输出时 useChat 每个 chunk 都会生成新的 messages 数组，
+ * 不加 memo 会导致所有历史消息（含 markdown 重解析）随每个 token 重渲染。
+ */
+const MessageBubble = memo(function MessageBubble({ message, streaming }: { message: UIMessage; streaming: boolean }) {
     const isUser = message.role === 'user';
     const text = message.parts
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
@@ -327,4 +331,4 @@ function MessageBubble({ message, streaming }: { message: UIMessage; streaming: 
             </div>
         </div>
     );
-}
+});

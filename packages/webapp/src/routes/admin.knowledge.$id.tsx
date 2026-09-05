@@ -51,11 +51,10 @@ function KnowledgeDetailPage() {
     const [docForm, setDocForm] = useState({ title: '', content: '' });
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'knowledge', kbId] });
 
-    const addDocument = useMutation({
+    const { mutate: addDoc, isPending: addingDoc } = useMutation({
         mutationFn: async (body: string) =>
             api<{ chunkCount?: number; embedded?: boolean; error?: string }>(`/api/admin/knowledge/${kbId}/documents`, {
                 method: 'POST',
@@ -228,9 +227,7 @@ function KnowledgeDetailPage() {
                         className='space-y-3'
                         onSubmit={(e) => {
                             e.preventDefault();
-                            setSaving(true);
-                            addDocument.mutate(JSON.stringify(docForm));
-                            setSaving(false);
+                            addDoc(JSON.stringify(docForm));
                         }}
                     >
                         <div>
@@ -250,8 +247,8 @@ function KnowledgeDetailPage() {
                             <Button type='button' variant='ghost' onPress={() => setShowAdd(false)}>
                                 取消
                             </Button>
-                            <Button type='submit' isDisabled={saving}>
-                                {saving ? '入库中…' : '入库'}
+                            <Button type='submit' isDisabled={addingDoc}>
+                                {addingDoc ? '入库中…' : '入库'}
                             </Button>
                         </div>
                     </form>

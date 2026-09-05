@@ -15,8 +15,20 @@
         "webapp:build:dev": "pnpm run --filter @repo/webapp build",
         "webapp:build:pro": "pnpm run --filter @repo/webapp build",
         "lint": "eslint './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}' --fix",
+        "lint:check": "eslint './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}'",
         "format": "prettier --write './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}'",
-        "stylelint": "stylelint './**/*.{css}' --fix"
+        "stylelint": "stylelint './**/*.{css}' --fix",
+        "typecheck": "pnpm -r typecheck",
+        "prepare": "husky"
+    },
+    "lint-staged": {
+        "*.{ts,tsx,mts,js,jsx,cjs,mjs}": [
+            "eslint --fix",
+            "prettier --write"
+        ],
+        "*.{json,md,css}": [
+            "prettier --write"
+        ]
     },
     "dependencies": {
         "@a2ui/react": "^0.11.0",
