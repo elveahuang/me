@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface KnowledgeBaseSummary {
     id: number;
@@ -52,8 +52,7 @@ function AdminKnowledgePage() {
                 <div>
                     <h1 className='text-xl font-bold text-gray-900'>RAG 知识库</h1>
                     <p className='mt-1 text-sm text-gray-500'>
-                        上传文档自动切块入库；挂载到智能体后，对话时会检索相关内容注入上下文。配置了 Embedding
-                        供应商的库走向量检索，否则退化为关键词匹配。
+                        上传文档自动切块入库；挂载到智能体后，对话时会检索相关内容注入上下文。配置了 Embedding 供应商的库走向量检索，否则退化为关键词匹配。
                     </p>
                 </div>
                 <Button onPress={() => setCreating(true)}>+ 新建知识库</Button>
@@ -126,16 +125,12 @@ function AdminKnowledgePage() {
     );
 }
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

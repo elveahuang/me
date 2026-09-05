@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { knowledgeBases, knowledgeDocuments } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { asc, count, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { knowledgeBases, knowledgeDocuments } from '@schema';
-import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 const KbBodySchema = z.object({
     name: z.string().min(1).max(80),

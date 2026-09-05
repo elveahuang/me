@@ -1,9 +1,9 @@
 import appCss from '@/commons/styles/theme.css?url';
+import { queryClient } from '@/lib/query';
+import type { QueryClient } from '@tanstack/react-query';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
-import type { QueryClient } from '@tanstack/react-query';
 import React from 'react';
-import { queryClient } from '@/lib/query';
 
 export interface MyRouterContext {
     queryClient: QueryClient;

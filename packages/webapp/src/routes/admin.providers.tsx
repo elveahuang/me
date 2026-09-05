@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface AdminProvider {
     id: number;
@@ -24,8 +24,7 @@ const EMPTY_FORM = {
     enabled: true,
 };
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 export const Route = createFileRoute('/admin/providers')({
     component: AdminProvidersPage,
@@ -142,17 +141,7 @@ function AdminProvidersPage() {
     );
 }
 
-function ProviderFormModal({
-    open,
-    provider,
-    onClose,
-    onSaved,
-}: {
-    open: boolean;
-    provider: AdminProvider | null;
-    onClose: () => void;
-    onSaved: () => void;
-}) {
+function ProviderFormModal({ open, provider, onClose, onSaved }: { open: boolean; provider: AdminProvider | null; onClose: () => void; onSaved: () => void }) {
     const [form, setForm] = useState(EMPTY_FORM);
     const [formId, setFormId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -216,7 +205,11 @@ function ProviderFormModal({
                     </div>
                     <div>
                         <label className='mb-1 block text-xs font-medium text-gray-500'>协议</label>
-                        <select value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value as AdminProvider['protocol'] })} className={inputClass}>
+                        <select
+                            value={form.protocol}
+                            onChange={(e) => setForm({ ...form, protocol: e.target.value as AdminProvider['protocol'] })}
+                            className={inputClass}
+                        >
                             <option value='openai-compatible'>OpenAI 兼容</option>
                             <option value='deepseek'>DeepSeek</option>
                         </select>
@@ -227,9 +220,7 @@ function ProviderFormModal({
                     <input required value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} className={inputClass} />
                 </div>
                 <div>
-                    <label className='mb-1 block text-xs font-medium text-gray-500'>
-                        API Key（{formId !== null ? '留空保持不变' : '服务端保存'}）
-                    </label>
+                    <label className='mb-1 block text-xs font-medium text-gray-500'>API Key（{formId !== null ? '留空保持不变' : '服务端保存'}）</label>
                     <input
                         type='password'
                         value={form.apiKey}
@@ -268,10 +259,7 @@ function ProviderFormModal({
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

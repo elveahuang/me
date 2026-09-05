@@ -34,18 +34,14 @@ export function JrStat({ label, value, hint }: { label?: string; value?: string;
     return (
         <div className='my-3 inline-flex min-w-36 flex-col rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm'>
             <span className='text-xs font-medium text-gray-500'>{label}</span>
-            <span className='mt-1 text-2xl font-bold tabular-nums text-gray-900'>{value}</span>
+            <span className='mt-1 text-2xl font-bold text-gray-900 tabular-nums'>{value}</span>
             {hint ? <span className='mt-0.5 text-xs text-gray-400'>{hint}</span> : null}
         </div>
     );
 }
 
 export function JrBadge({ label, tone = 'neutral' }: { label?: string; tone?: string }) {
-    return (
-        <span className={`my-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${toneClasses[tone] ?? toneClasses.neutral}`}>
-            {label}
-        </span>
-    );
+    return <span className={`my-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${toneClasses[tone] ?? toneClasses.neutral}`}>{label}</span>;
 }
 
 export function JrAlert({ message, level = 'info' }: { message?: string; level?: string }) {

@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { corsMiddleware } from '@/lib/cors';
-import { count, desc, eq, gte } from 'drizzle-orm';
 import { db } from '@/db';
-import { agents, aiProviders, conversations, mcpServers, messages, skills, tools, user } from '@schema';
 import { errorResponse, json, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { agents, aiProviders, conversations, mcpServers, messages, skills, tools, user } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { count, desc, eq, gte } from 'drizzle-orm';
 
 /** 管理端仪表盘统计 */
 export const Route = createFileRoute('/api/admin/stats')({
@@ -32,10 +32,7 @@ export const Route = createFileRoute('/api/admin/stats')({
                         db.select({ value: count() }).from(skills),
                         db.select({ value: count() }).from(conversations),
                         db.select({ value: count() }).from(messages),
-                        db
-                            .select({ value: count() })
-                            .from(conversations)
-                            .where(gte(conversations.updatedAt, dayAgo)),
+                        db.select({ value: count() }).from(conversations).where(gte(conversations.updatedAt, dayAgo)),
                         db.select({ value: count() }).from(aiProviders),
                         db.select({ value: count() }).from(aiProviders).where(eq(aiProviders.enabled, true)),
                         db.select({ value: count() }).from(tools),

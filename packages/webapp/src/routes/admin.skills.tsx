@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface AdminSkill {
     id: number;
@@ -124,17 +124,7 @@ function AdminSkillsPage() {
     );
 }
 
-function SkillFormModal({
-    open,
-    skill,
-    onClose,
-    onSaved,
-}: {
-    open: boolean;
-    skill: AdminSkill | null;
-    onClose: () => void;
-    onSaved: () => void;
-}) {
+function SkillFormModal({ open, skill, onClose, onSaved }: { open: boolean; skill: AdminSkill | null; onClose: () => void; onSaved: () => void }) {
     const [form, setForm] = useState(EMPTY_FORM);
     const [formSkillId, setFormSkillId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -210,16 +200,12 @@ function SkillFormModal({
     );
 }
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

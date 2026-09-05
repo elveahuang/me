@@ -1,10 +1,13 @@
 {
-    "extends": "expo/tsconfig.base",
+    "extends": ["@repo/config/typescript/react.json"],
     "compilerOptions": {
-        "strict": true,
+        "jsx": "react-jsx",
         "paths": {
-            "@/*": ["./src/*"]
+            "#/*": ["./src/*"],
+            "@/*": ["./src/*"],
+            "@schema": ["./src/db/schema.ts"],
+            "@schema/*": ["./src/db/schema/*"]
         }
     },
-    "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+    "include": ["**/*.ts", "**/*.tsx", "vite.config.mjs"]
 }

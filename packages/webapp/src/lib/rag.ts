@@ -1,6 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { agentKnowledge, aiProviders, knowledgeBases, knowledgeChunks, knowledgeDocuments } from '@/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 
 /** 单块目标长度（字符），中文场景 500-700 比较合适 */
 const CHUNK_SIZE = 600;
@@ -70,11 +70,7 @@ async function requestEmbeddings(baseUrl: string, apiKey: string, model: string,
 }
 
 /** 用供应商的 embedding 接口向量化一批文本（自动按 32 个一批拆分） */
-export async function embedTexts(
-    provider: { baseUrl: string; apiKey: string },
-    model: string,
-    texts: string[],
-): Promise<number[][]> {
+export async function embedTexts(provider: { baseUrl: string; apiKey: string }, model: string, texts: string[]): Promise<number[][]> {
     const result: number[][] = [];
     for (let i = 0; i < texts.length; i += 32) {
         const batch = texts.slice(i, i + 32);
@@ -138,20 +134,35 @@ export async function retrieveKnowledge(agentId: number, query: string): Promise
     const kbRows = await db
         .select()
         .from(knowledgeBases)
-        .where(inArray(knowledgeBases.id, bindings.map((b) => b.kbId)));
+        .where(
+            inArray(
+                knowledgeBases.id,
+                bindings.map((b) => b.kbId),
+            ),
+        );
     if (kbRows.length === 0) return null;
 
     // 文档标题映射
     const docRows = await db
         .select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title })
         .from(knowledgeDocuments)
-        .where(inArray(knowledgeDocuments.kbId, kbRows.map((kb) => kb.id)));
+        .where(
+            inArray(
+                knowledgeDocuments.kbId,
+                kbRows.map((kb) => kb.id),
+            ),
+        );
     const titleMap = new Map(docRows.map((d) => [d.id, d.title]));
 
     const chunkRows = await db
         .select()
         .from(knowledgeChunks)
-        .where(inArray(knowledgeChunks.kbId, kbRows.map((kb) => kb.id)))
+        .where(
+            inArray(
+                knowledgeChunks.kbId,
+                kbRows.map((kb) => kb.id),
+            ),
+        )
         .limit(2000);
     if (chunkRows.length === 0) return null;
 
@@ -162,11 +173,7 @@ export async function retrieveKnowledge(agentId: number, query: string): Promise
         const [provider] = await db.select().from(aiProviders).where(eq(aiProviders.id, firstKb.embeddingProviderId));
         if (provider?.enabled && provider.baseUrl) {
             try {
-                const [embedding] = await embedTexts(
-                    { baseUrl: provider.baseUrl, apiKey: provider.apiKey },
-                    firstKb.embeddingModel,
-                    [query.slice(0, 1000)],
-                );
+                const [embedding] = await embedTexts({ baseUrl: provider.baseUrl, apiKey: provider.apiKey }, firstKb.embeddingModel, [query.slice(0, 1000)]);
                 queryEmbedding = embedding ?? null;
             } catch (e) {
                 console.error('[rag] query embedding 失败，退化为关键词匹配:', e);
@@ -195,17 +202,11 @@ export async function retrieveKnowledge(agentId: number, query: string): Promise
     const top = scored.slice(0, TOP_K);
     if (top.length === 0) return null;
 
-    return top
-        .map((chunk, i) => `[${i + 1}]（来源：${chunk.documentTitle}）\n${chunk.content}`)
-        .join('\n\n---\n\n');
+    return top.map((chunk, i) => `[${i + 1}]（来源：${chunk.documentTitle}）\n${chunk.content}`).join('\n\n---\n\n');
 }
 
 /** 带向量化的入库：切块 →（可选）embedding → 写入 chunks 表 */
-export async function ingestDocument(params: {
-    kbId: number;
-    documentId: number;
-    content: string;
-}): Promise<{ chunkCount: number; embedded: boolean }> {
+export async function ingestDocument(params: { kbId: number; documentId: number; content: string }): Promise<{ chunkCount: number; embedded: boolean }> {
     const chunks = chunkText(params.content);
     if (chunks.length === 0) return { chunkCount: 0, embedded: false };
 
@@ -217,7 +218,10 @@ export async function ingestDocument(params: {
     let embeddings: number[][] | null = null;
 
     if (kb.embeddingProviderId && kb.embeddingModel) {
-        const [provider] = await db.select().from(aiProviders).where(and(eq(aiProviders.id, kb.embeddingProviderId), eq(aiProviders.enabled, true)));
+        const [provider] = await db
+            .select()
+            .from(aiProviders)
+            .where(and(eq(aiProviders.id, kb.embeddingProviderId), eq(aiProviders.enabled, true)));
         if (provider?.baseUrl) {
             embeddings = await embedTexts(provider, kb.embeddingModel, chunks);
             embeddingModel = kb.embeddingModel;

@@ -1,6 +1,6 @@
+import { api } from '@/lib/client-api';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { api } from '@/lib/client-api';
 
 interface AdminStats {
     totals: {
@@ -59,7 +59,7 @@ function AdminDashboard() {
                         <div className='text-sm text-gray-500'>
                             {card.emoji} {card.label}
                         </div>
-                        <div className='mt-2 text-3xl font-bold tabular-nums text-gray-900'>{card.value}</div>
+                        <div className='mt-2 text-3xl font-bold text-gray-900 tabular-nums'>{card.value}</div>
                     </div>
                 ))}
             </div>
@@ -115,7 +115,7 @@ function AdminDashboard() {
                                 <li key={m.model}>
                                     <div className='flex justify-between text-gray-700'>
                                         <span>{m.model}</span>
-                                        <span className='tabular-nums text-gray-500'>{m.conversations}</span>
+                                        <span className='text-gray-500 tabular-nums'>{m.conversations}</span>
                                     </div>
                                     <div className='mt-1 h-2 rounded-full bg-gray-100'>
                                         <div className='h-2 rounded-full bg-blue-500' style={{ width: `${(m.conversations / max) * 100}%` }} />

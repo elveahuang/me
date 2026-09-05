@@ -1,10 +1,10 @@
-import { dynamicTool, jsonSchema } from 'ai';
-import type { ToolSet } from 'ai';
+import type { mcpServers } from '@/db/schema';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { mcpServers } from '@/db/schema';
+import type { ToolSet } from 'ai';
+import { dynamicTool, jsonSchema } from 'ai';
 
 type McpServerRow = typeof mcpServers.$inferSelect;
 
@@ -34,10 +34,7 @@ export async function connectMcpServer(server: McpServerRow): Promise<Client> {
     }
 
     if (!server.url) throw new Error(`${server.transport} 传输缺少 url`);
-    const transport =
-        server.transport === 'sse'
-            ? new SSEClientTransport(new URL(server.url))
-            : new StreamableHTTPClientTransport(new URL(server.url));
+    const transport = server.transport === 'sse' ? new SSEClientTransport(new URL(server.url)) : new StreamableHTTPClientTransport(new URL(server.url));
     await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS, resetTimeoutOnProgress: false });
     return client;
 }

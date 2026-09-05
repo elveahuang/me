@@ -1,16 +1,13 @@
 packages:
-  - packages/*
+    - packages/*
 
 minimumReleaseAge: 0
 
 allowBuilds:
-  "@parcel/watcher": true
-  better-sqlite3: true
-  core-js: true
-  es5-ext: true
-  esbuild: true
-  sharp: true
-  workerd: true
-
-patchedDependencies:
-  react-native@0.87.1: patches/react-native@0.87.1.patch
+    "@parcel/watcher": true
+    better-sqlite3: true
+    core-js: true
+    es5-ext: true
+    esbuild: true
+    sharp: true
+    workerd: true

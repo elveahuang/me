@@ -48,10 +48,7 @@ export function resolveModel(id: string): LanguageModel {
 }
 
 /** 用自定义供应商（OpenAI 兼容协议）解析模型 */
-export function resolveProviderModel(
-    provider: { protocol: string; baseUrl: string; apiKey: string },
-    modelId: string,
-): LanguageModel {
+export function resolveProviderModel(provider: { protocol: string; baseUrl: string; apiKey: string }, modelId: string): LanguageModel {
     if (provider.protocol === 'deepseek') {
         const instance = createDeepSeek({ baseURL: provider.baseUrl, apiKey: provider.apiKey });
         return instance(modelId);

@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { corsMiddleware } from '@/lib/cors';
 import { errorResponse, json, requireUser } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { createFileRoute } from '@tanstack/react-router';
 
 /** 当前登录用户信息（供 webapp / mobile 判断登录态） */
 export const Route = createFileRoute('/api/me')({

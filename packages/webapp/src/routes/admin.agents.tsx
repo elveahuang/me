@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface AdminAgent {
     id: number;
@@ -64,8 +64,7 @@ const EMPTY_FORM: Omit<AdminAgent, 'id'> = {
     mcpServerIds: [],
 };
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 export const Route = createFileRoute('/admin/agents')({
     component: AdminAgentsPage,
@@ -269,7 +268,13 @@ function AgentFormModal({
         setLastKey(openKey);
         setForm(
             agent
-                ? { ...agent, skillIds: [...agent.skillIds], toolIds: [...agent.toolIds], knowledgeBaseIds: [...agent.knowledgeBaseIds], mcpServerIds: [...agent.mcpServerIds] }
+                ? {
+                      ...agent,
+                      skillIds: [...agent.skillIds],
+                      toolIds: [...agent.toolIds],
+                      knowledgeBaseIds: [...agent.knowledgeBaseIds],
+                      mcpServerIds: [...agent.mcpServerIds],
+                  }
                 : EMPTY_FORM,
         );
         setFormAgentId(agent?.id ?? null);
@@ -350,8 +355,7 @@ function AgentFormModal({
         }
     };
 
-    const toggleId = (list: number[], id: number) =>
-        list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+    const toggleId = (list: number[], id: number) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
     return (
         <Modal title={formAgentId !== null ? '编辑智能体' : '新建智能体'} onClose={onClose}>
@@ -434,11 +438,7 @@ function AgentFormModal({
                                         checked ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'
                                     }`}
                                 >
-                                    <input
-                                        type='checkbox'
-                                        checked={checked}
-                                        onChange={() => setForm({ ...form, skillIds: toggleId(form.skillIds, s.id) })}
-                                    />
+                                    <input type='checkbox' checked={checked} onChange={() => setForm({ ...form, skillIds: toggleId(form.skillIds, s.id) })} />
                                     {s.name}
                                 </label>
                             );
@@ -457,11 +457,7 @@ function AgentFormModal({
                                         checked ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600'
                                     }`}
                                 >
-                                    <input
-                                        type='checkbox'
-                                        checked={checked}
-                                        onChange={() => setForm({ ...form, toolIds: toggleId(form.toolIds, t.id) })}
-                                    />
+                                    <input type='checkbox' checked={checked} onChange={() => setForm({ ...form, toolIds: toggleId(form.toolIds, t.id) })} />
                                     🔧 {t.name}
                                 </label>
                             );
@@ -545,10 +541,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

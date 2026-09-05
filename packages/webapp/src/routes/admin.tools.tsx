@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface ToolParameter {
     name: string;
@@ -37,8 +37,7 @@ const EMPTY_FORM = {
     enabled: true,
 };
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 export const Route = createFileRoute('/admin/tools')({
     component: AdminToolsPage,
@@ -47,7 +46,10 @@ export const Route = createFileRoute('/admin/tools')({
 function parseParameters(text: string): ToolParameter[] {
     // 每行一个参数：名称,类型(string/number/boolean),说明,required
     const result: ToolParameter[] = [];
-    for (const line of text.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    for (const line of text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)) {
         const [name = '', type = 'string', description = '', required = ''] = line.split(',').map((s) => s.trim());
         if (!name) continue;
         result.push({
@@ -108,9 +110,7 @@ function AdminToolsPage() {
                                     <div className='max-w-sm truncate text-xs text-gray-400'>{tool.description}</div>
                                 </td>
                                 <td className='px-4 py-3'>
-                                    <span className='rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600'>
-                                        {tool.type === 'http' ? 'HTTP' : '内置'}
-                                    </span>
+                                    <span className='rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600'>{tool.type === 'http' ? 'HTTP' : '内置'}</span>
                                 </td>
                                 <td className='max-w-sm truncate px-4 py-3 font-mono text-xs text-gray-500'>
                                     {tool.type === 'http'
@@ -178,17 +178,7 @@ function AdminToolsPage() {
     );
 }
 
-function ToolFormModal({
-    open,
-    tool,
-    onClose,
-    onSaved,
-}: {
-    open: boolean;
-    tool: AdminTool | null;
-    onClose: () => void;
-    onSaved: () => void;
-}) {
+function ToolFormModal({ open, tool, onClose, onSaved }: { open: boolean; tool: AdminTool | null; onClose: () => void; onSaved: () => void }) {
     const [form, setForm] = useState(EMPTY_FORM);
     const [formId, setFormId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -309,9 +299,7 @@ function ToolFormModal({
                             />
                         </div>
                         <div>
-                            <label className='mb-1 block text-xs font-medium text-gray-500'>
-                                参数（每行：名称,类型,说明,required）
-                            </label>
+                            <label className='mb-1 block text-xs font-medium text-gray-500'>参数（每行：名称,类型,说明,required）</label>
                             <textarea
                                 value={form.parametersText}
                                 onChange={(e) => setForm({ ...form, parametersText: e.target.value })}
@@ -343,10 +331,7 @@ function ToolFormModal({
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

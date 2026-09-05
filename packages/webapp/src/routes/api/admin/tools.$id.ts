@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { tools } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { tools } from '@schema';
-import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 type RouteParams = { request: Request; params: { id: string } };
 
@@ -18,14 +18,17 @@ const ToolPatchSchema = z.object({
             method: z.string().max(10).optional(),
             headers: z.record(z.string(), z.string()).optional(),
             bodyTemplate: z.string().max(4000).optional(),
-            parameters: z.array(
-                z.object({
-                    name: z.string().min(1).max(50),
-                    type: z.enum(['string', 'number', 'boolean']).default('string'),
-                    description: z.string().max(200).optional(),
-                    required: z.boolean().optional(),
-                }),
-            ).max(20).optional(),
+            parameters: z
+                .array(
+                    z.object({
+                        name: z.string().min(1).max(50),
+                        type: z.enum(['string', 'number', 'boolean']).default('string'),
+                        description: z.string().max(200).optional(),
+                        required: z.boolean().optional(),
+                    }),
+                )
+                .max(20)
+                .optional(),
         })
         .optional(),
     enabled: z.boolean().optional(),

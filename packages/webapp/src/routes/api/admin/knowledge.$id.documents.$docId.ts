@@ -1,10 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { knowledgeChunks, knowledgeDocuments } from '@schema';
 import { errorResponse, HttpError, json, parseId, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
 import { ingestDocument } from '@/lib/rag';
+import { knowledgeChunks, knowledgeDocuments } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { eq } from 'drizzle-orm';
 
 type RouteParams = { request: Request; params: { id: string; docId: string } };
 
@@ -17,10 +17,7 @@ export const Route = createFileRoute('/api/admin/knowledge/$id/documents/$docId'
                 try {
                     await requireAdmin(request);
                     const docId = parseId(params.docId, '文档 ID');
-                    const deleted = await db
-                        .delete(knowledgeDocuments)
-                        .where(eq(knowledgeDocuments.id, docId))
-                        .returning({ id: knowledgeDocuments.id });
+                    const deleted = await db.delete(knowledgeDocuments).where(eq(knowledgeDocuments.id, docId)).returning({ id: knowledgeDocuments.id });
                     if (deleted.length === 0) throw new HttpError(404, '文档不存在');
                     return json({ ok: true });
                 } catch (e) {

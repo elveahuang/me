@@ -68,9 +68,7 @@ export function AgentsPage() {
             <IonContent>
                 <div style={{ padding: '8px 12px 0' }}>
                     <IonSearchbar placeholder='搜索智能体' value={search} onIonChange={(e) => setSearch(e.detail.value ?? '')} />
-                    <p style={{ margin: '0 4px 4px', fontSize: 13, color: 'var(--ion-color-medium)' }}>
-                        你好，{user?.name ?? '朋友'}，选择一个智能体开始对话
-                    </p>
+                    <p style={{ margin: '0 4px 4px', fontSize: 13, color: 'var(--ion-color-medium)' }}>你好，{user?.name ?? '朋友'}，选择一个智能体开始对话</p>
                 </div>
                 {loading ? (
                     <p style={{ textAlign: 'center', padding: 32, color: 'var(--ion-color-medium)' }}>加载中…</p>

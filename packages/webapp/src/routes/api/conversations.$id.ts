@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { corsMiddleware } from '@/lib/cors';
-import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { conversations, messages } from '@schema';
 import { errorResponse, HttpError, json, parseId, requireUser } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { conversations, messages } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { and, asc, eq } from 'drizzle-orm';
 
 type RouteParams = { request: Request; params: { id: string } };
 

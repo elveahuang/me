@@ -13,11 +13,11 @@ import {
     IonToolbar,
     useIonToast,
 } from '@ionic/react';
-import { useParams } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE_URL } from '../lib/config';
+import { useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { API_BASE_URL } from '../lib/config';
 
 interface ChatMessage {
     id: string;
@@ -251,7 +251,12 @@ export function ChatPage() {
                             <IonButton onClick={stopStreaming}>停止</IonButton>
                         ) : (
                             <>
-                                <IonButton onClick={() => { void refreshConversations(); setHistoryVisible(true); }}>
+                                <IonButton
+                                    onClick={() => {
+                                        void refreshConversations();
+                                        setHistoryVisible(true);
+                                    }}
+                                >
                                     历史
                                 </IonButton>
                                 <IonButton onClick={startNewConversation}>新对话</IonButton>
@@ -267,9 +272,7 @@ export function ChatPage() {
                         <p>发送第一条消息开始对话</p>
                     </div>
                 ) : null}
-                {status === 'loading' ? (
-                    <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>加载会话…</p>
-                ) : null}
+                {status === 'loading' ? <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>加载会话…</p> : null}
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {messages.map((message) =>
                         message.role === 'user' ? (

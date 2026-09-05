@@ -1,8 +1,8 @@
-import { Button } from '@heroui/react';
-import { createFileRoute, redirect, Link } from '@tanstack/react-router';
-import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { fetchSession } from '@/lib/session';
+import { Button } from '@heroui/react';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/register')({
     beforeLoad: async () => {

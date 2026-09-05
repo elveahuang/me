@@ -1,0 +1,7 @@
+/*
+ * Tailwind v4 入口（Konsta UI 依赖）。
+ * 不引入 preflight，避免重置 Ionic 全局样式；仅加载 theme + utilities。
+ */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'konsta/react/theme.css';

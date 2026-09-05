@@ -1,18 +1,16 @@
+import { db } from '@/db';
+import { account, session, user, verification } from '@/db/schema';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, bearer } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
-import { db } from '@/db';
-import { account, session, user, verification } from '@/db/schema';
 
 export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
     trustedOrigins: [
         'http://localhost:3000',
         'http://localhost:5173',
-        // Expo web（mobile 包）与 Ionic（wap 包）开发服务器
-        'http://localhost:8081',
-        'http://localhost:19006',
+        // Ionic/Capacitor（mobile 包）开发服务器
         'http://localhost:8100',
         'capacitor://localhost',
     ],

@@ -1,7 +1,7 @@
-import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
-import { AppHeader } from '@/components/app-header';
 import type { SessionUser } from '@/components/app-header';
+import { AppHeader } from '@/components/app-header';
 import { fetchSession, isAdminRole } from '@/lib/session';
+import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/admin')({
     beforeLoad: async () => {

@@ -1,12 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { eq } from 'drizzle-orm';
-import { generateText } from 'ai';
-import { z } from 'zod';
 import { db } from '@/db';
-import { aiProviders, mcpServers, skills, tools } from '@schema';
 import { resolveModel } from '@/lib/ai';
 import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
+import { aiProviders, mcpServers, skills, tools } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { generateText } from 'ai';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 const AutoConfigSchema = z.object({
     description: z.string().min(5).max(2000),
@@ -95,7 +95,10 @@ export const Route = createFileRoute('/api/admin/agents/auto-config')({
                         prompt: user,
                     });
 
-                    const raw = result.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+                    const raw = result.text
+                        .trim()
+                        .replace(/^```(?:json)?\s*/i, '')
+                        .replace(/```\s*$/, '');
                     let draft: unknown;
                     try {
                         draft = JSON.parse(raw);

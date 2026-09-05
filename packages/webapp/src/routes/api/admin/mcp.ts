@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { mcpServers } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { mcpServers } from '@schema';
-import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 const McpBodySchema = z
     .object({

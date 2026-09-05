@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface AdminUser {
     id: string;
@@ -70,10 +70,12 @@ function AdminUsersPage() {
                                         {u.role.includes('admin') ? '管理员' : '用户'}
                                     </span>
                                 </td>
-                                <td className='px-4 py-3 tabular-nums text-gray-600'>{u.conversationCount}</td>
+                                <td className='px-4 py-3 text-gray-600 tabular-nums'>{u.conversationCount}</td>
                                 <td className='px-4 py-3 text-xs text-gray-500'>{new Date(u.createdAt).toLocaleDateString()}</td>
                                 <td className='px-4 py-3'>
-                                    <span className={`rounded-full px-2 py-0.5 text-xs ${u.banned ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                    <span
+                                        className={`rounded-full px-2 py-0.5 text-xs ${u.banned ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}
+                                    >
                                         {u.banned ? `已封禁${u.banReason ? `（${u.banReason}）` : ''}` : '正常'}
                                     </span>
                                 </td>

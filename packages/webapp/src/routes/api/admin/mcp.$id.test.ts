@@ -1,10 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { mcpServers } from '@schema';
 import { errorResponse, HttpError, json, parseId, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
 import { listMcpTools } from '@/lib/mcp';
+import { mcpServers } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { eq } from 'drizzle-orm';
 
 type RouteParams = { request: Request; params: { id: string } };
 

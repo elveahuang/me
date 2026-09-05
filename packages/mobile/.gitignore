@@ -1,4 +1,4 @@
-.expo
-expo-env.d.ts
-uniwind-types.d.ts
 node_modules
+dist
+*.tsbuildinfo
+.DS_Store

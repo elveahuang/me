@@ -1,11 +1,11 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { db } from '@/db';
-import { knowledgeBases, knowledgeDocuments } from '@schema';
 import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
 import { ingestDocument, MAX_DOCUMENT_CHARS } from '@/lib/rag';
+import { knowledgeBases, knowledgeDocuments } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 type RouteParams = { request: Request; params: { id: string } };
 
@@ -29,10 +29,7 @@ export const Route = createFileRoute('/api/admin/knowledge/$id/documents')({
                     const parsed = DocumentBodySchema.safeParse(await readJson<unknown>(request));
                     if (!parsed.success) throw new HttpError(400, `参数错误: ${parsed.error.issues[0]?.message ?? ''}`);
 
-                    const [document] = await db
-                        .insert(knowledgeDocuments)
-                        .values({ kbId, title: parsed.data.title, content: parsed.data.content })
-                        .returning();
+                    const [document] = await db.insert(knowledgeDocuments).values({ kbId, title: parsed.data.title, content: parsed.data.content }).returning();
                     if (!document) throw new HttpError(500, '创建文档失败');
 
                     try {
@@ -41,14 +38,8 @@ export const Route = createFileRoute('/api/admin/knowledge/$id/documents')({
                     } catch (e) {
                         // 入库失败时保留文档记录，标记错误并返回原因
                         console.error('[knowledge] 文档入库失败:', e);
-                        await db
-                            .update(knowledgeDocuments)
-                            .set({ status: 'error' })
-                            .where(eq(knowledgeDocuments.id, document.id));
-                        return json(
-                            { ...document, chunkCount: 0, embedded: false, error: e instanceof Error ? e.message : '入库失败' },
-                            201,
-                        );
+                        await db.update(knowledgeDocuments).set({ status: 'error' }).where(eq(knowledgeDocuments.id, document.id));
+                        return json({ ...document, chunkCount: 0, embedded: false, error: e instanceof Error ? e.message : '入库失败' }, 201);
                     }
                 } catch (e) {
                     return errorResponse(e);

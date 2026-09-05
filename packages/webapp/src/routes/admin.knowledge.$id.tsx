@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface KnowledgeBaseDetail {
     id: number;
@@ -29,8 +29,7 @@ export const Route = createFileRoute('/admin/knowledge/$id')({
     component: KnowledgeDetailPage,
 });
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 function KnowledgeDetailPage() {
     const { id } = Route.useParams();
@@ -178,7 +177,7 @@ function KnowledgeDetailPage() {
                         {kb.documents.map((doc) => (
                             <tr key={doc.id}>
                                 <td className='px-4 py-3 font-medium text-gray-900'>{doc.title}</td>
-                                <td className='px-4 py-3 tabular-nums text-gray-600'>{doc.chunkCount}</td>
+                                <td className='px-4 py-3 text-gray-600 tabular-nums'>{doc.chunkCount}</td>
                                 <td className='px-4 py-3'>
                                     <span
                                         className={`rounded-full px-2 py-0.5 text-xs ${
@@ -236,12 +235,7 @@ function KnowledgeDetailPage() {
                     >
                         <div>
                             <label className='mb-1 block text-xs font-medium text-gray-500'>标题</label>
-                            <input
-                                required
-                                value={docForm.title}
-                                onChange={(e) => setDocForm({ ...docForm, title: e.target.value })}
-                                className={inputClass}
-                            />
+                            <input required value={docForm.title} onChange={(e) => setDocForm({ ...docForm, title: e.target.value })} className={inputClass} />
                         </div>
                         <div>
                             <label className='mb-1 block text-xs font-medium text-gray-500'>正文（Markdown / 纯文本，≤ 20 万字）</label>
@@ -270,10 +264,7 @@ function KnowledgeDetailPage() {
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

@@ -1,16 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-    bigserial,
-    boolean,
-    index,
-    integer,
-    jsonb,
-    pgTable,
-    primaryKey,
-    serial,
-    text,
-    timestamp,
-} from 'drizzle-orm/pg-core';
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // Better Auth core tables (see https://better-auth.com/docs/concepts/database)

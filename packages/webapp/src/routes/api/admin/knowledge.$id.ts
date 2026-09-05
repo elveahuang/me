@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { knowledgeBases, knowledgeDocuments } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { knowledgeBases, knowledgeDocuments } from '@schema';
-import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 type RouteParams = { request: Request; params: { id: string } };
 

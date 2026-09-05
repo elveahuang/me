@@ -2,7 +2,7 @@ import { auth } from './auth';
 import { corsResponseHeaders } from './cors';
 import { isAdminRole } from './session';
 
-/** REST 路由统一 JSON 返回（附带 CORS 头，供 mobile / wap 等跨源客户端使用） */
+/** REST 路由统一 JSON 返回（附带 CORS 头，供 mobile 等跨源客户端使用） */
 export function json(data: unknown, status = 200, headers?: HeadersInit) {
     return new Response(JSON.stringify(data), {
         status,

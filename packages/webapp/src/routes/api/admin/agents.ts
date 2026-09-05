@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { agentKnowledge, agentMcpServers, agents, agentSkills, agentTools } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { agentMcpServers, agentSkills, agentTools, agentKnowledge, agents } from '@schema';
-import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 const AgentBodySchema = z.object({
     name: z.string().min(1).max(50),

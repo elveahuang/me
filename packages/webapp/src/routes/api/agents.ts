@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { corsMiddleware } from '@/lib/cors';
-import { asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { agents } from '@schema';
 import { errorResponse, json, requireUser } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { agents } from '@schema';
+import { createFileRoute } from '@tanstack/react-router';
+import { asc, eq } from 'drizzle-orm';
 
 /** 已启用的智能体列表（登录用户可见） */
 export const Route = createFileRoute('/api/agents')({

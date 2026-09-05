@@ -4,9 +4,7 @@ config({ path: ['.env.local', '.env'] });
 
 async function main() {
     const { db } = await import('./index');
-    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, skills, tools, user } = await import(
-        './schema'
-    );
+    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, skills, tools, user } = await import('./schema');
     const { auth } = await import('../lib/auth');
     const { ingestDocument } = await import('../lib/rag');
     const { eq } = await import('drizzle-orm');
@@ -23,7 +21,8 @@ async function main() {
         const res = await auth.api.signUpEmail({ body: { name: 'Admin', email: adminEmail, password: adminPassword } });
         adminId = res.user.id;
         console.log(`已创建管理员: ${adminEmail} / ${adminPassword}`);
-    }    await db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId));
+    }
+    await db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId));
 
     // 2. Skills
     const skillSeeds = [
@@ -155,28 +154,30 @@ async function main() {
         if (!kb) throw new Error('创建知识库失败');
         guideKbId = kb.id;
 
-        const guideDoc = (await db
-            .insert(knowledgeDocuments)
-            .values({
-                kbId: kb.id,
-                title: 'ME 平台使用指南',
-                content: [
-                    'ME 平台是一个全栈 AI 智能体平台，支持网页端、移动端（Expo）与 Ionic/Capacitor 客户端三种入口，数据与账号互通。',
-                    '',
-                    '## 智能体',
-                    '智能体由管理员在后台创建，配置人设（系统提示词）、模型、供应商，并可挂载 Skills、Tools、MCP 服务器与知识库。用户在对话页选择智能体即可开始对话。',
-                    '',
-                    '## Skills 与 Tools',
-                    'Skill 是可复用的指令块，决定智能体的行为方式；Tool 是智能体可调用的工具（内置时间工具或自定义 HTTP 工具），调用遵循 ReAct 循环。',
-                    '',
-                    '## MCP 与知识库',
-                    'MCP（Model Context Protocol）服务器提供的外部工具可直接挂载到智能体。知识库支持文档切块入库，对话时自动检索相关内容作为参考。',
-                    '',
-                    '## 数据说明',
-                    '所有对话按会话保存，可随时切换回历史会话继续；平台对每个用户有接口频率限制以保障服务稳定。',
-                ].join('\n'),
-            })
-            .returning())[0];
+        const guideDoc = (
+            await db
+                .insert(knowledgeDocuments)
+                .values({
+                    kbId: kb.id,
+                    title: 'ME 平台使用指南',
+                    content: [
+                        'ME 平台是一个全栈 AI 智能体平台，支持网页端、移动端（Expo）与 Ionic/Capacitor 客户端三种入口，数据与账号互通。',
+                        '',
+                        '## 智能体',
+                        '智能体由管理员在后台创建，配置人设（系统提示词）、模型、供应商，并可挂载 Skills、Tools、MCP 服务器与知识库。用户在对话页选择智能体即可开始对话。',
+                        '',
+                        '## Skills 与 Tools',
+                        'Skill 是可复用的指令块，决定智能体的行为方式；Tool 是智能体可调用的工具（内置时间工具或自定义 HTTP 工具），调用遵循 ReAct 循环。',
+                        '',
+                        '## MCP 与知识库',
+                        'MCP（Model Context Protocol）服务器提供的外部工具可直接挂载到智能体。知识库支持文档切块入库，对话时自动检索相关内容作为参考。',
+                        '',
+                        '## 数据说明',
+                        '所有对话按会话保存，可随时切换回历史会话继续；平台对每个用户有接口频率限制以保障服务稳定。',
+                    ].join('\n'),
+                })
+                .returning()
+        )[0];
         if (!guideDoc) throw new Error('创建指南文档失败');
         const ingested = await ingestDocument({ kbId: kb.id, documentId: guideDoc.id, content: guideDoc.content });
         console.log(`已创建知识库: ${guideKbName}（${ingested.chunkCount} 块）`);

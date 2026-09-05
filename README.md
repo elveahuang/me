@@ -1,6 +1,6 @@
 # ME
 
-全栈 AI 智能体平台：pnpm monorepo，包含 Web 应用（用户端 + 管理端）、移动端（Expo）与 Ionic/Capacitor 客户端（wap）。
+全栈 AI 智能体平台：pnpm monorepo，包含 Web 应用（用户端 + 管理端）与移动端（Ionic + Capacitor，备选 Konsta UI 组件）。
 
 ## 功能
 
@@ -12,11 +12,11 @@
 - **自定义 AI 供应商**：接入任意 OpenAI 兼容协议供应商（DeepSeek / Moonshot / Ollama / OpenRouter 等），密钥服务端保存、界面掩码展示
 - **AI 自动配置**：输入智能体用途描述，AI 自动生成名称/人设/模型/Skills/Tools/MCP/知识库 配置草案，初步形成完整的 ReAct Agent
 - **RAG 知识库**：文档自动切块入库；配置了 Embedding 供应商走向量检索，否则退化为关键词匹配；对话时检索相关内容注入上下文（seed 自带「平台使用指南」示例知识库）
-- **对话体验**：流式输出可随时停止（webapp/mobile/wap 三端），服务端中断安全（保留已生成内容）
+- **对话体验**：流式输出可随时停止（webapp/mobile 双端），服务端中断安全（保留已生成内容）
 - **防滥用**：对话接口按用户限流（30 次/分）、超大消息体拒绝（512KB 上限）、会话创建限流（20 次/分）
 - **AI 渲染管线**：助手回复用 Comark（Markdown + 组件语法 + 流式 autoClose）渲染，
   `json-render` 代码块（由 @json-render/core 的 catalog 生成提示词驱动）渲染成 Card / Stat / Badge / Alert 组件
-- **三端用户侧**：webapp、mobile（Expo）、wap（Ionic 9 + React Router + Capacitor）各自实现注册登录、智能体列表、会话管理与流式对话
+- **双端用户侧**：webapp、mobile（Ionic 9 + React Router + Capacitor 7 + 备选 Konsta UI 组件）各自实现注册登录、智能体列表、会话管理与流式对话
 - **管理侧（仅 webapp）**：数据总览、智能体管理、Skills、Tools、知识库、AI 供应商、用户管理（角色 / 封禁）
 
 ## 目录结构
@@ -27,8 +27,7 @@ packages/
             #   src/routes/        页面 + /api/* 服务端路由（server.handlers）
             #   src/db/schema.ts   Drizzle 表定义
             #   src/lib/           auth / ai / catalog(json-render) / tools / rag / cors 等
-  mobile/   # Expo SDK 57 + expo-router + uniwind；REST + Bearer token 对接 webapp API
-  wap/      # Ionic 9.0.1 + React Router 6 + Capacitor 7；同样对接 webapp API
+  mobile/   # Ionic 9.0.1 + React Router 6 + Capacitor 7 + Konsta UI（备选组件层）；对接 webapp API
   config/   # 共享 tsconfig / eslint / prettier 配置
 scripts/    # 仓库脚手架脚本（init / build / update）
 ```
@@ -57,24 +56,16 @@ AI key（至少配一个）写入 `packages/webapp/env.local` 或环境变量：
 
 用户侧：`/login`、`/register`、`/chat`；管理侧：`/admin`（需 admin 角色）。
 
-### 3. Mobile（Expo）
+### 3. Mobile（Ionic + Capacitor）
 
 ```shell
-pnpm run mobile:start        # Expo dev server
+pnpm run mobile:start        # http://localhost:8100
+pnpm run mobile:build        # 产出 dist/，可用 npx cap add ios/android + pnpm run mobile:sync 打包原生壳
 ```
 
-- 默认连接 `http://localhost:3000`；真机调试请设置环境变量 `EXPO_PUBLIC_API_URL=http://<电脑局域网IP>:3000`
-- 鉴权使用 better-auth 的 Bearer 模式：登录响应中的 `token` 存入 expo-secure-store，请求时带 `Authorization: Bearer <token>`
-
-### 4. Wap（Ionic + Capacitor）
-
-```shell
-pnpm run wap:start           # http://localhost:8100
-pnpm run wap:build           # 产出 dist/，可用 npx cap add ios/android + cap sync 打包原生壳
-```
-
-- API 地址通过 `packages/wap/src/lib/config.ts` 或构建时 `VITE_API_URL` 配置
-- 鉴权与 mobile 相同（Bearer token，存 localStorage）
+- 主组件层为 Ionic；`/konsta-demo` 路由演示 Konsta UI 备选组件（iOS 风格，由 Tailwind CSS 构建）
+- API 地址通过 `packages/mobile/src/lib/config.ts` 或构建时 `VITE_API_URL` 配置
+- 鉴权使用 better-auth 的 Bearer 模式：登录响应中的 `token` 存 localStorage，请求时带 `Authorization: Bearer <token>`
 
 ## 技术要点
 
@@ -91,8 +82,5 @@ pnpm run wap:build           # 产出 dist/，可用 npx cap add ios/android + c
   允许来源可用 `CORS_ORIGINS` 环境变量覆盖（默认含 Expo/Ionic/Vite 本地端口）
 - better-auth 1.7 会对所有 POST 强制 Origin 校验（拒绝 curl/移动端等非浏览器客户端），
   已显式关闭并改由 SameSite=Lax Cookie 兜底
-- react-native 0.87 移除了 `rn-get-polyfills`，而 Expo CLI 57 仍会加载它（web 平台），
-  已用 `patches/react-native@0.87.1.patch` 修复（`pnpm-workspace.yaml` 的 `patchedDependencies`）
 - nitro 3 beta + vite 8 (rolldown) 多 chunk 构建存在导出损坏问题，
   webapp 构建已配置服务端单 chunk 输出（`vite.config.mjs`）规避
-

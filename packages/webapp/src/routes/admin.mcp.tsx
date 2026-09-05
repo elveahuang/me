@@ -1,8 +1,8 @@
+import { api } from '@/lib/client-api';
 import { Button } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '@/lib/client-api';
 
 interface McpServer {
     id: number;
@@ -33,8 +33,7 @@ const EMPTY_FORM = {
     enabled: true,
 };
 
-const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 
 export const Route = createFileRoute('/admin/mcp')({
     component: AdminMcpPage,
@@ -64,9 +63,7 @@ function AdminMcpPage() {
         onSuccess: (r) => {
             setTestingId(null);
             setTestResult(
-                r.ok
-                    ? `连接成功，提供 ${r.toolCount} 个工具：${(r.tools ?? []).map((t) => t.name).join('、') || '（无工具）'}`
-                    : `连接失败：${r.error}`,
+                r.ok ? `连接成功，提供 ${r.toolCount} 个工具：${(r.tools ?? []).map((t) => t.name).join('、') || '（无工具）'}` : `连接失败：${r.error}`,
             );
         },
         onError: (e) => {
@@ -186,17 +183,7 @@ function AdminMcpPage() {
     );
 }
 
-function McpFormModal({
-    open,
-    server,
-    onClose,
-    onSaved,
-}: {
-    open: boolean;
-    server: McpServer | null;
-    onClose: () => void;
-    onSaved: () => void;
-}) {
+function McpFormModal({ open, server, onClose, onSaved }: { open: boolean; server: McpServer | null; onClose: () => void; onSaved: () => void }) {
     const [form, setForm] = useState(EMPTY_FORM);
     const [formId, setFormId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -263,7 +250,11 @@ function McpFormModal({
                     </div>
                     <div>
                         <label className='mb-1 block text-xs font-medium text-gray-500'>传输方式</label>
-                        <select value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value as McpServer['transport'] })} className={inputClass}>
+                        <select
+                            value={form.transport}
+                            onChange={(e) => setForm({ ...form, transport: e.target.value as McpServer['transport'] })}
+                            className={inputClass}
+                        >
                             <option value='http'>Streamable HTTP</option>
                             <option value='sse'>SSE（旧版）</option>
                             <option value='stdio'>stdio（本地进程）</option>
@@ -278,11 +269,21 @@ function McpFormModal({
                     <>
                         <div>
                             <label className='mb-1 block text-xs font-medium text-gray-500'>命令（如 node / npx）</label>
-                            <input value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} className={inputClass} placeholder='node' />
+                            <input
+                                value={form.command}
+                                onChange={(e) => setForm({ ...form, command: e.target.value })}
+                                className={inputClass}
+                                placeholder='node'
+                            />
                         </div>
                         <div>
                             <label className='mb-1 block text-xs font-medium text-gray-500'>参数（空格分隔）</label>
-                            <input value={form.argsText} onChange={(e) => setForm({ ...form, argsText: e.target.value })} className={inputClass} placeholder='server.js --port 3001' />
+                            <input
+                                value={form.argsText}
+                                onChange={(e) => setForm({ ...form, argsText: e.target.value })}
+                                className={inputClass}
+                                placeholder='server.js --port 3001'
+                            />
                         </div>
                     </>
                 ) : (
@@ -318,10 +319,7 @@ function McpFormModal({
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4' onClick={onClose}>
-            <div
-                className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl'
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className='max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl' onClick={(e) => e.stopPropagation()}>
                 <div className='mb-4 flex items-center justify-between'>
                     <h2 className='text-lg font-bold text-gray-900'>{title}</h2>
                     <button type='button' onClick={onClose} className='text-gray-400 hover:text-gray-600'>

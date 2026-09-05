@@ -1,15 +1,15 @@
-import { Button } from '@heroui/react';
+import type { SessionUser } from '@/components/app-header';
+import { AppHeader } from '@/components/app-header';
+import { AssistantMarkdown } from '@/components/assistant-markdown';
+import { api } from '@/lib/client-api';
+import { fetchSession } from '@/lib/session';
 import { useChat } from '@ai-sdk/react';
+import { Button } from '@heroui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AssistantMarkdown } from '@/components/assistant-markdown';
-import { AppHeader } from '@/components/app-header';
-import { api } from '@/lib/client-api';
-import type { SessionUser } from '@/components/app-header';
-import { fetchSession } from '@/lib/session';
 
 interface AgentSummary {
     id: number;
@@ -134,7 +134,7 @@ function ChatPage() {
                                         <button
                                             type='button'
                                             aria-label='删除会话'
-                                            className='hidden shrink-0 text-gray-400 hover:text-red-500 group-hover:block'
+                                            className='hidden shrink-0 text-gray-400 group-hover:block hover:text-red-500'
                                             onClick={async () => {
                                                 await api(`/api/conversations/${c.id}`, { method: 'DELETE' });
                                                 if (activeConversationId === c.id) selectConversation(null);
@@ -245,8 +245,7 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
         chat.sendMessage({ text });
     };
 
-    const statusText =
-        chat.status === 'submitted' ? '思考中…' : chat.status === 'streaming' ? '回复中…' : chat.error ? chat.error.message : null;
+    const statusText = chat.status === 'submitted' ? '思考中…' : chat.status === 'streaming' ? '回复中…' : chat.error ? chat.error.message : null;
 
     return (
         <div className='flex h-full flex-col'>
@@ -270,11 +269,7 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                             </div>
                         ) : null}
                         {chat.messages.map((message, index) => (
-                            <MessageBubble
-                                key={message.id}
-                                message={message}
-                                streaming={chat.status === 'streaming' && index === chat.messages.length - 1}
-                            />
+                            <MessageBubble key={message.id} message={message} streaming={chat.status === 'streaming' && index === chat.messages.length - 1} />
                         ))}
                     </div>
                 )}
@@ -320,9 +315,7 @@ function MessageBubble({ message, streaming }: { message: UIMessage; streaming: 
     if (isUser) {
         return (
             <div className='flex justify-end'>
-                <div className='max-w-[80%] rounded-2xl rounded-br-sm bg-blue-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white'>
-                    {text}
-                </div>
+                <div className='max-w-[80%] rounded-2xl rounded-br-sm bg-blue-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white'>{text}</div>
             </div>
         );
     }

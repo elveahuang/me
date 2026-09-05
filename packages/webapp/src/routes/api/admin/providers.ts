@@ -1,10 +1,10 @@
+import { db } from '@/db';
+import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
+import { corsMiddleware } from '@/lib/cors';
+import { aiProviders } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/db';
-import { aiProviders } from '@schema';
-import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
-import { corsMiddleware } from '@/lib/cors';
 
 const ProviderBodySchema = z.object({
     name: z.string().min(1).max(50),
@@ -30,9 +30,7 @@ export const Route = createFileRoute('/api/admin/providers')({
                     await requireAdmin(request);
                     const list = await db.select().from(aiProviders).orderBy(asc(aiProviders.id));
                     // 不回传完整 key，只给掩码
-                    return json(
-                        list.map((p) => ({ ...p, apiKey: maskKey(p.apiKey), hasKey: p.apiKey.length > 0 })),
-                    );
+                    return json(list.map((p) => ({ ...p, apiKey: maskKey(p.apiKey), hasKey: p.apiKey.length > 0 })));
                 } catch (e) {
                     return errorResponse(e);
                 }

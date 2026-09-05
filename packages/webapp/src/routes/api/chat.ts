@@ -1,14 +1,17 @@
-import { createFileRoute } from '@tanstack/react-router';
-import type { UIMessage, UIMessageChunk } from 'ai';
-import { convertToModelMessages, JsonToSseTransformStream, stepCountIs, streamText } from 'ai';
-import { and, asc, eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { db } from '@/db';
+import { ensureBuiltinModelAvailable, resolveModel, resolveProviderModel } from '@/lib/ai';
+import { errorResponse, HttpError, readJson, requireUser } from '@/lib/api';
+import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
+import { buildMcpToolSets } from '@/lib/mcp';
+import { buildSystemPrompt } from '@/lib/prompt';
+import { retrieveKnowledge } from '@/lib/rag';
+import { rateLimit } from '@/lib/rate-limit';
+import { buildToolSet } from '@/lib/tools';
 import {
     agentMcpServers,
+    agents,
     agentSkills,
     agentTools,
-    agents,
     aiProviders,
     conversations,
     mcpServers,
@@ -16,14 +19,11 @@ import {
     skills,
     tools as toolsTable,
 } from '@schema';
-import { ensureBuiltinModelAvailable, resolveModel, resolveProviderModel } from '@/lib/ai';
-import { errorResponse, HttpError, readJson, requireUser } from '@/lib/api';
-import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
-import { buildMcpToolSets } from '@/lib/mcp';
-import { buildSystemPrompt } from '@/lib/prompt';
-import { rateLimit } from '@/lib/rate-limit';
-import { retrieveKnowledge } from '@/lib/rag';
-import { buildToolSet } from '@/lib/tools';
+import { createFileRoute } from '@tanstack/react-router';
+import type { UIMessage, UIMessageChunk } from 'ai';
+import { convertToModelMessages, JsonToSseTransformStream, stepCountIs, streamText } from 'ai';
+import { and, asc, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 /** 发送给模型的上下文窗口（最近 N 条消息），控制长会话的 token 成本 */
 const MAX_CONTEXT_MESSAGES = 24;
@@ -179,9 +179,7 @@ export const Route = createFileRoute('/api/chat')({
                         .from(agentMcpServers)
                         .innerJoin(mcpServers, eq(agentMcpServers.mcpServerId, mcpServers.id))
                         .where(and(eq(agentMcpServers.agentId, agent.id), eq(mcpServers.enabled, true)));
-                    const { toolSet: mcpToolSet, summary: mcpSummary, dispose: disposeMcp } = await buildMcpToolSets(
-                        mcpServerRows.map((row) => row.server),
-                    );
+                    const { toolSet: mcpToolSet, summary: mcpSummary, dispose: disposeMcp } = await buildMcpToolSets(mcpServerRows.map((row) => row.server));
 
                     // 3. 解析（或创建）会话，只能聊自己的会话
                     let conversation = conversationId
@@ -244,9 +242,7 @@ export const Route = createFileRoute('/api/chat')({
 
                     // 6. RAG 检索：以最后一条用户消息为查询，命中则注入系统提示词
                     const lastUserText = [...incoming].reverse().find((m) => m.role === 'user');
-                    const queryText = lastUserText?.parts.find(
-                        (p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text',
-                    )?.text;
+                    const queryText = lastUserText?.parts.find((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')?.text;
                     let knowledgeContext: string | null = null;
                     if (queryText?.trim()) {
                         try {
@@ -290,9 +286,7 @@ export const Route = createFileRoute('/api/chat')({
                         void disposeMcp();
                     });
 
-                    const sse = clientBranch
-                        .pipeThrough(new JsonToSseTransformStream())
-                        .pipeThrough(new TextEncoderStream());
+                    const sse = clientBranch.pipeThrough(new JsonToSseTransformStream()).pipeThrough(new TextEncoderStream());
                     const response = new Response(sse, {
                         status: 200,
                         headers: {

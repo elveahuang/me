@@ -1,5 +1,5 @@
-import { catalog } from './catalog';
 import type { agents, skills } from '@/db/schema';
+import { catalog } from './catalog';
 
 type Agent = typeof agents.$inferSelect;
 type Skill = typeof skills.$inferSelect;
@@ -12,12 +12,7 @@ type Skill = typeof skills.$inferSelect;
  * 4. RAG 检索命中的知识库参考资料
  * 5. json-render 组件目录说明（让模型能输出可渲染的 UI 规范）
  */
-export function buildSystemPrompt(
-    agent: Agent,
-    agentSkillList: Skill[],
-    knowledgeContext: string | null = null,
-    toolSummary: string | null = null,
-) {
+export function buildSystemPrompt(agent: Agent, agentSkillList: Skill[], knowledgeContext: string | null = null, toolSummary: string | null = null) {
     const sections: string[] = [];
 
     if (agent.systemPrompt.trim()) {
@@ -26,11 +21,7 @@ export function buildSystemPrompt(
 
     const enabledSkills = agentSkillList.filter((s) => s.enabled && s.instructions.trim());
     if (enabledSkills.length > 0) {
-        sections.push(
-            `# 可用技能（Skills）\n\n${enabledSkills
-                .map((s) => `## 技能：${s.name}\n${s.instructions.trim()}`)
-                .join('\n\n')}`,
-        );
+        sections.push(`# 可用技能（Skills）\n\n${enabledSkills.map((s) => `## 技能：${s.name}\n${s.instructions.trim()}`).join('\n\n')}`);
     }
 
     if (toolSummary) {
