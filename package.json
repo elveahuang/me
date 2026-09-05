@@ -18,17 +18,7 @@
         "lint:check": "eslint './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}'",
         "format": "prettier --write './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}'",
         "stylelint": "stylelint './**/*.{css}' --fix",
-        "typecheck": "pnpm -r typecheck",
-        "prepare": "husky"
-    },
-    "lint-staged": {
-        "*.{ts,tsx,mts,js,jsx,cjs,mjs}": [
-            "eslint --fix",
-            "prettier --write"
-        ],
-        "*.{json,md,css}": [
-            "prettier --write"
-        ]
+        "typecheck": "pnpm -r typecheck"
     },
     "dependencies": {
         "@a2ui/react": "^0.11.0",
@@ -107,8 +97,6 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.1.1",
         "globals": "^17.12.0",
-        "husky": "^9.1.7",
-        "lint-staged": "^17.5.0",
         "oxfmt": "^0.66.0",
         "oxlint": "^1.81.0",
         "path": "^0.12.7",
