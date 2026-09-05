@@ -94,7 +94,10 @@
         "statusPending": "Pending payment",
         "statusPaid": "Paid",
         "statusClosed": "Closed",
-        "statusRefunded": "Refunded"
+        "statusRefunded": "Refunded",
+        "redirectPayTitle": "Redirecting to WeChat Pay",
+        "redirectPayHint": "H5 payment started. Return to this page after paying",
+        "redirectPayButton": "Open WeChat Pay again"
     },
     "demo": {
         "title": "Konsta UI demo",
@@ -112,8 +115,5 @@
         "tailwindNote": "Konsta UI components are built with Tailwind CSS and share one set of utility classes with this package's Tailwind v4 entry.",
         "resetSearch": "Reset search",
         "primaryButton": "Primary button"
-    },
-    "membership.redirectPayTitle": "Redirecting to WeChat Pay",
-    "membership.redirectPayHint": "H5 payment started. Return to this page after paying",
-    "membership.redirectPayButton": "Open WeChat Pay again"
+    }
 }

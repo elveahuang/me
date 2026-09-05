@@ -94,7 +94,10 @@
         "statusPending": "待支付",
         "statusPaid": "已支付",
         "statusClosed": "已关闭",
-        "statusRefunded": "已退款"
+        "statusRefunded": "已退款",
+        "redirectPayTitle": "即将跳转微信支付",
+        "redirectPayHint": "已为你发起 H5 支付，支付完成后返回本页等待确认",
+        "redirectPayButton": "重新跳转微信支付"
     },
     "demo": {
         "title": "Konsta UI 演示",
@@ -112,8 +115,5 @@
         "tailwindNote": "Konsta UI 组件由 Tailwind CSS 构建，与本包的 Tailwind v4 入口共用一套工具类。",
         "resetSearch": "重置搜索",
         "primaryButton": "主按钮"
-    },
-    "membership.redirectPayTitle": "即将跳转微信支付",
-    "membership.redirectPayHint": "已为你发起 H5 支付，支付完成后返回本页等待确认",
-    "membership.redirectPayButton": "重新跳转微信支付"
+    }
 }
