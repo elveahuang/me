@@ -17,6 +17,8 @@
         "@capacitor/core": "^8.5.1",
         "@ionic/react": "^9.0.2",
         "@ionic/react-router": "^9.0.2",
+        "@repo/commons": "workspace:*",
+        "@repo/config": "workspace:*",
         "i18next": "26.4.2",
         "ionicons": "^8.1.0",
         "konsta": "^5.4.0",
