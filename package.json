@@ -23,7 +23,7 @@
     "dependencies": {
         "@a2ui/react": "^0.11.0",
         "@ai-sdk/deepseek": "^3.0.39",
-        "@ai-sdk/openai": "^4.0.59",
+        "@ai-sdk/openai": "^4.0.60",
         "@ai-sdk/react": "^4.0.96",
         "@comark/html": "^0.6.2",
         "@comark/react": "^0.6.2",
@@ -116,5 +116,5 @@
         "typescript-plugin-css-modules": "^5.2.0",
         "vite-plus": "^0.3.0"
     },
-    "packageManager": "pnpm@11.25.0"
+    "packageManager": "pnpm@12.3.4"
 }
