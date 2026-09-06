@@ -1,6 +1,8 @@
 import { db } from '@/db';
 import { agentKnowledge, aiProviders, knowledgeBases, knowledgeChunks, knowledgeDocuments } from '@/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, cosineDistance, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { cacheGet, cacheSet } from './redis';
 
 /** 单块目标长度（字符），中文场景 500-700 比较合适 */
 const CHUNK_SIZE = 600;
@@ -11,7 +13,9 @@ export const MAX_DOCUMENT_CHARS = 200_000;
 /** 检索召回的块数 */
 const TOP_K = 4;
 /** 关键词匹配的最小得分阈值（bigram 重叠率） */
-const MIN_SCORE = 0.08;
+const MIN_BIGRAM_SCORE = 0.08;
+/** 向量检索的最小相似度阈值（1 - cosineDistance） */
+const MIN_VECTOR_SIMILARITY = 0.25;
 
 /** 按段落 + 长度滑窗切块 */
 export function chunkText(content: string): string[] {
@@ -80,22 +84,6 @@ export async function embedTexts(provider: { baseUrl: string; apiKey: string }, 
     return result;
 }
 
-function cosineSimilarity(a: number[], b: number[]) {
-    let dot = 0;
-    let normA = 0;
-    let normB = 0;
-    const length = Math.min(a.length, b.length);
-    for (let i = 0; i < length; i++) {
-        const ai = a[i] ?? 0;
-        const bi = b[i] ?? 0;
-        dot += ai * bi;
-        normA += ai * ai;
-        normB += bi * bi;
-    }
-    if (normA === 0 || normB === 0) return 0;
-    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
 /** 中文字符 bigram 集合（无 embedding 时的关键词匹配兜底） */
 function bigrams(text: string): Set<string> {
     const normalized = text.toLowerCase().replace(/\s+/g, '');
@@ -124,47 +112,24 @@ interface RetrievedChunk {
 }
 
 /**
- * 检索：优先向量相似度（query 与 chunk 都能向量化的部分），
- * 否则退化为 bigram 关键词匹配。返回拼接好的参考资料文本（或 null）。
+ * 检索：优先采用 pgvector 在数据库层做 HNSW 余弦距离检索；
+ * 若未配置 embedding 或向量化失败，自动退化为内存 bigram 关键词匹配。
+ * 返回拼接好的参考资料文本（或 null）。
  */
 export async function retrieveKnowledge(agentId: number, query: string): Promise<string | null> {
     const bindings = await db.select().from(agentKnowledge).where(eq(agentKnowledge.agentId, agentId));
     if (bindings.length === 0) return null;
 
-    const kbRows = await db
-        .select()
-        .from(knowledgeBases)
-        .where(
-            inArray(
-                knowledgeBases.id,
-                bindings.map((b) => b.kbId),
-            ),
-        );
+    const kbIds = bindings.map((b) => b.kbId);
+    const kbRows = await db.select().from(knowledgeBases).where(inArray(knowledgeBases.id, kbIds));
     if (kbRows.length === 0) return null;
 
     // 文档标题映射
     const docRows = await db
         .select({ id: knowledgeDocuments.id, title: knowledgeDocuments.title })
         .from(knowledgeDocuments)
-        .where(
-            inArray(
-                knowledgeDocuments.kbId,
-                kbRows.map((kb) => kb.id),
-            ),
-        );
+        .where(inArray(knowledgeDocuments.kbId, kbIds));
     const titleMap = new Map(docRows.map((d) => [d.id, d.title]));
-
-    const chunkRows = await db
-        .select()
-        .from(knowledgeChunks)
-        .where(
-            inArray(
-                knowledgeChunks.kbId,
-                kbRows.map((kb) => kb.id),
-            ),
-        )
-        .limit(2000);
-    if (chunkRows.length === 0) return null;
 
     // 尝试向量检索：需要一个可用的 embedding 供应商
     let queryEmbedding: number[] | null = null;
@@ -172,24 +137,62 @@ export async function retrieveKnowledge(agentId: number, query: string): Promise
     if (firstKb?.embeddingProviderId && firstKb.embeddingModel) {
         const [provider] = await db.select().from(aiProviders).where(eq(aiProviders.id, firstKb.embeddingProviderId));
         if (provider?.enabled && provider.baseUrl) {
-            try {
-                const [embedding] = await embedTexts({ baseUrl: provider.baseUrl, apiKey: provider.apiKey }, firstKb.embeddingModel, [query.slice(0, 1000)]);
-                queryEmbedding = embedding ?? null;
-            } catch (e) {
-                console.error('[rag] query embedding 失败，退化为关键词匹配:', e);
+            const trimmedQuery = query.slice(0, 1000);
+            const queryHash = createHash('sha256').update(trimmedQuery).digest('hex');
+            const cacheKey = `cache:embed:${firstKb.embeddingProviderId}:${firstKb.embeddingModel}:${queryHash}`;
+
+            // 优先读 Redis 缓存中的 Query Embedding
+            queryEmbedding = await cacheGet<number[]>(cacheKey);
+            if (!queryEmbedding) {
+                try {
+                    const [embedding] = await embedTexts({ baseUrl: provider.baseUrl, apiKey: provider.apiKey }, firstKb.embeddingModel, [trimmedQuery]);
+                    if (embedding) {
+                        queryEmbedding = embedding;
+                        // 缓存 1 小时
+                        await cacheSet(cacheKey, embedding, 3600);
+                    }
+                } catch (e) {
+                    console.error('[rag] query embedding 失败，退化为关键词匹配:', e);
+                }
             }
         }
     }
 
+    // 1. pgvector 原生向量检索
+    if (queryEmbedding && queryEmbedding.length > 0) {
+        try {
+            const similarity = sql<number>`1 - (${cosineDistance(knowledgeChunks.embedding, queryEmbedding)})`;
+            const vectorResults = await db
+                .select({
+                    id: knowledgeChunks.id,
+                    documentId: knowledgeChunks.documentId,
+                    content: knowledgeChunks.content,
+                    similarity,
+                })
+                .from(knowledgeChunks)
+                .where(and(inArray(knowledgeChunks.kbId, kbIds), isNotNull(knowledgeChunks.embedding)))
+                .orderBy(cosineDistance(knowledgeChunks.embedding, queryEmbedding))
+                .limit(TOP_K);
+
+            const hits = vectorResults.filter((r) => Number(r.similarity) >= MIN_VECTOR_SIMILARITY);
+            if (hits.length > 0) {
+                return hits
+                    .map((chunk, i) => `[${i + 1}]（来源：${titleMap.get(chunk.documentId) ?? '未知文档'}）\n${chunk.content.slice(0, 800)}`)
+                    .join('\n\n---\n\n');
+            }
+        } catch (e) {
+            console.warn('[rag] pgvector 检索异常，退化为关键词匹配:', (e as Error)?.message || e);
+        }
+    }
+
+    // 2. 降级：关键词匹配
+    const chunkRows = await db.select().from(knowledgeChunks).where(inArray(knowledgeChunks.kbId, kbIds)).limit(2000);
+    if (chunkRows.length === 0) return null;
+
     const scored: RetrievedChunk[] = [];
     for (const chunk of chunkRows) {
-        let score = 0;
-        if (queryEmbedding && Array.isArray(chunk.embedding) && chunk.embedding.length > 0) {
-            score = cosineSimilarity(queryEmbedding, chunk.embedding);
-        } else {
-            score = bigramScore(query, chunk.content);
-        }
-        if (score > MIN_SCORE) {
+        const score = bigramScore(query, chunk.content);
+        if (score > MIN_BIGRAM_SCORE) {
             scored.push({
                 documentTitle: titleMap.get(chunk.documentId) ?? '未知文档',
                 content: chunk.content.slice(0, 800),

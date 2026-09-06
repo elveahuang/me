@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
-import { listPlans } from '@/lib/billing';
+import { invalidatePlansCache, listPlans } from '@/lib/billing';
 import { corsMiddleware } from '@/lib/cors';
 import { membershipPlans } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
@@ -10,7 +10,10 @@ import { z } from 'zod';
 type RouteParams = { request: Request };
 
 const PlanSchema = z.object({
-    code: z.string().regex(/^[a-z0-9_-]+$/i, '编码只能包含字母数字、- 和 _').max(30),
+    code: z
+        .string()
+        .regex(/^[a-z0-9_-]+$/i, '编码只能包含字母数字、- 和 _')
+        .max(30),
     name: z.string().min(1).max(50),
     description: z.string().max(500).default(''),
     chatQuotaPerDay: z.number().int().positive().nullable().default(null),
@@ -43,6 +46,7 @@ export const Route = createFileRoute('/api/admin/plans')({
                     // onConflictDoNothing 兜底并发重码（check-then-insert 竞态时 unique 约束触发 500 → 改为 400）
                     const [created] = await db.insert(membershipPlans).values(parsed.data).onConflictDoNothing({ target: membershipPlans.code }).returning();
                     if (!created) throw new HttpError(400, '套餐编码已存在');
+                    await invalidatePlansCache();
                     return json(created, 201);
                 } catch (e) {
                     return errorResponse(e);

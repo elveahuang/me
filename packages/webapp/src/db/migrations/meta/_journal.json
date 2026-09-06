@@ -1,27 +1,34 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1788107483731,
-            "tag": "0000_uneven_cammi",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1788108860068,
-            "tag": "0001_curly_starhawk",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "7",
-            "when": 1788115626841,
-            "tag": "0002_empty_hex",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788107483731,
+      "tag": "0000_uneven_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788108860068,
+      "tag": "0001_curly_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788115626841,
+      "tag": "0002_empty_hex",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788696113666,
+      "tag": "0003_foamy_blur",
+      "breakpoints": true
+    }
+  ]
 }

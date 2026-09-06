@@ -27,12 +27,7 @@ export const Route = createFileRoute('/api/billing/orders')({
             GET: async ({ request }: RouteParams) => {
                 try {
                     const session = await requireUser(request);
-                    const list = await db
-                        .select()
-                        .from(orders)
-                        .where(eq(orders.userId, session.user.id))
-                        .orderBy(desc(orders.id))
-                        .limit(50);
+                    const list = await db.select().from(orders).where(eq(orders.userId, session.user.id)).orderBy(desc(orders.id)).limit(50);
                     return json({ orders: list });
                 } catch (e) {
                     return errorResponse(e);
@@ -43,7 +38,7 @@ export const Route = createFileRoute('/api/billing/orders')({
                     const session = await requireUser(request);
 
                     // 限流：每用户每分钟最多 10 次下单，防刷 pending 订单
-                    const limited = rateLimit(`orders:${session.user.id}`, 10, 60_000);
+                    const limited = await rateLimit(`orders:${session.user.id}`, 10, 60_000);
                     if (!limited.ok) {
                         throw new HttpError(429, `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试`);
                     }
@@ -73,7 +68,10 @@ export const Route = createFileRoute('/api/billing/orders')({
                     // 保存支付引导信息（含 JSAPI 拉起参数，页面刷新后仍可恢复），轮询/重渲染时无需重复下单
                     await db
                         .update(orders)
-                        .set({ payInfo: { mode: payment.mode, payUrl: payment.payUrl ?? null, jsapiParams: payment.jsapiParams ?? null }, updatedAt: new Date() })
+                        .set({
+                            payInfo: { mode: payment.mode, payUrl: payment.payUrl ?? null, jsapiParams: payment.jsapiParams ?? null },
+                            updatedAt: new Date(),
+                        })
                         .where(eq(orders.id, order.id));
 
                     return json(

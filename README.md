@@ -14,9 +14,9 @@
 - **MCP Tools**：接入 Model Context Protocol 服务器（Streamable HTTP / SSE / stdio 三种传输），挂载到智能体后其工具自动进入 ReAct 循环；支持一键「测试连接」枚举远端工具
 - **自定义 AI 供应商**：接入任意 OpenAI 兼容协议供应商（DeepSeek / Moonshot / Ollama / OpenRouter 等），密钥服务端保存、界面掩码展示
 - **AI 自动配置**：输入智能体用途描述，AI 自动生成名称/人设/模型/Skills/Tools/MCP/知识库 配置草案，初步形成完整的 ReAct Agent
-- **RAG 知识库**：文档自动切块入库；配置了 Embedding 供应商走向量检索，否则退化为关键词匹配；对话时检索相关内容注入上下文（seed 自带「平台使用指南」示例知识库）
+- **RAG 知识库**：文档自动切块入库；基于 PostgreSQL **`pgvector`**（1536 维向量 + HNSW 索引）在数据库层执行余弦距离相似度匹配；未配置 Embedding 时平滑退化为关键词匹配；对话时检索相关内容注入上下文（seed 自带「平台使用指南」示例知识库）
 - **对话体验**：流式输出可随时停止（webapp/mobile 双端），服务端中断安全（保留已生成内容）
-- **防滥用**：对话接口按用户限流（30 次/分）、超大消息体拒绝（512KB 上限）、会话创建限流（20 次/分）
+- **防滥用与分布式限流**：对话接口按用户限流（30 次/分）、超大消息体拒绝（512KB 上限）、会话创建限流（20 次/分）；基于 **`node-redis`** 实现分布式滑动窗口限流，并在未配置 Redis 时自动降级为内存滑窗
 - **AI 渲染管线**：助手回复用 Comark（Markdown + 组件语法 + 流式 autoClose）渲染，
   `json-render` 代码块（由 @json-render/core 的 catalog 生成提示词驱动）渲染成 Card / Stat / Badge / Alert 组件
 - **双端用户侧**：webapp、mobile（Ionic 9 + React Router + Capacitor 7 + 备选 Konsta UI 组件）对等实现注册登录（邮箱/微信）、智能体列表、会话管理、流式对话、会员购买与订单查询
@@ -84,7 +84,8 @@ pnpm run mobile:build        # 产出 dist/，可用 npx cap add ios/android + p
   session/account 表（provider `wechat`，accountId 为 openid），与密码登录在 `requireUser` 层完全一致
 - MCP：`src/lib/mcp.ts` 按请求连接 MCP 服务器（Streamable HTTP/SSE/stdio），`listTools` 动态转换为
   AI SDK `dynamicTool`（工具名加 `mcp{serverId}_` 前缀防冲突），聊天结束后统一关闭连接
-- 限流：`src/lib/rate-limit.ts` 内存滑动窗口（单实例足够，多实例部署需换共享存储）
+- 限流与缓存：`src/lib/rate-limit.ts` 结合 `src/lib/redis.ts`（node-redis）实现分布式 ZSET 滑动窗口限流与业务缓存（套餐列表、Query Embedding），支持 Redis 离线时自动降级内存滑窗
+- RAG 检索：`src/lib/rag.ts` 基于 PostgreSQL `pgvector`（1536 维 + HNSW 索引）在数据库层执行 `cosineDistance` 相似度排序与 Top-K 召回，未命中或无向量时平滑退化为 Bigram 关键词检索
 - json-render：`src/lib/catalog.ts` 同时供服务端 `catalog.prompt()` 生成提示词、
   客户端 Comark `jsonRender()` 插件渲染 ```json-render 代码块
 - CORS：OPTIONS 预检由 `src/lib/cors.ts` 中间件短路，实际响应头由 `json()`/聊天流统一附加；

@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex, vector } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // Better Auth core tables (see https://better-auth.com/docs/concepts/database)
@@ -264,11 +264,15 @@ export const knowledgeChunks = pgTable(
             .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
         seq: integer('seq').notNull().default(0),
         content: text('content').notNull(),
-        // float[] 序列化存储；null 表示未向量化（检索退化为关键词匹配）
-        embedding: jsonb('embedding'),
+        // 1536 维 pgvector 向量；null 表示未向量化（检索退化为关键词匹配）
+        embedding: vector('embedding', { dimensions: 1536 }),
         embeddingModel: text('embedding_model'),
     },
-    (t) => [index('knowledge_chunks_kb_id_idx').on(t.kbId), index('knowledge_chunks_document_id_idx').on(t.documentId)],
+    (t) => [
+        index('knowledge_chunks_kb_id_idx').on(t.kbId),
+        index('knowledge_chunks_document_id_idx').on(t.documentId),
+        index('knowledge_chunks_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
+    ],
 );
 
 export const agentKnowledge = pgTable(

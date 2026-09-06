@@ -1,8 +1,8 @@
 import { db } from '@/db';
 import { ensureBuiltinModelAvailable, resolveModel, resolveProviderModel } from '@/lib/ai';
 import { errorResponse, HttpError, readJson, requireUser } from '@/lib/api';
-import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
 import { consumeChatQuota } from '@/lib/billing';
+import { corsMiddleware, corsResponseHeaders } from '@/lib/cors';
 import { buildMcpToolSets } from '@/lib/mcp';
 import { buildSystemPrompt } from '@/lib/prompt';
 import { retrieveKnowledge } from '@/lib/rag';
@@ -130,7 +130,7 @@ export const Route = createFileRoute('/api/chat')({
                     const session = await requireUser(request);
 
                     // 限流：每个用户每分钟最多 30 次对话请求
-                    const limited = rateLimit(`chat:${session.user.id}`, 30, 60_000);
+                    const limited = await rateLimit(`chat:${session.user.id}`, 30, 60_000);
                     if (!limited.ok) {
                         return Response.json(
                             { error: `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试` },

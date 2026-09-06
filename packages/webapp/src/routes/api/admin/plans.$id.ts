@@ -1,5 +1,6 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
+import { invalidatePlansCache } from '@/lib/billing';
 import { corsMiddleware } from '@/lib/cors';
 import { membershipPlans, orders } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
@@ -35,6 +36,7 @@ export const Route = createFileRoute('/api/admin/plans/$id')({
                         .where(eq(membershipPlans.id, id))
                         .returning();
                     if (!updated) throw new HttpError(404, '套餐不存在');
+                    await invalidatePlansCache();
                     return json(updated);
                 } catch (e) {
                     return errorResponse(e);
@@ -52,6 +54,7 @@ export const Route = createFileRoute('/api/admin/plans/$id')({
                     if (referenced) throw new HttpError(400, '该套餐已有订单记录，请改为下架（enabled=false）');
                     const deleted = await db.delete(membershipPlans).where(eq(membershipPlans.id, id)).returning({ id: membershipPlans.id });
                     if (deleted.length === 0) throw new HttpError(404, '套餐不存在');
+                    await invalidatePlansCache();
                     return json({ ok: true });
                 } catch (e) {
                     return errorResponse(e);

@@ -41,7 +41,7 @@ export const Route = createFileRoute('/api/conversations')({
             POST: async ({ request }) => {
                 try {
                     const session = await requireUser(request);
-                    const limited = rateLimit(`conv-create:${session.user.id}`, 20, 60_000);
+                    const limited = await rateLimit(`conv-create:${session.user.id}`, 20, 60_000);
                     if (!limited.ok) {
                         return Response.json(
                             { error: `创建过于频繁，请 ${limited.retryAfterSec} 秒后再试` },

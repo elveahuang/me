@@ -1,5 +1,6 @@
 import { db } from '@/db';
 import { HttpError } from '@/lib/api';
+import { cacheDel, cacheGetOrSet } from '@/lib/redis';
 import { membershipPlans, orders, usageCounters, userMemberships } from '@schema';
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
 
@@ -48,7 +49,9 @@ export interface Plan {
     sortOrder: number;
 }
 
-export async function listPlans(includeDisabled = false): Promise<Plan[]> {
+const PLANS_CACHE_KEY = 'cache:plans:active';
+
+async function queryPlansFromDb(includeDisabled: boolean): Promise<Plan[]> {
     const rows = includeDisabled
         ? await db.select().from(membershipPlans).orderBy(membershipPlans.sortOrder, membershipPlans.id)
         : await db.select().from(membershipPlans).where(eq(membershipPlans.enabled, true)).orderBy(membershipPlans.sortOrder, membershipPlans.id);
@@ -63,6 +66,19 @@ export async function listPlans(includeDisabled = false): Promise<Plan[]> {
         enabled: r.enabled,
         sortOrder: r.sortOrder,
     }));
+}
+
+export async function listPlans(includeDisabled = false): Promise<Plan[]> {
+    if (includeDisabled) {
+        return queryPlansFromDb(true);
+    }
+    // 启用状态的套餐列表缓存 10 分钟，管理端修改时触发失效
+    return cacheGetOrSet(PLANS_CACHE_KEY, 600, () => queryPlansFromDb(false));
+}
+
+/** 清理前台套餐列表缓存（管理端增删改套餐时调用） */
+export async function invalidatePlansCache(): Promise<void> {
+    await cacheDel(PLANS_CACHE_KEY);
 }
 
 export interface MembershipStatus {
