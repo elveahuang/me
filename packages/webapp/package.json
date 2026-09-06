@@ -5,8 +5,9 @@
     "type": "module",
     "scripts": {
         "auth:secret": "@better-auth/cli secret",
+        "auth:generate": "@better-auth/cli generate",
         "db:generate": "drizzle-kit generate --config=drizzle.config.mjs",
-        "db:migrate": "drizzle-kit push --config=drizzle.config.mjs",
+        "db:migrate": "drizzle-kit migrate --config=drizzle.config.mjs",
         "db:seed": "tsx src/db/seed.ts",
         "typecheck": "tsc --noEmit",
         "dev": "vite",

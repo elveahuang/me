@@ -40,8 +40,6 @@ export const account = pgTable('account', {
     id: text('id').primaryKey(),
     accountId: text('account_id').notNull(),
     providerId: text('provider_id').notNull(),
-    // better-auth 1.7 必填：账号颁发方标识（本地密码登录为合成 issuer）
-    issuer: text('issuer').notNull(),
     userId: text('user_id')
         .notNull()
         .references(() => user.id, { onDelete: 'cascade' }),

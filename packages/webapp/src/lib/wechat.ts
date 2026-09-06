@@ -132,7 +132,6 @@ export async function upsertWechatUser(openid: string, profile: { nickname?: str
                 id: crypto.randomUUID(),
                 accountId: openid,
                 providerId: 'wechat',
-                issuer: 'https://open.weixin.qq.com',
                 userId: created.id,
                 accessToken: null,
                 scope: 'snsapi_userinfo',
