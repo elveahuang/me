@@ -1,10 +1,12 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
+import { cacheDel } from '@/lib/redis';
 import { agentKnowledge, agentMcpServers, agents, agentSkills, agentTools, knowledgeBases, mcpServers, skills, tools } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { AGENTS_ACTIVE_CACHE_KEY } from '../agents';
 
 const AgentBodySchema = z.object({
     name: z.string().min(1).max(50),
@@ -95,6 +97,7 @@ export const Route = createFileRoute('/api/admin/agents')({
                         }
                         return agent;
                     });
+                    await cacheDel(AGENTS_ACTIVE_CACHE_KEY);
                     return json({ ...created, skillIds, toolIds, knowledgeBaseIds, mcpServerIds }, 201);
                 } catch (e) {
                     return errorResponse(e);

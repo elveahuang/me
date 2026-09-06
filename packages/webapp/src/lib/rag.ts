@@ -147,9 +147,13 @@ export async function retrieveKnowledge(agentId: number, query: string): Promise
                 try {
                     const [embedding] = await embedTexts({ baseUrl: provider.baseUrl, apiKey: provider.apiKey }, firstKb.embeddingModel, [trimmedQuery]);
                     if (embedding) {
-                        queryEmbedding = embedding;
-                        // 缓存 1 小时
-                        await cacheSet(cacheKey, embedding, 3600);
+                        if (embedding.length === 1536) {
+                            queryEmbedding = embedding;
+                            // 缓存 1 小时
+                            await cacheSet(cacheKey, embedding, 3600);
+                        } else {
+                            console.warn(`[rag] Query embedding 维度 (${embedding.length}) 与数据库配置维度 (1536) 不一致，跳过向量检索`);
+                        }
                     }
                 } catch (e) {
                     console.error('[rag] query embedding 失败，退化为关键词匹配:', e);
@@ -227,6 +231,11 @@ export async function ingestDocument(params: { kbId: number; documentId: number;
             .where(and(eq(aiProviders.id, kb.embeddingProviderId), eq(aiProviders.enabled, true)));
         if (provider?.baseUrl) {
             embeddings = await embedTexts(provider, kb.embeddingModel, chunks);
+            if (embeddings.length > 0 && embeddings[0] && embeddings[0].length !== 1536) {
+                throw new Error(
+                    `Embedding 模型输出维度为 ${embeddings[0].length}，但数据库配置维度为 1536，请选用 1536 维向量模型（如 text-embedding-3-small 或 text-embedding-ada-002）`,
+                );
+            }
             embeddingModel = kb.embeddingModel;
             embedded = true;
         }

@@ -1,10 +1,12 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
+import { cacheDel } from '@/lib/redis';
 import { agentKnowledge, agentMcpServers, agents, agentSkills, agentTools, knowledgeBases, mcpServers, skills, tools } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { AGENTS_ACTIVE_CACHE_KEY } from '../agents';
 
 type RouteParams = { request: Request; params: { id: string } };
 
@@ -101,6 +103,7 @@ export const Route = createFileRoute('/api/admin/agents/$id')({
                     const toolLinks = await db.select().from(agentTools).where(eq(agentTools.agentId, id));
                     const kbLinks = await db.select().from(agentKnowledge).where(eq(agentKnowledge.agentId, id));
                     const mcpLinks = await db.select().from(agentMcpServers).where(eq(agentMcpServers.agentId, id));
+                    await cacheDel(AGENTS_ACTIVE_CACHE_KEY);
                     return json({
                         ...agent,
                         skillIds: skillLinks.map((l) => l.skillId),
@@ -118,6 +121,7 @@ export const Route = createFileRoute('/api/admin/agents/$id')({
                     const id = parseId(params.id, '智能体 ID');
                     const deleted = await db.delete(agents).where(eq(agents.id, id)).returning({ id: agents.id });
                     if (deleted.length === 0) throw new HttpError(404, '智能体不存在');
+                    await cacheDel(AGENTS_ACTIVE_CACHE_KEY);
                     return json({ ok: true });
                 } catch (e) {
                     return errorResponse(e);

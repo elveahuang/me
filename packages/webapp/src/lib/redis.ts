@@ -105,9 +105,13 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
  */
 export async function cacheSet(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
     try {
+        if (value === undefined) return;
+        const serialized = JSON.stringify(value);
+        if (serialized === undefined) return;
+
         const client = await getRedisClient();
         if (!client) return;
-        const serialized = JSON.stringify(value);
+
         if (ttlSeconds && ttlSeconds > 0) {
             await client.set(key, serialized, { EX: ttlSeconds });
         } else {
@@ -145,4 +149,33 @@ export async function cacheGetOrSet<T>(key: string, ttlSeconds: number, fetcher:
     const fresh = await fetcher();
     await cacheSet(key, fresh, ttlSeconds);
     return fresh;
+}
+
+/**
+ * 优雅关闭 Redis 客户端连接
+ */
+export async function closeRedisClient(): Promise<void> {
+    if (redisClient) {
+        try {
+            if (redisClient.isOpen) {
+                await redisClient.quit();
+            }
+        } catch (err) {
+            console.warn('[redis] 关闭连接异常:', (err as Error)?.message || err);
+        } finally {
+            redisClient = null;
+        }
+    }
+}
+
+// 监听进程终止信号，优雅关闭 Redis 连接
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+    const onExit = () => {
+        if (redisClient?.isOpen) {
+            redisClient.quit().catch(() => {});
+            redisClient = null;
+        }
+    };
+    process.once('SIGINT', onExit);
+    process.once('SIGTERM', onExit);
 }

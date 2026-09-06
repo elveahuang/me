@@ -4,6 +4,7 @@
     "type": "module",
     "scripts": {
         "mobile:start": "pnpm run --filter @repo/mobile dev",
+        "mobile:build": "pnpm run --filter @repo/mobile build",
         "mobile:build:dev": "pnpm run --filter @repo/mobile build:dev",
         "mobile:build:pro": "pnpm run --filter @repo/mobile build:pro",
         "mobile:sync": "pnpm run --filter @repo/mobile cap:sync",
@@ -12,6 +13,7 @@
         "webapp:db:generate": "pnpm run --filter @repo/webapp db:generate",
         "webapp:db:migrate": "pnpm run --filter @repo/webapp db:migrate",
         "webapp:db:seed": "pnpm run --filter @repo/webapp db:seed",
+        "webapp:build": "pnpm run --filter @repo/webapp build",
         "webapp:build:dev": "pnpm run --filter @repo/webapp build",
         "webapp:build:pro": "pnpm run --filter @repo/webapp build",
         "lint": "eslint './**/*.{ts,tsx,mts,js,jsx,cjs,mjs,vue,json,md}' --fix",
