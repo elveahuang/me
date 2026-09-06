@@ -51,6 +51,8 @@
     "chat.inputPlaceholder": "Type a message. Enter to send, Shift+Enter for a new line",
     "chat.send": "Send",
     "chat.stop": "Stop",
+    "chat.copy": "Copy",
+    "chat.copied": "Copied",
     "pricing.currentPlan": "Current plan",
     "pricing.noPlan": "None",
     "pricing.expiresAt": "Valid until {{date}}",

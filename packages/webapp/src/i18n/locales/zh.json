@@ -51,6 +51,8 @@
     "chat.inputPlaceholder": "输入消息，Enter 发送，Shift+Enter 换行",
     "chat.send": "发送",
     "chat.stop": "停止",
+    "chat.copy": "复制",
+    "chat.copied": "已复制",
     "pricing.currentPlan": "当前套餐",
     "pricing.noPlan": "未开通",
     "pricing.expiresAt": "有效期至 {{date}}",

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const toneBadgeClasses: Record<string, string> = {
     info: 'bg-sky-100 text-sky-800 border-sky-200',
@@ -157,6 +158,113 @@ export function renderJsonRenderBlock(jsonContent: string, key: string | number)
     return null;
 }
 
+export interface MobileCodeBlockProps {
+    code: string;
+    language?: string;
+}
+
+export function MobileCodeBlock({ code, language }: MobileCodeBlockProps) {
+    const { t } = useTranslation();
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // ignore
+        }
+    };
+
+    return (
+        <div className='my-2.5 overflow-hidden rounded-xl border border-gray-800 bg-gray-950 text-gray-100 shadow-xs'>
+            <div className='flex items-center justify-between border-b border-gray-800/80 bg-gray-900/80 px-3 py-1.5 text-xs text-gray-400'>
+                <span className='font-mono text-[11px] font-medium tracking-wide text-gray-300 uppercase'>{language || 'code'}</span>
+                <button
+                    type='button'
+                    onClick={handleCopy}
+                    className='inline-flex cursor-pointer items-center gap-1 rounded px-2 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-gray-800'
+                >
+                    {copied ? `✓ ${t('chat.copied')}` : `📋 ${t('chat.copyCode')}`}
+                </button>
+            </div>
+            <pre className='overflow-x-auto p-3 font-mono text-xs leading-relaxed text-gray-200'>
+                <code>{code}</code>
+            </pre>
+        </div>
+    );
+}
+
+function renderInlineTokens(text: string, baseKey: string | number): React.ReactNode[] {
+    const tokens = text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
+    return tokens.map((tok, i) => {
+        const key = `${baseKey}-tok-${i}`;
+        if (tok.startsWith('`') && tok.endsWith('`') && tok.length >= 2) {
+            return (
+                <code key={key} className='rounded border border-gray-200 bg-gray-100 px-1 py-0.5 font-mono text-[12px] text-rose-600'>
+                    {tok.slice(1, -1)}
+                </code>
+            );
+        }
+        if (tok.startsWith('**') && tok.endsWith('**') && tok.length >= 4) {
+            return (
+                <strong key={key} className='font-semibold text-gray-900'>
+                    {tok.slice(2, -2)}
+                </strong>
+            );
+        }
+        return <span key={key}>{tok}</span>;
+    });
+}
+
+interface FormattedSegment {
+    type: 'prose' | 'code';
+    content: string;
+    language?: string;
+}
+
+function parseFormattedSegments(text: string): FormattedSegment[] {
+    const segments: FormattedSegment[] = [];
+    const codeRegex = /```([a-zA-Z0-9_-]*)\s*([\s\S]*?)(?:```|$)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = codeRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            segments.push({ type: 'prose', content: text.slice(lastIndex, match.index) });
+        }
+        const lang = match[1]?.trim() || undefined;
+        const code = match[2] ?? '';
+        segments.push({ type: 'code', content: code, language: lang });
+        lastIndex = codeRegex.lastIndex;
+        if (!match[0].endsWith('```')) {
+            break;
+        }
+    }
+
+    if (lastIndex < text.length) {
+        segments.push({ type: 'prose', content: text.slice(lastIndex) });
+    }
+
+    return segments;
+}
+
+function renderFormattedText(text: string, keyPrefix: string | number): React.ReactNode {
+    const segments = parseFormattedSegments(text);
+    return segments.map((seg, i) => {
+        const key = `${keyPrefix}-s-${i}`;
+        if (seg.type === 'code') {
+            return <MobileCodeBlock key={key} code={seg.content} language={seg.language} />;
+        }
+        return (
+            <span key={key} style={{ whiteSpace: 'pre-wrap' }}>
+                {renderInlineTokens(seg.content, key)}
+            </span>
+        );
+    });
+}
+
 interface MobileMessageContentProps {
     text: string;
     reasoning?: string;
@@ -166,8 +274,9 @@ interface MobileMessageContentProps {
 /**
  * 移动端智能体消息内容渲染器：
  * 1. 拆分普通文字与 ```json-render ... ``` 结构化 UI 块
- * 2. 将 json-render 代码块自动渲染为移动端原生卡片/指标/徽章/提示
- * 3. 展开/折叠显示模型的思考过程（Reasoning / Think）
+ * 2. 普通文本支持标准代码块卡片（带语言标牌与一键复制）与行内重点样式
+ * 3. 将 json-render 代码块自动渲染为移动端原生卡片/指标/徽章/提示
+ * 4. 展开/折叠显示模型的思考过程（Reasoning / Think）
  */
 export function MobileMessageContent({ text, reasoning, streaming = false }: MobileMessageContentProps) {
     const parts: { type: 'text' | 'json-render'; content: string }[] = [];
@@ -212,11 +321,7 @@ export function MobileMessageContent({ text, reasoning, streaming = false }: Mob
                 if (p.type === 'json-render') {
                     return renderJsonRenderBlock(p.content, idx);
                 }
-                return (
-                    <span key={idx} style={{ whiteSpace: 'pre-wrap' }}>
-                        {p.content}
-                    </span>
-                );
+                return renderFormattedText(p.content, idx);
             })}
         </div>
     );

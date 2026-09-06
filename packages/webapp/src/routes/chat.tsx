@@ -6,7 +6,7 @@ import { fetchSession } from '@/lib/session';
 import { useChat } from '@ai-sdk/react';
 import { Button } from '@heroui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -313,7 +313,18 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                         </Button>
                     ) : null}
                 </form>
-                {statusText ? <p className='mx-auto mt-2 max-w-3xl text-xs text-gray-400'>{statusText}</p> : null}
+                {chat.error ? (
+                    <div className='mx-auto mt-2 flex max-w-3xl items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800'>
+                        <span>⚠️ {chat.error.message}</span>
+                        {chat.error.message.includes('额度') || chat.error.message.includes('402') ? (
+                            <Link to='/pricing' className='font-medium text-blue-600 underline hover:text-blue-800'>
+                                {t('pricing.choosePlan')} &rarr;
+                            </Link>
+                        ) : null}
+                    </div>
+                ) : statusText ? (
+                    <p className='mx-auto mt-2 max-w-3xl text-xs text-gray-400'>{statusText}</p>
+                ) : null}
             </div>
         </div>
     );
@@ -324,6 +335,8 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
  * 不加 memo 会导致所有历史消息（含 markdown 重解析）随每个 token 重渲染。
  */
 const MessageBubble = memo(function MessageBubble({ message, streaming }: { message: UIMessage; streaming: boolean }) {
+    const { t } = useTranslation();
+    const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
     const text = message.parts
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
@@ -345,9 +358,19 @@ const MessageBubble = memo(function MessageBubble({ message, streaming }: { mess
 
     const toolParts = message.parts.filter((p) => (p as { type?: string }).type?.startsWith('tool-'));
 
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // ignore
+        }
+    };
+
     return (
         <div className='flex justify-start'>
-            <div className='max-w-[85%] rounded-2xl rounded-bl-sm border border-gray-200 bg-white px-4 py-2.5 text-sm'>
+            <div className='max-w-[85%] rounded-2xl rounded-bl-sm border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-xs'>
                 {reasoning ? (
                     <details className='mb-3 rounded-xl border border-purple-200 bg-purple-50/60 p-3 text-xs text-purple-900' open={streaming && !text}>
                         <summary className='cursor-pointer font-medium text-purple-700 select-none'>
@@ -369,6 +392,25 @@ const MessageBubble = memo(function MessageBubble({ message, streaming }: { mess
                     </div>
                 ) : null}
                 <AssistantMarkdown content={text} streaming={streaming} />
+                {!streaming && text ? (
+                    <div className='mt-2 flex justify-end border-t border-gray-100 pt-1.5'>
+                        <button
+                            type='button'
+                            onClick={handleCopy}
+                            className='inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:text-gray-600'
+                            title={copied ? t('chat.copied') : t('chat.copy')}
+                        >
+                            {copied ? (
+                                <span className='font-medium text-emerald-600'>✓ {t('chat.copied')}</span>
+                            ) : (
+                                <>
+                                    <span>📋</span>
+                                    <span>{t('chat.copy')}</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

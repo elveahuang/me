@@ -34,7 +34,13 @@
         "streamingUnsupported": "当前环境不支持流式响应",
         "serverError": "服务端返回错误",
         "unparsableStream": "收到无法解析的流数据",
-        "connectionInterrupted": "连接中断，回复可能不完整"
+        "connectionInterrupted": "连接中断，回复可能不完整",
+        "copy": "复制",
+        "copied": "已复制",
+        "copyCode": "复制代码",
+        "deleteConversation": "删除会话",
+        "deleteSuccess": "会话已删除",
+        "deleteFailed": "删除会话失败"
     },
     "login": {
         "title": "登录",

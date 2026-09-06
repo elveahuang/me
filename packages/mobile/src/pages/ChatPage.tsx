@@ -5,14 +5,19 @@ import {
     IonContent,
     IonFooter,
     IonHeader,
+    IonIcon,
+    IonItem,
+    IonLabel,
     IonList,
     IonModal,
     IonPage,
     IonTextarea,
     IonTitle,
     IonToolbar,
+    useIonRouter,
     useIonToast,
 } from '@ionic/react';
+import { trashOutline } from 'ionicons/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -27,6 +32,7 @@ interface ChatMessage {
     role: 'user' | 'assistant';
     text: string;
     reasoning?: string;
+    tools?: string[];
     /** 本地占位气泡（失败/停止提示）：仅用于展示，不随下次请求上送入库 */
     local?: boolean;
 }
@@ -126,10 +132,48 @@ async function streamChat(
     return { conversationId: headerConversationId ? Number(headerConversationId) : null };
 }
 
+function CopyAssistantButton({ text }: { text: string }) {
+    const { t } = useTranslation();
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // ignore
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, borderTop: '1px solid #f3f4f6', paddingTop: 6 }}>
+            <button
+                type='button'
+                onClick={handleCopy}
+                style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '2px 6px',
+                    fontSize: 11,
+                    color: copied ? '#059669' : '#9ca3af',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    cursor: 'pointer',
+                }}
+            >
+                {copied ? `✓ ${t('chat.copied')}` : `📋 ${t('chat.copy')}`}
+            </button>
+        </div>
+    );
+}
+
 export function ChatPage() {
     const params = useParams<{ agentId: string }>();
     const agentId = Number(params.agentId);
     const { token } = useAuth();
+    const router = useIonRouter();
     const { t } = useTranslation();
     const [presentToast] = useIonToast();
 
@@ -165,6 +209,7 @@ export function ChatPage() {
                 setMessages(
                     detail.messages.map((m) => {
                         const textParts: string[] = [];
+                        const tools: string[] = [];
                         let reasoning = '';
                         for (const p of m.parts) {
                             if (p.type === 'text') {
@@ -172,7 +217,10 @@ export function ChatPage() {
                             } else if (p.type === 'reasoning') {
                                 if (p.text) reasoning += p.text;
                             } else if (p.type.startsWith('tool-')) {
-                                textParts.push(`🔧 ${p.type.slice(5)}`);
+                                const toolName = p.type.slice(5);
+                                if (toolName && !tools.includes(toolName)) {
+                                    tools.push(toolName);
+                                }
                             }
                         }
                         return {
@@ -180,6 +228,7 @@ export function ChatPage() {
                             role: m.role === 'assistant' ? 'assistant' : 'user',
                             text: textParts.join('\n'),
                             reasoning: reasoning || undefined,
+                            tools: tools.length > 0 ? tools : undefined,
                         };
                     }),
                 );
@@ -199,6 +248,24 @@ export function ChatPage() {
         setInput('');
         setStatus('idle');
     }, []);
+
+    const handleDeleteConversation = useCallback(
+        async (id: number, e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (token === null) return;
+            try {
+                await api(`/api/conversations/${id}`, token, { method: 'DELETE' });
+                setConversations((prev) => prev.filter((c) => c.id !== id));
+                if (conversationIdRef.current === id) {
+                    startNewConversation();
+                }
+                void presentToast({ message: t('chat.deleteSuccess'), duration: 2000, color: 'success' });
+            } catch (err) {
+                void presentToast({ message: err instanceof Error ? err.message : t('chat.deleteFailed'), duration: 2500, color: 'danger' });
+            }
+        },
+        [token, startNewConversation, presentToast, t],
+    );
 
     // 加载智能体信息 + 默认续接该智能体最近的会话
     useEffect(() => {
@@ -241,7 +308,7 @@ export function ChatPage() {
 
         const userMessage: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text };
         const assistantId = `a-${Date.now()}`;
-        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '', reasoning: '', local: true }]);
+        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '', reasoning: '', tools: [], local: true }]);
         setStatus('streaming');
 
         const controller = new AbortController();
@@ -264,8 +331,12 @@ export function ChatPage() {
                     setMessages((prev) =>
                         prev.map((m) => {
                             if (m.id !== assistantId) return m;
-                            const sep = m.text === '' ? '' : String.fromCharCode(10);
-                            return { ...m, text: m.text + sep + t('chat.callingTool', { tool: toolName }), local: false };
+                            const existing = m.tools ?? [];
+                            return {
+                                ...m,
+                                tools: existing.includes(toolName) ? existing : [...existing, toolName],
+                                local: false,
+                            };
                         }),
                     ),
                 (delta) =>
@@ -284,7 +355,24 @@ export function ChatPage() {
         } catch (e) {
             const aborted = controller.signal.aborted;
             if (!aborted) {
-                void presentToast({ message: e instanceof Error ? e.message : t('chat.sendFailed'), duration: 2500, color: 'danger' });
+                const is402 = (e instanceof ApiError && e.status === 402) || (e instanceof Error && e.message.includes('额度'));
+                if (is402) {
+                    void presentToast({
+                        message: e instanceof Error ? e.message : t('chat.sendFailed'),
+                        duration: 4500,
+                        color: 'warning',
+                        buttons: [
+                            {
+                                text: t('common.membership'),
+                                handler: () => {
+                                    router.push('/membership');
+                                },
+                            },
+                        ],
+                    });
+                } else {
+                    void presentToast({ message: e instanceof Error ? e.message : t('chat.sendFailed'), duration: 2500, color: 'danger' });
+                }
             }
             setMessages((prev) =>
                 prev.map((m) =>
@@ -367,11 +455,41 @@ export function ChatPage() {
                                         fontSize: 14,
                                     }}
                                 >
+                                    {message.tools && message.tools.length > 0 ? (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                                            {message.tools.map((tool, idx) => (
+                                                <span
+                                                    key={idx}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        borderRadius: 9999,
+                                                        border: '1px solid #e5e7eb',
+                                                        background: '#f9fafb',
+                                                        padding: '2px 8px',
+                                                        fontSize: 11,
+                                                        color: '#6b7280',
+                                                    }}
+                                                >
+                                                    🔧 {tool}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : null}
                                     <MobileMessageContent
                                         text={message.text}
                                         reasoning={message.reasoning}
                                         streaming={status === 'streaming' && message.id.startsWith('a-')}
                                     />
+                                    {message.role === 'assistant' && message.local && (message.text.includes('额度') || message.text.includes('402')) ? (
+                                        <div style={{ marginTop: 8 }}>
+                                            <IonButton size='small' fill='outline' color='warning' onClick={() => router.push('/membership')}>
+                                                {t('common.membership')} &rarr;
+                                            </IonButton>
+                                        </div>
+                                    ) : null}
+                                    {!message.local && message.text ? <CopyAssistantButton text={message.text} /> : null}
                                 </div>
                             </div>
                         ),
@@ -409,18 +527,31 @@ export function ChatPage() {
                 <IonContent>
                     <IonList inset>
                         {conversations.map((c) => (
-                            <IonButton
+                            <IonItem
                                 key={c.id}
-                                expand='block'
-                                fill={activeConversationId === c.id ? 'solid' : 'outline'}
-                                style={{ margin: '6px 12px' }}
+                                button
+                                detail={false}
+                                color={activeConversationId === c.id ? 'primary' : undefined}
                                 onClick={() => {
                                     setHistoryVisible(false);
                                     void loadConversation(c.id);
                                 }}
                             >
-                                {c.title || t('chat.newConversation')}
-                            </IonButton>
+                                <IonLabel>
+                                    <h2>{c.title || t('chat.newConversation')}</h2>
+                                    {c.updatedAt ? <p>{new Date(c.updatedAt).toLocaleString()}</p> : null}
+                                </IonLabel>
+                                <IonButton
+                                    slot='end'
+                                    fill='clear'
+                                    color={activeConversationId === c.id ? 'light' : 'medium'}
+                                    size='small'
+                                    onClick={(e) => void handleDeleteConversation(c.id, e)}
+                                    aria-label={t('chat.deleteConversation')}
+                                >
+                                    <IonIcon icon={trashOutline} slot='icon-only' />
+                                </IonButton>
+                            </IonItem>
                         ))}
                         {conversations.length === 0 ? (
                             <p style={{ textAlign: 'center', paddingTop: 40, color: 'var(--ion-color-medium)' }}>{t('chat.noHistory')}</p>

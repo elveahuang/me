@@ -34,7 +34,13 @@
         "streamingUnsupported": "Streaming is not supported in this environment",
         "serverError": "Server returned an error",
         "unparsableStream": "Received unparsable stream data",
-        "connectionInterrupted": "Connection interrupted, the reply may be incomplete"
+        "connectionInterrupted": "Connection interrupted, the reply may be incomplete",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyCode": "Copy code",
+        "deleteConversation": "Delete conversation",
+        "deleteSuccess": "Conversation deleted",
+        "deleteFailed": "Failed to delete conversation"
     },
     "login": {
         "title": "Sign in",
