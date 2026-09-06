@@ -1,6 +1,6 @@
+import { db } from '@/db';
 import { json } from '@/lib/api';
 import { activateMembership } from '@/lib/billing';
-import { db } from '@/db';
 import { WechatPayProvider } from '@/lib/payments/wechat';
 import { orders } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
@@ -38,8 +38,7 @@ export const Route = createFileRoute('/api/pay/notify/wechat')({
 
                     if (result.eventType === 'TRANSACTION.SUCCESS') {
                         const data = result.decryptedData as
-                            | { out_trade_no?: string; transaction_id?: string; amount?: { total?: number; payer_total?: number } }
-                            | undefined;
+                            { out_trade_no?: string; transaction_id?: string; amount?: { total?: number; payer_total?: number } } | undefined;
                         if (data?.out_trade_no) {
                             // 防御纵深：校验订单金额一致。必须用 total（订单金额）而非 payer_total
                             // （用户实付，使用代金券/立减后更小，会误拒合法支付）

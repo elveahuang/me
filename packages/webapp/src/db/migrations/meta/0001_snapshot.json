@@ -1,6 +1,6 @@
 {
-    "id": "dd4462f4-c9dd-4405-b606-368e9e9885bc",
-    "prevId": "00000000-0000-0000-0000-000000000000",
+    "id": "b69f647b-6572-42c4-a9ec-4a0292660899",
+    "prevId": "dd4462f4-c9dd-4405-b606-368e9e9885bc",
     "version": "7",
     "dialect": "postgresql",
     "tables": {
@@ -352,6 +352,26 @@
                     "type": "integer",
                     "primaryKey": false,
                     "notNull": false
+                },
+                "temperature": {
+                    "name": "temperature",
+                    "type": "real",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "default": 0.7
+                },
+                "max_tokens": {
+                    "name": "max_tokens",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false
+                },
+                "max_steps": {
+                    "name": "max_steps",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "default": 6
                 },
                 "enabled": {
                     "name": "enabled",

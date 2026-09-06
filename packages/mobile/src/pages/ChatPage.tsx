@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { MobileMessageContent } from '../components/MobileGenerativeUI';
 import i18n from '../i18n';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -25,6 +26,7 @@ interface ChatMessage {
     id: string;
     role: 'user' | 'assistant';
     text: string;
+    reasoning?: string;
     /** 本地占位气泡（失败/停止提示）：仅用于展示，不随下次请求上送入库 */
     local?: boolean;
 }
@@ -54,6 +56,7 @@ async function streamChat(
     body: object,
     onDelta: (text: string) => void,
     onToolCall: (toolName: string) => void,
+    onReasoning?: (delta: string) => void,
     signal?: AbortSignal,
 ) {
     const res = await fetch(`${API_BASE_URL}/api/chat`, {
@@ -91,6 +94,7 @@ async function streamChat(
             toolName?: string;
         };
         if (chunk.type === 'text-delta' && chunk.delta) onDelta(chunk.delta);
+        if (chunk.type === 'reasoning-delta' && chunk.delta && onReasoning) onReasoning(chunk.delta);
         if (chunk.type === 'tool-input-available' && chunk.toolName) onToolCall(chunk.toolName);
         if (chunk.type === 'finish') finished = true;
         if (chunk.type === 'error') throw new Error(chunk.errorText ?? i18n.t('chat.serverError'));
@@ -159,14 +163,25 @@ export function ChatPage() {
                 conversationIdRef.current = id;
                 setActiveConversationId(id);
                 setMessages(
-                    detail.messages.map((m) => ({
-                        id: m.id,
-                        role: m.role === 'assistant' ? 'assistant' : 'user',
-                        text: m.parts
-                            .map((p) => (p.type === 'text' ? (p.text ?? '') : p.type.startsWith('tool-') ? `🔧 ${p.type.slice(5)}` : ''))
-                            .filter((t) => t !== '')
-                            .join('\n'),
-                    })),
+                    detail.messages.map((m) => {
+                        const textParts: string[] = [];
+                        let reasoning = '';
+                        for (const p of m.parts) {
+                            if (p.type === 'text') {
+                                if (p.text) textParts.push(p.text);
+                            } else if (p.type === 'reasoning') {
+                                if (p.text) reasoning += p.text;
+                            } else if (p.type.startsWith('tool-')) {
+                                textParts.push(`🔧 ${p.type.slice(5)}`);
+                            }
+                        }
+                        return {
+                            id: m.id,
+                            role: m.role === 'assistant' ? 'assistant' : 'user',
+                            text: textParts.join('\n'),
+                            reasoning: reasoning || undefined,
+                        };
+                    }),
                 );
             } catch (e) {
                 void presentToast({ message: e instanceof Error ? e.message : t('chat.loadConversationFailed'), duration: 2500, color: 'danger' });
@@ -226,7 +241,7 @@ export function ChatPage() {
 
         const userMessage: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text };
         const assistantId = `a-${Date.now()}`;
-        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '', local: true }]);
+        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '', reasoning: '', local: true }]);
         setStatus('streaming');
 
         const controller = new AbortController();
@@ -251,6 +266,13 @@ export function ChatPage() {
                             if (m.id !== assistantId) return m;
                             const sep = m.text === '' ? '' : String.fromCharCode(10);
                             return { ...m, text: m.text + sep + t('chat.callingTool', { tool: toolName }), local: false };
+                        }),
+                    ),
+                (delta) =>
+                    setMessages((prev) =>
+                        prev.map((m) => {
+                            if (m.id !== assistantId) return m;
+                            return { ...m, reasoning: (m.reasoning ?? '') + delta, local: false };
                         }),
                     ),
                 controller.signal,
@@ -312,7 +334,9 @@ export function ChatPage() {
                         <p>{t('chat.emptyHint')}</p>
                     </div>
                 ) : null}
-                {status === 'loading' ? <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>{t('chat.loadingConversation')}</p> : null}
+                {status === 'loading' ? (
+                    <p style={{ textAlign: 'center', paddingTop: 96, color: 'var(--ion-color-medium)' }}>{t('chat.loadingConversation')}</p>
+                ) : null}
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {messages.map((message) =>
                         message.role === 'user' ? (
@@ -335,16 +359,19 @@ export function ChatPage() {
                             <div key={message.id} style={{ display: 'flex', justifyContent: 'flex-start' }}>
                                 <div
                                     style={{
-                                        maxWidth: '85%',
+                                        maxWidth: '88%',
                                         background: 'white',
                                         border: '1px solid var(--ion-color-light-shade, #d7d8da)',
                                         borderRadius: '4px 16px 16px 16px',
                                         padding: '10px 14px',
                                         fontSize: 14,
-                                        whiteSpace: 'pre-wrap',
                                     }}
                                 >
-                                    {message.text || '…'}
+                                    <MobileMessageContent
+                                        text={message.text}
+                                        reasoning={message.reasoning}
+                                        streaming={status === 'streaming' && message.id.startsWith('a-')}
+                                    />
                                 </div>
                             </div>
                         ),

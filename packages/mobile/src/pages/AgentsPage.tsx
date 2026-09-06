@@ -82,11 +82,7 @@ export function AgentsPage() {
             </IonHeader>
             <IonContent>
                 <div style={{ padding: '8px 12px 0' }}>
-                    <IonSearchbar
-                        placeholder={t('agents.searchPlaceholder')}
-                        value={search}
-                        onIonChange={(e) => setSearch(e.detail.value ?? '')}
-                    />
+                    <IonSearchbar placeholder={t('agents.searchPlaceholder')} value={search} onIonChange={(e) => setSearch(e.detail.value ?? '')} />
                     <p style={{ margin: '0 4px 4px', fontSize: 13, color: 'var(--ion-color-medium)' }}>
                         {t('agents.greeting', { name: user?.name ?? t('common.friend') })}
                     </p>

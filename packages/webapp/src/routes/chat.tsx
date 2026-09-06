@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useEffect, memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AgentSummary {
@@ -258,7 +258,8 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
         chat.sendMessage({ text });
     };
 
-    const statusText = chat.status === 'submitted' ? t('chat.thinking') : chat.status === 'streaming' ? t('chat.responding') : chat.error ? chat.error.message : null;
+    const statusText =
+        chat.status === 'submitted' ? t('chat.thinking') : chat.status === 'streaming' ? t('chat.responding') : chat.error ? chat.error.message : null;
 
     return (
         <div className='flex h-full flex-col'>
@@ -337,9 +338,36 @@ const MessageBubble = memo(function MessageBubble({ message, streaming }: { mess
         );
     }
 
+    const reasoning = message.parts
+        .filter((p): p is { type: 'reasoning'; text: string } => (p as { type?: string }).type === 'reasoning')
+        .map((p) => p.text)
+        .join('');
+
+    const toolParts = message.parts.filter((p) => (p as { type?: string }).type?.startsWith('tool-'));
+
     return (
         <div className='flex justify-start'>
             <div className='max-w-[85%] rounded-2xl rounded-bl-sm border border-gray-200 bg-white px-4 py-2.5 text-sm'>
+                {reasoning ? (
+                    <details className='mb-3 rounded-xl border border-purple-200 bg-purple-50/60 p-3 text-xs text-purple-900' open={streaming && !text}>
+                        <summary className='cursor-pointer font-medium text-purple-700 select-none'>
+                            💭 思考过程 {streaming && !text ? '（思考中…）' : ''}
+                        </summary>
+                        <div className='mt-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-purple-800 opacity-90'>{reasoning}</div>
+                    </details>
+                ) : null}
+                {toolParts.length > 0 ? (
+                    <div className='mb-2 flex flex-wrap gap-1.5'>
+                        {toolParts.map((tp, i) => (
+                            <span
+                                key={i}
+                                className='inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-500'
+                            >
+                                🔧 {(tp as { type: string }).type.slice(5)}
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
                 <AssistantMarkdown content={text} streaming={streaming} />
             </div>
         </div>

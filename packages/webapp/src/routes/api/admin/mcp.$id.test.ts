@@ -21,7 +21,7 @@ export const Route = createFileRoute('/api/admin/mcp/$id/test')({
                     if (!server) throw new HttpError(404, 'MCP 服务器不存在');
 
                     try {
-                        const tools = await listMcpTools(server);
+                        const tools = await listMcpTools(server, true);
                         return json({ ok: true, toolCount: tools.length, tools });
                     } catch (e) {
                         return json({ ok: false, error: e instanceof Error ? e.message : '连接失败' });

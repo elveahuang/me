@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex, vector } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, real, serial, text, timestamp, uniqueIndex, vector } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // Better Auth core tables (see https://better-auth.com/docs/concepts/database)
@@ -77,6 +77,9 @@ export const agents = pgTable('agents', {
     model: text('model').notNull().default('deepseek:deepseek-chat'),
     // 自定义供应商（ai_providers.id）；为空表示使用内置环境变量型供应商
     providerId: integer('provider_id').references(() => aiProviders.id, { onDelete: 'set null' }),
+    temperature: real('temperature').default(0.7),
+    maxTokens: integer('max_tokens'),
+    maxSteps: integer('max_steps').notNull().default(6),
     enabled: boolean('enabled').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

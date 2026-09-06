@@ -1,6 +1,7 @@
 import { db } from '@/db';
 import { errorResponse, HttpError, json, parseId, readJson, requireAdmin } from '@/lib/api';
 import { corsMiddleware } from '@/lib/cors';
+import { invalidateMcpToolsCache } from '@/lib/mcp';
 import { mcpServers } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { eq } from 'drizzle-orm';
@@ -36,6 +37,7 @@ export const Route = createFileRoute('/api/admin/mcp/$id')({
                         .where(eq(mcpServers.id, id))
                         .returning();
                     if (!server) throw new HttpError(404, 'MCP 服务器不存在');
+                    await invalidateMcpToolsCache(id);
                     return json(server);
                 } catch (e) {
                     return errorResponse(e);
@@ -47,6 +49,7 @@ export const Route = createFileRoute('/api/admin/mcp/$id')({
                     const id = parseId(params.id, 'MCP 服务器 ID');
                     const deleted = await db.delete(mcpServers).where(eq(mcpServers.id, id)).returning({ id: mcpServers.id });
                     if (deleted.length === 0) throw new HttpError(404, 'MCP 服务器不存在');
+                    await invalidateMcpToolsCache(id);
                     return json({ ok: true });
                 } catch (e) {
                     return errorResponse(e);

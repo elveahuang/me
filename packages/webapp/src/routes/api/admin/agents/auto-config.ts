@@ -25,16 +25,14 @@ async function loadOptions() {
         .from(mcpServers)
         .where(eq(mcpServers.enabled, true));
 
-    const models = [
-        ...providerRows.map((p) => ({
-            providerId: p.id,
-            providerName: p.name,
-            model: p.name,
-            // 自定义供应商无法枚举远端模型列表，给一个模型 ID 占位说明
-            note: '自定义供应商：model 填该供应商的模型 ID（如 qwen-max / glm-4 等）',
-            embedding: p.embeddingModel,
-        })),
-    ];
+    const models = providerRows.map((p) => ({
+        providerId: p.id,
+        providerName: p.name,
+        model: p.name,
+        // 自定义供应商无法枚举远端模型列表，给一个模型 ID 占位说明
+        note: '自定义供应商：model 填该供应商的模型 ID（如 qwen-max / glm-4 等）',
+        embedding: p.embeddingModel,
+    }));
     const builtin: { providerId: number | null; providerName: string; model: string }[] = [];
     if (process.env.DEEPSEEK_API_KEY) builtin.push({ providerId: null, providerName: 'DeepSeek（内置）', model: 'deepseek-chat' });
     if (process.env.OPENAI_API_KEY) builtin.push({ providerId: null, providerName: 'OpenAI（内置）', model: 'gpt-4o-mini' });

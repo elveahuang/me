@@ -1,6 +1,6 @@
+import WeChatPay from 'better-wechatpay';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import WeChatPay from 'better-wechatpay';
 import type { CreatePaymentResult, PaymentContext, PaymentProvider } from './types';
 
 /**
@@ -26,10 +26,10 @@ export class WechatPayProvider implements PaymentProvider {
         // publicKey 为 SDK 必填项（缺失时构造即抛错），必须一并检查，避免 isConfigured 误判
         return Boolean(
             process.env.WECHAT_PAY_APP_ID &&
-                process.env.WECHAT_PAY_MCH_ID &&
-                process.env.WECHAT_PAY_API_KEY &&
-                process.env.WECHAT_PAY_PUBLIC_KEY &&
-                this.readPrivateKey(),
+            process.env.WECHAT_PAY_MCH_ID &&
+            process.env.WECHAT_PAY_API_KEY &&
+            process.env.WECHAT_PAY_PUBLIC_KEY &&
+            this.readPrivateKey(),
         );
     }
 
@@ -60,8 +60,7 @@ export class WechatPayProvider implements PaymentProvider {
                     apiKey: process.env.WECHAT_PAY_API_KEY!,
                     privateKey: this.readPrivateKey()!,
                     publicKey: process.env.WECHAT_PAY_PUBLIC_KEY!,
-                    notifyUrl:
-                        process.env.WECHAT_PAY_NOTIFY_URL ?? `${process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'}/api/pay/notify/wechat`,
+                    notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL ?? `${process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'}/api/pay/notify/wechat`,
                 },
             });
         }

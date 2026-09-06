@@ -27,7 +27,7 @@ export async function api<T>(path: string, token: string | null, init?: RequestI
         headers: {
             'content-type': 'application/json',
             ...(token ? { authorization: `Bearer ${token}` } : {}),
-            ...(init?.headers ?? {}),
+            ...init?.headers,
         },
     });
     if (!res.ok) {

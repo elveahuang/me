@@ -20,6 +20,9 @@ const AgentBodySchema = z.object({
         .default('deepseek:deepseek-chat'),
     // 内置供应商（null）或自定义供应商 ID
     providerId: z.number().int().positive().nullable().default(null),
+    temperature: z.number().min(0).max(2).nullable().default(0.7),
+    maxTokens: z.number().int().positive().nullable().optional(),
+    maxSteps: z.number().int().min(1).max(20).default(6),
     enabled: z.boolean().default(true),
     skillIds: z.array(z.number().int().positive()).default([]),
     toolIds: z.array(z.number().int().positive()).default([]),

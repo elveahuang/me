@@ -91,7 +91,9 @@ function AdminPlansPage() {
                                 </td>
                                 <td className='px-4 py-3 text-gray-600'>{plan.chatQuotaPerDay ?? '∞'}</td>
                                 <td className='px-4 py-3 text-gray-600'>¥{(plan.monthlyPriceCents / 100).toFixed(2)}</td>
-                                <td className='px-4 py-3 text-gray-600'>{plan.yearlyPriceCents !== null ? `¥${(plan.yearlyPriceCents / 100).toFixed(2)}` : '—'}</td>
+                                <td className='px-4 py-3 text-gray-600'>
+                                    {plan.yearlyPriceCents !== null ? `¥${(plan.yearlyPriceCents / 100).toFixed(2)}` : '—'}
+                                </td>
                                 <td className='px-4 py-3'>
                                     <span
                                         className={`rounded-full px-2 py-0.5 text-xs ${
@@ -266,12 +268,7 @@ function PlanFormModal({ open, plan, onClose, onSaved }: { open: boolean; plan: 
                     </div>
                     <div>
                         <label className='mb-1 block text-xs font-medium text-gray-500'>排序（越小越靠前）</label>
-                        <input
-                            type='number'
-                            value={form.sortOrder}
-                            onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
-                            className={inputClass}
-                        />
+                        <input type='number' value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} className={inputClass} />
                     </div>
                 </div>
                 <div className='grid grid-cols-2 gap-3'>

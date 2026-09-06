@@ -12,9 +12,9 @@ import {
     IonToolbar,
     useIonToast,
 } from '@ionic/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import type { CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -430,8 +430,7 @@ export function MembershipPage() {
                                 <IonItem key={order.orderNo}>
                                     <IonLabel>
                                         <h2>
-                                            {order.planCode} ·{' '}
-                                            {order.period === 'yearly' ? t('membership.periodYearly') : t('membership.periodMonthly')} · ¥
+                                            {order.planCode} · {order.period === 'yearly' ? t('membership.periodYearly') : t('membership.periodMonthly')} · ¥
                                             {formatYuan(order.amountCents)}
                                         </h2>
                                         <p>{order.orderNo}</p>

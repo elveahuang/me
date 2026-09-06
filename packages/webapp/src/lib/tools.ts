@@ -55,7 +55,7 @@ async function executeHttpTool(config: HttpToolConfig, input: Record<string, unk
     const url = fillTemplate(config.url, input);
     const headers: Record<string, string> = {
         accept: 'application/json, text/plain;q=0.8, */*;q=0.5',
-        ...(config.headers ?? {}),
+        ...config.headers,
     };
     let body: string | undefined;
     if (method !== 'GET' && method !== 'HEAD') {

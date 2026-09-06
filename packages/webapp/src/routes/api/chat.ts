@@ -61,6 +61,26 @@ async function collectAssistantMessage(chunkStream: AsyncIterable<UIMessageChunk
                     if (part && part.type === 'text') part.state = 'done';
                     break;
                 }
+                case 'reasoning-start': {
+                    const part = { type: 'reasoning', text: '', state: 'streaming' } as unknown as UIMessage['parts'][number];
+                    partById.set((chunk as { id: string }).id, part);
+                    parts.push(part);
+                    break;
+                }
+                case 'reasoning-delta': {
+                    const part = partById.get((chunk as { id: string }).id);
+                    if (part && (part as { type: string }).type === 'reasoning') {
+                        (part as { text: string }).text += (chunk as { delta: string }).delta;
+                    }
+                    break;
+                }
+                case 'reasoning-end': {
+                    const part = partById.get((chunk as { id: string }).id);
+                    if (part && (part as { type: string }).type === 'reasoning') {
+                        (part as { state?: string }).state = 'done';
+                    }
+                    break;
+                }
                 case 'tool-input-available': {
                     const part = {
                         type: `tool-${chunk.toolName}`,
@@ -243,20 +263,74 @@ export const Route = createFileRoute('/api/chat')({
                             .orderBy(desc(messagesTable.seq))
                             .limit(MAX_CONTEXT_MESSAGES)
                     ).reverse();
-                    const uiMessages = windowed.map((m) => ({
+
+                    // 确保滑动窗口的开头是一条完整的用户消息，避免被截断的中间工具响应或孤立助手消息破坏上下文
+                    let startIndex = 0;
+                    while (startIndex < windowed.length && windowed[startIndex]?.role !== 'user') {
+                        startIndex++;
+                    }
+                    const trimmedWindow = startIndex < windowed.length ? windowed.slice(startIndex) : windowed;
+
+                    // 对早期历史消息中的工具输出进行按需压缩，保护长对话的 Token 预算
+                    const MAX_HISTORICAL_TOOL_OUTPUT = 800;
+                    const historyLength = trimmedWindow.length;
+                    const optimizedWindow = trimmedWindow.map((m, idx) => {
+                        // 保留最近 2 条消息的原貌，较早的历史进行输出折叠
+                        if (idx >= historyLength - 2) {
+                            return m;
+                        }
+                        const parts = (m.parts as UIMessage['parts']).map((part) => {
+                            if (part && typeof part === 'object' && 'type' in part && typeof part.type === 'string' && part.type.startsWith('tool-')) {
+                                const toolPart = part as { output?: unknown };
+                                if (typeof toolPart.output === 'string' && toolPart.output.length > MAX_HISTORICAL_TOOL_OUTPUT) {
+                                    return {
+                                        ...part,
+                                        output: toolPart.output.slice(0, MAX_HISTORICAL_TOOL_OUTPUT) + '\n...[早期工具调用结果已压缩]',
+                                    };
+                                }
+                            }
+                            return part;
+                        });
+                        return { ...m, parts };
+                    });
+
+                    const uiMessages = optimizedWindow.map((m) => ({
                         id: '',
                         role: m.role as UIMessage['role'],
                         parts: m.parts as UIMessage['parts'],
                     }));
                     const modelMessages = await convertToModelMessages(uiMessages);
 
-                    // 6. RAG 检索：以最后一条用户消息为查询，命中则注入系统提示词
-                    const lastUserText = [...incoming].reverse().find((m) => m.role === 'user');
-                    const queryText = lastUserText?.parts.find((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')?.text;
+                    // 6. RAG 检索：提取当前用户问题，结合上下文代词消解增强检索准确度
+                    const lastUserMsg = [...incoming].reverse().find((m) => m.role === 'user');
+                    const currentQuery =
+                        lastUserMsg?.parts.find((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')?.text?.trim() ?? '';
+
+                    let searchKeyword = currentQuery;
+                    if (currentQuery) {
+                        // 检测是否为超短提问或包含指代代词（如"它怎么配置"、"这个呢"、"为什么"）
+                        const isShortOrAnaphoric = currentQuery.length < 15 || /(它|他|她|这|那|其|上面|前面|上述|这个|那个)/.test(currentQuery);
+
+                        if (isShortOrAnaphoric && trimmedWindow.length > 1) {
+                            // 查找上一轮用户的提问作为上下文补充
+                            const previousUserMsg = [...trimmedWindow]
+                                .slice(0, -1)
+                                .reverse()
+                                .find((m) => m.role === 'user');
+                            const prevText = (previousUserMsg?.parts as UIMessage['parts'] | undefined)
+                                ?.find((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')
+                                ?.text?.trim();
+
+                            if (prevText) {
+                                searchKeyword = `${prevText} ${currentQuery}`;
+                            }
+                        }
+                    }
+
                     let knowledgeContext: string | null = null;
-                    if (queryText?.trim()) {
+                    if (searchKeyword.trim()) {
                         try {
-                            knowledgeContext = await retrieveKnowledge(agent.id, queryText.trim());
+                            knowledgeContext = await retrieveKnowledge(agent.id, searchKeyword.trim());
                         } catch (e) {
                             console.error('[chat] 知识库检索失败（跳过）:', e);
                         }
@@ -274,23 +348,26 @@ export const Route = createFileRoute('/api/chat')({
                                   ...mcpSummary,
                               ].join('\n')
                             : null,
+                        { name: session.user.name, role: session.user.role },
                     );
 
                     const toolSet = buildToolSet(toolRows.map((row) => row.tool));
                     Object.assign(toolSet, mcpToolSet);
 
-                    // 7. 流式生成
+                    // 7. 流式生成（应用温度、最大 Token 与最大步数）
                     const result = streamText({
                         model,
                         system,
                         messages: modelMessages,
                         tools: toolSet,
-                        stopWhen: stepCountIs(6),
+                        temperature: agent.temperature ?? undefined,
+                        maxOutputTokens: agent.maxTokens ?? undefined,
+                        stopWhen: stepCountIs(agent.maxSteps ?? 6),
                         abortSignal: request.signal,
                     });
 
-                    // 8. 服务端自行消费 UI 流：一路转 SSE 给客户端，一路收集助手消息落库
-                    const uiStream = result.toUIMessageStream({ sendReasoning: false });
+                    // 8. 服务端自行消费 UI 流：开启思考过程流式传递，一路转 SSE 给客户端，一路收集助手消息落库
+                    const uiStream = result.toUIMessageStream({ sendReasoning: true });
                     const [clientBranch, collectBranch] = uiStream.tee();
                     void collectAssistantMessage(collectBranch, conv.id).finally(() => {
                         void disposeMcp();

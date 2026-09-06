@@ -18,10 +18,7 @@ export function KonstaDemoPage() {
                 <Navbar title={t('demo.title')} />
                 <BlockTitle>{t('demo.togglesTitle')}</BlockTitle>
                 <List strongIos outlineIos>
-                    <ListItem
-                        title={t('demo.darkMode')}
-                        after={<Toggle component='div' checked={dark} onChange={() => setDark(!dark)} />}
-                    />
+                    <ListItem title={t('demo.darkMode')} after={<Toggle component='div' checked={dark} onChange={() => setDark(!dark)} />} />
                 </List>
                 <BlockTitle>{t('demo.searchTitle')}</BlockTitle>
                 <Searchbar value={search} placeholder={t('demo.searchPlaceholder')} onInput={(e) => setSearch((e.target as HTMLInputElement).value)} />

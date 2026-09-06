@@ -1,7 +1,7 @@
 // i18n 初始化必须在应用渲染前生效（模块副作用）
+import appCss from '@/commons/styles/theme.css?url';
 import '@/i18n';
 import i18n from '@/i18n';
-import appCss from '@/commons/styles/theme.css?url';
 import { queryClient } from '@/lib/query';
 import type { QueryClient } from '@tanstack/react-query';
 import { QueryClientProvider } from '@tanstack/react-query';

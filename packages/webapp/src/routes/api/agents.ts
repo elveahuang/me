@@ -24,6 +24,7 @@ export const Route = createFileRoute('/api/agents')({
                                 emoji: agents.emoji,
                                 description: agents.description,
                                 model: agents.model,
+                                temperature: agents.temperature,
                             })
                             .from(agents)
                             .where(eq(agents.enabled, true))

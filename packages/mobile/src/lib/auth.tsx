@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api, ApiError, getToken, setToken, signInRequest, signUpRequest } from './api';
 import type { SessionUser } from './api';
+import { api, ApiError, getToken, setToken, signInRequest, signUpRequest } from './api';
 
 interface AuthContextValue {
     token: string | null;

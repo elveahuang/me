@@ -78,7 +78,12 @@ interface OrderRow {
 }
 
 const PERIOD_KEYS: Record<string, string> = { monthly: 'pricing.periodMonthly', yearly: 'pricing.periodYearly' };
-const STATUS_KEYS: Record<string, string> = { pending: 'pricing.statusPending', paid: 'pricing.statusPaid', closed: 'pricing.statusClosed', refunded: 'pricing.statusRefunded' };
+const STATUS_KEYS: Record<string, string> = {
+    pending: 'pricing.statusPending',
+    paid: 'pricing.statusPaid',
+    closed: 'pricing.statusClosed',
+    refunded: 'pricing.statusRefunded',
+};
 const PROVIDER_KEYS: Record<string, string> = { wechat: 'pricing.providerWechat', mock: 'pricing.providerMock' };
 
 /** 枚举值 → 文案：命中映射表时走 i18n，否则原样展示原始值 */
@@ -171,9 +176,7 @@ function PricingPage() {
                             <p className='text-sm text-gray-500'>{t('pricing.todayUsage')}</p>
                             <p className='mt-1 text-xl font-bold text-gray-900'>
                                 {membership ? membership.usedToday : '—'}
-                                <span className='text-sm font-normal text-gray-400'>
-                                    / {membership ? (membership.chatQuotaPerDay ?? '∞') : '—'}
-                                </span>
+                                <span className='text-sm font-normal text-gray-400'>/ {membership ? (membership.chatQuotaPerDay ?? '∞') : '—'}</span>
                             </p>
                         </div>
                     </div>
@@ -263,11 +266,7 @@ function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boole
     const isFree = plan.code === 'free';
 
     return (
-        <div
-            className={`flex flex-col rounded-2xl border bg-white p-5 shadow-sm ${
-                current ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200'
-            }`}
-        >
+        <div className={`flex flex-col rounded-2xl border bg-white p-5 shadow-sm ${current ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200'}`}>
             <div className='flex items-center justify-between'>
                 <h3 className='text-base font-bold text-gray-900'>{plan.name}</h3>
                 {current ? <span className='rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600'>{t('pricing.currentPlan')}</span> : null}
@@ -299,13 +298,7 @@ function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boole
                         <Button size='sm' isDisabled={buying} onPress={() => onBuy('monthly')} className='flex-1'>
                             {buying ? t('pricing.ordering') : t('pricing.buyMonthly')}
                         </Button>
-                        <Button
-                            size='sm'
-                            variant='ghost'
-                            isDisabled={buying || !plan.yearlyPriceCents}
-                            onPress={() => onBuy('yearly')}
-                            className='flex-1'
-                        >
+                        <Button size='sm' variant='ghost' isDisabled={buying || !plan.yearlyPriceCents} onPress={() => onBuy('yearly')} className='flex-1'>
                             {t('pricing.buyYearly')}
                         </Button>
                     </>
@@ -315,13 +308,7 @@ function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boole
     );
 }
 
-function PayModal({
-    payModal,
-    onClose,
-}: {
-    payModal: { plan: Plan; period: 'monthly' | 'yearly'; order: CreateOrderResult };
-    onClose: () => void;
-}) {
+function PayModal({ payModal, onClose }: { payModal: { plan: Plan; period: 'monthly' | 'yearly'; order: CreateOrderResult }; onClose: () => void }) {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const { plan, period, order } = payModal;

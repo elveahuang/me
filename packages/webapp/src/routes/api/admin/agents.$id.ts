@@ -21,6 +21,9 @@ const AgentPatchSchema = z.object({
         .regex(/^[a-z0-9._:-]+$/i, '模型 ID 只能包含字母数字与 . _ : -')
         .optional(),
     providerId: z.number().int().positive().nullable().optional(),
+    temperature: z.number().min(0).max(2).nullable().optional(),
+    maxTokens: z.number().int().positive().nullable().optional(),
+    maxSteps: z.number().int().min(1).max(20).optional(),
     enabled: z.boolean().optional(),
     skillIds: z.array(z.number().int().positive()).optional(),
     toolIds: z.array(z.number().int().positive()).optional(),

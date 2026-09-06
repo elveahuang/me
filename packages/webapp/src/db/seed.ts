@@ -1,11 +1,12 @@
-import { randomBytes } from 'node:crypto';
 import { config } from 'dotenv';
+import { randomBytes } from 'node:crypto';
 
 config({ path: ['.env.local', '.env'] });
 
 async function main() {
     const { db } = await import('./index');
-    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, membershipPlans, skills, tools, user } = await import('./schema');
+    const { agents, agentSkills, agentTools, agentKnowledge, knowledgeBases, knowledgeDocuments, membershipPlans, skills, tools, user } =
+        await import('./schema');
     const { auth } = await import('../lib/auth');
     const { ingestDocument } = await import('../lib/rag');
     const { eq } = await import('drizzle-orm');
@@ -131,9 +132,12 @@ async function main() {
             name: '通用助手',
             emoji: '🤖',
             description: '日常问答、写作、翻译样样都行的通用智能体',
-            systemPrompt: '你是一个乐于助人的中文智能助手，回答准确、简洁、有条理。',
+            systemPrompt: '你是一个乐于助人的中文智能助手，回答准确、简洁、有条理。可通过 {{user_name}} 称呼用户。',
             model: 'deepseek:deepseek-chat',
             providerId: null,
+            temperature: 0.7,
+            maxTokens: null,
+            maxSteps: 6,
             enabled: true,
             skillIdx: [0, 1],
             withTimeTool: true,
@@ -142,9 +146,13 @@ async function main() {
             name: '数据看板助手',
             emoji: '📊',
             description: '擅长把数字整理成卡片和指标展示',
-            systemPrompt: '你是一个数据分析助手，擅长把数据整理成清晰的指标卡。收到数据问题时，先给结论再用组件展示关键指标。',
+            systemPrompt:
+                '你是一个专业的数据分析助手，擅长把业务与统计数据整理成清晰的指标卡。收到数据问题时，先给核心结论再利用 json-render 组件呈现关键指标。',
             model: 'deepseek:deepseek-chat',
             providerId: null,
+            temperature: 0.3,
+            maxTokens: null,
+            maxSteps: 6,
             enabled: true,
             skillIdx: [0],
             withTimeTool: false,
@@ -153,9 +161,12 @@ async function main() {
             name: '文案写作助手',
             emoji: '✍️',
             description: '营销文案、标题、社媒帖子创作',
-            systemPrompt: '你是一位资深文案策划，文风灵活，擅长提供多个候选方案并说明适用场景。',
+            systemPrompt: '你是一位资深文案策划，文风生动灵活，擅长提供多个不同风格的候选方案并说明适用场景。',
             model: 'openai:gpt-4o-mini',
             providerId: null,
+            temperature: 0.85,
+            maxTokens: null,
+            maxSteps: 4,
             enabled: true,
             skillIdx: [1],
             withTimeTool: false,
@@ -164,11 +175,12 @@ async function main() {
 
     for (const seed of agentSeeds) {
         const found = await db.select().from(agents).where(eq(agents.name, seed.name));
+        const { skillIdx, withTimeTool, ...values } = seed;
         if (found.length > 0) {
-            console.log(`智能体已存在: ${seed.name}`);
+            await db.update(agents).set(values).where(eq(agents.id, found[0]!.id));
+            console.log(`智能体配置已同步: ${seed.name}`);
             continue;
         }
-        const { skillIdx, withTimeTool, ...values } = seed;
         const created = (await db.insert(agents).values(values).returning())[0];
         if (!created) throw new Error(`创建智能体失败: ${seed.name}`);
         const links = skillIdx

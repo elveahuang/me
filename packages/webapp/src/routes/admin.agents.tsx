@@ -12,6 +12,9 @@ interface AdminAgent {
     systemPrompt: string;
     model: string;
     providerId: number | null;
+    temperature: number | null;
+    maxTokens: number | null;
+    maxSteps: number;
     enabled: boolean;
     skillIds: number[];
     toolIds: number[];
@@ -57,6 +60,9 @@ const EMPTY_FORM: Omit<AdminAgent, 'id'> = {
     systemPrompt: '',
     model: 'deepseek:deepseek-chat',
     providerId: null,
+    temperature: 0.7,
+    maxTokens: null,
+    maxSteps: 6,
     enabled: true,
     skillIds: [],
     toolIds: [],
@@ -139,9 +145,15 @@ function AdminAgentsPage() {
                                     <div className='max-w-md truncate text-xs text-gray-400'>{agent.description}</div>
                                 </td>
                                 <td className='px-4 py-3 font-mono text-xs text-gray-600'>
-                                    {providerLabel(agent.providerId, providers)}
-                                    <span className='mx-1 text-gray-300'>/</span>
-                                    {agent.model}
+                                    <div>
+                                        {providerLabel(agent.providerId, providers)}
+                                        <span className='mx-1 text-gray-300'>/</span>
+                                        {agent.model}
+                                    </div>
+                                    <div className='mt-0.5 font-sans text-[11px] text-gray-400'>
+                                        T={agent.temperature ?? 0.7} · 步数={agent.maxSteps ?? 6}
+                                        {agent.maxTokens ? ` · maxTokens=${agent.maxTokens}` : ''}
+                                    </div>
                                 </td>
                                 <td className='px-4 py-3 text-xs text-gray-600'>
                                     {[
@@ -270,6 +282,9 @@ function AgentFormModal({
             agent
                 ? {
                       ...agent,
+                      temperature: agent.temperature ?? 0.7,
+                      maxTokens: agent.maxTokens ?? null,
+                      maxSteps: agent.maxSteps ?? 6,
                       skillIds: [...agent.skillIds],
                       toolIds: [...agent.toolIds],
                       knowledgeBaseIds: [...agent.knowledgeBaseIds],
@@ -430,14 +445,62 @@ function AgentFormModal({
                         />
                     </Field>
                 </div>
-                <Field label='系统提示词（人设与规则）'>
+                <Field label='系统提示词（人设与规则，支持 {{user_name}}、{{user_role}}、{{current_date}}、{{agent_name}}）'>
                     <textarea
                         value={form.systemPrompt}
                         onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
                         className={`${inputClass} h-28 resize-y font-mono text-xs`}
-                        placeholder='你是一个…类型的助手，回答风格…'
+                        placeholder='你是一个…类型的助手，回答风格…（可使用 {{user_name}} 或 {{current_date}} 动态变量）'
                     />
                 </Field>
+                <details className='rounded-lg border border-gray-200 bg-gray-50/50 p-3 text-xs' open>
+                    <summary className='cursor-pointer font-medium text-gray-700 select-none'>⚙️ 高级模型参数（采样温度、最大 Token、执行步数）</summary>
+                    <div className='mt-3 space-y-3'>
+                        <div className='grid grid-cols-2 gap-3'>
+                            <div>
+                                <label className='mb-1 block font-medium text-gray-600'>采样温度（Temperature: {form.temperature ?? 0.7}）</label>
+                                <input
+                                    type='range'
+                                    min='0'
+                                    max='2'
+                                    step='0.05'
+                                    value={form.temperature ?? 0.7}
+                                    onChange={(e) => setForm({ ...form, temperature: Number(e.target.value) })}
+                                    className='w-full'
+                                />
+                                <span className='text-[11px] text-gray-400'>0 确定严谨，1 适中平衡，2 强发散创造</span>
+                            </div>
+                            <div>
+                                <label className='mb-1 block font-medium text-gray-600'>最大执行步数（Max Steps）</label>
+                                <input
+                                    type='number'
+                                    min='1'
+                                    max='20'
+                                    value={form.maxSteps}
+                                    onChange={(e) => setForm({ ...form, maxSteps: Math.max(1, Math.min(20, Number(e.target.value) || 6)) })}
+                                    className={inputClass}
+                                />
+                                <span className='text-[11px] text-gray-400'>智能体单次对话中工具循环最大上限 (1~20)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className='mb-1 block font-medium text-gray-600'>最大生成 Token（Max Tokens）</label>
+                            <input
+                                type='number'
+                                min='100'
+                                max='64000'
+                                placeholder='留空使用模型默认限制'
+                                value={form.maxTokens ?? ''}
+                                onChange={(e) => {
+                                    const val = e.target.value.trim();
+                                    setForm({ ...form, maxTokens: val ? Number(val) : null });
+                                }}
+                                className={inputClass}
+                            />
+                            <span className='text-[11px] text-gray-400'>限制模型单次生成的最大 Token 数量（选填）</span>
+                        </div>
+                    </div>
+                </details>
                 <Field label='挂载 Skills'>
                     <div className='flex flex-wrap gap-2'>
                         {skills.map((s) => {

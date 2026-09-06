@@ -25,8 +25,7 @@ export const Route = createFileRoute('/api/auth/wechat')({
                     const redirect = target.kind === 'mobile' ? target.url : target.path;
 
                     const state = crypto.randomBytes(16).toString('hex');
-                    const redirectUri =
-                        process.env.WECHAT_OAUTH_REDIRECT_URL ?? `${process.env.BETTER_AUTH_URL ?? url.origin}/api/auth/wechat/callback`;
+                    const redirectUri = process.env.WECHAT_OAUTH_REDIRECT_URL ?? `${process.env.BETTER_AUTH_URL ?? url.origin}/api/auth/wechat/callback`;
                     const authorizeUrl = buildWechatAuthorizeUrl({ redirectUri, state });
 
                     // state 与回跳地址一起放进短时 Cookie，回调时校验防 CSRF
@@ -36,10 +35,13 @@ export const Route = createFileRoute('/api/auth/wechat')({
                 } catch (e) {
                     // 授权入口在浏览器中直接访问，错误以 HTML 呈现而非 JSON
                     const message = e instanceof Error ? e.message : '微信登录不可用';
-                    return new Response(`<meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center;color:#666">${message}</body>`, {
-                        status: e instanceof HttpError ? e.status : 500,
-                        headers: { 'content-type': 'text/html; charset=utf-8' },
-                    });
+                    return new Response(
+                        `<meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center;color:#666">${message}</body>`,
+                        {
+                            status: e instanceof HttpError ? e.status : 500,
+                            headers: { 'content-type': 'text/html; charset=utf-8' },
+                        },
+                    );
                 }
             },
         },

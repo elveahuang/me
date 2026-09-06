@@ -37,10 +37,7 @@ export const Route = createFileRoute('/api/billing/orders/$orderNo')({
                             // 防"已扣款被本地关闭"导致回调无法开通
                             const closed = await provider.closeOrder(order.orderNo);
                             if (closed) {
-                                await db
-                                    .update(orders)
-                                    .set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() })
-                                    .where(eq(orders.id, order.id));
+                                await db.update(orders).set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
                                 status = 'closed';
                             }
                         }

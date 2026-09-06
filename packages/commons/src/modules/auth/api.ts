@@ -1,1 +1,1 @@
-const AUTH_API = '/api/auth/login';
+export const AUTH_API = '/api/auth/login';
