@@ -30,7 +30,8 @@ export const Route = createFileRoute('/api/auth/wechat')({
                     const authorizeUrl = buildWechatAuthorizeUrl({ redirectUri, state });
 
                     // state 与回跳地址一起放进短时 Cookie，回调时校验防 CSRF
-                    const stateCookie = `wechat_oauth_state=${state}|${encodeURIComponent(redirect)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=300`;
+                    const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
+                    const stateCookie = `wechat_oauth_state=${state}|${encodeURIComponent(redirect)}; Path=/; HttpOnly; SameSite=Lax;${secure} Max-Age=300`;
                     return new Response(null, { status: 302, headers: { location: authorizeUrl, 'set-cookie': stateCookie } });
                 } catch (e) {
                     // 授权入口在浏览器中直接访问，错误以 HTML 呈现而非 JSON

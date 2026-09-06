@@ -54,6 +54,14 @@ interface OrderStatusResult {
     status: 'pending' | 'paid' | 'closed' | 'refunded';
     mode: string | null;
     payUrl: string | null;
+    jsapiParams?: {
+        appId: string;
+        timeStamp: string;
+        nonceStr: string;
+        package: string;
+        signType: 'RSA';
+        paySign: string;
+    } | null;
     amountCents: number;
 }
 
@@ -163,7 +171,9 @@ function PricingPage() {
                             <p className='text-sm text-gray-500'>{t('pricing.todayUsage')}</p>
                             <p className='mt-1 text-xl font-bold text-gray-900'>
                                 {membership ? membership.usedToday : '—'}
-                                <span className='text-sm font-normal text-gray-400'> / {membership?.chatQuotaPerDay ?? '∞'}</span>
+                                <span className='text-sm font-normal text-gray-400'>
+                                    / {membership ? (membership.chatQuotaPerDay ?? '∞') : '—'}
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -249,7 +259,8 @@ function PricingPage() {
 
 function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boolean; buying: boolean; onBuy: (period: 'monthly' | 'yearly') => void }) {
     const { t } = useTranslation();
-    const isFree = plan.code === 'free' || plan.monthlyPriceCents === 0;
+    // 统一以 code === 'free' 判定免费档；0 元付费档由后端建单 400 兜底（价格未配置）
+    const isFree = plan.code === 'free';
 
     return (
         <div
@@ -267,7 +278,7 @@ function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boole
                 <span className='text-sm font-normal text-gray-400'>{t('pricing.perMonth')}</span>
             </div>
             <div className='mt-1 text-sm text-gray-500'>
-                {plan.yearlyPriceCents !== null ? (
+                {plan.yearlyPriceCents ? (
                     <>
                         ¥{yuan(plan.yearlyPriceCents)}
                         <span className='text-gray-400'>{t('pricing.perYear')}</span>
@@ -291,7 +302,7 @@ function PlanCard({ plan, current, buying, onBuy }: { plan: Plan; current: boole
                         <Button
                             size='sm'
                             variant='ghost'
-                            isDisabled={buying || plan.yearlyPriceCents === null}
+                            isDisabled={buying || !plan.yearlyPriceCents}
                             onPress={() => onBuy('yearly')}
                             className='flex-1'
                         >
@@ -331,19 +342,30 @@ function PayModal({
 
     const status = latest?.status ?? order.status;
     const mode = latest?.mode ?? order.mode;
+    // JSAPI 拉起参数优先取建单响应；页面刷新后从订单查询接口恢复
+    const jsapiParams = order.jsapiParams ?? latest?.jsapiParams ?? null;
 
     // 微信内 JSAPI 支付：拉起 WeixinJSBridge 收银台（幂等，仅一次）
     useEffect(() => {
         if (mode !== 'jsapi' || jsapiInvokedRef.current) return;
-        const bridge = (window as { WeixinJSBridge?: { invoke: (api: string, params: string, cb: (res: { err_msg?: string }) => void) => void } }).WeixinJSBridge;
-        if (!bridge || !order.jsapiParams) return;
-        jsapiInvokedRef.current = true;
-        bridge.invoke('getBrandWCPayRequest', JSON.stringify(order.jsapiParams), (res) => {
-            if (res?.err_msg && !res.err_msg.includes('ok')) {
-                console.warn('[pay] JSAPI 拉起失败:', res.err_msg);
-            }
-        });
-    }, [mode, order.jsapiParams]);
+        const invoke = () => {
+            const bridge = (window as { WeixinJSBridge?: { invoke: (api: string, params: string, cb: (res: { err_msg?: string }) => void) => void } })
+                .WeixinJSBridge;
+            if (!bridge || !jsapiParams) return;
+            jsapiInvokedRef.current = true;
+            bridge.invoke('getBrandWCPayRequest', JSON.stringify(jsapiParams), (res) => {
+                if (res?.err_msg && !res.err_msg.includes('ok')) {
+                    console.warn('[pay] JSAPI 拉起失败:', res.err_msg);
+                }
+            });
+        };
+        if ((window as { WeixinJSBridge?: unknown }).WeixinJSBridge) {
+            invoke();
+        } else {
+            // 微信浏览器异步注入 bridge：挂载时可能尚未就绪，监听就绪事件后拉起
+            document.addEventListener('WeixinJSBridgeReady', invoke, { once: true });
+        }
+    }, [mode, jsapiParams]);
 
     // 支付成功后刷新会员状态与订单列表（只触发一次）
     useEffect(() => {

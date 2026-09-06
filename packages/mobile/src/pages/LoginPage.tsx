@@ -19,7 +19,7 @@ export function LoginPage() {
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/auth/wechat/status`);
+                const res = await fetch(`${API_BASE_URL}/api/auth/wechat/status?client=mobile`);
                 const data = (await res.json().catch(() => ({}))) as { enabled?: boolean };
                 if (!cancelled) setWechatEnabled(Boolean(data.enabled));
             } catch {

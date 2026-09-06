@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import WeChatPay from 'better-wechatpay';
 import type { CreatePaymentResult, PaymentContext, PaymentProvider } from './types';
 
@@ -8,12 +9,13 @@ import type { CreatePaymentResult, PaymentContext, PaymentProvider } from './typ
  * 凭据通过环境变量注入（见 .env.example）：
  * - WECHAT_PAY_APP_ID / WECHAT_PAY_MCH_ID / WECHAT_PAY_API_KEY
  * - WECHAT_PAY_PRIVATE_KEY（商户私钥 PEM，支持 WECHAT_PAY_PRIVATE_KEY_PATH 指向文件）
- * - WECHAT_PAY_PUBLIC_KEY（微信支付公钥/平台证书 PEM）
- * - WECHAT_PAY_NOTIFY_URL（回调地址，默认 {BETTER_AUTH_URL}/api/pay/notify/wechat）
+ * - WECHAT_PAY_PUBLIC_KEY（微信支付公钥/平台证书 PEM，SDK 必填）
+ * - WECHAT_PAY_NOTIFY_URL（可选，默认 {BETTER_AUTH_URL}/api/pay/notify/wechat）
  *
  * 支付方式路由：
  * - 微信内浏览器 + 有 openid → JSAPI（返回 WeixinJSBridge 拉起参数）
- * - 其他环境 → Native 扫码（返回 code_url，前端渲染二维码）
+ * - 移动端浏览器 → H5（返回跳转链接）
+ * - 桌面浏览器 → Native 扫码（返回 code_url，前端渲染二维码）
  */
 export class WechatPayProvider implements PaymentProvider {
     code = 'wechat';
@@ -21,8 +23,13 @@ export class WechatPayProvider implements PaymentProvider {
     private client: WeChatPay | null = null;
 
     private isReady(): boolean {
+        // publicKey 为 SDK 必填项（缺失时构造即抛错），必须一并检查，避免 isConfigured 误判
         return Boolean(
-            process.env.WECHAT_PAY_APP_ID && process.env.WECHAT_PAY_MCH_ID && process.env.WECHAT_PAY_API_KEY && this.readPrivateKey(),
+            process.env.WECHAT_PAY_APP_ID &&
+                process.env.WECHAT_PAY_MCH_ID &&
+                process.env.WECHAT_PAY_API_KEY &&
+                process.env.WECHAT_PAY_PUBLIC_KEY &&
+                this.readPrivateKey(),
         );
     }
 
@@ -36,7 +43,7 @@ export class WechatPayProvider implements PaymentProvider {
         if (path) {
             try {
                 // 同步读取：密钥文件在服务启动后即固定
-                return require('node:fs').readFileSync(path, 'utf8');
+                return fs.readFileSync(path, 'utf8');
             } catch {
                 return null;
             }
@@ -52,8 +59,9 @@ export class WechatPayProvider implements PaymentProvider {
                     mchId: process.env.WECHAT_PAY_MCH_ID!,
                     apiKey: process.env.WECHAT_PAY_API_KEY!,
                     privateKey: this.readPrivateKey()!,
-                    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY ?? '',
-                    notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL,
+                    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY!,
+                    notifyUrl:
+                        process.env.WECHAT_PAY_NOTIFY_URL ?? `${process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'}/api/pay/notify/wechat`,
                 },
             });
         }
@@ -136,19 +144,23 @@ export class WechatPayProvider implements PaymentProvider {
             const state = result.trade_state ?? 'UNKNOWN';
             if (state === 'SUCCESS') return 'SUCCESS';
             if (state === 'CLOSED' || state === 'REVOKED' || state === 'PAYERROR') return 'CLOSED';
-            if (state === 'NOTPAY' || state === 'USERPAYING') return 'NOTPAY';
+            if (state === 'NOTPAY') return 'NOTPAY';
+            // USERPAYING（用户支付中）返回 UNKNOWN：绝不能按未支付关单，否则"已扣款被本地关闭"导致不开通
             return 'UNKNOWN';
         } catch {
             return null;
         }
     }
 
-    async closeOrder(orderNo: string): Promise<void> {
-        if (!this.isReady()) return;
+    /** 关单；返回 false 表示渠道侧拒绝（常见为用户已支付），调用方此时不应本地置 closed */
+    async closeOrder(orderNo: string): Promise<boolean> {
+        if (!this.isReady()) return false;
         try {
             await this.getClient().native.close(orderNo);
-        } catch {
-            // 微信侧可能已关闭/已支付，忽略关单失败
+            return true;
+        } catch (e) {
+            console.warn('[wechat-pay] 关单失败（可能已支付）:', orderNo, e instanceof Error ? e.message : e);
+            return false;
         }
     }
 }

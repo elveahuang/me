@@ -12,8 +12,12 @@ export class MockPayProvider implements PaymentProvider {
     code = 'mock';
 
     isConfigured(): boolean {
-        const wechatReady = Boolean(process.env.WECHAT_PAY_APP_ID && process.env.WECHAT_PAY_MCH_ID && process.env.WECHAT_PAY_API_KEY);
-        return !wechatReady || process.env.NODE_ENV !== 'production';
+        if (process.env.NODE_ENV === 'production') {
+            // 生产环境安全闸门：仅当显式开启 MOCK_PAY_ENABLED 时才允许 mock 渠道
+            // （例如生产环境尚未配置微信支付时的过渡期），否则一律拒绝，防 0 元开通会员
+            return process.env.MOCK_PAY_ENABLED === 'true';
+        }
+        return true;
     }
 
     async createPayment(_ctx: PaymentContext): Promise<CreatePaymentResult> {
@@ -21,10 +25,12 @@ export class MockPayProvider implements PaymentProvider {
     }
 
     async queryOrder(): Promise<'SUCCESS' | 'NOTPAY' | 'CLOSED' | 'UNKNOWN' | null> {
-        return null;
+        // mock 订单在 mock-pay 前始终概念上"未支付"；超时关单走正常 NOTPAY 分支
+        return 'NOTPAY';
     }
 
-    async closeOrder(): Promise<void> {
+    async closeOrder(): Promise<boolean> {
         // mock 渠道无需关单
+        return true;
     }
 }

@@ -68,7 +68,7 @@ export const Route = createFileRoute('/api/auth/wechat/callback')({
 
                     return new Response(null, {
                         status: 302,
-                        headers: { location: target.path, 'set-cookie': `${sessionCookie(sessionToken)}, ${CLEAR_STATE_COOKIE}` },
+                        headers: { location: target.path, 'set-cookie': `${await sessionCookie(sessionToken)}, ${CLEAR_STATE_COOKIE}` },
                     });
                 } catch (e) {
                     if (e instanceof HttpError) return htmlPage(e.message, e.status, { 'set-cookie': CLEAR_STATE_COOKIE });

@@ -3,6 +3,7 @@ import { errorResponse, HttpError, json, readJson, requireUser } from '@/lib/api
 import { createOrder } from '@/lib/billing';
 import { corsMiddleware } from '@/lib/cors';
 import { getPaymentProvider } from '@/lib/payments';
+import { rateLimit } from '@/lib/rate-limit';
 import { getWechatOpenid } from '@/lib/wechat';
 import { orders } from '@schema';
 import { createFileRoute } from '@tanstack/react-router';
@@ -40,6 +41,13 @@ export const Route = createFileRoute('/api/billing/orders')({
             POST: async ({ request }: RouteParams) => {
                 try {
                     const session = await requireUser(request);
+
+                    // 限流：每用户每分钟最多 10 次下单，防刷 pending 订单
+                    const limited = rateLimit(`orders:${session.user.id}`, 10, 60_000);
+                    if (!limited.ok) {
+                        throw new HttpError(429, `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试`);
+                    }
+
                     const parsed = CreateOrderSchema.safeParse(await readJson<unknown>(request));
                     if (!parsed.success) throw new HttpError(400, `参数错误: ${parsed.error.issues[0]?.message ?? ''}`);
                     const { planId, period } = parsed.data;
@@ -58,13 +66,14 @@ export const Route = createFileRoute('/api/billing/orders')({
                         amountCents: order.amountCents,
                         userAgent: request.headers.get('user-agent') ?? '',
                         openid: openid ?? undefined,
-                        clientIp: request.headers.get('x-forwarded-for') ?? undefined,
+                        // H5 支付必填；代理场景取第一个 IP（多级 x-forwarded-for 为逗号分隔）
+                        clientIp: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined,
                     });
 
-                    // 保存支付引导信息，轮询/重渲染时无需重复下单
+                    // 保存支付引导信息（含 JSAPI 拉起参数，页面刷新后仍可恢复），轮询/重渲染时无需重复下单
                     await db
                         .update(orders)
-                        .set({ payInfo: { mode: payment.mode, payUrl: payment.payUrl ?? null }, updatedAt: new Date() })
+                        .set({ payInfo: { mode: payment.mode, payUrl: payment.payUrl ?? null, jsapiParams: payment.jsapiParams ?? null }, updatedAt: new Date() })
                         .where(eq(orders.id, order.id));
 
                     return json(

@@ -26,21 +26,31 @@ export const Route = createFileRoute('/api/billing/orders/$orderNo')({
                     let status = order.status;
                     if (status === 'pending') {
                         const provider = getPaymentProvider(order.provider);
+                        const expired = Date.now() - new Date(order.createdAt).getTime() > ORDER_TTL_MS;
                         // 主动查一次渠道（Native 扫码场景用户可能已支付而回调未达）
                         const remote = await provider.queryOrder(order.orderNo);
                         if (remote === 'SUCCESS') {
                             const paid = await activateMembership(order.orderNo);
                             status = paid.status;
-                        } else if ((remote === 'NOTPAY' || remote === 'CLOSED') && Date.now() - new Date(order.createdAt).getTime() > ORDER_TTL_MS) {
-                            // 仅在渠道明确未支付时才超时关单；查询失败（null/UNKNOWN）跳过，
-                            // 避免用户已支付却被本地关单、回调到达后无法开通
-                            await provider.closeOrder(order.orderNo);
-                            await db.update(orders).set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
-                            status = 'closed';
+                        } else if (expired && (remote === 'NOTPAY' || remote === 'CLOSED')) {
+                            // 仅在渠道明确未支付/已关闭时超时关单；UNKNOWN（如用户支付中、查询异常）不关单，
+                            // 防"已扣款被本地关闭"导致回调无法开通
+                            const closed = await provider.closeOrder(order.orderNo);
+                            if (closed) {
+                                await db
+                                    .update(orders)
+                                    .set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() })
+                                    .where(eq(orders.id, order.id));
+                                status = 'closed';
+                            }
                         }
                     }
 
-                    const payInfo = (order.payInfo ?? {}) as { mode?: string; payUrl?: string | null };
+                    const payInfo = (order.payInfo ?? {}) as {
+                        mode?: string;
+                        payUrl?: string | null;
+                        jsapiParams?: Record<string, string> | null;
+                    };
                     return json({
                         orderNo: order.orderNo,
                         status,
@@ -50,6 +60,7 @@ export const Route = createFileRoute('/api/billing/orders/$orderNo')({
                         amountCents: order.amountCents,
                         mode: payInfo.mode ?? null,
                         payUrl: payInfo.payUrl ?? null,
+                        jsapiParams: payInfo.jsapiParams ?? null,
                         paidAt: order.paidAt,
                         createdAt: order.createdAt,
                     });

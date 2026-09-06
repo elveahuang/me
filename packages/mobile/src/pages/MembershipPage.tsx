@@ -12,8 +12,9 @@ import {
     IonToolbar,
     useIonToast,
 } from '@ionic/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -51,10 +52,21 @@ interface CreateOrderResult {
     status: string;
     mode: 'mock' | 'qrcode' | 'jsapi' | 'redirect';
     payUrl?: string | null;
+    jsapiParams?: {
+        appId: string;
+        timeStamp: string;
+        nonceStr: string;
+        package: string;
+        signType: 'RSA';
+        paySign: string;
+    };
     amountCents: number;
     planCode: string;
     period: string;
 }
+
+/** H5 跳转支付后整页导航会丢失 React state；用 sessionStorage 保存待支付订单，返回本页时恢复轮询 */
+const PENDING_ORDER_KEY = 'membership.payingOrder';
 
 const ORDER_STATUS_COLOR: Record<string, string> = {
     pending: 'var(--ion-color-warning-shade, #c48400)',
@@ -102,7 +114,19 @@ export function MembershipPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
-    const [payingOrder, setPayingOrder] = useState<CreateOrderResult | null>(null);
+    const [payingOrder, setPayingOrderState] = useState<CreateOrderResult | null>(null);
+    const jsapiInvokedRef = useRef(false);
+
+    /** 更新待支付订单并同步到 sessionStorage（H5 跳转返回后恢复轮询） */
+    const setPayingOrder = useCallback((order: CreateOrderResult | null) => {
+        setPayingOrderState(order);
+        try {
+            if (order) sessionStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(order));
+            else sessionStorage.removeItem(PENDING_ORDER_KEY);
+        } catch {
+            // sessionStorage 不可用时静默（仅影响跳转返回后的轮询恢复）
+        }
+    }, []);
 
     const refreshMembership = useCallback(async () => {
         if (token === null) return;
@@ -128,8 +152,18 @@ export function MembershipPage() {
         void refreshOrders();
     }, [refreshMembership, refreshOrders]);
 
-    // 首次加载：套餐 + 会员状态 + 我的订单
+    // 首次加载：套餐 + 会员状态 + 我的订单；并恢复 H5 跳转前的待支付订单（继续轮询）
     useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem(PENDING_ORDER_KEY);
+            if (saved) {
+                const restored = JSON.parse(saved) as CreateOrderResult;
+                if (restored?.orderNo && restored.status === 'pending') setPayingOrderState(restored);
+                else sessionStorage.removeItem(PENDING_ORDER_KEY);
+            }
+        } catch {
+            sessionStorage.removeItem(PENDING_ORDER_KEY);
+        }
         if (token === null) return;
         (async () => {
             try {
@@ -147,7 +181,29 @@ export function MembershipPage() {
                 setLoading(false);
             }
         })();
-    }, [token, t]);
+    }, [token, t, setPayingOrderState]);
+
+    // JSAPI（微信内公众号支付）：拉起 WeixinJSBridge 收银台（幂等，仅一次）
+    useEffect(() => {
+        if (payingOrder?.mode !== 'jsapi' || jsapiInvokedRef.current) return;
+        const invoke = () => {
+            const bridge = (window as { WeixinJSBridge?: { invoke: (api: string, params: string, cb: (res: { err_msg?: string }) => void) => void } })
+                .WeixinJSBridge;
+            if (!bridge || !payingOrder.jsapiParams) return;
+            jsapiInvokedRef.current = true;
+            bridge.invoke('getBrandWCPayRequest', JSON.stringify(payingOrder.jsapiParams), (res) => {
+                if (res?.err_msg && !res.err_msg.includes('ok')) {
+                    console.warn('[pay] JSAPI 拉起失败:', res.err_msg);
+                }
+            });
+        };
+        if ((window as { WeixinJSBridge?: unknown }).WeixinJSBridge) {
+            invoke();
+        } else {
+            // 微信浏览器异步注入 bridge：就绪事件触发后拉起
+            document.addEventListener('WeixinJSBridgeReady', invoke, { once: true });
+        }
+    }, [payingOrder]);
 
     // 扫码/微信内/H5 跳转支付：每 2 秒轮询订单状态，离开页面时 cleanup 清理
     useEffect(() => {
@@ -283,9 +339,13 @@ export function MembershipPage() {
                                               : t('membership.jsapiPayTitle')}
                                     </div>
                                     {payingOrder.mode === 'qrcode' ? (
-                                        <p style={{ margin: '0 0 6px', fontSize: 13, wordBreak: 'break-all', color: 'var(--ion-color-medium)' }}>
-                                            {payingOrder.payUrl || t('membership.noPayUrl')}
-                                        </p>
+                                        payingOrder.payUrl ? (
+                                            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0', background: 'white', borderRadius: 8 }}>
+                                                <QRCodeSVG value={payingOrder.payUrl} size={160} />
+                                            </div>
+                                        ) : (
+                                            <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ion-color-danger)' }}>{t('membership.noPayUrl')}</p>
+                                        )
                                     ) : payingOrder.mode === 'redirect' ? (
                                         <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ion-color-medium)' }}>{t('membership.redirectPayHint')}</p>
                                     ) : (
@@ -345,7 +405,7 @@ export function MembershipPage() {
                                                     <IonButton
                                                         size='small'
                                                         fill='outline'
-                                                        disabled={creating || plan.yearlyPriceCents === null}
+                                                        disabled={creating || !plan.yearlyPriceCents}
                                                         onClick={() => void handleBuy(plan, 'yearly')}
                                                     >
                                                         {t('membership.buyYearly')}

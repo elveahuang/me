@@ -38,14 +38,15 @@ export const Route = createFileRoute('/api/pay/notify/wechat')({
 
                     if (result.eventType === 'TRANSACTION.SUCCESS') {
                         const data = result.decryptedData as
-                            | { out_trade_no?: string; transaction_id?: string; amount?: { payer_total?: number } }
+                            | { out_trade_no?: string; transaction_id?: string; amount?: { total?: number; payer_total?: number } }
                             | undefined;
                         if (data?.out_trade_no) {
-                            // 防御纵深：回调金额与订单不一致时拒绝开通
-                            if (typeof data.amount?.payer_total === 'number') {
+                            // 防御纵深：校验订单金额一致。必须用 total（订单金额）而非 payer_total
+                            // （用户实付，使用代金券/立减后更小，会误拒合法支付）
+                            if (typeof data.amount?.total === 'number') {
                                 const [order] = await db.select({ amountCents: orders.amountCents }).from(orders).where(eq(orders.orderNo, data.out_trade_no));
-                                if (order && order.amountCents !== data.amount.payer_total) {
-                                    console.error('[wechat-pay] 回调金额不一致:', data.out_trade_no, data.amount.payer_total, '!=', order.amountCents);
+                                if (order && order.amountCents !== data.amount.total) {
+                                    console.error('[wechat-pay] 回调金额不一致:', data.out_trade_no, data.amount.total, '!=', order.amountCents);
                                     return json({ code: 'FAIL', message: '金额不一致' }, 500);
                                 }
                             }

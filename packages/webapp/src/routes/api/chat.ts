@@ -123,6 +123,9 @@ export const Route = createFileRoute('/api/chat')({
         middleware: [corsMiddleware],
         handlers: {
             POST: async ({ request }) => {
+                // MCP 连接建立后到流接管清理（collectAssistantMessage 的 finally）之间如有异常，
+                // 必须在外层 catch 释放连接（stdio 模式是子进程，泄漏会累积；dispose 可安全重复调用）
+                let disposeMcpRef: (() => Promise<void>) | null = null;
                 try {
                     const session = await requireUser(request);
 
@@ -134,9 +137,6 @@ export const Route = createFileRoute('/api/chat')({
                             { status: 429, headers: { 'retry-after': String(limited.retryAfterSec), ...corsResponseHeaders() } },
                         );
                     }
-
-                    // 会员配额：原子检查并消耗一次当日额度（超出抛 402，提示升级）
-                    await consumeChatQuota(session.user.id);
 
                     const body = await readJson<unknown>(request);
                     const parsed = ChatBodySchema.safeParse(body);
@@ -151,6 +151,10 @@ export const Route = createFileRoute('/api/chat')({
                         .from(agents)
                         .where(and(eq(agents.id, agentId), eq(agents.enabled, true)));
                     if (!agent) throw new HttpError(404, '智能体不存在或未启用');
+
+                    // 会员配额：请求校验通过、确定要发起生成时才原子消耗一次当日额度
+                    // （放在 MCP 建连之前：402 路径不创建任何需要清理的资源）
+                    await consumeChatQuota(session.user.id);
 
                     // 2. 模型解析（内置供应商按模型校验 key；自定义供应商读库）
                     let model;
@@ -184,6 +188,7 @@ export const Route = createFileRoute('/api/chat')({
                         .innerJoin(mcpServers, eq(agentMcpServers.mcpServerId, mcpServers.id))
                         .where(and(eq(agentMcpServers.agentId, agent.id), eq(mcpServers.enabled, true)));
                     const { toolSet: mcpToolSet, summary: mcpSummary, dispose: disposeMcp } = await buildMcpToolSets(mcpServerRows.map((row) => row.server));
+                    disposeMcpRef = disposeMcp;
 
                     // 3. 解析（或创建）会话，只能聊自己的会话
                     let conversation = conversationId
@@ -303,6 +308,7 @@ export const Route = createFileRoute('/api/chat')({
                     });
                     return response;
                 } catch (e) {
+                    if (disposeMcpRef) await disposeMcpRef();
                     return errorResponse(e);
                 }
             },

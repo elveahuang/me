@@ -138,9 +138,13 @@ function ChatPage() {
                                             aria-label={t('chat.deleteConversation')}
                                             className='hidden shrink-0 text-gray-400 group-hover:block hover:text-red-500'
                                             onClick={async () => {
-                                                await api(`/api/conversations/${c.id}`, { method: 'DELETE' });
-                                                if (activeConversationId === c.id) selectConversation(null);
-                                                await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                                                try {
+                                                    await api(`/api/conversations/${c.id}`, { method: 'DELETE' });
+                                                    if (activeConversationId === c.id) selectConversation(null);
+                                                    await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                                                } catch (e) {
+                                                    alert(e instanceof Error ? e.message : t('chat.deleteFailed'));
+                                                }
                                             }}
                                         >
                                             ✕
@@ -204,10 +208,16 @@ function ChatView({ agent, conversationId, onFirstMessageCreated }: ChatViewProp
                         createdRef.current = Number(headerId);
                         onFirstMessageCreated(Number(headerId));
                     }
+                    if (!res.ok) {
+                        // 服务端错误统一 { error } 结构（如 402 配额用尽）；直接展示文本会被
+                        // AI SDK 包装成整个 JSON 字符串，这里解出来抛纯文本
+                        const data = (await res.json().catch(() => ({}))) as { error?: string };
+                        throw new Error(data.error ?? t('chat.errorFallback', { status: res.status }));
+                    }
                     return res;
                 },
             }),
-        [agent.id],
+        [agent.id, t],
     );
 
     const initialMessages = useMemo<UIMessage[]>(

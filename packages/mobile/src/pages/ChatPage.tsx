@@ -25,6 +25,8 @@ interface ChatMessage {
     id: string;
     role: 'user' | 'assistant';
     text: string;
+    /** 本地占位气泡（失败/停止提示）：仅用于展示，不随下次请求上送入库 */
+    local?: boolean;
 }
 
 interface Agent {
@@ -224,7 +226,7 @@ export function ChatPage() {
 
         const userMessage: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text };
         const assistantId = `a-${Date.now()}`;
-        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '' }]);
+        setMessages((prev) => [...prev, userMessage, { id: assistantId, role: 'assistant', text: '', local: true }]);
         setStatus('streaming');
 
         const controller = new AbortController();
@@ -237,17 +239,18 @@ export function ChatPage() {
                     agentId,
                     conversationId: conversationIdRef.current ?? undefined,
                     messages: [
-                        ...messages.map((m) => ({ id: m.id, role: m.role, parts: [{ type: 'text', text: m.text }] })),
+                        // 本地占位气泡（错误提示等）仅作展示，不上送入库
+                        ...messages.filter((m) => !m.local).map((m) => ({ id: m.id, role: m.role, parts: [{ type: 'text', text: m.text }] })),
                         { id: userMessage.id, role: 'user', parts: [{ type: 'text', text }] },
                     ],
                 },
-                (delta) => setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta } : m))),
+                (delta) => setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + delta, local: false } : m))),
                 (toolName) =>
                     setMessages((prev) =>
                         prev.map((m) => {
                             if (m.id !== assistantId) return m;
                             const sep = m.text === '' ? '' : String.fromCharCode(10);
-                            return { ...m, text: m.text + sep + t('chat.callingTool', { tool: toolName }) };
+                            return { ...m, text: m.text + sep + t('chat.callingTool', { tool: toolName }), local: false };
                         }),
                     ),
                 controller.signal,

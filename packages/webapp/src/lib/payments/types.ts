@@ -53,8 +53,8 @@ export interface PaymentProvider {
     isConfigured(): boolean;
     /** 创建支付 */
     createPayment(ctx: PaymentContext): Promise<CreatePaymentResult>;
-    /** 主动查询渠道订单状态（返回 null 表示渠道不可用） */
+    /** 主动查询渠道订单状态（返回 null 表示渠道不可用/查询失败，不可据此关单） */
     queryOrder(orderNo: string): Promise<'SUCCESS' | 'NOTPAY' | 'CLOSED' | 'UNKNOWN' | null>;
-    /** 关闭未支付订单 */
-    closeOrder(orderNo: string): Promise<void>;
+    /** 关闭未支付订单；返回 false 表示渠道侧拒绝（常见为用户已支付），调用方不应本地关单 */
+    closeOrder(orderNo: string): Promise<boolean>;
 }

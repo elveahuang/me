@@ -1,4 +1,5 @@
 import { db } from '@/db';
+import { auth } from '@/lib/auth';
 import { account, session, user } from '@schema';
 import { and, eq } from 'drizzle-orm';
 import crypto from 'node:crypto';
@@ -22,7 +23,7 @@ import crypto from 'node:crypto';
 const WECHAT_AUTHORIZE_URL = 'https://open.weixin.qq.com/connect/oauth2/authorize';
 const WECHAT_TOKEN_URL = 'https://api.weixin.qq.com/sns/oauth2/access_token';
 const WECHAT_USERINFO_URL = 'https://api.weixin.qq.com/sns/userinfo';
-const SESSION_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60; // 与 better-auth 默认 session 有效期一致（604800s）
 
 export function isWechatOAuthConfigured(): boolean {
     return Boolean(process.env.WECHAT_OAUTH_APP_ID && process.env.WECHAT_OAUTH_APP_SECRET);
@@ -141,7 +142,10 @@ export async function upsertWechatUser(openid: string, profile: { nickname?: str
     });
 }
 
-/** 创建 better-auth 会话（直接写 session 表；webapp 侧以 Cookie 下发，移动端以 Bearer 使用） */
+/**
+ * 创建 better-auth 会话（直接写 session 表；webapp 侧以 Cookie 下发，移动端以 Bearer 使用）。
+ * 过期时间与 better-auth 默认 session 有效期（7 天）保持一致。
+ */
 export async function createWechatSession(params: { userId: string; userAgent?: string; ip?: string }): Promise<{ token: string; expiresAt: Date }> {
     const token = crypto.randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
@@ -156,10 +160,17 @@ export async function createWechatSession(params: { userId: string; userAgent?: 
     return { token, expiresAt };
 }
 
-/** 会话 Cookie（better-auth 默认 cookie 名；SameSite=Lax 兜底 CSRF） */
-export function sessionCookie(token: string, maxAgeSec = SESSION_MAX_AGE_SEC): string {
-    const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
-    return `better-auth.session_token=${token}; Path=/; HttpOnly; SameSite=Lax;${secure} Max-Age=${maxAgeSec}`;
+/**
+ * 会话 Cookie。better-auth 1.7 读取会话 Cookie 时校验 HMAC-SHA256 签名
+ * （格式 `token.<base64签名>`，URL 编码后写入；名称在生产 https 下带 `__Secure-` 前缀），
+ * 裸 token 会被 getSignedCookie 拒绝，因此这里复刻其签名算法。
+ * secret 取 better-auth 实际生效的 secret（含环境变量回退逻辑），避免两处配置漂移。
+ */
+export async function sessionCookie(token: string): Promise<string> {
+    const ctx = await auth.$context;
+    const signature = crypto.createHmac('sha256', ctx.secret).update(token).digest('base64');
+    const value = encodeURIComponent(`${token}.${signature}`);
+    return `${ctx.authCookies.sessionToken.name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`;
 }
 
 /** 查询用户绑定的微信 openid（JSAPI 支付需要） */

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api, getToken, setToken, signInRequest, signUpRequest } from './api';
+import { api, ApiError, getToken, setToken, signInRequest, signUpRequest } from './api';
 import type { SessionUser } from './api';
 
 interface AuthContextValue {
@@ -32,8 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setToken(hashToken);
                     setTokenState(hashToken);
                     setUser(me.user);
-                } catch {
-                    setToken(null);
+                } catch (e) {
+                    // 仅 token 被拒（401/403）时清除；网络抖动不清除，避免误伤原有登录态
+                    if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setToken(null);
                 }
                 setLoading(false);
                 return;
@@ -45,8 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const me = await api<{ user: SessionUser }>('/api/me', stored);
                     setTokenState(stored);
                     setUser(me.user);
-                } catch {
-                    setToken(null);
+                } catch (e) {
+                    if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setToken(null);
                 }
             }
             setLoading(false);

@@ -40,7 +40,9 @@ export const Route = createFileRoute('/api/admin/plans')({
                     if (!parsed.success) throw new HttpError(400, `参数错误: ${parsed.error.issues[0]?.message ?? ''}`);
                     const [existing] = await db.select().from(membershipPlans).where(eq(membershipPlans.code, parsed.data.code));
                     if (existing) throw new HttpError(400, '套餐编码已存在');
-                    const [created] = await db.insert(membershipPlans).values(parsed.data).returning();
+                    // onConflictDoNothing 兜底并发重码（check-then-insert 竞态时 unique 约束触发 500 → 改为 400）
+                    const [created] = await db.insert(membershipPlans).values(parsed.data).onConflictDoNothing({ target: membershipPlans.code }).returning();
+                    if (!created) throw new HttpError(400, '套餐编码已存在');
                     return json(created, 201);
                 } catch (e) {
                     return errorResponse(e);

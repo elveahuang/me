@@ -176,7 +176,8 @@ export async function createOrder(params: {
     if (plan.code === 'free') throw new HttpError(400, '免费套餐无需购买');
 
     const amountCents = params.period === 'yearly' ? plan.yearlyPriceCents : plan.monthlyPriceCents;
-    if (amountCents === null || amountCents <= 0) throw new HttpError(400, '该套餐不支持所选周期');
+    if (amountCents === null) throw new HttpError(400, '该套餐不支持所选周期');
+    if (amountCents <= 0) throw new HttpError(400, '该套餐价格未配置，请联系管理员');
 
     const [order] = await db
         .insert(orders)
@@ -221,7 +222,11 @@ export async function activateMembership(orderNo: string, providerTradeNo?: stri
 
     const now = new Date();
     const updated = await db.transaction(async (tx) => {
-        // 当前会员（含并发中其他事务刚开通的）在事务内读取，保证续期基准一致
+        // 用户级事务锁：READ COMMITTED 下并发激活两个不同订单时，双方都能提交但续期基准
+        // 会互相看不到（导致两段会员期重叠），先拿 advisory lock 串行化同一用户的开通
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${order.userId}, 0))`);
+
+        // 当前会员在锁内读取，保证续期基准一致
         const [current] = await tx
             .select()
             .from(userMemberships)

@@ -109,5 +109,7 @@
     "admin.nav.plans": "💳 Plans",
     "admin.nav.orders": "🧾 Orders",
     "admin.nav.users": "👥 Users",
-    "login.wechat": "Continue with WeChat"
+    "login.wechat": "Continue with WeChat",
+    "chat.deleteFailed": "Delete failed",
+    "chat.errorFallback": "Request failed ({{status}})"
 }
