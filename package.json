@@ -13,6 +13,7 @@
         "webapp:db:generate": "pnpm run --filter @repo/webapp db:generate",
         "webapp:db:migrate": "pnpm run --filter @repo/webapp db:migrate",
         "webapp:db:seed": "pnpm run --filter @repo/webapp db:seed",
+        "webapp:init": "pnpm run webapp:db:migrate && pnpm run webapp:db:seed",
         "webapp:build": "pnpm run --filter @repo/webapp build",
         "webapp:build:dev": "pnpm run --filter @repo/webapp build",
         "webapp:build:pro": "pnpm run --filter @repo/webapp build",

@@ -39,6 +39,10 @@ const config = [
             'react/no-children-prop': 'off',
             'react/react-in-jsx-scope': 'off',
             'react/jsx-uses-react': 'off',
+            'react/display-name': 'off',
+            'react/no-direct-mutation-state': 'off',
+            'react/no-render-return-value': 'off',
+            'react/no-string-refs': 'off',
         },
     },
 ];

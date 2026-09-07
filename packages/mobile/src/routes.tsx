@@ -1,4 +1,5 @@
 import { IonRouterOutlet } from '@ionic/react';
+import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { AgentsPage } from './pages/AgentsPage';
