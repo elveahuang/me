@@ -8,1371 +8,1331 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as ChatRouteImport } from './routes/chat'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as PricingRouteImport } from './routes/pricing'
-import { Route as RegisterRouteImport } from './routes/register'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AdminAgentsRouteImport } from './routes/admin.agents'
-import { Route as AdminKnowledgeRouteImport } from './routes/admin.knowledge'
-import { Route as AdminMcpRouteImport } from './routes/admin.mcp'
-import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
-import { Route as AdminPlansRouteImport } from './routes/admin.plans'
-import { Route as AdminProvidersRouteImport } from './routes/admin.providers'
-import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
-import { Route as AdminToolsRouteImport } from './routes/admin.tools'
-import { Route as AdminUsersRouteImport } from './routes/admin.users'
-import { Route as ApiAgentsRouteImport } from './routes/api/agents'
-import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiConversationsRouteImport } from './routes/api/conversations'
-import { Route as ApiMeRouteImport } from './routes/api/me'
-import { Route as ApiPlansRouteImport } from './routes/api/plans'
-import { Route as AdminKnowledgeIdRouteImport } from './routes/admin.knowledge.$id'
-import { Route as ApiAdminAgentsRouteImport } from './routes/api/admin/agents'
-import { Route as ApiAdminBuiltinProvidersRouteImport } from './routes/api/admin/builtin-providers'
-import { Route as ApiAdminKnowledgeRouteImport } from './routes/api/admin/knowledge'
-import { Route as ApiAdminMcpRouteImport } from './routes/api/admin/mcp'
-import { Route as ApiAdminOrdersRouteImport } from './routes/api/admin/orders'
-import { Route as ApiAdminPlansRouteImport } from './routes/api/admin/plans'
-import { Route as ApiAdminProvidersRouteImport } from './routes/api/admin/providers'
-import { Route as ApiAdminSkillsRouteImport } from './routes/api/admin/skills'
-import { Route as ApiAdminStatsRouteImport } from './routes/api/admin/stats'
-import { Route as ApiAdminToolsRouteImport } from './routes/api/admin/tools'
-import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiAuthWechatRouteImport } from './routes/api/auth/wechat'
-import { Route as ApiBillingMembershipRouteImport } from './routes/api/billing/membership'
-import { Route as ApiBillingOrdersRouteImport } from './routes/api/billing/orders'
-import { Route as ApiConversationsIdRouteImport } from './routes/api/conversations.$id'
-import { Route as ApiAdminAgentsIdRouteImport } from './routes/api/admin/agents.$id'
-import { Route as ApiAdminAgentsAutoConfigRouteImport } from './routes/api/admin/agents/auto-config'
-import { Route as ApiAdminKnowledgeIdRouteImport } from './routes/api/admin/knowledge.$id'
-import { Route as ApiAdminMcpIdRouteImport } from './routes/api/admin/mcp.$id'
-import { Route as ApiAdminPlansIdRouteImport } from './routes/api/admin/plans.$id'
-import { Route as ApiAdminProvidersIdRouteImport } from './routes/api/admin/providers.$id'
-import { Route as ApiAdminSkillsIdRouteImport } from './routes/api/admin/skills.$id'
-import { Route as ApiAdminToolsIdRouteImport } from './routes/api/admin/tools.$id'
-import { Route as ApiAdminUsersIdRouteImport } from './routes/api/admin/users.$id'
-import { Route as ApiAuthWechatCallbackRouteImport } from './routes/api/auth/wechat/callback'
-import { Route as ApiAuthWechatStatusRouteImport } from './routes/api/auth/wechat/status'
-import { Route as ApiBillingOrdersOrderNoRouteImport } from './routes/api/billing/orders.$orderNo'
-import { Route as ApiPayNotifyWechatRouteImport } from './routes/api/pay/notify/wechat'
-import { Route as ApiAdminKnowledgeIdDocumentsRouteImport } from './routes/api/admin/knowledge.$id.documents'
-import { Route as ApiAdminMcpIdTestRouteImport } from './routes/api/admin/mcp.$id.test'
-import { Route as ApiBillingOrdersOrderNoMockPayRouteImport } from './routes/api/billing/orders.$orderNo.mock-pay'
-import { Route as ApiAdminKnowledgeIdDocumentsDocIdRouteImport } from './routes/api/admin/knowledge.$id.documents.$docId'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as AdminRouteImport } from './routes/admin';
+import { Route as AdminAgentsRouteImport } from './routes/admin.agents';
+import { Route as AdminIndexRouteImport } from './routes/admin.index';
+import { Route as AdminKnowledgeRouteImport } from './routes/admin.knowledge';
+import { Route as AdminKnowledgeIdRouteImport } from './routes/admin.knowledge.$id';
+import { Route as AdminMcpRouteImport } from './routes/admin.mcp';
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders';
+import { Route as AdminPlansRouteImport } from './routes/admin.plans';
+import { Route as AdminProvidersRouteImport } from './routes/admin.providers';
+import { Route as AdminSkillsRouteImport } from './routes/admin.skills';
+import { Route as AdminToolsRouteImport } from './routes/admin.tools';
+import { Route as AdminUsersRouteImport } from './routes/admin.users';
+import { Route as ApiAdminAgentsRouteImport } from './routes/api/admin/agents';
+import { Route as ApiAdminAgentsIdRouteImport } from './routes/api/admin/agents.$id';
+import { Route as ApiAdminAgentsAutoConfigRouteImport } from './routes/api/admin/agents/auto-config';
+import { Route as ApiAdminBuiltinProvidersRouteImport } from './routes/api/admin/builtin-providers';
+import { Route as ApiAdminKnowledgeRouteImport } from './routes/api/admin/knowledge';
+import { Route as ApiAdminKnowledgeIdRouteImport } from './routes/api/admin/knowledge.$id';
+import { Route as ApiAdminKnowledgeIdDocumentsRouteImport } from './routes/api/admin/knowledge.$id.documents';
+import { Route as ApiAdminKnowledgeIdDocumentsDocIdRouteImport } from './routes/api/admin/knowledge.$id.documents.$docId';
+import { Route as ApiAdminMcpRouteImport } from './routes/api/admin/mcp';
+import { Route as ApiAdminMcpIdRouteImport } from './routes/api/admin/mcp.$id';
+import { Route as ApiAdminMcpIdTestRouteImport } from './routes/api/admin/mcp.$id.test';
+import { Route as ApiAdminOrdersRouteImport } from './routes/api/admin/orders';
+import { Route as ApiAdminPlansRouteImport } from './routes/api/admin/plans';
+import { Route as ApiAdminPlansIdRouteImport } from './routes/api/admin/plans.$id';
+import { Route as ApiAdminProvidersRouteImport } from './routes/api/admin/providers';
+import { Route as ApiAdminProvidersIdRouteImport } from './routes/api/admin/providers.$id';
+import { Route as ApiAdminSkillsRouteImport } from './routes/api/admin/skills';
+import { Route as ApiAdminSkillsIdRouteImport } from './routes/api/admin/skills.$id';
+import { Route as ApiAdminStatsRouteImport } from './routes/api/admin/stats';
+import { Route as ApiAdminToolsRouteImport } from './routes/api/admin/tools';
+import { Route as ApiAdminToolsIdRouteImport } from './routes/api/admin/tools.$id';
+import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users';
+import { Route as ApiAdminUsersIdRouteImport } from './routes/api/admin/users.$id';
+import { Route as ApiAgentsRouteImport } from './routes/api/agents';
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$';
+import { Route as ApiAuthWechatRouteImport } from './routes/api/auth/wechat';
+import { Route as ApiAuthWechatCallbackRouteImport } from './routes/api/auth/wechat/callback';
+import { Route as ApiAuthWechatStatusRouteImport } from './routes/api/auth/wechat/status';
+import { Route as ApiBillingMembershipRouteImport } from './routes/api/billing/membership';
+import { Route as ApiBillingOrdersRouteImport } from './routes/api/billing/orders';
+import { Route as ApiBillingOrdersOrderNoRouteImport } from './routes/api/billing/orders.$orderNo';
+import { Route as ApiBillingOrdersOrderNoMockPayRouteImport } from './routes/api/billing/orders.$orderNo.mock-pay';
+import { Route as ApiChatRouteImport } from './routes/api/chat';
+import { Route as ApiConversationsRouteImport } from './routes/api/conversations';
+import { Route as ApiConversationsIdRouteImport } from './routes/api/conversations.$id';
+import { Route as ApiMeRouteImport } from './routes/api/me';
+import { Route as ApiPayNotifyWechatRouteImport } from './routes/api/pay/notify/wechat';
+import { Route as ApiPlansRouteImport } from './routes/api/plans';
+import { Route as ChatRouteImport } from './routes/chat';
+import { Route as IndexRouteImport } from './routes/index';
+import { Route as LoginRouteImport } from './routes/login';
+import { Route as PricingRouteImport } from './routes/pricing';
+import { Route as RegisterRouteImport } from './routes/register';
 
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/',
+    path: '/',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/admin',
+    path: '/admin',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/chat',
+    path: '/chat',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/login',
+    path: '/login',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const PricingRoute = PricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/pricing',
+    path: '/pricing',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/register',
+    path: '/register',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminAgentsRoute = AdminAgentsRouteImport.update({
-  id: '/agents',
-  path: '/agents',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/agents',
+    path: '/agents',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminKnowledgeRoute = AdminKnowledgeRouteImport.update({
-  id: '/knowledge',
-  path: '/knowledge',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/knowledge',
+    path: '/knowledge',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminMcpRoute = AdminMcpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/mcp',
+    path: '/mcp',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/orders',
+    path: '/orders',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminPlansRoute = AdminPlansRouteImport.update({
-  id: '/plans',
-  path: '/plans',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/plans',
+    path: '/plans',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminProvidersRoute = AdminProvidersRouteImport.update({
-  id: '/providers',
-  path: '/providers',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/providers',
+    path: '/providers',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminSkillsRoute = AdminSkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/skills',
+    path: '/skills',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminToolsRoute = AdminToolsRouteImport.update({
-  id: '/tools',
-  path: '/tools',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/tools',
+    path: '/tools',
+    getParentRoute: () => AdminRoute,
+} as any);
 const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AdminRoute,
-} as any)
+    id: '/users',
+    path: '/users',
+    getParentRoute: () => AdminRoute,
+} as any);
 const ApiAgentsRoute = ApiAgentsRouteImport.update({
-  id: '/api/agents',
-  path: '/api/agents',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/agents',
+    path: '/api/agents',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiChatRoute = ApiChatRouteImport.update({
-  id: '/api/chat',
-  path: '/api/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/chat',
+    path: '/api/chat',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiConversationsRoute = ApiConversationsRouteImport.update({
-  id: '/api/conversations',
-  path: '/api/conversations',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/conversations',
+    path: '/api/conversations',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiMeRoute = ApiMeRouteImport.update({
-  id: '/api/me',
-  path: '/api/me',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/me',
+    path: '/api/me',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiPlansRoute = ApiPlansRouteImport.update({
-  id: '/api/plans',
-  path: '/api/plans',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/plans',
+    path: '/api/plans',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const AdminKnowledgeIdRoute = AdminKnowledgeIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AdminKnowledgeRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AdminKnowledgeRoute,
+} as any);
 const ApiAdminAgentsRoute = ApiAdminAgentsRouteImport.update({
-  id: '/api/admin/agents',
-  path: '/api/admin/agents',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminBuiltinProvidersRoute =
-  ApiAdminBuiltinProvidersRouteImport.update({
+    id: '/api/admin/agents',
+    path: '/api/admin/agents',
+    getParentRoute: () => rootRouteImport,
+} as any);
+const ApiAdminBuiltinProvidersRoute = ApiAdminBuiltinProvidersRouteImport.update({
     id: '/api/admin/builtin-providers',
     path: '/api/admin/builtin-providers',
     getParentRoute: () => rootRouteImport,
-  } as any)
+} as any);
 const ApiAdminKnowledgeRoute = ApiAdminKnowledgeRouteImport.update({
-  id: '/api/admin/knowledge',
-  path: '/api/admin/knowledge',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/knowledge',
+    path: '/api/admin/knowledge',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminMcpRoute = ApiAdminMcpRouteImport.update({
-  id: '/api/admin/mcp',
-  path: '/api/admin/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/mcp',
+    path: '/api/admin/mcp',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminOrdersRoute = ApiAdminOrdersRouteImport.update({
-  id: '/api/admin/orders',
-  path: '/api/admin/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/orders',
+    path: '/api/admin/orders',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminPlansRoute = ApiAdminPlansRouteImport.update({
-  id: '/api/admin/plans',
-  path: '/api/admin/plans',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/plans',
+    path: '/api/admin/plans',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminProvidersRoute = ApiAdminProvidersRouteImport.update({
-  id: '/api/admin/providers',
-  path: '/api/admin/providers',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/providers',
+    path: '/api/admin/providers',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminSkillsRoute = ApiAdminSkillsRouteImport.update({
-  id: '/api/admin/skills',
-  path: '/api/admin/skills',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/skills',
+    path: '/api/admin/skills',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminStatsRoute = ApiAdminStatsRouteImport.update({
-  id: '/api/admin/stats',
-  path: '/api/admin/stats',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/stats',
+    path: '/api/admin/stats',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminToolsRoute = ApiAdminToolsRouteImport.update({
-  id: '/api/admin/tools',
-  path: '/api/admin/tools',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/tools',
+    path: '/api/admin/tools',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
-  id: '/api/admin/users',
-  path: '/api/admin/users',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/admin/users',
+    path: '/api/admin/users',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/auth/$',
+    path: '/api/auth/$',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAuthWechatRoute = ApiAuthWechatRouteImport.update({
-  id: '/api/auth/wechat',
-  path: '/api/auth/wechat',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/auth/wechat',
+    path: '/api/auth/wechat',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiBillingMembershipRoute = ApiBillingMembershipRouteImport.update({
-  id: '/api/billing/membership',
-  path: '/api/billing/membership',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/billing/membership',
+    path: '/api/billing/membership',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiBillingOrdersRoute = ApiBillingOrdersRouteImport.update({
-  id: '/api/billing/orders',
-  path: '/api/billing/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
+    id: '/api/billing/orders',
+    path: '/api/billing/orders',
+    getParentRoute: () => rootRouteImport,
+} as any);
 const ApiConversationsIdRoute = ApiConversationsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiConversationsRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiConversationsRoute,
+} as any);
 const ApiAdminAgentsIdRoute = ApiAdminAgentsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminAgentsRoute,
-} as any)
-const ApiAdminAgentsAutoConfigRoute =
-  ApiAdminAgentsAutoConfigRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminAgentsRoute,
+} as any);
+const ApiAdminAgentsAutoConfigRoute = ApiAdminAgentsAutoConfigRouteImport.update({
     id: '/auto-config',
     path: '/auto-config',
     getParentRoute: () => ApiAdminAgentsRoute,
-  } as any)
+} as any);
 const ApiAdminKnowledgeIdRoute = ApiAdminKnowledgeIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminKnowledgeRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminKnowledgeRoute,
+} as any);
 const ApiAdminMcpIdRoute = ApiAdminMcpIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminMcpRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminMcpRoute,
+} as any);
 const ApiAdminPlansIdRoute = ApiAdminPlansIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminPlansRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminPlansRoute,
+} as any);
 const ApiAdminProvidersIdRoute = ApiAdminProvidersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminProvidersRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminProvidersRoute,
+} as any);
 const ApiAdminSkillsIdRoute = ApiAdminSkillsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminSkillsRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminSkillsRoute,
+} as any);
 const ApiAdminToolsIdRoute = ApiAdminToolsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminToolsRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminToolsRoute,
+} as any);
 const ApiAdminUsersIdRoute = ApiAdminUsersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiAdminUsersRoute,
-} as any)
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiAdminUsersRoute,
+} as any);
 const ApiAuthWechatCallbackRoute = ApiAuthWechatCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => ApiAuthWechatRoute,
-} as any)
+    id: '/callback',
+    path: '/callback',
+    getParentRoute: () => ApiAuthWechatRoute,
+} as any);
 const ApiAuthWechatStatusRoute = ApiAuthWechatStatusRouteImport.update({
-  id: '/status',
-  path: '/status',
-  getParentRoute: () => ApiAuthWechatRoute,
-} as any)
+    id: '/status',
+    path: '/status',
+    getParentRoute: () => ApiAuthWechatRoute,
+} as any);
 const ApiBillingOrdersOrderNoRoute = ApiBillingOrdersOrderNoRouteImport.update({
-  id: '/$orderNo',
-  path: '/$orderNo',
-  getParentRoute: () => ApiBillingOrdersRoute,
-} as any)
+    id: '/$orderNo',
+    path: '/$orderNo',
+    getParentRoute: () => ApiBillingOrdersRoute,
+} as any);
 const ApiPayNotifyWechatRoute = ApiPayNotifyWechatRouteImport.update({
-  id: '/api/pay/notify/wechat',
-  path: '/api/pay/notify/wechat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminKnowledgeIdDocumentsRoute =
-  ApiAdminKnowledgeIdDocumentsRouteImport.update({
+    id: '/api/pay/notify/wechat',
+    path: '/api/pay/notify/wechat',
+    getParentRoute: () => rootRouteImport,
+} as any);
+const ApiAdminKnowledgeIdDocumentsRoute = ApiAdminKnowledgeIdDocumentsRouteImport.update({
     id: '/documents',
     path: '/documents',
     getParentRoute: () => ApiAdminKnowledgeIdRoute,
-  } as any)
+} as any);
 const ApiAdminMcpIdTestRoute = ApiAdminMcpIdTestRouteImport.update({
-  id: '/test',
-  path: '/test',
-  getParentRoute: () => ApiAdminMcpIdRoute,
-} as any)
-const ApiBillingOrdersOrderNoMockPayRoute =
-  ApiBillingOrdersOrderNoMockPayRouteImport.update({
+    id: '/test',
+    path: '/test',
+    getParentRoute: () => ApiAdminMcpIdRoute,
+} as any);
+const ApiBillingOrdersOrderNoMockPayRoute = ApiBillingOrdersOrderNoMockPayRouteImport.update({
     id: '/mock-pay',
     path: '/mock-pay',
     getParentRoute: () => ApiBillingOrdersOrderNoRoute,
-  } as any)
-const ApiAdminKnowledgeIdDocumentsDocIdRoute =
-  ApiAdminKnowledgeIdDocumentsDocIdRouteImport.update({
+} as any);
+const ApiAdminKnowledgeIdDocumentsDocIdRoute = ApiAdminKnowledgeIdDocumentsDocIdRouteImport.update({
     id: '/$docId',
     path: '/$docId',
     getParentRoute: () => ApiAdminKnowledgeIdDocumentsRoute,
-  } as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
-  '/chat': typeof ChatRoute
-  '/login': typeof LoginRoute
-  '/pricing': typeof PricingRoute
-  '/register': typeof RegisterRoute
-  '/admin/agents': typeof AdminAgentsRoute
-  '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
-  '/admin/mcp': typeof AdminMcpRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/plans': typeof AdminPlansRoute
-  '/admin/providers': typeof AdminProvidersRoute
-  '/admin/skills': typeof AdminSkillsRoute
-  '/admin/tools': typeof AdminToolsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/agents': typeof ApiAgentsRoute
-  '/api/chat': typeof ApiChatRoute
-  '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/me': typeof ApiMeRoute
-  '/api/plans': typeof ApiPlansRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
-  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
-  '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
-  '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
-  '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
-  '/api/admin/orders': typeof ApiAdminOrdersRoute
-  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
-  '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
-  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
-  '/api/admin/stats': typeof ApiAdminStatsRoute
-  '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
-  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
-  '/api/billing/membership': typeof ApiBillingMembershipRoute
-  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
-  '/api/conversations/$id': typeof ApiConversationsIdRoute
-  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
-  '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
-  '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
-  '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
-  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
-  '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
-  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
-  '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
-  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
-  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
-  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
-  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
-  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
-  '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
-  '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
-  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
-  '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
+    '/': typeof IndexRoute;
+    '/admin': typeof AdminRouteWithChildren;
+    '/chat': typeof ChatRoute;
+    '/login': typeof LoginRoute;
+    '/pricing': typeof PricingRoute;
+    '/register': typeof RegisterRoute;
+    '/admin/agents': typeof AdminAgentsRoute;
+    '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren;
+    '/admin/mcp': typeof AdminMcpRoute;
+    '/admin/orders': typeof AdminOrdersRoute;
+    '/admin/plans': typeof AdminPlansRoute;
+    '/admin/providers': typeof AdminProvidersRoute;
+    '/admin/skills': typeof AdminSkillsRoute;
+    '/admin/tools': typeof AdminToolsRoute;
+    '/admin/users': typeof AdminUsersRoute;
+    '/api/agents': typeof ApiAgentsRoute;
+    '/api/chat': typeof ApiChatRoute;
+    '/api/conversations': typeof ApiConversationsRouteWithChildren;
+    '/api/me': typeof ApiMeRoute;
+    '/api/plans': typeof ApiPlansRoute;
+    '/admin/': typeof AdminIndexRoute;
+    '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute;
+    '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren;
+    '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute;
+    '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren;
+    '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren;
+    '/api/admin/orders': typeof ApiAdminOrdersRoute;
+    '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren;
+    '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren;
+    '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren;
+    '/api/admin/stats': typeof ApiAdminStatsRoute;
+    '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren;
+    '/api/admin/users': typeof ApiAdminUsersRouteWithChildren;
+    '/api/auth/$': typeof ApiAuthSplatRoute;
+    '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren;
+    '/api/billing/membership': typeof ApiBillingMembershipRoute;
+    '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren;
+    '/api/conversations/$id': typeof ApiConversationsIdRoute;
+    '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute;
+    '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute;
+    '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren;
+    '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren;
+    '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute;
+    '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute;
+    '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute;
+    '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute;
+    '/api/admin/users/$id': typeof ApiAdminUsersIdRoute;
+    '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute;
+    '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute;
+    '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren;
+    '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute;
+    '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren;
+    '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute;
+    '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute;
+    '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/chat': typeof ChatRoute
-  '/login': typeof LoginRoute
-  '/pricing': typeof PricingRoute
-  '/register': typeof RegisterRoute
-  '/admin/agents': typeof AdminAgentsRoute
-  '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
-  '/admin/mcp': typeof AdminMcpRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/plans': typeof AdminPlansRoute
-  '/admin/providers': typeof AdminProvidersRoute
-  '/admin/skills': typeof AdminSkillsRoute
-  '/admin/tools': typeof AdminToolsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/agents': typeof ApiAgentsRoute
-  '/api/chat': typeof ApiChatRoute
-  '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/me': typeof ApiMeRoute
-  '/api/plans': typeof ApiPlansRoute
-  '/admin': typeof AdminIndexRoute
-  '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
-  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
-  '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
-  '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
-  '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
-  '/api/admin/orders': typeof ApiAdminOrdersRoute
-  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
-  '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
-  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
-  '/api/admin/stats': typeof ApiAdminStatsRoute
-  '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
-  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
-  '/api/billing/membership': typeof ApiBillingMembershipRoute
-  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
-  '/api/conversations/$id': typeof ApiConversationsIdRoute
-  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
-  '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
-  '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
-  '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
-  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
-  '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
-  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
-  '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
-  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
-  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
-  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
-  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
-  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
-  '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
-  '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
-  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
-  '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
+    '/': typeof IndexRoute;
+    '/chat': typeof ChatRoute;
+    '/login': typeof LoginRoute;
+    '/pricing': typeof PricingRoute;
+    '/register': typeof RegisterRoute;
+    '/admin/agents': typeof AdminAgentsRoute;
+    '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren;
+    '/admin/mcp': typeof AdminMcpRoute;
+    '/admin/orders': typeof AdminOrdersRoute;
+    '/admin/plans': typeof AdminPlansRoute;
+    '/admin/providers': typeof AdminProvidersRoute;
+    '/admin/skills': typeof AdminSkillsRoute;
+    '/admin/tools': typeof AdminToolsRoute;
+    '/admin/users': typeof AdminUsersRoute;
+    '/api/agents': typeof ApiAgentsRoute;
+    '/api/chat': typeof ApiChatRoute;
+    '/api/conversations': typeof ApiConversationsRouteWithChildren;
+    '/api/me': typeof ApiMeRoute;
+    '/api/plans': typeof ApiPlansRoute;
+    '/admin': typeof AdminIndexRoute;
+    '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute;
+    '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren;
+    '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute;
+    '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren;
+    '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren;
+    '/api/admin/orders': typeof ApiAdminOrdersRoute;
+    '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren;
+    '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren;
+    '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren;
+    '/api/admin/stats': typeof ApiAdminStatsRoute;
+    '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren;
+    '/api/admin/users': typeof ApiAdminUsersRouteWithChildren;
+    '/api/auth/$': typeof ApiAuthSplatRoute;
+    '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren;
+    '/api/billing/membership': typeof ApiBillingMembershipRoute;
+    '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren;
+    '/api/conversations/$id': typeof ApiConversationsIdRoute;
+    '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute;
+    '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute;
+    '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren;
+    '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren;
+    '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute;
+    '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute;
+    '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute;
+    '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute;
+    '/api/admin/users/$id': typeof ApiAdminUsersIdRoute;
+    '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute;
+    '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute;
+    '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren;
+    '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute;
+    '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren;
+    '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute;
+    '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute;
+    '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
-  '/chat': typeof ChatRoute
-  '/login': typeof LoginRoute
-  '/pricing': typeof PricingRoute
-  '/register': typeof RegisterRoute
-  '/admin/agents': typeof AdminAgentsRoute
-  '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren
-  '/admin/mcp': typeof AdminMcpRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/plans': typeof AdminPlansRoute
-  '/admin/providers': typeof AdminProvidersRoute
-  '/admin/skills': typeof AdminSkillsRoute
-  '/admin/tools': typeof AdminToolsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/agents': typeof ApiAgentsRoute
-  '/api/chat': typeof ApiChatRoute
-  '/api/conversations': typeof ApiConversationsRouteWithChildren
-  '/api/me': typeof ApiMeRoute
-  '/api/plans': typeof ApiPlansRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute
-  '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren
-  '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute
-  '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren
-  '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren
-  '/api/admin/orders': typeof ApiAdminOrdersRoute
-  '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren
-  '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren
-  '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren
-  '/api/admin/stats': typeof ApiAdminStatsRoute
-  '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren
-  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren
-  '/api/billing/membership': typeof ApiBillingMembershipRoute
-  '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren
-  '/api/conversations/$id': typeof ApiConversationsIdRoute
-  '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute
-  '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute
-  '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren
-  '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren
-  '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute
-  '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute
-  '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute
-  '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute
-  '/api/admin/users/$id': typeof ApiAdminUsersIdRoute
-  '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute
-  '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute
-  '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren
-  '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute
-  '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
-  '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute
-  '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute
-  '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
+    __root__: typeof rootRouteImport;
+    '/': typeof IndexRoute;
+    '/admin': typeof AdminRouteWithChildren;
+    '/chat': typeof ChatRoute;
+    '/login': typeof LoginRoute;
+    '/pricing': typeof PricingRoute;
+    '/register': typeof RegisterRoute;
+    '/admin/agents': typeof AdminAgentsRoute;
+    '/admin/knowledge': typeof AdminKnowledgeRouteWithChildren;
+    '/admin/mcp': typeof AdminMcpRoute;
+    '/admin/orders': typeof AdminOrdersRoute;
+    '/admin/plans': typeof AdminPlansRoute;
+    '/admin/providers': typeof AdminProvidersRoute;
+    '/admin/skills': typeof AdminSkillsRoute;
+    '/admin/tools': typeof AdminToolsRoute;
+    '/admin/users': typeof AdminUsersRoute;
+    '/api/agents': typeof ApiAgentsRoute;
+    '/api/chat': typeof ApiChatRoute;
+    '/api/conversations': typeof ApiConversationsRouteWithChildren;
+    '/api/me': typeof ApiMeRoute;
+    '/api/plans': typeof ApiPlansRoute;
+    '/admin/': typeof AdminIndexRoute;
+    '/admin/knowledge/$id': typeof AdminKnowledgeIdRoute;
+    '/api/admin/agents': typeof ApiAdminAgentsRouteWithChildren;
+    '/api/admin/builtin-providers': typeof ApiAdminBuiltinProvidersRoute;
+    '/api/admin/knowledge': typeof ApiAdminKnowledgeRouteWithChildren;
+    '/api/admin/mcp': typeof ApiAdminMcpRouteWithChildren;
+    '/api/admin/orders': typeof ApiAdminOrdersRoute;
+    '/api/admin/plans': typeof ApiAdminPlansRouteWithChildren;
+    '/api/admin/providers': typeof ApiAdminProvidersRouteWithChildren;
+    '/api/admin/skills': typeof ApiAdminSkillsRouteWithChildren;
+    '/api/admin/stats': typeof ApiAdminStatsRoute;
+    '/api/admin/tools': typeof ApiAdminToolsRouteWithChildren;
+    '/api/admin/users': typeof ApiAdminUsersRouteWithChildren;
+    '/api/auth/$': typeof ApiAuthSplatRoute;
+    '/api/auth/wechat': typeof ApiAuthWechatRouteWithChildren;
+    '/api/billing/membership': typeof ApiBillingMembershipRoute;
+    '/api/billing/orders': typeof ApiBillingOrdersRouteWithChildren;
+    '/api/conversations/$id': typeof ApiConversationsIdRoute;
+    '/api/admin/agents/$id': typeof ApiAdminAgentsIdRoute;
+    '/api/admin/agents/auto-config': typeof ApiAdminAgentsAutoConfigRoute;
+    '/api/admin/knowledge/$id': typeof ApiAdminKnowledgeIdRouteWithChildren;
+    '/api/admin/mcp/$id': typeof ApiAdminMcpIdRouteWithChildren;
+    '/api/admin/plans/$id': typeof ApiAdminPlansIdRoute;
+    '/api/admin/providers/$id': typeof ApiAdminProvidersIdRoute;
+    '/api/admin/skills/$id': typeof ApiAdminSkillsIdRoute;
+    '/api/admin/tools/$id': typeof ApiAdminToolsIdRoute;
+    '/api/admin/users/$id': typeof ApiAdminUsersIdRoute;
+    '/api/auth/wechat/callback': typeof ApiAuthWechatCallbackRoute;
+    '/api/auth/wechat/status': typeof ApiAuthWechatStatusRoute;
+    '/api/billing/orders/$orderNo': typeof ApiBillingOrdersOrderNoRouteWithChildren;
+    '/api/pay/notify/wechat': typeof ApiPayNotifyWechatRoute;
+    '/api/admin/knowledge/$id/documents': typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren;
+    '/api/admin/mcp/$id/test': typeof ApiAdminMcpIdTestRoute;
+    '/api/billing/orders/$orderNo/mock-pay': typeof ApiBillingOrdersOrderNoMockPayRoute;
+    '/api/admin/knowledge/$id/documents/$docId': typeof ApiAdminKnowledgeIdDocumentsDocIdRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/admin'
-    | '/chat'
-    | '/login'
-    | '/pricing'
-    | '/register'
-    | '/admin/agents'
-    | '/admin/knowledge'
-    | '/admin/mcp'
-    | '/admin/orders'
-    | '/admin/plans'
-    | '/admin/providers'
-    | '/admin/skills'
-    | '/admin/tools'
-    | '/admin/users'
-    | '/api/agents'
-    | '/api/chat'
-    | '/api/conversations'
-    | '/api/me'
-    | '/api/plans'
-    | '/admin/'
-    | '/admin/knowledge/$id'
-    | '/api/admin/agents'
-    | '/api/admin/builtin-providers'
-    | '/api/admin/knowledge'
-    | '/api/admin/mcp'
-    | '/api/admin/orders'
-    | '/api/admin/plans'
-    | '/api/admin/providers'
-    | '/api/admin/skills'
-    | '/api/admin/stats'
-    | '/api/admin/tools'
-    | '/api/admin/users'
-    | '/api/auth/$'
-    | '/api/auth/wechat'
-    | '/api/billing/membership'
-    | '/api/billing/orders'
-    | '/api/conversations/$id'
-    | '/api/admin/agents/$id'
-    | '/api/admin/agents/auto-config'
-    | '/api/admin/knowledge/$id'
-    | '/api/admin/mcp/$id'
-    | '/api/admin/plans/$id'
-    | '/api/admin/providers/$id'
-    | '/api/admin/skills/$id'
-    | '/api/admin/tools/$id'
-    | '/api/admin/users/$id'
-    | '/api/auth/wechat/callback'
-    | '/api/auth/wechat/status'
-    | '/api/billing/orders/$orderNo'
-    | '/api/pay/notify/wechat'
-    | '/api/admin/knowledge/$id/documents'
-    | '/api/admin/mcp/$id/test'
-    | '/api/billing/orders/$orderNo/mock-pay'
-    | '/api/admin/knowledge/$id/documents/$docId'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/chat'
-    | '/login'
-    | '/pricing'
-    | '/register'
-    | '/admin/agents'
-    | '/admin/knowledge'
-    | '/admin/mcp'
-    | '/admin/orders'
-    | '/admin/plans'
-    | '/admin/providers'
-    | '/admin/skills'
-    | '/admin/tools'
-    | '/admin/users'
-    | '/api/agents'
-    | '/api/chat'
-    | '/api/conversations'
-    | '/api/me'
-    | '/api/plans'
-    | '/admin'
-    | '/admin/knowledge/$id'
-    | '/api/admin/agents'
-    | '/api/admin/builtin-providers'
-    | '/api/admin/knowledge'
-    | '/api/admin/mcp'
-    | '/api/admin/orders'
-    | '/api/admin/plans'
-    | '/api/admin/providers'
-    | '/api/admin/skills'
-    | '/api/admin/stats'
-    | '/api/admin/tools'
-    | '/api/admin/users'
-    | '/api/auth/$'
-    | '/api/auth/wechat'
-    | '/api/billing/membership'
-    | '/api/billing/orders'
-    | '/api/conversations/$id'
-    | '/api/admin/agents/$id'
-    | '/api/admin/agents/auto-config'
-    | '/api/admin/knowledge/$id'
-    | '/api/admin/mcp/$id'
-    | '/api/admin/plans/$id'
-    | '/api/admin/providers/$id'
-    | '/api/admin/skills/$id'
-    | '/api/admin/tools/$id'
-    | '/api/admin/users/$id'
-    | '/api/auth/wechat/callback'
-    | '/api/auth/wechat/status'
-    | '/api/billing/orders/$orderNo'
-    | '/api/pay/notify/wechat'
-    | '/api/admin/knowledge/$id/documents'
-    | '/api/admin/mcp/$id/test'
-    | '/api/billing/orders/$orderNo/mock-pay'
-    | '/api/admin/knowledge/$id/documents/$docId'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/chat'
-    | '/login'
-    | '/pricing'
-    | '/register'
-    | '/admin/agents'
-    | '/admin/knowledge'
-    | '/admin/mcp'
-    | '/admin/orders'
-    | '/admin/plans'
-    | '/admin/providers'
-    | '/admin/skills'
-    | '/admin/tools'
-    | '/admin/users'
-    | '/api/agents'
-    | '/api/chat'
-    | '/api/conversations'
-    | '/api/me'
-    | '/api/plans'
-    | '/admin/'
-    | '/admin/knowledge/$id'
-    | '/api/admin/agents'
-    | '/api/admin/builtin-providers'
-    | '/api/admin/knowledge'
-    | '/api/admin/mcp'
-    | '/api/admin/orders'
-    | '/api/admin/plans'
-    | '/api/admin/providers'
-    | '/api/admin/skills'
-    | '/api/admin/stats'
-    | '/api/admin/tools'
-    | '/api/admin/users'
-    | '/api/auth/$'
-    | '/api/auth/wechat'
-    | '/api/billing/membership'
-    | '/api/billing/orders'
-    | '/api/conversations/$id'
-    | '/api/admin/agents/$id'
-    | '/api/admin/agents/auto-config'
-    | '/api/admin/knowledge/$id'
-    | '/api/admin/mcp/$id'
-    | '/api/admin/plans/$id'
-    | '/api/admin/providers/$id'
-    | '/api/admin/skills/$id'
-    | '/api/admin/tools/$id'
-    | '/api/admin/users/$id'
-    | '/api/auth/wechat/callback'
-    | '/api/auth/wechat/status'
-    | '/api/billing/orders/$orderNo'
-    | '/api/pay/notify/wechat'
-    | '/api/admin/knowledge/$id/documents'
-    | '/api/admin/mcp/$id/test'
-    | '/api/billing/orders/$orderNo/mock-pay'
-    | '/api/admin/knowledge/$id/documents/$docId'
-  fileRoutesById: FileRoutesById
+    fileRoutesByFullPath: FileRoutesByFullPath;
+    fullPaths:
+        | '/'
+        | '/admin'
+        | '/chat'
+        | '/login'
+        | '/pricing'
+        | '/register'
+        | '/admin/agents'
+        | '/admin/knowledge'
+        | '/admin/mcp'
+        | '/admin/orders'
+        | '/admin/plans'
+        | '/admin/providers'
+        | '/admin/skills'
+        | '/admin/tools'
+        | '/admin/users'
+        | '/api/agents'
+        | '/api/chat'
+        | '/api/conversations'
+        | '/api/me'
+        | '/api/plans'
+        | '/admin/'
+        | '/admin/knowledge/$id'
+        | '/api/admin/agents'
+        | '/api/admin/builtin-providers'
+        | '/api/admin/knowledge'
+        | '/api/admin/mcp'
+        | '/api/admin/orders'
+        | '/api/admin/plans'
+        | '/api/admin/providers'
+        | '/api/admin/skills'
+        | '/api/admin/stats'
+        | '/api/admin/tools'
+        | '/api/admin/users'
+        | '/api/auth/$'
+        | '/api/auth/wechat'
+        | '/api/billing/membership'
+        | '/api/billing/orders'
+        | '/api/conversations/$id'
+        | '/api/admin/agents/$id'
+        | '/api/admin/agents/auto-config'
+        | '/api/admin/knowledge/$id'
+        | '/api/admin/mcp/$id'
+        | '/api/admin/plans/$id'
+        | '/api/admin/providers/$id'
+        | '/api/admin/skills/$id'
+        | '/api/admin/tools/$id'
+        | '/api/admin/users/$id'
+        | '/api/auth/wechat/callback'
+        | '/api/auth/wechat/status'
+        | '/api/billing/orders/$orderNo'
+        | '/api/pay/notify/wechat'
+        | '/api/admin/knowledge/$id/documents'
+        | '/api/admin/mcp/$id/test'
+        | '/api/billing/orders/$orderNo/mock-pay'
+        | '/api/admin/knowledge/$id/documents/$docId';
+    fileRoutesByTo: FileRoutesByTo;
+    to:
+        | '/'
+        | '/chat'
+        | '/login'
+        | '/pricing'
+        | '/register'
+        | '/admin/agents'
+        | '/admin/knowledge'
+        | '/admin/mcp'
+        | '/admin/orders'
+        | '/admin/plans'
+        | '/admin/providers'
+        | '/admin/skills'
+        | '/admin/tools'
+        | '/admin/users'
+        | '/api/agents'
+        | '/api/chat'
+        | '/api/conversations'
+        | '/api/me'
+        | '/api/plans'
+        | '/admin'
+        | '/admin/knowledge/$id'
+        | '/api/admin/agents'
+        | '/api/admin/builtin-providers'
+        | '/api/admin/knowledge'
+        | '/api/admin/mcp'
+        | '/api/admin/orders'
+        | '/api/admin/plans'
+        | '/api/admin/providers'
+        | '/api/admin/skills'
+        | '/api/admin/stats'
+        | '/api/admin/tools'
+        | '/api/admin/users'
+        | '/api/auth/$'
+        | '/api/auth/wechat'
+        | '/api/billing/membership'
+        | '/api/billing/orders'
+        | '/api/conversations/$id'
+        | '/api/admin/agents/$id'
+        | '/api/admin/agents/auto-config'
+        | '/api/admin/knowledge/$id'
+        | '/api/admin/mcp/$id'
+        | '/api/admin/plans/$id'
+        | '/api/admin/providers/$id'
+        | '/api/admin/skills/$id'
+        | '/api/admin/tools/$id'
+        | '/api/admin/users/$id'
+        | '/api/auth/wechat/callback'
+        | '/api/auth/wechat/status'
+        | '/api/billing/orders/$orderNo'
+        | '/api/pay/notify/wechat'
+        | '/api/admin/knowledge/$id/documents'
+        | '/api/admin/mcp/$id/test'
+        | '/api/billing/orders/$orderNo/mock-pay'
+        | '/api/admin/knowledge/$id/documents/$docId';
+    id:
+        | '__root__'
+        | '/'
+        | '/admin'
+        | '/chat'
+        | '/login'
+        | '/pricing'
+        | '/register'
+        | '/admin/agents'
+        | '/admin/knowledge'
+        | '/admin/mcp'
+        | '/admin/orders'
+        | '/admin/plans'
+        | '/admin/providers'
+        | '/admin/skills'
+        | '/admin/tools'
+        | '/admin/users'
+        | '/api/agents'
+        | '/api/chat'
+        | '/api/conversations'
+        | '/api/me'
+        | '/api/plans'
+        | '/admin/'
+        | '/admin/knowledge/$id'
+        | '/api/admin/agents'
+        | '/api/admin/builtin-providers'
+        | '/api/admin/knowledge'
+        | '/api/admin/mcp'
+        | '/api/admin/orders'
+        | '/api/admin/plans'
+        | '/api/admin/providers'
+        | '/api/admin/skills'
+        | '/api/admin/stats'
+        | '/api/admin/tools'
+        | '/api/admin/users'
+        | '/api/auth/$'
+        | '/api/auth/wechat'
+        | '/api/billing/membership'
+        | '/api/billing/orders'
+        | '/api/conversations/$id'
+        | '/api/admin/agents/$id'
+        | '/api/admin/agents/auto-config'
+        | '/api/admin/knowledge/$id'
+        | '/api/admin/mcp/$id'
+        | '/api/admin/plans/$id'
+        | '/api/admin/providers/$id'
+        | '/api/admin/skills/$id'
+        | '/api/admin/tools/$id'
+        | '/api/admin/users/$id'
+        | '/api/auth/wechat/callback'
+        | '/api/auth/wechat/status'
+        | '/api/billing/orders/$orderNo'
+        | '/api/pay/notify/wechat'
+        | '/api/admin/knowledge/$id/documents'
+        | '/api/admin/mcp/$id/test'
+        | '/api/billing/orders/$orderNo/mock-pay'
+        | '/api/admin/knowledge/$id/documents/$docId';
+    fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRouteWithChildren
-  ChatRoute: typeof ChatRoute
-  LoginRoute: typeof LoginRoute
-  PricingRoute: typeof PricingRoute
-  RegisterRoute: typeof RegisterRoute
-  ApiAgentsRoute: typeof ApiAgentsRoute
-  ApiChatRoute: typeof ApiChatRoute
-  ApiConversationsRoute: typeof ApiConversationsRouteWithChildren
-  ApiMeRoute: typeof ApiMeRoute
-  ApiPlansRoute: typeof ApiPlansRoute
-  ApiAdminAgentsRoute: typeof ApiAdminAgentsRouteWithChildren
-  ApiAdminBuiltinProvidersRoute: typeof ApiAdminBuiltinProvidersRoute
-  ApiAdminKnowledgeRoute: typeof ApiAdminKnowledgeRouteWithChildren
-  ApiAdminMcpRoute: typeof ApiAdminMcpRouteWithChildren
-  ApiAdminOrdersRoute: typeof ApiAdminOrdersRoute
-  ApiAdminPlansRoute: typeof ApiAdminPlansRouteWithChildren
-  ApiAdminProvidersRoute: typeof ApiAdminProvidersRouteWithChildren
-  ApiAdminSkillsRoute: typeof ApiAdminSkillsRouteWithChildren
-  ApiAdminStatsRoute: typeof ApiAdminStatsRoute
-  ApiAdminToolsRoute: typeof ApiAdminToolsRouteWithChildren
-  ApiAdminUsersRoute: typeof ApiAdminUsersRouteWithChildren
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiAuthWechatRoute: typeof ApiAuthWechatRouteWithChildren
-  ApiBillingMembershipRoute: typeof ApiBillingMembershipRoute
-  ApiBillingOrdersRoute: typeof ApiBillingOrdersRouteWithChildren
-  ApiPayNotifyWechatRoute: typeof ApiPayNotifyWechatRoute
+    IndexRoute: typeof IndexRoute;
+    AdminRoute: typeof AdminRouteWithChildren;
+    ChatRoute: typeof ChatRoute;
+    LoginRoute: typeof LoginRoute;
+    PricingRoute: typeof PricingRoute;
+    RegisterRoute: typeof RegisterRoute;
+    ApiAgentsRoute: typeof ApiAgentsRoute;
+    ApiChatRoute: typeof ApiChatRoute;
+    ApiConversationsRoute: typeof ApiConversationsRouteWithChildren;
+    ApiMeRoute: typeof ApiMeRoute;
+    ApiPlansRoute: typeof ApiPlansRoute;
+    ApiAdminAgentsRoute: typeof ApiAdminAgentsRouteWithChildren;
+    ApiAdminBuiltinProvidersRoute: typeof ApiAdminBuiltinProvidersRoute;
+    ApiAdminKnowledgeRoute: typeof ApiAdminKnowledgeRouteWithChildren;
+    ApiAdminMcpRoute: typeof ApiAdminMcpRouteWithChildren;
+    ApiAdminOrdersRoute: typeof ApiAdminOrdersRoute;
+    ApiAdminPlansRoute: typeof ApiAdminPlansRouteWithChildren;
+    ApiAdminProvidersRoute: typeof ApiAdminProvidersRouteWithChildren;
+    ApiAdminSkillsRoute: typeof ApiAdminSkillsRouteWithChildren;
+    ApiAdminStatsRoute: typeof ApiAdminStatsRoute;
+    ApiAdminToolsRoute: typeof ApiAdminToolsRouteWithChildren;
+    ApiAdminUsersRoute: typeof ApiAdminUsersRouteWithChildren;
+    ApiAuthSplatRoute: typeof ApiAuthSplatRoute;
+    ApiAuthWechatRoute: typeof ApiAuthWechatRouteWithChildren;
+    ApiBillingMembershipRoute: typeof ApiBillingMembershipRoute;
+    ApiBillingOrdersRoute: typeof ApiBillingOrdersRouteWithChildren;
+    ApiPayNotifyWechatRoute: typeof ApiPayNotifyWechatRoute;
 }
 
 declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+    interface FileRoutesByPath {
+        '/': {
+            id: '/';
+            path: '/';
+            fullPath: '/';
+            preLoaderRoute: typeof IndexRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/admin': {
+            id: '/admin';
+            path: '/admin';
+            fullPath: '/admin';
+            preLoaderRoute: typeof AdminRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/chat': {
+            id: '/chat';
+            path: '/chat';
+            fullPath: '/chat';
+            preLoaderRoute: typeof ChatRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/login': {
+            id: '/login';
+            path: '/login';
+            fullPath: '/login';
+            preLoaderRoute: typeof LoginRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/pricing': {
+            id: '/pricing';
+            path: '/pricing';
+            fullPath: '/pricing';
+            preLoaderRoute: typeof PricingRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/register': {
+            id: '/register';
+            path: '/register';
+            fullPath: '/register';
+            preLoaderRoute: typeof RegisterRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/admin/': {
+            id: '/admin/';
+            path: '/';
+            fullPath: '/admin/';
+            preLoaderRoute: typeof AdminIndexRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/agents': {
+            id: '/admin/agents';
+            path: '/agents';
+            fullPath: '/admin/agents';
+            preLoaderRoute: typeof AdminAgentsRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/knowledge': {
+            id: '/admin/knowledge';
+            path: '/knowledge';
+            fullPath: '/admin/knowledge';
+            preLoaderRoute: typeof AdminKnowledgeRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/mcp': {
+            id: '/admin/mcp';
+            path: '/mcp';
+            fullPath: '/admin/mcp';
+            preLoaderRoute: typeof AdminMcpRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/orders': {
+            id: '/admin/orders';
+            path: '/orders';
+            fullPath: '/admin/orders';
+            preLoaderRoute: typeof AdminOrdersRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/plans': {
+            id: '/admin/plans';
+            path: '/plans';
+            fullPath: '/admin/plans';
+            preLoaderRoute: typeof AdminPlansRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/providers': {
+            id: '/admin/providers';
+            path: '/providers';
+            fullPath: '/admin/providers';
+            preLoaderRoute: typeof AdminProvidersRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/skills': {
+            id: '/admin/skills';
+            path: '/skills';
+            fullPath: '/admin/skills';
+            preLoaderRoute: typeof AdminSkillsRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/tools': {
+            id: '/admin/tools';
+            path: '/tools';
+            fullPath: '/admin/tools';
+            preLoaderRoute: typeof AdminToolsRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/admin/users': {
+            id: '/admin/users';
+            path: '/users';
+            fullPath: '/admin/users';
+            preLoaderRoute: typeof AdminUsersRouteImport;
+            parentRoute: typeof AdminRoute;
+        };
+        '/api/agents': {
+            id: '/api/agents';
+            path: '/api/agents';
+            fullPath: '/api/agents';
+            preLoaderRoute: typeof ApiAgentsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/chat': {
+            id: '/api/chat';
+            path: '/api/chat';
+            fullPath: '/api/chat';
+            preLoaderRoute: typeof ApiChatRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/conversations': {
+            id: '/api/conversations';
+            path: '/api/conversations';
+            fullPath: '/api/conversations';
+            preLoaderRoute: typeof ApiConversationsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/me': {
+            id: '/api/me';
+            path: '/api/me';
+            fullPath: '/api/me';
+            preLoaderRoute: typeof ApiMeRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/plans': {
+            id: '/api/plans';
+            path: '/api/plans';
+            fullPath: '/api/plans';
+            preLoaderRoute: typeof ApiPlansRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/admin/knowledge/$id': {
+            id: '/admin/knowledge/$id';
+            path: '/$id';
+            fullPath: '/admin/knowledge/$id';
+            preLoaderRoute: typeof AdminKnowledgeIdRouteImport;
+            parentRoute: typeof AdminKnowledgeRoute;
+        };
+        '/api/admin/agents': {
+            id: '/api/admin/agents';
+            path: '/api/admin/agents';
+            fullPath: '/api/admin/agents';
+            preLoaderRoute: typeof ApiAdminAgentsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/builtin-providers': {
+            id: '/api/admin/builtin-providers';
+            path: '/api/admin/builtin-providers';
+            fullPath: '/api/admin/builtin-providers';
+            preLoaderRoute: typeof ApiAdminBuiltinProvidersRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/knowledge': {
+            id: '/api/admin/knowledge';
+            path: '/api/admin/knowledge';
+            fullPath: '/api/admin/knowledge';
+            preLoaderRoute: typeof ApiAdminKnowledgeRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/mcp': {
+            id: '/api/admin/mcp';
+            path: '/api/admin/mcp';
+            fullPath: '/api/admin/mcp';
+            preLoaderRoute: typeof ApiAdminMcpRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/orders': {
+            id: '/api/admin/orders';
+            path: '/api/admin/orders';
+            fullPath: '/api/admin/orders';
+            preLoaderRoute: typeof ApiAdminOrdersRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/plans': {
+            id: '/api/admin/plans';
+            path: '/api/admin/plans';
+            fullPath: '/api/admin/plans';
+            preLoaderRoute: typeof ApiAdminPlansRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/providers': {
+            id: '/api/admin/providers';
+            path: '/api/admin/providers';
+            fullPath: '/api/admin/providers';
+            preLoaderRoute: typeof ApiAdminProvidersRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/skills': {
+            id: '/api/admin/skills';
+            path: '/api/admin/skills';
+            fullPath: '/api/admin/skills';
+            preLoaderRoute: typeof ApiAdminSkillsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/stats': {
+            id: '/api/admin/stats';
+            path: '/api/admin/stats';
+            fullPath: '/api/admin/stats';
+            preLoaderRoute: typeof ApiAdminStatsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/tools': {
+            id: '/api/admin/tools';
+            path: '/api/admin/tools';
+            fullPath: '/api/admin/tools';
+            preLoaderRoute: typeof ApiAdminToolsRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/users': {
+            id: '/api/admin/users';
+            path: '/api/admin/users';
+            fullPath: '/api/admin/users';
+            preLoaderRoute: typeof ApiAdminUsersRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/auth/$': {
+            id: '/api/auth/$';
+            path: '/api/auth/$';
+            fullPath: '/api/auth/$';
+            preLoaderRoute: typeof ApiAuthSplatRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/auth/wechat': {
+            id: '/api/auth/wechat';
+            path: '/api/auth/wechat';
+            fullPath: '/api/auth/wechat';
+            preLoaderRoute: typeof ApiAuthWechatRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/billing/membership': {
+            id: '/api/billing/membership';
+            path: '/api/billing/membership';
+            fullPath: '/api/billing/membership';
+            preLoaderRoute: typeof ApiBillingMembershipRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/billing/orders': {
+            id: '/api/billing/orders';
+            path: '/api/billing/orders';
+            fullPath: '/api/billing/orders';
+            preLoaderRoute: typeof ApiBillingOrdersRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/conversations/$id': {
+            id: '/api/conversations/$id';
+            path: '/$id';
+            fullPath: '/api/conversations/$id';
+            preLoaderRoute: typeof ApiConversationsIdRouteImport;
+            parentRoute: typeof ApiConversationsRoute;
+        };
+        '/api/admin/agents/$id': {
+            id: '/api/admin/agents/$id';
+            path: '/$id';
+            fullPath: '/api/admin/agents/$id';
+            preLoaderRoute: typeof ApiAdminAgentsIdRouteImport;
+            parentRoute: typeof ApiAdminAgentsRoute;
+        };
+        '/api/admin/agents/auto-config': {
+            id: '/api/admin/agents/auto-config';
+            path: '/auto-config';
+            fullPath: '/api/admin/agents/auto-config';
+            preLoaderRoute: typeof ApiAdminAgentsAutoConfigRouteImport;
+            parentRoute: typeof ApiAdminAgentsRoute;
+        };
+        '/api/admin/knowledge/$id': {
+            id: '/api/admin/knowledge/$id';
+            path: '/$id';
+            fullPath: '/api/admin/knowledge/$id';
+            preLoaderRoute: typeof ApiAdminKnowledgeIdRouteImport;
+            parentRoute: typeof ApiAdminKnowledgeRoute;
+        };
+        '/api/admin/mcp/$id': {
+            id: '/api/admin/mcp/$id';
+            path: '/$id';
+            fullPath: '/api/admin/mcp/$id';
+            preLoaderRoute: typeof ApiAdminMcpIdRouteImport;
+            parentRoute: typeof ApiAdminMcpRoute;
+        };
+        '/api/admin/plans/$id': {
+            id: '/api/admin/plans/$id';
+            path: '/$id';
+            fullPath: '/api/admin/plans/$id';
+            preLoaderRoute: typeof ApiAdminPlansIdRouteImport;
+            parentRoute: typeof ApiAdminPlansRoute;
+        };
+        '/api/admin/providers/$id': {
+            id: '/api/admin/providers/$id';
+            path: '/$id';
+            fullPath: '/api/admin/providers/$id';
+            preLoaderRoute: typeof ApiAdminProvidersIdRouteImport;
+            parentRoute: typeof ApiAdminProvidersRoute;
+        };
+        '/api/admin/skills/$id': {
+            id: '/api/admin/skills/$id';
+            path: '/$id';
+            fullPath: '/api/admin/skills/$id';
+            preLoaderRoute: typeof ApiAdminSkillsIdRouteImport;
+            parentRoute: typeof ApiAdminSkillsRoute;
+        };
+        '/api/admin/tools/$id': {
+            id: '/api/admin/tools/$id';
+            path: '/$id';
+            fullPath: '/api/admin/tools/$id';
+            preLoaderRoute: typeof ApiAdminToolsIdRouteImport;
+            parentRoute: typeof ApiAdminToolsRoute;
+        };
+        '/api/admin/users/$id': {
+            id: '/api/admin/users/$id';
+            path: '/$id';
+            fullPath: '/api/admin/users/$id';
+            preLoaderRoute: typeof ApiAdminUsersIdRouteImport;
+            parentRoute: typeof ApiAdminUsersRoute;
+        };
+        '/api/auth/wechat/callback': {
+            id: '/api/auth/wechat/callback';
+            path: '/callback';
+            fullPath: '/api/auth/wechat/callback';
+            preLoaderRoute: typeof ApiAuthWechatCallbackRouteImport;
+            parentRoute: typeof ApiAuthWechatRoute;
+        };
+        '/api/auth/wechat/status': {
+            id: '/api/auth/wechat/status';
+            path: '/status';
+            fullPath: '/api/auth/wechat/status';
+            preLoaderRoute: typeof ApiAuthWechatStatusRouteImport;
+            parentRoute: typeof ApiAuthWechatRoute;
+        };
+        '/api/billing/orders/$orderNo': {
+            id: '/api/billing/orders/$orderNo';
+            path: '/$orderNo';
+            fullPath: '/api/billing/orders/$orderNo';
+            preLoaderRoute: typeof ApiBillingOrdersOrderNoRouteImport;
+            parentRoute: typeof ApiBillingOrdersRoute;
+        };
+        '/api/pay/notify/wechat': {
+            id: '/api/pay/notify/wechat';
+            path: '/api/pay/notify/wechat';
+            fullPath: '/api/pay/notify/wechat';
+            preLoaderRoute: typeof ApiPayNotifyWechatRouteImport;
+            parentRoute: typeof rootRouteImport;
+        };
+        '/api/admin/knowledge/$id/documents': {
+            id: '/api/admin/knowledge/$id/documents';
+            path: '/documents';
+            fullPath: '/api/admin/knowledge/$id/documents';
+            preLoaderRoute: typeof ApiAdminKnowledgeIdDocumentsRouteImport;
+            parentRoute: typeof ApiAdminKnowledgeIdRoute;
+        };
+        '/api/admin/mcp/$id/test': {
+            id: '/api/admin/mcp/$id/test';
+            path: '/test';
+            fullPath: '/api/admin/mcp/$id/test';
+            preLoaderRoute: typeof ApiAdminMcpIdTestRouteImport;
+            parentRoute: typeof ApiAdminMcpIdRoute;
+        };
+        '/api/billing/orders/$orderNo/mock-pay': {
+            id: '/api/billing/orders/$orderNo/mock-pay';
+            path: '/mock-pay';
+            fullPath: '/api/billing/orders/$orderNo/mock-pay';
+            preLoaderRoute: typeof ApiBillingOrdersOrderNoMockPayRouteImport;
+            parentRoute: typeof ApiBillingOrdersOrderNoRoute;
+        };
+        '/api/admin/knowledge/$id/documents/$docId': {
+            id: '/api/admin/knowledge/$id/documents/$docId';
+            path: '/$docId';
+            fullPath: '/api/admin/knowledge/$id/documents/$docId';
+            preLoaderRoute: typeof ApiAdminKnowledgeIdDocumentsDocIdRouteImport;
+            parentRoute: typeof ApiAdminKnowledgeIdDocumentsRoute;
+        };
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/agents': {
-      id: '/admin/agents'
-      path: '/agents'
-      fullPath: '/admin/agents'
-      preLoaderRoute: typeof AdminAgentsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/knowledge': {
-      id: '/admin/knowledge'
-      path: '/knowledge'
-      fullPath: '/admin/knowledge'
-      preLoaderRoute: typeof AdminKnowledgeRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/mcp': {
-      id: '/admin/mcp'
-      path: '/mcp'
-      fullPath: '/admin/mcp'
-      preLoaderRoute: typeof AdminMcpRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/orders': {
-      id: '/admin/orders'
-      path: '/orders'
-      fullPath: '/admin/orders'
-      preLoaderRoute: typeof AdminOrdersRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/plans': {
-      id: '/admin/plans'
-      path: '/plans'
-      fullPath: '/admin/plans'
-      preLoaderRoute: typeof AdminPlansRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/providers': {
-      id: '/admin/providers'
-      path: '/providers'
-      fullPath: '/admin/providers'
-      preLoaderRoute: typeof AdminProvidersRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/skills': {
-      id: '/admin/skills'
-      path: '/skills'
-      fullPath: '/admin/skills'
-      preLoaderRoute: typeof AdminSkillsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/tools': {
-      id: '/admin/tools'
-      path: '/tools'
-      fullPath: '/admin/tools'
-      preLoaderRoute: typeof AdminToolsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/users': {
-      id: '/admin/users'
-      path: '/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/api/agents': {
-      id: '/api/agents'
-      path: '/api/agents'
-      fullPath: '/api/agents'
-      preLoaderRoute: typeof ApiAgentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/chat': {
-      id: '/api/chat'
-      path: '/api/chat'
-      fullPath: '/api/chat'
-      preLoaderRoute: typeof ApiChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/conversations': {
-      id: '/api/conversations'
-      path: '/api/conversations'
-      fullPath: '/api/conversations'
-      preLoaderRoute: typeof ApiConversationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/me': {
-      id: '/api/me'
-      path: '/api/me'
-      fullPath: '/api/me'
-      preLoaderRoute: typeof ApiMeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/plans': {
-      id: '/api/plans'
-      path: '/api/plans'
-      fullPath: '/api/plans'
-      preLoaderRoute: typeof ApiPlansRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/knowledge/$id': {
-      id: '/admin/knowledge/$id'
-      path: '/$id'
-      fullPath: '/admin/knowledge/$id'
-      preLoaderRoute: typeof AdminKnowledgeIdRouteImport
-      parentRoute: typeof AdminKnowledgeRoute
-    }
-    '/api/admin/agents': {
-      id: '/api/admin/agents'
-      path: '/api/admin/agents'
-      fullPath: '/api/admin/agents'
-      preLoaderRoute: typeof ApiAdminAgentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/builtin-providers': {
-      id: '/api/admin/builtin-providers'
-      path: '/api/admin/builtin-providers'
-      fullPath: '/api/admin/builtin-providers'
-      preLoaderRoute: typeof ApiAdminBuiltinProvidersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/knowledge': {
-      id: '/api/admin/knowledge'
-      path: '/api/admin/knowledge'
-      fullPath: '/api/admin/knowledge'
-      preLoaderRoute: typeof ApiAdminKnowledgeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/mcp': {
-      id: '/api/admin/mcp'
-      path: '/api/admin/mcp'
-      fullPath: '/api/admin/mcp'
-      preLoaderRoute: typeof ApiAdminMcpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/orders': {
-      id: '/api/admin/orders'
-      path: '/api/admin/orders'
-      fullPath: '/api/admin/orders'
-      preLoaderRoute: typeof ApiAdminOrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/plans': {
-      id: '/api/admin/plans'
-      path: '/api/admin/plans'
-      fullPath: '/api/admin/plans'
-      preLoaderRoute: typeof ApiAdminPlansRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/providers': {
-      id: '/api/admin/providers'
-      path: '/api/admin/providers'
-      fullPath: '/api/admin/providers'
-      preLoaderRoute: typeof ApiAdminProvidersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/skills': {
-      id: '/api/admin/skills'
-      path: '/api/admin/skills'
-      fullPath: '/api/admin/skills'
-      preLoaderRoute: typeof ApiAdminSkillsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/stats': {
-      id: '/api/admin/stats'
-      path: '/api/admin/stats'
-      fullPath: '/api/admin/stats'
-      preLoaderRoute: typeof ApiAdminStatsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/tools': {
-      id: '/api/admin/tools'
-      path: '/api/admin/tools'
-      fullPath: '/api/admin/tools'
-      preLoaderRoute: typeof ApiAdminToolsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/users': {
-      id: '/api/admin/users'
-      path: '/api/admin/users'
-      fullPath: '/api/admin/users'
-      preLoaderRoute: typeof ApiAdminUsersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/wechat': {
-      id: '/api/auth/wechat'
-      path: '/api/auth/wechat'
-      fullPath: '/api/auth/wechat'
-      preLoaderRoute: typeof ApiAuthWechatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/billing/membership': {
-      id: '/api/billing/membership'
-      path: '/api/billing/membership'
-      fullPath: '/api/billing/membership'
-      preLoaderRoute: typeof ApiBillingMembershipRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/billing/orders': {
-      id: '/api/billing/orders'
-      path: '/api/billing/orders'
-      fullPath: '/api/billing/orders'
-      preLoaderRoute: typeof ApiBillingOrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/conversations/$id': {
-      id: '/api/conversations/$id'
-      path: '/$id'
-      fullPath: '/api/conversations/$id'
-      preLoaderRoute: typeof ApiConversationsIdRouteImport
-      parentRoute: typeof ApiConversationsRoute
-    }
-    '/api/admin/agents/$id': {
-      id: '/api/admin/agents/$id'
-      path: '/$id'
-      fullPath: '/api/admin/agents/$id'
-      preLoaderRoute: typeof ApiAdminAgentsIdRouteImport
-      parentRoute: typeof ApiAdminAgentsRoute
-    }
-    '/api/admin/agents/auto-config': {
-      id: '/api/admin/agents/auto-config'
-      path: '/auto-config'
-      fullPath: '/api/admin/agents/auto-config'
-      preLoaderRoute: typeof ApiAdminAgentsAutoConfigRouteImport
-      parentRoute: typeof ApiAdminAgentsRoute
-    }
-    '/api/admin/knowledge/$id': {
-      id: '/api/admin/knowledge/$id'
-      path: '/$id'
-      fullPath: '/api/admin/knowledge/$id'
-      preLoaderRoute: typeof ApiAdminKnowledgeIdRouteImport
-      parentRoute: typeof ApiAdminKnowledgeRoute
-    }
-    '/api/admin/mcp/$id': {
-      id: '/api/admin/mcp/$id'
-      path: '/$id'
-      fullPath: '/api/admin/mcp/$id'
-      preLoaderRoute: typeof ApiAdminMcpIdRouteImport
-      parentRoute: typeof ApiAdminMcpRoute
-    }
-    '/api/admin/plans/$id': {
-      id: '/api/admin/plans/$id'
-      path: '/$id'
-      fullPath: '/api/admin/plans/$id'
-      preLoaderRoute: typeof ApiAdminPlansIdRouteImport
-      parentRoute: typeof ApiAdminPlansRoute
-    }
-    '/api/admin/providers/$id': {
-      id: '/api/admin/providers/$id'
-      path: '/$id'
-      fullPath: '/api/admin/providers/$id'
-      preLoaderRoute: typeof ApiAdminProvidersIdRouteImport
-      parentRoute: typeof ApiAdminProvidersRoute
-    }
-    '/api/admin/skills/$id': {
-      id: '/api/admin/skills/$id'
-      path: '/$id'
-      fullPath: '/api/admin/skills/$id'
-      preLoaderRoute: typeof ApiAdminSkillsIdRouteImport
-      parentRoute: typeof ApiAdminSkillsRoute
-    }
-    '/api/admin/tools/$id': {
-      id: '/api/admin/tools/$id'
-      path: '/$id'
-      fullPath: '/api/admin/tools/$id'
-      preLoaderRoute: typeof ApiAdminToolsIdRouteImport
-      parentRoute: typeof ApiAdminToolsRoute
-    }
-    '/api/admin/users/$id': {
-      id: '/api/admin/users/$id'
-      path: '/$id'
-      fullPath: '/api/admin/users/$id'
-      preLoaderRoute: typeof ApiAdminUsersIdRouteImport
-      parentRoute: typeof ApiAdminUsersRoute
-    }
-    '/api/auth/wechat/callback': {
-      id: '/api/auth/wechat/callback'
-      path: '/callback'
-      fullPath: '/api/auth/wechat/callback'
-      preLoaderRoute: typeof ApiAuthWechatCallbackRouteImport
-      parentRoute: typeof ApiAuthWechatRoute
-    }
-    '/api/auth/wechat/status': {
-      id: '/api/auth/wechat/status'
-      path: '/status'
-      fullPath: '/api/auth/wechat/status'
-      preLoaderRoute: typeof ApiAuthWechatStatusRouteImport
-      parentRoute: typeof ApiAuthWechatRoute
-    }
-    '/api/billing/orders/$orderNo': {
-      id: '/api/billing/orders/$orderNo'
-      path: '/$orderNo'
-      fullPath: '/api/billing/orders/$orderNo'
-      preLoaderRoute: typeof ApiBillingOrdersOrderNoRouteImport
-      parentRoute: typeof ApiBillingOrdersRoute
-    }
-    '/api/pay/notify/wechat': {
-      id: '/api/pay/notify/wechat'
-      path: '/api/pay/notify/wechat'
-      fullPath: '/api/pay/notify/wechat'
-      preLoaderRoute: typeof ApiPayNotifyWechatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/knowledge/$id/documents': {
-      id: '/api/admin/knowledge/$id/documents'
-      path: '/documents'
-      fullPath: '/api/admin/knowledge/$id/documents'
-      preLoaderRoute: typeof ApiAdminKnowledgeIdDocumentsRouteImport
-      parentRoute: typeof ApiAdminKnowledgeIdRoute
-    }
-    '/api/admin/mcp/$id/test': {
-      id: '/api/admin/mcp/$id/test'
-      path: '/test'
-      fullPath: '/api/admin/mcp/$id/test'
-      preLoaderRoute: typeof ApiAdminMcpIdTestRouteImport
-      parentRoute: typeof ApiAdminMcpIdRoute
-    }
-    '/api/billing/orders/$orderNo/mock-pay': {
-      id: '/api/billing/orders/$orderNo/mock-pay'
-      path: '/mock-pay'
-      fullPath: '/api/billing/orders/$orderNo/mock-pay'
-      preLoaderRoute: typeof ApiBillingOrdersOrderNoMockPayRouteImport
-      parentRoute: typeof ApiBillingOrdersOrderNoRoute
-    }
-    '/api/admin/knowledge/$id/documents/$docId': {
-      id: '/api/admin/knowledge/$id/documents/$docId'
-      path: '/$docId'
-      fullPath: '/api/admin/knowledge/$id/documents/$docId'
-      preLoaderRoute: typeof ApiAdminKnowledgeIdDocumentsDocIdRouteImport
-      parentRoute: typeof ApiAdminKnowledgeIdDocumentsRoute
-    }
-  }
 }
 
 interface AdminKnowledgeRouteChildren {
-  AdminKnowledgeIdRoute: typeof AdminKnowledgeIdRoute
+    AdminKnowledgeIdRoute: typeof AdminKnowledgeIdRoute;
 }
 
 const AdminKnowledgeRouteChildren: AdminKnowledgeRouteChildren = {
-  AdminKnowledgeIdRoute: AdminKnowledgeIdRoute,
-}
+    AdminKnowledgeIdRoute: AdminKnowledgeIdRoute,
+};
 
-const AdminKnowledgeRouteWithChildren = AdminKnowledgeRoute._addFileChildren(
-  AdminKnowledgeRouteChildren,
-)
+const AdminKnowledgeRouteWithChildren = AdminKnowledgeRoute._addFileChildren(AdminKnowledgeRouteChildren);
 
 interface AdminRouteChildren {
-  AdminAgentsRoute: typeof AdminAgentsRoute
-  AdminKnowledgeRoute: typeof AdminKnowledgeRouteWithChildren
-  AdminMcpRoute: typeof AdminMcpRoute
-  AdminOrdersRoute: typeof AdminOrdersRoute
-  AdminPlansRoute: typeof AdminPlansRoute
-  AdminProvidersRoute: typeof AdminProvidersRoute
-  AdminSkillsRoute: typeof AdminSkillsRoute
-  AdminToolsRoute: typeof AdminToolsRoute
-  AdminUsersRoute: typeof AdminUsersRoute
-  AdminIndexRoute: typeof AdminIndexRoute
+    AdminAgentsRoute: typeof AdminAgentsRoute;
+    AdminKnowledgeRoute: typeof AdminKnowledgeRouteWithChildren;
+    AdminMcpRoute: typeof AdminMcpRoute;
+    AdminOrdersRoute: typeof AdminOrdersRoute;
+    AdminPlansRoute: typeof AdminPlansRoute;
+    AdminProvidersRoute: typeof AdminProvidersRoute;
+    AdminSkillsRoute: typeof AdminSkillsRoute;
+    AdminToolsRoute: typeof AdminToolsRoute;
+    AdminUsersRoute: typeof AdminUsersRoute;
+    AdminIndexRoute: typeof AdminIndexRoute;
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminAgentsRoute: AdminAgentsRoute,
-  AdminKnowledgeRoute: AdminKnowledgeRouteWithChildren,
-  AdminMcpRoute: AdminMcpRoute,
-  AdminOrdersRoute: AdminOrdersRoute,
-  AdminPlansRoute: AdminPlansRoute,
-  AdminProvidersRoute: AdminProvidersRoute,
-  AdminSkillsRoute: AdminSkillsRoute,
-  AdminToolsRoute: AdminToolsRoute,
-  AdminUsersRoute: AdminUsersRoute,
-  AdminIndexRoute: AdminIndexRoute,
-}
+    AdminAgentsRoute: AdminAgentsRoute,
+    AdminKnowledgeRoute: AdminKnowledgeRouteWithChildren,
+    AdminMcpRoute: AdminMcpRoute,
+    AdminOrdersRoute: AdminOrdersRoute,
+    AdminPlansRoute: AdminPlansRoute,
+    AdminProvidersRoute: AdminProvidersRoute,
+    AdminSkillsRoute: AdminSkillsRoute,
+    AdminToolsRoute: AdminToolsRoute,
+    AdminUsersRoute: AdminUsersRoute,
+    AdminIndexRoute: AdminIndexRoute,
+};
 
-const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren);
 
 interface ApiConversationsRouteChildren {
-  ApiConversationsIdRoute: typeof ApiConversationsIdRoute
+    ApiConversationsIdRoute: typeof ApiConversationsIdRoute;
 }
 
 const ApiConversationsRouteChildren: ApiConversationsRouteChildren = {
-  ApiConversationsIdRoute: ApiConversationsIdRoute,
-}
+    ApiConversationsIdRoute: ApiConversationsIdRoute,
+};
 
-const ApiConversationsRouteWithChildren =
-  ApiConversationsRoute._addFileChildren(ApiConversationsRouteChildren)
+const ApiConversationsRouteWithChildren = ApiConversationsRoute._addFileChildren(ApiConversationsRouteChildren);
 
 interface ApiAdminAgentsRouteChildren {
-  ApiAdminAgentsIdRoute: typeof ApiAdminAgentsIdRoute
-  ApiAdminAgentsAutoConfigRoute: typeof ApiAdminAgentsAutoConfigRoute
+    ApiAdminAgentsIdRoute: typeof ApiAdminAgentsIdRoute;
+    ApiAdminAgentsAutoConfigRoute: typeof ApiAdminAgentsAutoConfigRoute;
 }
 
 const ApiAdminAgentsRouteChildren: ApiAdminAgentsRouteChildren = {
-  ApiAdminAgentsIdRoute: ApiAdminAgentsIdRoute,
-  ApiAdminAgentsAutoConfigRoute: ApiAdminAgentsAutoConfigRoute,
-}
+    ApiAdminAgentsIdRoute: ApiAdminAgentsIdRoute,
+    ApiAdminAgentsAutoConfigRoute: ApiAdminAgentsAutoConfigRoute,
+};
 
-const ApiAdminAgentsRouteWithChildren = ApiAdminAgentsRoute._addFileChildren(
-  ApiAdminAgentsRouteChildren,
-)
+const ApiAdminAgentsRouteWithChildren = ApiAdminAgentsRoute._addFileChildren(ApiAdminAgentsRouteChildren);
 
 interface ApiAdminKnowledgeIdDocumentsRouteChildren {
-  ApiAdminKnowledgeIdDocumentsDocIdRoute: typeof ApiAdminKnowledgeIdDocumentsDocIdRoute
+    ApiAdminKnowledgeIdDocumentsDocIdRoute: typeof ApiAdminKnowledgeIdDocumentsDocIdRoute;
 }
 
-const ApiAdminKnowledgeIdDocumentsRouteChildren: ApiAdminKnowledgeIdDocumentsRouteChildren =
-  {
-    ApiAdminKnowledgeIdDocumentsDocIdRoute:
-      ApiAdminKnowledgeIdDocumentsDocIdRoute,
-  }
+const ApiAdminKnowledgeIdDocumentsRouteChildren: ApiAdminKnowledgeIdDocumentsRouteChildren = {
+    ApiAdminKnowledgeIdDocumentsDocIdRoute: ApiAdminKnowledgeIdDocumentsDocIdRoute,
+};
 
-const ApiAdminKnowledgeIdDocumentsRouteWithChildren =
-  ApiAdminKnowledgeIdDocumentsRoute._addFileChildren(
-    ApiAdminKnowledgeIdDocumentsRouteChildren,
-  )
+const ApiAdminKnowledgeIdDocumentsRouteWithChildren = ApiAdminKnowledgeIdDocumentsRoute._addFileChildren(ApiAdminKnowledgeIdDocumentsRouteChildren);
 
 interface ApiAdminKnowledgeIdRouteChildren {
-  ApiAdminKnowledgeIdDocumentsRoute: typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren
+    ApiAdminKnowledgeIdDocumentsRoute: typeof ApiAdminKnowledgeIdDocumentsRouteWithChildren;
 }
 
 const ApiAdminKnowledgeIdRouteChildren: ApiAdminKnowledgeIdRouteChildren = {
-  ApiAdminKnowledgeIdDocumentsRoute:
-    ApiAdminKnowledgeIdDocumentsRouteWithChildren,
-}
+    ApiAdminKnowledgeIdDocumentsRoute: ApiAdminKnowledgeIdDocumentsRouteWithChildren,
+};
 
-const ApiAdminKnowledgeIdRouteWithChildren =
-  ApiAdminKnowledgeIdRoute._addFileChildren(ApiAdminKnowledgeIdRouteChildren)
+const ApiAdminKnowledgeIdRouteWithChildren = ApiAdminKnowledgeIdRoute._addFileChildren(ApiAdminKnowledgeIdRouteChildren);
 
 interface ApiAdminKnowledgeRouteChildren {
-  ApiAdminKnowledgeIdRoute: typeof ApiAdminKnowledgeIdRouteWithChildren
+    ApiAdminKnowledgeIdRoute: typeof ApiAdminKnowledgeIdRouteWithChildren;
 }
 
 const ApiAdminKnowledgeRouteChildren: ApiAdminKnowledgeRouteChildren = {
-  ApiAdminKnowledgeIdRoute: ApiAdminKnowledgeIdRouteWithChildren,
-}
+    ApiAdminKnowledgeIdRoute: ApiAdminKnowledgeIdRouteWithChildren,
+};
 
-const ApiAdminKnowledgeRouteWithChildren =
-  ApiAdminKnowledgeRoute._addFileChildren(ApiAdminKnowledgeRouteChildren)
+const ApiAdminKnowledgeRouteWithChildren = ApiAdminKnowledgeRoute._addFileChildren(ApiAdminKnowledgeRouteChildren);
 
 interface ApiAdminMcpIdRouteChildren {
-  ApiAdminMcpIdTestRoute: typeof ApiAdminMcpIdTestRoute
+    ApiAdminMcpIdTestRoute: typeof ApiAdminMcpIdTestRoute;
 }
 
 const ApiAdminMcpIdRouteChildren: ApiAdminMcpIdRouteChildren = {
-  ApiAdminMcpIdTestRoute: ApiAdminMcpIdTestRoute,
-}
+    ApiAdminMcpIdTestRoute: ApiAdminMcpIdTestRoute,
+};
 
-const ApiAdminMcpIdRouteWithChildren = ApiAdminMcpIdRoute._addFileChildren(
-  ApiAdminMcpIdRouteChildren,
-)
+const ApiAdminMcpIdRouteWithChildren = ApiAdminMcpIdRoute._addFileChildren(ApiAdminMcpIdRouteChildren);
 
 interface ApiAdminMcpRouteChildren {
-  ApiAdminMcpIdRoute: typeof ApiAdminMcpIdRouteWithChildren
+    ApiAdminMcpIdRoute: typeof ApiAdminMcpIdRouteWithChildren;
 }
 
 const ApiAdminMcpRouteChildren: ApiAdminMcpRouteChildren = {
-  ApiAdminMcpIdRoute: ApiAdminMcpIdRouteWithChildren,
-}
+    ApiAdminMcpIdRoute: ApiAdminMcpIdRouteWithChildren,
+};
 
-const ApiAdminMcpRouteWithChildren = ApiAdminMcpRoute._addFileChildren(
-  ApiAdminMcpRouteChildren,
-)
+const ApiAdminMcpRouteWithChildren = ApiAdminMcpRoute._addFileChildren(ApiAdminMcpRouteChildren);
 
 interface ApiAdminPlansRouteChildren {
-  ApiAdminPlansIdRoute: typeof ApiAdminPlansIdRoute
+    ApiAdminPlansIdRoute: typeof ApiAdminPlansIdRoute;
 }
 
 const ApiAdminPlansRouteChildren: ApiAdminPlansRouteChildren = {
-  ApiAdminPlansIdRoute: ApiAdminPlansIdRoute,
-}
+    ApiAdminPlansIdRoute: ApiAdminPlansIdRoute,
+};
 
-const ApiAdminPlansRouteWithChildren = ApiAdminPlansRoute._addFileChildren(
-  ApiAdminPlansRouteChildren,
-)
+const ApiAdminPlansRouteWithChildren = ApiAdminPlansRoute._addFileChildren(ApiAdminPlansRouteChildren);
 
 interface ApiAdminProvidersRouteChildren {
-  ApiAdminProvidersIdRoute: typeof ApiAdminProvidersIdRoute
+    ApiAdminProvidersIdRoute: typeof ApiAdminProvidersIdRoute;
 }
 
 const ApiAdminProvidersRouteChildren: ApiAdminProvidersRouteChildren = {
-  ApiAdminProvidersIdRoute: ApiAdminProvidersIdRoute,
-}
+    ApiAdminProvidersIdRoute: ApiAdminProvidersIdRoute,
+};
 
-const ApiAdminProvidersRouteWithChildren =
-  ApiAdminProvidersRoute._addFileChildren(ApiAdminProvidersRouteChildren)
+const ApiAdminProvidersRouteWithChildren = ApiAdminProvidersRoute._addFileChildren(ApiAdminProvidersRouteChildren);
 
 interface ApiAdminSkillsRouteChildren {
-  ApiAdminSkillsIdRoute: typeof ApiAdminSkillsIdRoute
+    ApiAdminSkillsIdRoute: typeof ApiAdminSkillsIdRoute;
 }
 
 const ApiAdminSkillsRouteChildren: ApiAdminSkillsRouteChildren = {
-  ApiAdminSkillsIdRoute: ApiAdminSkillsIdRoute,
-}
+    ApiAdminSkillsIdRoute: ApiAdminSkillsIdRoute,
+};
 
-const ApiAdminSkillsRouteWithChildren = ApiAdminSkillsRoute._addFileChildren(
-  ApiAdminSkillsRouteChildren,
-)
+const ApiAdminSkillsRouteWithChildren = ApiAdminSkillsRoute._addFileChildren(ApiAdminSkillsRouteChildren);
 
 interface ApiAdminToolsRouteChildren {
-  ApiAdminToolsIdRoute: typeof ApiAdminToolsIdRoute
+    ApiAdminToolsIdRoute: typeof ApiAdminToolsIdRoute;
 }
 
 const ApiAdminToolsRouteChildren: ApiAdminToolsRouteChildren = {
-  ApiAdminToolsIdRoute: ApiAdminToolsIdRoute,
-}
+    ApiAdminToolsIdRoute: ApiAdminToolsIdRoute,
+};
 
-const ApiAdminToolsRouteWithChildren = ApiAdminToolsRoute._addFileChildren(
-  ApiAdminToolsRouteChildren,
-)
+const ApiAdminToolsRouteWithChildren = ApiAdminToolsRoute._addFileChildren(ApiAdminToolsRouteChildren);
 
 interface ApiAdminUsersRouteChildren {
-  ApiAdminUsersIdRoute: typeof ApiAdminUsersIdRoute
+    ApiAdminUsersIdRoute: typeof ApiAdminUsersIdRoute;
 }
 
 const ApiAdminUsersRouteChildren: ApiAdminUsersRouteChildren = {
-  ApiAdminUsersIdRoute: ApiAdminUsersIdRoute,
-}
+    ApiAdminUsersIdRoute: ApiAdminUsersIdRoute,
+};
 
-const ApiAdminUsersRouteWithChildren = ApiAdminUsersRoute._addFileChildren(
-  ApiAdminUsersRouteChildren,
-)
+const ApiAdminUsersRouteWithChildren = ApiAdminUsersRoute._addFileChildren(ApiAdminUsersRouteChildren);
 
 interface ApiAuthWechatRouteChildren {
-  ApiAuthWechatCallbackRoute: typeof ApiAuthWechatCallbackRoute
-  ApiAuthWechatStatusRoute: typeof ApiAuthWechatStatusRoute
+    ApiAuthWechatCallbackRoute: typeof ApiAuthWechatCallbackRoute;
+    ApiAuthWechatStatusRoute: typeof ApiAuthWechatStatusRoute;
 }
 
 const ApiAuthWechatRouteChildren: ApiAuthWechatRouteChildren = {
-  ApiAuthWechatCallbackRoute: ApiAuthWechatCallbackRoute,
-  ApiAuthWechatStatusRoute: ApiAuthWechatStatusRoute,
-}
+    ApiAuthWechatCallbackRoute: ApiAuthWechatCallbackRoute,
+    ApiAuthWechatStatusRoute: ApiAuthWechatStatusRoute,
+};
 
-const ApiAuthWechatRouteWithChildren = ApiAuthWechatRoute._addFileChildren(
-  ApiAuthWechatRouteChildren,
-)
+const ApiAuthWechatRouteWithChildren = ApiAuthWechatRoute._addFileChildren(ApiAuthWechatRouteChildren);
 
 interface ApiBillingOrdersOrderNoRouteChildren {
-  ApiBillingOrdersOrderNoMockPayRoute: typeof ApiBillingOrdersOrderNoMockPayRoute
+    ApiBillingOrdersOrderNoMockPayRoute: typeof ApiBillingOrdersOrderNoMockPayRoute;
 }
 
-const ApiBillingOrdersOrderNoRouteChildren: ApiBillingOrdersOrderNoRouteChildren =
-  {
+const ApiBillingOrdersOrderNoRouteChildren: ApiBillingOrdersOrderNoRouteChildren = {
     ApiBillingOrdersOrderNoMockPayRoute: ApiBillingOrdersOrderNoMockPayRoute,
-  }
+};
 
-const ApiBillingOrdersOrderNoRouteWithChildren =
-  ApiBillingOrdersOrderNoRoute._addFileChildren(
-    ApiBillingOrdersOrderNoRouteChildren,
-  )
+const ApiBillingOrdersOrderNoRouteWithChildren = ApiBillingOrdersOrderNoRoute._addFileChildren(ApiBillingOrdersOrderNoRouteChildren);
 
 interface ApiBillingOrdersRouteChildren {
-  ApiBillingOrdersOrderNoRoute: typeof ApiBillingOrdersOrderNoRouteWithChildren
+    ApiBillingOrdersOrderNoRoute: typeof ApiBillingOrdersOrderNoRouteWithChildren;
 }
 
 const ApiBillingOrdersRouteChildren: ApiBillingOrdersRouteChildren = {
-  ApiBillingOrdersOrderNoRoute: ApiBillingOrdersOrderNoRouteWithChildren,
-}
+    ApiBillingOrdersOrderNoRoute: ApiBillingOrdersOrderNoRouteWithChildren,
+};
 
-const ApiBillingOrdersRouteWithChildren =
-  ApiBillingOrdersRoute._addFileChildren(ApiBillingOrdersRouteChildren)
+const ApiBillingOrdersRouteWithChildren = ApiBillingOrdersRoute._addFileChildren(ApiBillingOrdersRouteChildren);
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AdminRoute: AdminRouteWithChildren,
-  ChatRoute: ChatRoute,
-  LoginRoute: LoginRoute,
-  PricingRoute: PricingRoute,
-  RegisterRoute: RegisterRoute,
-  ApiAgentsRoute: ApiAgentsRoute,
-  ApiChatRoute: ApiChatRoute,
-  ApiConversationsRoute: ApiConversationsRouteWithChildren,
-  ApiMeRoute: ApiMeRoute,
-  ApiPlansRoute: ApiPlansRoute,
-  ApiAdminAgentsRoute: ApiAdminAgentsRouteWithChildren,
-  ApiAdminBuiltinProvidersRoute: ApiAdminBuiltinProvidersRoute,
-  ApiAdminKnowledgeRoute: ApiAdminKnowledgeRouteWithChildren,
-  ApiAdminMcpRoute: ApiAdminMcpRouteWithChildren,
-  ApiAdminOrdersRoute: ApiAdminOrdersRoute,
-  ApiAdminPlansRoute: ApiAdminPlansRouteWithChildren,
-  ApiAdminProvidersRoute: ApiAdminProvidersRouteWithChildren,
-  ApiAdminSkillsRoute: ApiAdminSkillsRouteWithChildren,
-  ApiAdminStatsRoute: ApiAdminStatsRoute,
-  ApiAdminToolsRoute: ApiAdminToolsRouteWithChildren,
-  ApiAdminUsersRoute: ApiAdminUsersRouteWithChildren,
-  ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiAuthWechatRoute: ApiAuthWechatRouteWithChildren,
-  ApiBillingMembershipRoute: ApiBillingMembershipRoute,
-  ApiBillingOrdersRoute: ApiBillingOrdersRouteWithChildren,
-  ApiPayNotifyWechatRoute: ApiPayNotifyWechatRoute,
-}
-export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+    IndexRoute: IndexRoute,
+    AdminRoute: AdminRouteWithChildren,
+    ChatRoute: ChatRoute,
+    LoginRoute: LoginRoute,
+    PricingRoute: PricingRoute,
+    RegisterRoute: RegisterRoute,
+    ApiAgentsRoute: ApiAgentsRoute,
+    ApiChatRoute: ApiChatRoute,
+    ApiConversationsRoute: ApiConversationsRouteWithChildren,
+    ApiMeRoute: ApiMeRoute,
+    ApiPlansRoute: ApiPlansRoute,
+    ApiAdminAgentsRoute: ApiAdminAgentsRouteWithChildren,
+    ApiAdminBuiltinProvidersRoute: ApiAdminBuiltinProvidersRoute,
+    ApiAdminKnowledgeRoute: ApiAdminKnowledgeRouteWithChildren,
+    ApiAdminMcpRoute: ApiAdminMcpRouteWithChildren,
+    ApiAdminOrdersRoute: ApiAdminOrdersRoute,
+    ApiAdminPlansRoute: ApiAdminPlansRouteWithChildren,
+    ApiAdminProvidersRoute: ApiAdminProvidersRouteWithChildren,
+    ApiAdminSkillsRoute: ApiAdminSkillsRouteWithChildren,
+    ApiAdminStatsRoute: ApiAdminStatsRoute,
+    ApiAdminToolsRoute: ApiAdminToolsRouteWithChildren,
+    ApiAdminUsersRoute: ApiAdminUsersRouteWithChildren,
+    ApiAuthSplatRoute: ApiAuthSplatRoute,
+    ApiAuthWechatRoute: ApiAuthWechatRouteWithChildren,
+    ApiBillingMembershipRoute: ApiBillingMembershipRoute,
+    ApiBillingOrdersRoute: ApiBillingOrdersRouteWithChildren,
+    ApiPayNotifyWechatRoute: ApiPayNotifyWechatRoute,
+};
+export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { createStart } from '@tanstack/react-start';
+import type { getRouter } from './router.tsx';
 declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
+    interface Register {
+        ssr: true;
+        router: Awaited<ReturnType<typeof getRouter>>;
+    }
 }
