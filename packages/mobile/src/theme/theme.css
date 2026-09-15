@@ -1,5 +1,4 @@
-@import 'tailwindcss';
-@import '../../../contract/src/theme.css';
+@import './base.css';
 
 /* 移动端采用 class 策略的深色模式（由 useTheme 切换 <html class="dark">） */
 @custom-variant dark (&:where(.dark, .dark *));

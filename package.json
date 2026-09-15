@@ -68,7 +68,7 @@
         "@iconify/vue": "^5.0.1",
         "@json-render/core": "^0.20.0",
         "@json-render/vue": "^0.20.0",
-        "@mastra/ai-sdk": "^1.10.2",
+        "@mastra/ai-sdk": "^1.10.3",
         "@milkdown/crepe": "^7.22.1",
         "@milkdown/kit": "^7.22.1",
         "@milkdown/vue": "^7.22.1",
@@ -82,7 +82,7 @@
         "@tiptap/pm": "^3.31.3",
         "@tiptap/starter-kit": "^3.31.3",
         "@tiptap/vue-3": "^3.31.3",
-        "@unhead/vue": "^3.4.0",
+        "@unhead/vue": "^3.4.1",
         "@vue-flow/core": "^1.48.2",
         "@vueuse/core": "^14.4.0",
         "ai": "^7.0.101",
@@ -190,5 +190,5 @@
         "*.{ts,tsx,js,jsx}": "eslint --fix",
         "*.{ts,tsx,js,jsx,mjs,mts,cjs,css,vue}": "prettier --write"
     },
-    "packageManager": "pnpm@12.4.1"
+    "packageManager": "pnpm@12.4.2"
 }
