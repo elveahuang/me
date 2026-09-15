@@ -1,0 +1,309 @@
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+
+definePageMeta({ layout: 'admin', middleware: 'admin' });
+
+const { t } = useI18n();
+
+interface AdminPlan {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    chatQuotaPerDay: number | null;
+    monthlyPriceCents: number;
+    yearlyPriceCents: number | null;
+    enabled: boolean;
+    sortOrder: number;
+}
+
+const plans = ref<AdminPlan[]>([]);
+const editing = ref<Partial<AdminPlan> | null>(null);
+const errorMessage = ref<string | null>(null);
+
+const form = reactive({
+    code: '',
+    name: '',
+    description: '',
+    chatQuotaPerDay: null as number | null,
+    monthlyPriceYuan: '0',
+    yearlyPriceYuan: '',
+    enabled: true,
+    sortOrder: 0,
+});
+
+async function load() {
+    try {
+        plans.value = await $fetch<AdminPlan[]>('/api/admin/plans');
+    } catch (e: any) {
+        console.error('加载套餐列表失败:', e);
+    }
+}
+
+onMounted(load);
+
+function openCreate() {
+    editing.value = {};
+    Object.assign(form, {
+        code: '',
+        name: '',
+        description: '',
+        chatQuotaPerDay: null,
+        monthlyPriceYuan: '0',
+        yearlyPriceYuan: '',
+        enabled: true,
+        sortOrder: 0,
+    });
+    errorMessage.value = null;
+}
+
+function openEdit(plan: AdminPlan) {
+    editing.value = plan;
+    Object.assign(form, {
+        code: plan.code,
+        name: plan.name,
+        description: plan.description,
+        chatQuotaPerDay: plan.chatQuotaPerDay,
+        monthlyPriceYuan: (plan.monthlyPriceCents / 100).toFixed(2),
+        yearlyPriceYuan: plan.yearlyPriceCents !== null ? (plan.yearlyPriceCents / 100).toFixed(2) : '',
+        enabled: plan.enabled,
+        sortOrder: plan.sortOrder,
+    });
+    errorMessage.value = null;
+}
+
+async function save() {
+    errorMessage.value = null;
+    if (!form.code.trim()) {
+        errorMessage.value = '套餐编码不能为空';
+        return;
+    }
+    if (!form.name.trim()) {
+        errorMessage.value = '套餐名称不能为空';
+        return;
+    }
+    const monthlyPriceCents = Math.round(parseFloat(form.monthlyPriceYuan || '0') * 100);
+    const yearlyPriceCents = form.yearlyPriceYuan.trim() ? Math.round(parseFloat(form.yearlyPriceYuan) * 100) : null;
+
+    if (Number.isNaN(monthlyPriceCents) || monthlyPriceCents < 0) {
+        errorMessage.value = '月付价格必须为非负数';
+        return;
+    }
+    if (yearlyPriceCents !== null && (Number.isNaN(yearlyPriceCents) || yearlyPriceCents < 0)) {
+        errorMessage.value = '年付价格必须为非负数';
+        return;
+    }
+
+    try {
+        if (editing.value?.id) {
+            await $fetch(`/api/admin/plans/${editing.value.id}`, {
+                method: 'PATCH',
+                body: {
+                    name: form.name.trim(),
+                    description: form.description.trim(),
+                    chatQuotaPerDay: form.chatQuotaPerDay === null || form.chatQuotaPerDay === undefined ? null : Number(form.chatQuotaPerDay),
+                    monthlyPriceCents,
+                    yearlyPriceCents,
+                    enabled: form.enabled,
+                    sortOrder: Number(form.sortOrder) || 0,
+                },
+            });
+        } else {
+            await $fetch('/api/admin/plans', {
+                method: 'POST',
+                body: {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    description: form.description.trim(),
+                    chatQuotaPerDay: form.chatQuotaPerDay === null || form.chatQuotaPerDay === undefined ? null : Number(form.chatQuotaPerDay),
+                    monthlyPriceCents,
+                    yearlyPriceCents,
+                    enabled: form.enabled,
+                    sortOrder: Number(form.sortOrder) || 0,
+                },
+            });
+        }
+        editing.value = null;
+        await load();
+    } catch (e: any) {
+        errorMessage.value = e.data?.statusMessage || e.message || '保存失败';
+    }
+}
+
+async function remove(id: string) {
+    if (!confirm('确认删除该套餐？')) return;
+    try {
+        await $fetch(`/api/admin/plans/${id}`, { method: 'DELETE' });
+        await load();
+    } catch (e: any) {
+        alert(e.data?.statusMessage || e.message || '删除失败');
+    }
+}
+</script>
+
+<template>
+    <div class="space-y-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ t('nav.plans') }}</h1>
+                <p class="mt-1 text-xs text-slate-500">会员套餐定义每日对话配额与周期定价；free 为注册用户的免费兜底档</p>
+            </div>
+            <button
+                class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
+                @click="openCreate"
+            >
+                + {{ t('admin.addRecord') }}
+            </button>
+        </div>
+
+        <!-- 编辑 / 新建表单 -->
+        <div v-if="editing !== null" class="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs sm:p-8">
+            <h3 class="text-base font-black text-slate-900">{{ editing.id ? t('common.edit') : t('admin.addRecord') }}</h3>
+            <p v-if="errorMessage" class="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-600">{{ errorMessage }}</p>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐编码 (创建后不可修改)</label>
+                    <input
+                        v-model="form.code"
+                        :disabled="Boolean(editing.id)"
+                        placeholder="如 pro / max"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white disabled:bg-slate-100"
+                    />
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐名称</label>
+                    <input
+                        v-model="form.name"
+                        placeholder="如 专业版 Pro"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐描述与权益</label>
+                <input
+                    v-model="form.description"
+                    placeholder="套餐核心权益简述"
+                    class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                />
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">每日对话配额 (留空不限)</label>
+                    <input
+                        v-model="form.chatQuotaPerDay"
+                        type="number"
+                        placeholder="留空为无限制"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">月付价格 (元)</label>
+                    <input
+                        v-model="form.monthlyPriceYuan"
+                        type="number"
+                        step="0.01"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">年付价格 (元，留空不支持)</label>
+                    <input
+                        v-model="form.yearlyPriceYuan"
+                        type="number"
+                        step="0.01"
+                        placeholder="留空为无"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">显示排序 (越小越靠前)</label>
+                    <input
+                        v-model="form.sortOrder"
+                        type="number"
+                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                    />
+                </div>
+                <div class="flex items-center gap-2 pt-6">
+                    <label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                        <input v-model="form.enabled" type="checkbox" class="rounded text-emerald-600" />
+                        <span>启用上架并对用户可见</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button
+                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
+                    @click="save"
+                >
+                    {{ t('common.save') }}
+                </button>
+                <button
+                    class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200"
+                    @click="editing = null"
+                >
+                    {{ t('common.cancel') }}
+                </button>
+            </div>
+        </div>
+
+        <!-- 套餐表格 -->
+        <div class="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
+                        <tr>
+                            <th class="p-4">编码</th>
+                            <th class="p-4">名称</th>
+                            <th class="p-4">每日配额</th>
+                            <th class="p-4">月价</th>
+                            <th class="p-4">年价</th>
+                            <th class="p-4">排序</th>
+                            <th class="p-4">{{ t('common.status') }}</th>
+                            <th class="p-4 text-right">{{ t('common.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-700">
+                        <tr v-for="p in plans" :key="p.id" class="transition-colors hover:bg-slate-50/60">
+                            <td class="p-4 font-mono font-bold text-slate-900">{{ p.code }}</td>
+                            <td class="p-4">
+                                <div class="font-bold text-slate-900">{{ p.name }}</div>
+                                <div class="mt-0.5 max-w-xs truncate text-[11px] text-slate-400">{{ p.description }}</div>
+                            </td>
+                            <td class="p-4 font-semibold text-slate-800">{{ p.chatQuotaPerDay ?? '∞ 不限量' }}</td>
+                            <td class="p-4 font-black text-slate-900">¥{{ (p.monthlyPriceCents / 100).toFixed(2) }}</td>
+                            <td class="p-4 text-slate-600">{{ p.yearlyPriceCents !== null ? `¥${(p.yearlyPriceCents / 100).toFixed(2)}` : '—' }}</td>
+                            <td class="p-4 text-slate-400">{{ p.sortOrder }}</td>
+                            <td class="p-4">
+                                <span
+                                    :class="[
+                                        'rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                                        p.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500',
+                                    ]"
+                                >
+                                    {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
+                                </span>
+                            </td>
+                            <td class="space-x-2 p-4 text-right whitespace-nowrap">
+                                <button class="font-bold text-emerald-600 hover:text-emerald-700" @click="openEdit(p)">{{ t('common.edit') }}</button>
+                                <button v-if="p.code !== 'free'" class="font-medium text-rose-500 hover:text-rose-700" @click="remove(p.id)">
+                                    {{ t('common.delete') }}
+                                </button>
+                            </td>
+                        </tr>
+                        <tr v-if="!plans.length">
+                            <td colspan="8" class="p-12 text-center text-xs text-slate-400">{{ t('admin.tableEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</template>

@@ -1,0 +1,18 @@
+.idea
+.nuxt
+.zcode
+**/.nuxt
+node_modules
+**/node_modules
+dist
+temp
+**/dist
+.output
+**/.output
+
+# husky runtime（只提交 .husky/pre-commit 等钩子文件）
+.husky/_
+
+apps/server/.data
+
+packages/webapp/.data.zcode/

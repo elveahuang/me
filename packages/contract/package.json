@@ -1,0 +1,11 @@
+{
+    "name": "@repo/contract",
+    "version": "26.3.0",
+    "private": true,
+    "description": "Web / Mobile 共用的接口契约、格式化工具与主题令牌（源码直引，无需构建）",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts",
+        "./theme.css": "./src/theme.css"
+    }
+}

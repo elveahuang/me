@@ -1,0 +1,51 @@
+{
+    "name": "@repo/config",
+    "version": "26.3.0",
+    "private": true,
+    "publishConfig": {
+        "access": "public"
+    },
+    "exports": {
+        "./typescript/vue.json": "./src/typescript/vue.json",
+        "./typescript/node.json": "./src/typescript/node.json",
+        "./typescript/nuxt.json": "./src/typescript/nuxt.json",
+        "./typescript/base.json": "./src/typescript/base.json",
+        "./stylelint/base": "./src/stylelint/stylelint.config.mjs",
+        "./prettier/base": "./src/prettier/prettier.config.mjs",
+        "./eslint/base": "./src/eslint/eslint.config.mjs",
+        "./commitlint/base": "./src/commitlint/commitlint.config.mjs"
+    },
+    "dependencies": {
+        "@commitlint/cli": "^21.2.2",
+        "@commitlint/config-conventional": "^21.2.2",
+        "@eslint/js": "^10.0.1",
+        "@eslint/markdown": "^8.0.3",
+        "@intlify/unplugin-vue-i18n": "^11.2.5",
+        "@typescript-eslint/eslint-plugin": "^8.70.0",
+        "@typescript-eslint/parser": "^8.70.0",
+        "@vue/eslint-config-prettier": "^10.2.0",
+        "@vue/eslint-config-typescript": "^14.9.0",
+        "@vue/tsconfig": "^0.9.1",
+        "eslint": "^10.10.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-html": "^8.2.0",
+        "eslint-plugin-prettier": "^5.5.6",
+        "eslint-plugin-vue": "^10.11.0",
+        "globals": "^17.12.0",
+        "prettier": "^3.9.6",
+        "prettier-plugin-organize-imports": "^4.3.0",
+        "prettier-plugin-tailwindcss": "^0.8.1",
+        "stylelint": "^17.15.0",
+        "stylelint-config-html": "^2.0.0",
+        "stylelint-config-recess-order": "^7.8.0",
+        "stylelint-config-standard": "^40.0.0",
+        "stylelint-config-standard-vue": "^2.0.0",
+        "stylelint-order": "^8.1.1",
+        "stylelint-prettier": "^5.0.3",
+        "typescript": "6.0.3",
+        "typescript-eslint": "^8.70.0",
+        "typescript-plugin-css-modules": "^5.2.0",
+        "vue": "^3.5.42",
+        "vue-eslint-parser": "^10.4.1"
+    }
+}

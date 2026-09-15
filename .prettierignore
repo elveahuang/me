@@ -1,0 +1,4 @@
+.nuxt
+dist
+auto-imports.d.ts
+typed-router.d.ts
