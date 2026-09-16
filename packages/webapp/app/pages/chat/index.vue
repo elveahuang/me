@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentSummary, ConversationSummary } from '@contract';
+import type { AgentSummary, ConversationSummary } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ middleware: 'auth' });

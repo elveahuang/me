@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { BRAND_PRESETS, MODE_PRESETS } from '@contract';
-import { useTheme } from '../composables/useTheme';
+import { BRAND_PRESETS, MODE_PRESETS } from '@commons/contract';
+import { useTheme } from '@/composables/useTheme';
 
 const { mode, brand, setMode, setBrand } = useTheme();
 </script>

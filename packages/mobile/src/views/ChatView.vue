@@ -2,7 +2,7 @@
 import { Chat } from '@ai-sdk/vue';
 import { Markdown } from '@comark/vue';
 import jsonRender from '@comark/vue/plugins/json-render';
-import { extractApiError, isQuotaError, type AgentDetail, type ChatMessage, type ConversationSummary } from '@contract';
+import { extractApiError, isQuotaError, type AgentDetail, type ChatMessage, type ConversationSummary } from '@commons/contract';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { IonBackButton, IonButtons, IonContent, IonHeader, IonModal, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';

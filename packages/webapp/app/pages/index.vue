@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentSummary } from '@contract';
+import type { AgentSummary } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
 

@@ -1,15 +1,15 @@
 import {
+    applyThemeToElement,
     DEFAULT_BRAND,
     DEFAULT_MODE,
-    THEME_BRANDS,
-    THEME_STORAGE_KEY,
-    applyThemeToElement,
     parseTheme,
     resolveDarkClass,
     serializeTheme,
+    THEME_BRANDS,
+    THEME_STORAGE_KEY,
     type ThemeBrand,
     type ThemeMode,
-} from '@contract';
+} from '@commons/contract';
 import { readonly, ref } from 'vue';
 
 /**

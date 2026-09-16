@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { extractApiError } from '@contract';
+import { extractApiError } from '@commons/contract';
 import { IonContent, IonHeader, IonInput, IonTitle, IonToolbar } from '@ionic/vue';
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, authClient } from '../api/auth';
-import { useTheme } from '../composables/useTheme';
+import { useTheme } from '@/composables/useTheme';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
@@ -49,15 +49,6 @@ function loginWithWechat() {
 
 <template>
     <PageShell>
-        <ion-header class="ion-no-border">
-            <ion-toolbar>
-                <ion-title class="!text-sm font-black">{{ t('nav.login') }}</ion-title>
-                <template v-slot:end>
-                    <button type="button" class="app-btn app-btn-ghost mr-1 !px-2.5" @click="toggleMode">🌓</button>
-                </template>
-            </ion-toolbar>
-        </ion-header>
-
         <ion-content>
             <div class="flex min-h-full flex-col justify-center p-5">
                 <div class="app-card overflow-hidden">
@@ -87,7 +78,7 @@ function loginWithWechat() {
                     </form>
                 </div>
 
-                <button v-if="wechat.enabled" type="button" class="app-btn app-btn-outline mt-4 w-full !py-3" @click="loginWithWechat">
+                <button v-if="wechat.enabled" type="button" class="app-btn app-btn-outline mt-4 w-full py-3!" @click="loginWithWechat">
                     <span>💬</span>
                     <span>微信快捷登录</span>
                 </button>

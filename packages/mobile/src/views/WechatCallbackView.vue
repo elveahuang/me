@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError } from '@contract';
+import { extractApiError } from '@commons/contract';
 import { IonContent, IonPage, IonSpinner } from '@ionic/vue';
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BRAND_PRESETS, MODE_PRESETS } from '@contract';
+import { BRAND_PRESETS, MODE_PRESETS } from '@commons/contract';
 
 withDefaults(
     defineProps<{

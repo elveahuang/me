@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDate, formatYuan, type MeResponse, type OrdersResponse } from '@contract';
+import { extractApiError, formatDate, formatYuan, type MeResponse, type OrdersResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';

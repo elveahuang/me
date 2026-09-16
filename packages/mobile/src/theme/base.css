@@ -22,5 +22,5 @@
 @import 'konsta/vue/theme.css';
 
 /* Custom */
-@import '../../../contract/src/theme.css';
+@import '@commons/styles/theme.css';
 @import './variables.css';

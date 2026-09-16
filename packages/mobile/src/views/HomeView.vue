@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentSummary } from '@contract';
+import type { AgentSummary } from '@commons/contract';
 import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';

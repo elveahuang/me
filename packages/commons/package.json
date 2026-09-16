@@ -1,6 +1,14 @@
 {
     "name": "@repo/commons",
     "version": "26.4.0",
+    "private": true,
+    "publishConfig": {
+        "access": "public"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./styles/theme.css": "./src/styles/theme.css"
+    },
     "dependencies": {
         "tailwindcss": "^4.3.3",
         "typescript": "6.0.3",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Chat } from '@ai-sdk/vue';
-import { extractApiError, isQuotaError, type AgentDetail, type ConversationSummary } from '@contract';
+import { extractApiError, isQuotaError, type AgentDetail, type ConversationSummary } from '@commons/contract';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { useI18n } from 'vue-i18n';
 import { downloadMarkdownFile, formatConversationMarkdown } from '~/utils/markdown-export';

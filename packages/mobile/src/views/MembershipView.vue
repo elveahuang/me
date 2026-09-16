@@ -10,7 +10,7 @@ import {
     type OrderRecord,
     type Plan,
     type PlansResponse,
-} from '@contract';
+} from '@commons/contract';
 import { IonBackButton, IonButtons, IonContent, IonHeader, IonModal, IonPage, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
 import QRCode from 'qrcode';
 import { computed, onMounted, onUnmounted, ref } from 'vue';

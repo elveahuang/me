@@ -1,4 +1,4 @@
-import { extractApiError, type SessionUser } from '@contract';
+import { extractApiError, type SessionUser } from '@commons/contract';
 import { createAuthClient } from 'better-auth/client';
 
 /**

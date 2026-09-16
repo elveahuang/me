@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError } from '@contract';
+import { extractApiError } from '@commons/contract';
 import { IonContent, IonHeader, IonInput, IonTitle, IonToolbar } from '@ionic/vue';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';

@@ -1,4 +1,4 @@
-import { DEFAULT_BRAND, THEME_BRANDS, isThemeBrand, type ThemeBrand } from '@contract';
+import { DEFAULT_BRAND, THEME_BRANDS, isThemeBrand, type ThemeBrand } from '@commons/contract';
 
 /**
  * 主题状态（Web 端）：

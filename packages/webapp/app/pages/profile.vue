@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BRAND_PRESETS, MODE_PRESETS, formatDate, formatYuan, quotaUsedPercent, type MeResponse, type OrdersResponse } from '@contract';
+import { BRAND_PRESETS, MODE_PRESETS, formatDate, formatYuan, quotaUsedPercent, type MeResponse, type OrdersResponse } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { authClient, fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
 

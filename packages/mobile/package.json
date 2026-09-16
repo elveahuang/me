@@ -9,6 +9,7 @@
         "preview": "vite preview",
         "typecheck": "vue-tsc --noEmit"
     },
+
     "dependencies": {
         "@ai-sdk/vue": "^4.0.102",
         "@comark/vue": "^0.7.0",

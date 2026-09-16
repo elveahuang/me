@@ -10,7 +10,7 @@ import {
     type OrderRecord,
     type PlansResponse,
     type Plan,
-} from '@contract';
+} from '@commons/contract';
 import QRCode from 'qrcode';
 import { useI18n } from 'vue-i18n';
 

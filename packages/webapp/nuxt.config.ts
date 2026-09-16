@@ -6,11 +6,10 @@ export default defineNuxtConfig({
     compatibilityDate: '2026-04-01',
     modules: ['@nuxt/content', '@nuxt/icon', '@nuxt/image', '@nuxt/ui', '@comark/nuxt'],
     devtools: { enabled: false },
-    // 与 mobile 共用同一份接口契约 / 主题令牌（packages/contract）
-    alias: {
-        '@contract': fileURLToPath(new URL('../contract/src/index.ts', import.meta.url)),
-    },
     css: [resolve(__dirname, 'app/assets/css/main.css')],
+    alias: {
+        '@commons': fileURLToPath(new URL('../commons/src', import.meta.url)),
+    },
     content: {
         database: {
             type: 'postgresql',
