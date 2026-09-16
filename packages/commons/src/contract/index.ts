@@ -235,13 +235,35 @@ export function extractApiError(error: unknown, fallback = '操作失败，请�
     if (fromData) return fromData;
     if (err.statusMessage) return err.statusMessage;
     const status = err.status ?? err.statusCode;
-    if (typeof err.message === 'string' && err.message.trim() && !/^\d{3}$/.test(err.message.trim())) {
-        return status && !err.message.includes(String(status)) ? `${err.message}（${status}）` : err.message;
+    const message = typeof err.message === 'string' ? err.message.trim() : '';
+    /**
+     * 部分 SDK（如 AI SDK 的 Chat）会把整个 JSON 响应体塞进 message，
+     * 直接返回会把服务端字段甚至堆栈暴露给用户，这里再解析一层。
+     */
+    const fromJson = readJsonMessage(message);
+    if (fromJson) return fromJson;
+    if (message && fromJson === undefined && !/^\d{3}$/.test(message)) {
+        return status && !message.includes(String(status)) ? `${message}（${status}）` : message;
     }
     if (status === 401) return '登录状态已失效，请重新登录';
     if (status === 402) return '今日额度已用完，升级会员可获得更多额度';
     if (status === 429) return '操作过于频繁，请稍后再试';
     return status ? `${fallback}（${status}）` : fallback;
+}
+
+/**
+ * 读取「整个 JSON 响应体被塞进 message」的错误文案。
+ * 返回 undefined 表示不是 JSON；返回空串表示是 JSON 但没有可读文案。
+ */
+function readJsonMessage(message: string): string | undefined {
+    if (!message.startsWith('{') || !message.endsWith('}')) return undefined;
+    try {
+        const payload = JSON.parse(message) as { statusMessage?: unknown; message?: unknown };
+        const value = payload.statusMessage ?? payload.message;
+        return typeof value === 'string' ? value.trim() : '';
+    } catch {
+        return undefined;
+    }
 }
 
 /** 判断错误是否为「配额用尽」（402） */
@@ -370,10 +392,12 @@ export function applyThemeToElement(el: HTMLElement, state: ThemeState, prefersD
 
 /** 四色主题的展示信息（两端切换器共用） */
 export const BRAND_PRESETS: { value: ThemeBrand; label: string; labelEn: string; swatch: string }[] = [
-    { value: 'blue', label: '蓝色', labelEn: 'Blue', swatch: 'var(--brand-500)' },
-    { value: 'green', label: '绿色', labelEn: 'Green', swatch: 'var(--brand-500)' },
-    { value: 'yellow', label: '黄色', labelEn: 'Yellow', swatch: 'var(--brand-500)' },
-    { value: 'red', label: '红色', labelEn: 'Red', swatch: 'var(--brand-500)' },
+    // swatch 取各品牌自身的 --brand-500（theme.css 中的 html[data-brand='x']），
+    // 不能写成 var(--brand-500)，否则圆点会全部跟随当前品牌，失去预览作用。
+    { value: 'blue', label: '蓝色', labelEn: 'Blue', swatch: 'oklch(62.3% 0.214 259.815)' },
+    { value: 'green', label: '绿色', labelEn: 'Green', swatch: 'oklch(72.3% 0.219 149.579)' },
+    { value: 'yellow', label: '黄色', labelEn: 'Yellow', swatch: 'oklch(79.5% 0.184 86.047)' },
+    { value: 'red', label: '红色', labelEn: 'Red', swatch: 'oklch(63.7% 0.237 25.331)' },
 ];
 
 export const MODE_PRESETS: { value: ThemeMode; label: string; labelEn: string; icon: string }[] = [

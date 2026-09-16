@@ -73,6 +73,7 @@ export default {
     },
     agents: {
         title: '智能体广场',
+        subtitle: '挑一个智能体，开始你的任务',
         searchPlaceholder: '搜索智能体名称或功能描述…',
         favorites: '我的收藏',
         topPin: '置顶',
@@ -133,6 +134,10 @@ export default {
         memberLevel: '会员特权',
         quotaUsage: '今日用量',
         preferences: '偏好设置',
+        appearanceMode: '外观模式',
+        appearanceModeHint: '浅色 / 深色 / 跟随系统',
+        brandColor: '主题配色',
+        brandColorHint: '蓝色 / 绿色 / 黄色 / 红色',
         languageSelect: '切换语言',
         logoutConfirm: '确认退出登录？',
     },

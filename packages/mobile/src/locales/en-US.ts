@@ -73,6 +73,7 @@ export default {
     },
     agents: {
         title: 'Agents Square',
+        subtitle: 'Pick an agent and start your task',
         searchPlaceholder: 'Search agents or skills…',
         favorites: 'Favorites',
         topPin: 'Pinned',
@@ -133,6 +134,10 @@ export default {
         memberLevel: 'Membership',
         quotaUsage: "Today's Usage",
         preferences: 'Preferences',
+        appearanceMode: 'Appearance',
+        appearanceModeHint: 'Light / Dark / System',
+        brandColor: 'Accent Color',
+        brandColorHint: 'Blue / Green / Yellow / Red',
         languageSelect: 'Change Language',
         logoutConfirm: 'Are you sure you want to sign out?',
     },

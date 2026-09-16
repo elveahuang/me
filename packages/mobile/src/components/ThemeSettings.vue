@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { BRAND_PRESETS, MODE_PRESETS } from '@commons/contract';
+import { useI18n } from 'vue-i18n';
 import { useTheme } from '@/composables/useTheme';
 
 const { mode, brand, setMode, setBrand } = useTheme();
+const { t } = useI18n();
 </script>
 
 <template>
@@ -10,8 +12,8 @@ const { mode, brand, setMode, setBrand } = useTheme();
         <!-- 深浅色 -->
         <div class="app-panel flex items-center justify-between p-3.5">
             <div>
-                <p class="text-xs font-bold">外观模式</p>
-                <p class="text-faint mt-0.5 text-[11px]">浅色 / 深色 / 跟随系统</p>
+                <p class="text-xs font-bold">{{ t('profile.appearanceMode') }}</p>
+                <p class="text-faint mt-0.5 text-[11px]">{{ t('profile.appearanceModeHint') }}</p>
             </div>
             <div class="flex items-center gap-1">
                 <button
@@ -31,8 +33,8 @@ const { mode, brand, setMode, setBrand } = useTheme();
         <!-- 四色主题 -->
         <div class="app-panel flex items-center justify-between p-3.5">
             <div>
-                <p class="text-xs font-bold">主题配色</p>
-                <p class="text-faint mt-0.5 text-[11px]">蓝色 / 绿色 / 黄色 / 红色</p>
+                <p class="text-xs font-bold">{{ t('profile.brandColor') }}</p>
+                <p class="text-faint mt-0.5 text-[11px]">{{ t('profile.brandColorHint') }}</p>
             </div>
             <div class="flex items-center gap-2">
                 <button

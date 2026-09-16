@@ -333,7 +333,7 @@ async function copyConversationMarkdown() {
                                 <!-- 单条复制操作 -->
                                 <button
                                     type="button"
-                                    class="text-faint hover:text-default mt-1.5 inline-flex items-center gap-1 text-[10px] opacity-70 transition-opacity active:opacity-100"
+                                    class="mt-1.5 inline-flex items-center gap-1 text-[10px] opacity-70 transition-opacity hover:opacity-100 active:opacity-100"
                                     @click="copyMessage(m)"
                                 >
                                     <span>{{ copiedId === m.id ? '✓ ' + t('common.copied') : '📋 ' + t('common.copy') }}</span>
