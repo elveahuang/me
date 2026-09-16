@@ -2,7 +2,7 @@ import App from '@/App.vue';
 import { initTheme } from '@/composables/useTheme';
 import { i18n } from '@/i18n';
 import router from '@/router';
-import '@/theme/theme.css';
+import '@/theme/main.css';
 import { IonicVue } from '@ionic/vue';
 import { createApp } from 'vue';
 

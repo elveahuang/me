@@ -783,6 +783,9 @@ importers:
       '@ionic/vue-router':
         specifier: ^9.0.3
         version: 9.0.3(@stencil/core@4.45.0)(vue-router@5.3.1(@vue/compiler-sfc@3.5.42)(esbuild@0.28.2)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)))(rolldown@1.2.8)(rollup@4.63.3)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.104.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))(vue@3.5.42(typescript@5.9.3)))(vue@3.5.42(typescript@5.9.3))
+      '@repo/commons':
+        specifier: workspace:*
+        version: link:../commons
       ai:
         specifier: ^7.0.102
         version: 7.0.102(zod@4.6.5)

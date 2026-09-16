@@ -1,26 +1,53 @@
-/* Core CSS required for Ionic components to work properly */
-@import '@ionic/vue/css/core.css';
+/* 移动端采用 class 策略的深色模式（由 useTheme 切换 <html class="dark">） */
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* Basic CSS for apps built with Ionic */
-@import '@ionic/vue/css/normalize.css';
-@import '@ionic/vue/css/structure.css';
-@import '@ionic/vue/css/typography.css';
+/* ============================================================
+ * Ionic 组件跟随同一套令牌
+ * ============================================================ */
 
-/* Optional CSS utils that can be commented out */
-@import '@ionic/vue/css/display.css';
-@import '@ionic/vue/css/flex-utils.css';
-@import '@ionic/vue/css/float-elements.css';
-@import '@ionic/vue/css/padding.css';
-@import '@ionic/vue/css/text-alignment.css';
-@import '@ionic/vue/css/text-transformation.css';
+ion-content {
+    --background: var(--surface-2);
+    --color: var(--content);
+}
 
-/* Ionic 深色主题（class 策略，由 useTheme 切换 ion-palette-dark） */
-@import '@ionic/vue/css/palettes/dark.class.css';
+ion-toolbar {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+}
 
-/* TaildwindCss && Konsta UI */
-@import 'tailwindcss';
-@import 'konsta/vue/theme.css';
+ion-tab-bar {
+    --background: var(--surface);
+    --color: var(--content-muted);
+    --color-selected: var(--brand);
+    --border: 1px solid var(--line);
+}
 
-/* Custom */
-@import '@commons/styles/theme.css';
-@import './variables.css';
+ion-item,
+ion-input,
+ion-textarea,
+ion-select {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+    --placeholder-color: var(--content-dim);
+    --highlight-color-focused: var(--brand);
+}
+
+ion-searchbar {
+    --background: var(--surface-3);
+    --color: var(--content);
+    --placeholder-color: var(--content-dim);
+    --icon-color: var(--content-muted);
+    --clear-button-color: var(--content-muted);
+    --border-radius: 0.9rem;
+}
+
+ion-modal {
+    --background: var(--surface);
+    --color: var(--content);
+}
+
+ion-spinner {
+    color: var(--brand);
+}
