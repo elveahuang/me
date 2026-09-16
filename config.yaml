@@ -1,0 +1,5 @@
+platforms:
+    android:
+        versionName: 26.4.0
+    ios:
+        version: 26.4.0

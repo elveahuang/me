@@ -1,0 +1,75 @@
+@import './base.css';
+
+/* 移动端采用 class 策略的深色模式（由 useTheme 切换 <html class="dark">） */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 把 Tailwind 的 primary-* 工具类接到共用品牌令牌上，保证与 webapp 同一套色板 */
+@theme inline {
+    --color-primary-50: var(--brand-50);
+    --color-primary-100: var(--brand-100);
+    --color-primary-200: var(--brand-200);
+    --color-primary-300: var(--brand-300);
+    --color-primary-400: var(--brand-400);
+    --color-primary-500: var(--brand-500);
+    --color-primary-600: var(--brand-600);
+    --color-primary-700: var(--brand-700);
+    --color-primary-800: var(--brand-800);
+    --color-primary-900: var(--brand-900);
+    --color-primary-950: var(--brand-950);
+}
+
+/* ============================================================
+ * Ionic 组件跟随同一套令牌
+ * ============================================================ */
+ion-content {
+    --background: var(--surface-2);
+    --color: var(--content);
+}
+
+ion-toolbar {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+}
+
+ion-tab-bar {
+    --background: var(--surface);
+    --color: var(--content-muted);
+    --color-selected: var(--brand);
+    --border: 1px solid var(--line);
+}
+
+ion-item,
+ion-input,
+ion-textarea,
+ion-select {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+    --placeholder-color: var(--content-dim);
+    --highlight-color-focused: var(--brand);
+}
+
+ion-searchbar {
+    --background: var(--surface-3);
+    --color: var(--content);
+    --placeholder-color: var(--content-dim);
+    --icon-color: var(--content-muted);
+    --clear-button-color: var(--content-muted);
+    --border-radius: 0.9rem;
+}
+
+ion-modal {
+    --background: var(--surface);
+    --color: var(--content);
+}
+
+ion-spinner {
+    color: var(--brand);
+}
+
+/* 移动端基础排版 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}

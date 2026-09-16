@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" data-brand="green">
+    <head>
+        <meta charset="utf-8" />
+        <title>EE 智能体</title>
+        <base href="/" />
+        <meta name="color-scheme" content="light dark" />
+        <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        <link rel="shortcut icon" type="image/png" href="/favicon.png" />
+        <!-- add to homescreen for ios -->
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Mobile" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+        <!-- 首屏应用主题（避免深浅色 / 品牌色闪烁），与 useTheme 使用同一存储格式 -->
+        <script>
+            (function () {
+                try {
+                    var raw = localStorage.getItem('ee_theme') || '';
+                    var parts = raw.split(':');
+                    var mode = parts[0] === 'dark' || parts[0] === 'light' || parts[0] === 'system' ? parts[0] : 'system';
+                    var brand = ['blue', 'green', 'yellow', 'red'].indexOf(parts[1]) >= 0 ? parts[1] : 'green';
+                    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    var dark = mode === 'dark' || (mode === 'system' && prefersDark);
+                    var el = document.documentElement;
+                    el.dataset.brand = brand;
+                    el.classList.toggle('dark', dark);
+                    el.classList.toggle('ion-palette-dark', dark);
+                    el.style.colorScheme = dark ? 'dark' : 'light';
+                } catch (e) {}
+            })();
+        </script>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>

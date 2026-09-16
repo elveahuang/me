@@ -1,0 +1,661 @@
+/**
+ * 两端共用的设计令牌与基础组件样式（webapp / mobile 同时 @import 本文件）。
+ *
+ * 设计原则：
+ * 1. 颜色只走 CSS 变量，浅色/深色 + 蓝/绿/黄/红四色主题都只切换变量，不动模板；
+ * 2. 组件类使用原生 CSS 声明（而非 @apply），这样 webapp(Nuxt UI) 与 mobile(纯 Tailwind)
+ *    的构建链都能安全处理，不依赖各自的主题插件行为；
+ * 3. 语义类名统一使用 app-* / bg-surface / text-soft 等自有命名，避免与 Tailwind 内置工具类冲突。
+ */
+
+/* ============================================================
+ * 品牌四色（数值取自 Tailwind v4 调色板，两端完全一致）
+ * ============================================================ */
+html {
+    --brand-50: oklch(98.2% 0.018 155.826);
+    --brand-100: oklch(96.2% 0.044 156.743);
+    --brand-200: oklch(92.5% 0.084 155.995);
+    --brand-300: oklch(87.1% 0.15 154.449);
+    --brand-400: oklch(79.2% 0.209 151.711);
+    --brand-500: oklch(72.3% 0.219 149.579);
+    --brand-600: oklch(62.7% 0.194 149.214);
+    --brand-700: oklch(52.7% 0.154 150.069);
+    --brand-800: oklch(44.8% 0.119 151.328);
+    --brand-900: oklch(39.3% 0.095 152.535);
+    --brand-950: oklch(26.6% 0.065 152.934);
+}
+
+html[data-brand='blue'] {
+    --brand-50: oklch(97% 0.014 254.604);
+    --brand-100: oklch(93.2% 0.032 255.585);
+    --brand-200: oklch(88.2% 0.059 254.128);
+    --brand-300: oklch(80.9% 0.105 251.813);
+    --brand-400: oklch(70.7% 0.165 254.624);
+    --brand-500: oklch(62.3% 0.214 259.815);
+    --brand-600: oklch(54.6% 0.245 262.881);
+    --brand-700: oklch(48.8% 0.243 264.376);
+    --brand-800: oklch(42.4% 0.199 265.638);
+    --brand-900: oklch(37.9% 0.146 265.522);
+    --brand-950: oklch(28.2% 0.091 267.935);
+}
+
+html[data-brand='yellow'] {
+    --brand-50: oklch(98.7% 0.026 102.212);
+    --brand-100: oklch(97.3% 0.071 103.193);
+    --brand-200: oklch(94.5% 0.129 101.54);
+    --brand-300: oklch(90.5% 0.182 98.111);
+    --brand-400: oklch(85.2% 0.199 91.936);
+    --brand-500: oklch(79.5% 0.184 86.047);
+    --brand-600: oklch(68.1% 0.162 75.834);
+    --brand-700: oklch(55.4% 0.135 66.442);
+    --brand-800: oklch(47.6% 0.114 61.907);
+    --brand-900: oklch(42.1% 0.095 57.708);
+    --brand-950: oklch(28.6% 0.066 53.813);
+}
+
+html[data-brand='red'] {
+    --brand-50: oklch(97.1% 0.013 17.38);
+    --brand-100: oklch(93.6% 0.032 17.717);
+    --brand-200: oklch(88.5% 0.062 18.334);
+    --brand-300: oklch(80.8% 0.114 19.571);
+    --brand-400: oklch(70.4% 0.191 22.216);
+    --brand-500: oklch(63.7% 0.237 25.331);
+    --brand-600: oklch(57.7% 0.245 27.325);
+    --brand-700: oklch(50.5% 0.213 27.518);
+    --brand-800: oklch(44.4% 0.177 26.899);
+    --brand-900: oklch(39.6% 0.141 25.723);
+    --brand-950: oklch(25.8% 0.092 26.042);
+}
+
+/* ============================================================
+ * 语义令牌：浅色
+ * ============================================================ */
+:root {
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --surface-3: #f1f5f9;
+    --surface-inverse: #0f172a;
+    --content: #0f172a;
+    --content-soft: #475569;
+    --content-muted: #64748b;
+    --content-dim: #94a3b8;
+    --content-inverse: #ffffff;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --shadow-color: 15 23 42;
+    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.06);
+    --shadow-sm: 0 4px 14px -6px rgb(var(--shadow-color) / 0.18);
+    --shadow-md: 0 18px 40px -22px rgb(var(--shadow-color) / 0.35);
+
+    --success: oklch(62.7% 0.194 149.214);
+    --info: oklch(62.3% 0.214 259.815);
+    --warning: oklch(70% 0.16 70);
+    --danger: oklch(57.7% 0.245 27.325);
+
+    --on-brand: #ffffff;
+    --brand: var(--brand-600);
+    --brand-strong: var(--brand-700);
+    --brand-soft: var(--brand-50);
+    --brand-soft-border: var(--brand-200);
+    --brand-soft-text: var(--brand-700);
+    --brand-ring: color-mix(in oklab, var(--brand-500) 35%, transparent);
+}
+
+/* 黄色主题的实底按钮需要深色文字才够对比度 */
+html[data-brand='yellow'] {
+    --on-brand: #3f2c00;
+}
+
+/* ============================================================
+ * 语义令牌：深色
+ * ============================================================ */
+.dark {
+    --surface: #0b1220;
+    --surface-2: #070c16;
+    --surface-3: #131c2e;
+    --surface-inverse: #f8fafc;
+    --content: #f1f5f9;
+    --content-soft: #cbd5e1;
+    --content-muted: #94a3b8;
+    --content-dim: #64748b;
+    --content-inverse: #0f172a;
+    --line: #1e293b;
+    --line-strong: #334155;
+    --shadow-color: 0 0 0;
+    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.5);
+    --shadow-sm: 0 4px 16px -8px rgb(var(--shadow-color) / 0.8);
+    --shadow-md: 0 20px 45px -25px rgb(var(--shadow-color) / 0.9);
+
+    --success: oklch(79.2% 0.209 151.711);
+    --info: oklch(70.7% 0.165 254.624);
+    --warning: oklch(82.8% 0.189 84.429);
+    --danger: oklch(70.4% 0.191 22.216);
+
+    --brand: var(--brand-500);
+    --brand-strong: var(--brand-400);
+    --brand-soft: color-mix(in oklab, var(--brand-500) 16%, transparent);
+    --brand-soft-border: color-mix(in oklab, var(--brand-500) 32%, transparent);
+    --brand-soft-text: var(--brand-300);
+    --on-brand: #ffffff;
+}
+
+html[data-brand='yellow'].dark {
+    /* 深色下的黄色实底同样用深色文字 */
+    --on-brand: #3f2c00;
+}
+
+/* ============================================================
+ * 基础排版与滚动条
+ * ============================================================ */
+body {
+    background-color: var(--surface-2);
+    color: var(--content);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+::selection {
+    background-color: color-mix(in oklab, var(--brand-500) 28%, transparent);
+}
+
+* {
+    scrollbar-color: color-mix(in oklab, var(--content-dim) 45%, transparent) transparent;
+    scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--content-dim) 45%, transparent);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+/* ============================================================
+ * 语义工具类
+ * ============================================================ */
+.bg-surface {
+    background-color: var(--surface);
+}
+
+.bg-surface-2 {
+    background-color: var(--surface-2);
+}
+
+.bg-surface-3 {
+    background-color: var(--surface-3);
+}
+
+.bg-inverse {
+    background-color: var(--surface-inverse);
+}
+
+.text-strong {
+    color: var(--content);
+}
+
+.text-soft {
+    color: var(--content-soft);
+}
+
+.text-muted-2 {
+    color: var(--content-muted);
+}
+
+.text-faint {
+    color: var(--content-dim);
+}
+
+.text-inverse {
+    color: var(--content-inverse);
+}
+
+.border-line {
+    border-color: var(--line);
+}
+
+.border-line-strong {
+    border-color: var(--line-strong);
+}
+
+.divide-line > * + * {
+    border-top: 1px solid var(--line);
+}
+
+.text-brand {
+    color: var(--brand);
+}
+
+.text-brand-strong {
+    color: var(--brand-soft-text);
+}
+
+.bg-brand {
+    background-color: var(--brand);
+    color: var(--on-brand);
+}
+
+.bg-brand-strong {
+    background-color: var(--brand-strong);
+    color: var(--on-brand);
+}
+
+.bg-brand-soft {
+    background-color: var(--brand-soft);
+    color: var(--brand-soft-text);
+}
+
+.border-brand {
+    border-color: var(--brand);
+}
+
+.border-brand-soft {
+    border-color: var(--brand-soft-border);
+}
+
+.ring-brand {
+    box-shadow: 0 0 0 3px var(--brand-ring);
+}
+
+.accent-brand {
+    accent-color: var(--brand);
+}
+
+/* 品牌渐变（Hero / 头像底色） */
+.bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+    color: var(--on-brand);
+}
+
+.bg-brand-soft-gradient {
+    background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-100) 85%, transparent), color-mix(in oklab, var(--brand-300) 55%, transparent));
+}
+
+.dark .bg-brand-soft-gradient {
+    background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-500) 22%, transparent), color-mix(in oklab, var(--brand-700) 30%, transparent));
+}
+
+/* ============================================================
+ * 组件类
+ * ============================================================ */
+.app-card {
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-xs);
+}
+
+.app-card-hover {
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        border-color 0.18s ease;
+}
+
+.app-card-hover:hover {
+    transform: translateY(-2px);
+    border-color: var(--brand-soft-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.app-panel {
+    background-color: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+}
+
+.app-divider {
+    border-top: 1px solid var(--line);
+}
+
+.app-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.85rem;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    cursor: pointer;
+    transition:
+        background-color 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.12s ease,
+        box-shadow 0.18s ease;
+    border: 1px solid transparent;
+    text-align: center;
+}
+
+.app-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.app-btn:not(:disabled):active {
+    transform: scale(0.97);
+}
+
+.app-btn-primary {
+    background-color: var(--brand);
+    color: var(--on-brand);
+    box-shadow: var(--shadow-xs);
+}
+
+.app-btn-primary:not(:disabled):hover {
+    background-color: var(--brand-strong);
+}
+
+.app-btn-soft {
+    background-color: var(--brand-soft);
+    color: var(--brand-soft-text);
+    border-color: var(--brand-soft-border);
+}
+
+.app-btn-soft:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--brand) 18%, transparent);
+}
+
+.app-btn-outline {
+    background-color: var(--surface);
+    color: var(--content);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-xs);
+}
+
+.app-btn-outline:not(:disabled):hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
+.app-btn-ghost {
+    background-color: transparent;
+    color: var(--content-soft);
+}
+
+.app-btn-ghost:not(:disabled):hover {
+    background-color: var(--surface-3);
+    color: var(--content);
+}
+
+.app-btn-danger {
+    background-color: color-mix(in oklab, var(--danger) 12%, transparent);
+    color: var(--danger);
+    border-color: color-mix(in oklab, var(--danger) 30%, transparent);
+}
+
+.app-input {
+    width: 100%;
+    border-radius: 0.85rem;
+    border: 1px solid var(--line);
+    background-color: var(--surface);
+    color: var(--content);
+    padding: 0.65rem 0.9rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease;
+}
+
+.app-input::placeholder {
+    color: var(--content-dim);
+}
+
+.app-input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-ring);
+}
+
+.app-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    background-color: var(--surface-3);
+    color: var(--content-soft);
+    border: 1px solid var(--line);
+}
+
+.app-chip-brand {
+    background-color: var(--brand-soft);
+    color: var(--brand-soft-text);
+    border-color: var(--brand-soft-border);
+}
+
+.app-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.app-badge-success {
+    background-color: color-mix(in oklab, var(--success) 16%, transparent);
+    color: var(--success);
+}
+
+.app-badge-warning {
+    background-color: color-mix(in oklab, var(--warning) 18%, transparent);
+    color: var(--warning);
+}
+
+.app-badge-danger {
+    background-color: color-mix(in oklab, var(--danger) 16%, transparent);
+    color: var(--danger);
+}
+
+.app-badge-info {
+    background-color: color-mix(in oklab, var(--info) 16%, transparent);
+    color: var(--info);
+}
+
+.app-badge-neutral {
+    background-color: var(--surface-3);
+    color: var(--content-muted);
+}
+
+/* 提示块（生成式 UI 的 Alert / 页面级提示共用） */
+.app-alert {
+    border-radius: 0.9rem;
+    border: 1px solid transparent;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+    line-height: 1.3rem;
+}
+
+.app-alert-info {
+    border-color: color-mix(in oklab, var(--info) 32%, transparent);
+    background-color: color-mix(in oklab, var(--info) 10%, transparent);
+    color: var(--info);
+}
+
+.app-alert-success {
+    border-color: color-mix(in oklab, var(--success) 32%, transparent);
+    background-color: color-mix(in oklab, var(--success) 10%, transparent);
+    color: var(--success);
+}
+
+.app-alert-warning {
+    border-color: color-mix(in oklab, var(--warning) 35%, transparent);
+    background-color: color-mix(in oklab, var(--warning) 12%, transparent);
+    color: var(--warning);
+}
+
+.app-alert-danger {
+    border-color: color-mix(in oklab, var(--danger) 32%, transparent);
+    background-color: color-mix(in oklab, var(--danger) 10%, transparent);
+    color: var(--danger);
+}
+
+.app-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+    color: var(--on-brand);
+    font-weight: 800;
+}
+
+/* 用于展示 emoji / 图标头像（浅色柔和底 + 不强制文字色） */
+.app-avatar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-100) 80%, transparent), color-mix(in oklab, var(--brand-300) 45%, transparent));
+    border: 1px solid var(--brand-soft-border);
+}
+
+.dark .app-avatar-icon {
+    background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-500) 22%, transparent), color-mix(in oklab, var(--brand-700) 28%, transparent));
+}
+
+.app-link {
+    color: var(--brand);
+    font-weight: 600;
+    transition: color 0.18s ease;
+}
+
+.app-link:hover {
+    color: var(--brand-strong);
+    text-decoration: underline;
+}
+
+.app-nav-link {
+    border-radius: 0.7rem;
+    padding: 0.4rem 0.75rem;
+    color: var(--content-soft);
+    font-weight: 600;
+    transition:
+        background-color 0.18s ease,
+        color 0.18s ease;
+}
+
+.app-nav-link:hover {
+    background-color: var(--surface-3);
+    color: var(--content);
+}
+
+.app-nav-link-active {
+    background-color: var(--brand-soft);
+    color: var(--brand-soft-text);
+}
+
+.app-progress {
+    height: 0.6rem;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    background-color: var(--surface-3);
+}
+
+.app-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background-image: linear-gradient(90deg, var(--brand-500), var(--brand-700));
+    transition: width 0.4s ease;
+}
+
+.app-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.app-table thead {
+    background-color: var(--surface-3);
+    color: var(--content-muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.app-table th,
+.app-table td {
+    padding: 0.7rem 0.75rem;
+    text-align: left;
+}
+
+.app-table tbody tr + tr {
+    border-top: 1px solid var(--line);
+}
+
+.app-skeleton {
+    background-image: linear-gradient(90deg, var(--surface-3), color-mix(in oklab, var(--surface-3) 60%, var(--surface)), var(--surface-3));
+    background-size: 200% 100%;
+    animation: app-skeleton 1.4s ease-in-out infinite;
+    border-radius: 0.75rem;
+}
+
+@keyframes app-skeleton {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 聊天气泡 */
+.app-bubble-user {
+    background-color: var(--brand);
+    color: var(--on-brand);
+    border-radius: 1.1rem 1.1rem 0.35rem 1.1rem;
+}
+
+.app-bubble-assistant {
+    background-color: var(--surface);
+    color: var(--content);
+    border: 1px solid var(--line);
+    border-radius: 1.1rem 1.1rem 1.1rem 0.35rem;
+    box-shadow: var(--shadow-xs);
+}
+
+/* 主题切换器（两端共用外观） */
+.app-theme-dot {
+    height: 1.15rem;
+    width: 1.15rem;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition:
+        transform 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.app-theme-dot:hover {
+    transform: scale(1.12);
+}
+
+.app-theme-dot[data-active='true'] {
+    border-color: var(--content);
+}
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
