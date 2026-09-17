@@ -16,3 +16,6 @@ temp
 apps/server/.data
 
 packages/webapp/.data.zcode/
+
+# 部署用环境变量（含真实密钥，由 deploy/init-env.mjs 生成）
+deploy/.env

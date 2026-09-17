@@ -1,0 +1,38 @@
+# 忽略本地依赖与构建产物，避免把 1.9GB node_modules 打进构建上下文
+node_modules
+**/node_modules
+
+# 本地构建产物（镜像内会重新构建）
+.output
+**/.output
+dist
+**/dist
+.nuxt
+**/.nuxt
+.nitro
+
+# 本地环境与运行时文件（生产配置由 deploy/.env 提供）
+.env
+**/.env
+!.env.example
+!deploy/.env.example
+
+# 凭据、证书与签名材料
+**/*.pem
+**/*.key
+**/*.jks
+**/*.keystore
+
+# 版本控制与编辑器
+.git
+**/.git
+.github
+.idea
+.vscode
+.zed
+.husky
+
+# 数据库与日志等本地数据
+**/.data
+**/*.log
+**/.DS_Store
