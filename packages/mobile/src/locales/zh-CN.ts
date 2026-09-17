@@ -59,6 +59,7 @@ export default {
         deleteConfirm: '确认删除「{name}」？',
         empty: '还没有上传任何附件',
         emptyHint: '点击右上角上传第一个文件',
+        takePhoto: '拍照 / 从相册选择',
     },
     news: {
         title: '资讯中心',

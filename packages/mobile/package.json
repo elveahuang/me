@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@ai-sdk/vue": "^4.0.105",
+        "@capacitor/camera": "8.2.4",
         "@comark/vue": "^0.7.0",
         "@ionic/core": "^9.0.4",
         "@ionic/vue": "^9.0.4",

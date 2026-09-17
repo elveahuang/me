@@ -4,10 +4,13 @@ import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherConten
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, apiUrl, extractApiError, getToken } from '../api/auth';
-import { pickFiles, uploadAttachment } from '../composables/useUpload';
+import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
+
+/** 原生壳才提供「拍照/相册」入口，浏览器保留单文件选择器即可 */
+const nativeShell = isNativeShell();
 
 const items = ref<AttachmentRecord[]>([]);
 const total = ref(0);
@@ -68,11 +71,17 @@ function changeCategory(value: string) {
     void load(true);
 }
 
-/** 从相册/文件系统选择并上传（原生走 Capacitor，浏览器走 input） */
-async function pickAndUpload() {
+/** 选择文件并上传。原生壳下「拍照」走系统相机/相册，其余走文件选择器 */
+async function pickAndUpload(source: 'file' | 'photo' = 'file') {
     error.value = '';
     success.value = '';
-    const files = await pickFiles({ accept: '*/*', multiple: true });
+    let files: Awaited<ReturnType<typeof pickFiles>> = [];
+    try {
+        files = source === 'photo' ? await pickFiles({ source: 'photo', accept: 'image/*' }) : await pickFiles({ accept: '*/*', multiple: true });
+    } catch (e) {
+        error.value = extractApiError(e, t('common.error'));
+        return;
+    }
     if (!files.length) return;
 
     uploading.value = true;
@@ -144,7 +153,17 @@ function preview(item: AttachmentRecord) {
             <ion-toolbar>
                 <ion-title class="!text-lg font-black">{{ t('attachments.title') }}</ion-title>
                 <template v-slot:end>
-                    <button type="button" class="app-btn app-btn-soft mr-2 !px-3 !py-1" :disabled="uploading" @click="pickAndUpload">
+                    <button
+                        v-if="nativeShell"
+                        type="button"
+                        class="app-btn app-btn-ghost mr-1 !px-2.5 !py-1"
+                        :disabled="uploading"
+                        :title="t('attachments.takePhoto')"
+                        @click="pickAndUpload('photo')"
+                    >
+                        📷
+                    </button>
+                    <button type="button" class="app-btn app-btn-soft mr-2 !px-3 !py-1" :disabled="uploading" @click="pickAndUpload('file')">
                         {{ uploading ? `${progress}%` : t('attachments.upload') }}
                     </button>
                 </template>

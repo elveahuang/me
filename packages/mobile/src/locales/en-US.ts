@@ -59,6 +59,7 @@ export default {
         deleteConfirm: 'Delete "{name}"?',
         empty: 'No files yet',
         emptyHint: 'Tap Upload to add your first file',
+        takePhoto: 'Take photo / choose from album',
     },
     news: {
         title: 'News',
