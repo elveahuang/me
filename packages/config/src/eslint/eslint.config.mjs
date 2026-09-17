@@ -52,8 +52,8 @@ export default defineConfigWithVueTs(
             'vue/valid-v-for': 'off',
             // Ionic(Stencil) 的具名插槽只能用原生 slot 属性——v-slot 不会作用到自定义元素上，
             // 官方 Ionic Vue 示例同样写作 <ion-tab-bar slot="bottom">，因此仅对 ion-* 放行。
-            // 注意：该规则的 ignore 值是「正则片段」而非 glob，所以写成 ion-.*
-            'vue/no-deprecated-slot-attribute': ['error', { ignore: ['ion-.*'] }],
+            // 注意：ignore 匹配的是「元素名」，模式需写成 /^…$/ 形式；直接写 ion-.* 会被当成字面量元素名而失效。
+            'vue/no-deprecated-slot-attribute': ['error', { ignore: ['/^ion-.*$/'] }],
             'no-async-promise-executor': 'off',
         },
     },
