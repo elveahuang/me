@@ -115,20 +115,42 @@ export async function countUnreadNotifications(userId: string): Promise<number> 
  * - 传入 ids：只标记这些通知
  * - 不传：标记当前用户全部未读（上限 500 条，避免一次写入过多）
  * 广播通知按 (notificationId, userId) upsert，定向通知复用已有收件人行。
+ *
+ * 安全约束：传入的 ids 必须先在「当前用户可见」的集合内过滤。
+ * 否则调用方可以通过构造任意 id 写入收件人行，把自己加进别人定向消息的可见列表。
  */
 export async function markNotificationsRead(userId: string, ids?: string[]): Promise<number> {
-    const targets = ids?.length
-        ? ids
-        : (
-              await db
-                  .select({ id: notifications.id })
-                  .from(notifications)
-                  .leftJoin(notificationRecipients, and(eq(notificationRecipients.notificationId, notifications.id), eq(notificationRecipients.userId, userId)))
-                  .where(and(or(eq(notifications.audience, 'all'), eq(notificationRecipients.userId, userId)), isNull(notificationRecipients.readAt)))
-                  .orderBy(desc(notifications.createdAt))
-                  .limit(500)
-          ).map((row) => row.id);
+    const visible = or(eq(notifications.audience, 'all'), eq(notificationRecipients.userId, userId));
 
+    if (ids?.length) {
+        // 只保留当前用户确实可见（且仍存在）的通知 id
+        const allowed = await db
+            .select({ id: notifications.id })
+            .from(notifications)
+            .leftJoin(notificationRecipients, and(eq(notificationRecipients.notificationId, notifications.id), eq(notificationRecipients.userId, userId)))
+            .where(and(inArray(notifications.id, [...new Set(ids)].slice(0, 500)), visible));
+        const targets = allowed.map((row) => row.id);
+        if (!targets.length) return 0;
+
+        const now = new Date();
+        await db
+            .insert(notificationRecipients)
+            .values(targets.map((notificationId) => ({ id: crypto.randomUUID(), notificationId, userId, readAt: now })))
+            .onConflictDoUpdate({
+                target: [notificationRecipients.notificationId, notificationRecipients.userId],
+                set: { readAt: now },
+            });
+        return targets.length;
+    }
+
+    const all = await db
+        .select({ id: notifications.id })
+        .from(notifications)
+        .leftJoin(notificationRecipients, and(eq(notificationRecipients.notificationId, notifications.id), eq(notificationRecipients.userId, userId)))
+        .where(and(visible, isNull(notificationRecipients.readAt)))
+        .orderBy(desc(notifications.createdAt))
+        .limit(500);
+    const targets = all.map((row) => row.id);
     if (!targets.length) return 0;
 
     const now = new Date();
@@ -158,12 +180,4 @@ export async function notificationReadStats(notificationId: string) {
 /** 删除通知（收件人记录级联删除） */
 export async function deleteNotification(id: string): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
-}
-
-/** 定向推送时的用户名校验：返回真实存在的用户 id */
-export async function filterExistingUserIds(userIds: string[]): Promise<string[]> {
-    if (!userIds.length) return [];
-    const { user } = await import('../db/schema');
-    const rows = await db.select({ id: user.id }).from(user).where(inArray(user.id, userIds));
-    return rows.map((row) => row.id);
 }
