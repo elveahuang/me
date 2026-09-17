@@ -1,15 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
     plugins: [vue(), tailwindcss()],
     resolve: {
-        alias: {
-            // 与 webapp 共用同一份接口契约 / 主题令牌
-            '@contract': fileURLToPath(new URL('../contract/src/index.ts', import.meta.url)),
-        },
         tsconfigPaths: true,
         // pnpm 工作区中 vue-router 存在多份 peer 变体（@ionic/vue 与应用代码各解析到一份），
         // 多实例会让注入键（Symbol(router) / Symbol(route location)）不一致，

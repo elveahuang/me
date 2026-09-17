@@ -1,6 +1,8 @@
 # EE 智能体平台
 
-基于 Nuxt 4 + Vue 3 的智能体对话平台：Web（Nuxt UI）与移动端（Ionic + Capacitor）共用一套后端，支持自定义模型供应商、可配置 Skill 工具、MCP 服务器接入、RAG 知识库与智能体自治配置，构成完整的 ReAct Agent。
+基于 Nuxt 4 + Vue 3 的智能体对话平台：Web（Nuxt UI）与移动端（Ionic + Capacitor）共用一套后端，支持自定义模型供应商、可配置
+Skill 工具、MCP 服务器接入、RAG
+知识库与智能体自治配置，构成完整的 ReAct Agent。
 
 ## 架构
 
@@ -17,21 +19,20 @@ packages/
       utils/          json-ui.ts（json-render 组件映射，供 Comark 渲染）
       components/     ChatMessage（Comark markdown + json-render 生成式 UI）
   mobile/    Ionic 9 + Capacitor 8，vite dev proxy 指向 webapp
-  commons/   共享业务资产（api/store/i18n/services，本次未强制接入）
+  commons/   共享契约（src/contract）与主题令牌（src/styles/theme.css）；其他 api/store/i18n/services 按需接入
   config/    eslint/prettier/stylelint/tsconfig 共享配置
-  contract/  Web / Mobile 共用契约：接口类型 + 业务格式化 + 主题令牌（theme.css），无需构建，两端按别名 `@contract` 直引
 ```
 
 ## 主题与多端一致性
 
 - **主题**：浅色 / 深色 / 跟随系统 + 蓝色 / 绿色 / 黄色 / 红色四套品牌色，Web 与移动端共用
-  `packages/contract/src/theme.css` 的令牌（`--brand-*` / `--surface*` / `--content*`）。
+  `packages/commons/src/styles/theme.css` 的令牌（`--brand-*` / `--surface*` / `--content*`）。
   Web 端由 `app/composables/useTheme.ts`（Nuxt UI color-mode + `data-brand` cookie，SSR 直出无闪色）
   驱动；移动端由 `src/composables/useTheme.ts`（localStorage + `<html data-brand>`）驱动。
   页面样式统一使用语义类：`app-card` / `app-btn-primary` / `app-input` / `bg-brand` / `text-soft` …，
   换主题只改变量，不需要改模板。
 - **接口契约**：两端接口类型、错误文案归一化（`extractApiError`）、金额/日期/额度格式化都来自
-  `packages/contract/src/index.ts`，避免 Web 与移动端解析同一接口时字段不一致。
+  `packages/commons/src/contract/index.ts`（两端通过 `@commons/contract` 引用），避免 Web 与移动端解析同一接口时字段不一致。
 - **移动端样式**：`packages/mobile` 通过 `@tailwindcss/vite` 接入 Tailwind v4，与 Web 共用同一套令牌；
   Ionic 组件（toolbar / content / tab-bar / input）在 `src/theme/theme.css` 中映射到同一批 CSS 变量。
 - **移动端鉴权**：浏览器与开发环境走同源 cookie；原生壳使用 better-auth bearer 插件，
@@ -82,7 +83,7 @@ pnpm mobile:start      # Ionic dev，/api 代理到 3000
 ## 开发与 CI
 
 ```bash
-pnpm run lint        # eslint（webapp / mobile / contract）
+pnpm run lint        # eslint（webapp / mobile / commons）
 pnpm run typecheck   # nuxt typecheck + vue-tsc
 pnpm run test        # 冒烟测试（20 项，含 DB 连通性）
 pnpm run webapp:build && pnpm run mobile:build
@@ -94,7 +95,7 @@ pnpm run webapp:build && pnpm run mobile:build
 ## 核心概念
 
 | 概念       | 说明                                                                                                                            | 管理入口         |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+|------------|---------------------------------------------------------------------------------------------------------------------------------|------------------|
 | 供应商     | OpenAI 兼容协议（DeepSeek/通义/OpenAI/自建网关），填 Base URL + Key，「测试连接」自动拉取模型列表                               | /admin/providers |
 | Skill      | **可复用的指令块（不可执行）**。挂载到智能体后其 `instructions` 注入系统提示词，支持 `{{user_name}}` 等模版变量                 | /admin/skills    |
 | Tool       | **可执行的 AI SDK 工具**。`builtin_time`（内置查询时间）或 `http`（后台配置 URL/方法/参数 schema，无需写代码）                  | /admin/tools     |

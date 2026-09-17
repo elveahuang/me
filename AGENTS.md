@@ -1,0 +1,163 @@
+# AGENTS.md — EE 智能体平台
+
+> 项目知识核实日期：2026-09-17。本文是后续代理的工作入口，不是运行验证报告。
+> 优先使用本文定位相关模块，再读本次修改涉及的实现；不要每次重新扫描整个仓库。
+> 当代码与本文或 README 冲突时，以当前源码、包脚本和配置为准，并在相关任务中更新本文。
+
+## 1. 工作方式与边界
+
+- 默认使用中文沟通。先理解用户要的是分析还是修改；分析任务不顺手改业务代码。
+- 开始先检查 `git status --short`，保留已有未提交修改。不要重置、覆盖或把无关变更一起提交。
+- 使用 pnpm workspace，不混用 npm/yarn 安装，不为了排障无差别升级依赖或重建锁文件。
+- 按任务范围查找文件，排除 `node_modules`、`.git`、`.nuxt`、`.output`、`dist` 和本地数据库目录。
+- 环境配置优先阅读 `.env.example`；不要把实际密钥、令牌、连接串或用户数据写入文档与日志。
+- 数据库迁移、种子、支付、外部模型调用都可能有真实副作用；不要把它们当作无副作用的代码检查。
+- 仅文档修改不需要启动应用、安装依赖、访问外部服务或迁移数据库。结尾说明实际验证了什么、未验证什么。
+- 本仓库可在 Windows 上工作；工具的 shell 不一定是 Bash。不要假设分号、POSIX 路径或 Bash 语法可用；优先单命令或当前 shell 支持的 `&&`。
+
+## 2. 项目地图与技术边界
+
+EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nuxt/Nitro API，不是两个独立后端。
+
+| 目录                       | 职责与入口                                                   |
+| -------------------------- | ------------------------------------------------------------ |
+| `packages/webapp`          | Nuxt 4 全栈应用；`app/` 是 Vue 页面，`server/` 是 Nitro 后端 |
+| `packages/mobile`          | Ionic + Vue + Vite 前端、Capacitor 原生壳；调用 Web 后端     |
+| `packages/commons`         | 共享契约、主题及其他可复用资产；修改前确认实际消费者         |
+| `packages/config`          | ESLint、Prettier、Stylelint、TypeScript 等共享配置           |
+| `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口             |
+| `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                      |
+
+当前核心栈：Vue 3、Nuxt 4、Tailwind CSS 4、Nuxt UI、Ionic/Capacitor、AI SDK 7、Better Auth、Drizzle ORM、PostgreSQL。依赖的精确版本查各 `package.json` 和 `pnpm-lock.yaml`，不要根据旧 README 或记忆选择版本。
+
+**共享契约属于 commons 包，不是独立 workspace 包。**
+
+- 实际共享契约是 `packages/commons/src/contract/index.ts`，业务代码使用 `@commons/contract`。
+- 共享主题是 `packages/commons/src/styles/theme.css`，通过 `@repo/commons/styles/theme.css` 使用。
+- Web 的 `@commons` 别名在 `packages/webapp/nuxt.config.ts`，指向 `../commons/src`。
+- Mobile 的 `@commons/*` 在 `packages/mobile/tsconfig.json`，Vite 使用 `resolve.tsconfigPaths: true`。
+- 根依赖列表很大，不代表所有库都已用于核心链路；不要仅凭依赖名推断功能。
+
+## 3. 常用命令与验证边界
+
+以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.4.2`；CI 使用 Node 22，但依赖升级后仍需检查各依赖的 engines，不能把 CI 配置视为兼容性证明。
+
+| 命令                                     | 实际作用 / 前提                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `pnpm install`                           | 安装 workspace 依赖；`prepare` 会安装 Husky 钩子，可能修改锁文件 |
+| `pnpm webapp:start`                      | 启动 Nuxt Web/API，默认端口 3000                                 |
+| `pnpm mobile:start`                      | 启动移动端 Vite 开发服务；后端仍需单独启动                       |
+| `pnpm webapp:build`                      | Nuxt 生产构建                                                    |
+| `pnpm mobile:build`                      | 执行移动端包的构建脚本；不等于完成原生平台打包                   |
+| `pnpm typecheck`                         | 先 Web 再 Mobile；前者失败会阻止后者执行                         |
+| `pnpm lint`                              | ESLint；覆盖 Web server/app、Mobile src、Commons src             |
+| `pnpm test`                              | Web 的 `smoke-test`，不是双端端到端测试                          |
+| `pnpm --filter @repo/webapp typecheck`   | 仅 Web 类型检查                                                  |
+| `pnpm --filter @repo/mobile typecheck`   | 仅 Mobile 类型检查                                               |
+| `pnpm --filter @repo/webapp icons:check` | 检查图标生成结果是否同步                                         |
+| `pnpm webapp:db:generate`                | 根据 schema 生成迁移文件，会写文件                               |
+| `pnpm webapp:db:migrate`                 | 向目标数据库应用迁移，会改数据结构                               |
+| `pnpm webapp:db:seed`                    | 执行 `server/db/seed.ts`，会写数据库                             |
+| `pnpm webapp:init`                       | 依次 migrate + seed，不是只读环境检查                            |
+
+- `webapp:start:pro` 实际仍是 dev；`webapp:build:dev`、`webapp:build:pro` 当前与普通 build 相同，不能据命名假设加载不同环境。
+- `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
+- 业务变更按涉及包执行类型检查和构建；改共享代码须考虑双端。检查失败时区分本次回归与既有问题，不通过删代码或削弱检查掩盖失败。
+- `packages/webapp/scripts/smoke-test.ts` 主要直接调用模块/断言；数据库不可用可仅警告跳过，局部算法断言也不代表真实接口、计费或数据库事务已通过。
+- CI 目前是 install → lint → typecheck → Web build → Mobile build → smoke test。未配置 DB/Redis services，Web build 的环境变量仅在该步骤内设置。
+
+## 4. 环境、数据与危险脚本
+
+- 配置从 `packages/webapp/.env.example` 与 `packages/mobile/.env.example` 了解。先准备本地环境，再执行依赖这些变量的数据库命令；不要照抄 README 中先迁移后配置的顺序。
+- Web 的 `nuxt.config.ts` 为 Nuxt Content 配置 PostgreSQL，URL 来自 `POSTGRES_URL`；仅页面内容模块也可能需要数据库，不能假设静态页面构建完全离线。
+- `NUXT_DEEPSEEK_API_KEY` 对应私有 `runtimeConfig.deepseekApiKey`；模型供应商还存在数据库配置，不要把所有模型选择简化成一个环境变量。
+- 生产运行 `.output/server/index.mjs` 时应由运行环境注入变量，不要假设它会自动读取开发 `.env`。认证及管理员初始密码必须使用真实安全配置；查看 `server/plugins/env-guard.ts` 的约束。
+- 跨域配置同时关系到 CORS 和认证可信来源；修改 API 域名、Web 域名或原生回调协议时一起核对，不要只改客户端地址。
+- **禁止自动执行** `scripts/update.mjs`：它会清理锁文件/依赖、批量升级、重装并全局格式化。
+- **禁止作为常规初始化执行** `tools/db/init.sql`：含 `DROP DATABASE me`。
+- README 中旧 schema 升级的 `DROP SCHEMA ... CASCADE` 是破坏性操作，不是解决迁移错误的默认方案。必须先核对目标库、现有迁移与数据保留要求。
+
+## 5. Web / Mobile / 共享代码的修改入口
+
+- Web 路由在 `packages/webapp/app/pages`，管理端在 `app/pages/admin`；Nuxt 文件路由与 Nitro API 文件路由不要混淆。
+- Web 聊天页：`packages/webapp/app/pages/chat/[agentId].vue`。
+- Mobile 聊天页：`packages/mobile/src/views/ChatView.vue`；路由与导航先从移动端入口及 router 目录定位，不套用 Nuxt 自动路由约定。
+- 双端聊天使用 AI SDK 的 `Chat<UIMessage>` 与 `DefaultChatTransport`，请求 `/api/chat`，携带 `agentId`、`conversationId`、`messages`。
+- 恢复聊天历史必须保留 `parts`，不能只存/只回填纯文本，否则工具调用和富内容会丢失。
+- 移动端普通接口与认证实现集中在 `packages/mobile/src/api/client.ts`：`credentials: include`，存在 token 时附带 Bearer；token 键为 `ee_mobile_token`，并捕获 `set-auth-token` 响应头。
+- 移动端聊天 transport 另行显式设置 Bearer，不直接复用普通 JSON `api()`。更改认证逻辑时两处都要核对。
+- 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
+- 修改接口字段、错误归一化、金额/日期/额度格式化时，先读共享契约，再同步服务端响应与两端消费者，避免另造同名类型。
+- 主题先改共享语义变量，再查 Web 样式和 Mobile 的 Ionic 映射；不要为单页硬编码一套颜色绕过浅色/深色/品牌色。
+
+## 6. 服务端定位原则
+
+以下路径均相对于 `packages/webapp/`：
+
+| 任务                           | 优先读取                                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| 对话编排、流式返回             | `server/api/chat.post.ts`                                                                          |
+| 表结构与种子                   | `server/db/schema.ts`、`server/db/seed.ts`                                                         |
+| 迁移配置                       | `drizzle.config.ts`                                                                                |
+| 数据访问、认证、模型及工具实现 | `server/utils/` 对应模块                                                                           |
+| 登录/注册、会话                | `server/api/auth/`、`server/middleware/`                                                           |
+| 会话列表与消息历史             | `server/api/conversations/`、`server/api/conversations.get.ts`、`server/api/conversations.post.ts` |
+| 管理端资源配置                 | `server/api/admin/` 下 agents/providers/skills/tools/mcp-servers/knowledge-bases 等资源            |
+| 套餐、账单、支付               | `server/api/plans.get.ts`、`server/api/billing/`、`server/api/pay/`                                |
+| 运行时配置保护                 | `server/plugins/env-guard.ts`                                                                      |
+
+- Skill 是注入系统提示词的可复用指令块；Tool 是可执行工具。不能因为旧文档把二者混用就重新合并数据模型。
+- MCP 是外部工具来源；修改时关注工具命名、连接生命周期和清理，不能只改管理表单。
+- RAG 涉及分块、索引、检索与提示词注入；更换 embedding 模型/维度后须核对历史索引兼容性。
+- 生成式 UI 是提示词、组件目录和客户端渲染协作，不是任意服务端 HTML 输出。修改组件 schema 时同步提示词与渲染端。
+- 页面路由守卫不能代替服务端鉴权；管理 API 要验证管理员，会话读写要验证所有者。
+- 工具、MCP、模型供应商和支付涉及外部调用。维持现有地址校验、超时、鉴权、额度及幂等边界，不为“让测试通过”放开内网访问或关闭认证。
+
+### 主对话链路与数据不变量
+
+`server/api/chat.post.ts` 的实际顺序：鉴权与每用户限流 → 校验请求和启用的 agent → 扣额度 → 加载能力绑定 → 检查/创建会话 → 保存用户消息 → 读取数据库历史 → RAG → 解析模型、工具与提示词 → 流式生成 → 保存 assistant 消息并关闭 MCP。
+
+- 额度按请求次数而非 token 扣减；通过初步校验后、会话归属检查和模型调用前扣额，失败不自动退款。调整顺序会改变业务语义。
+- 数据库历史是模型上下文的权威来源。客户端仅能提交落库 user 消息，parts 有白名单；消息主键冲突忽略用于幂等。
+- 上下文读取最近 24 条并按 `messages.seq` 排序，裁掉开头非 user 消息，对较早工具输出做压缩。`seq` 为全局 bigserial，不要改成仅按时间排序。
+- 生成使用 `streamText` + `stepCountIs(maxSteps)`；输出 UIMessage stream 和 reasoning，结束保存 assistant 消息，中断也保留已生成部分；响应携 `x-conversation-id`。
+- `server/utils/providers.ts` 使用 OpenAI 兼容 `.chat()`，不是 Responses API；模型解析可能创建默认 provider 或回填空 key，并非纯读。
+- `server/utils/self-config.ts` 修改的是数据库中的全局 agent 及绑定，不是会话私有配置；当前请求已加载的工具集不会因此立即重建。
+- `server/api/completion.ts` 是独立简化链路，不具备主 chat 的完整配额、历史、agent、工具和 RAG 编排。
+
+### 数据库、检索、支付与认证
+
+- `server/db/schema.ts` 集中定义认证、供应商/智能体/能力绑定、MCP、知识库/文档/分块、会话/消息、套餐/订单/会员/用量表。关系绑定采用复合主键；删除 agent 会级联删除其会话和消息，删除前必须确认影响。
+- `server/utils/db.ts` 使用 postgres-js + Drizzle，`prepare: false`；连接本身不执行迁移或 seed。迁移以 `drizzle.config.ts` 与 `server/db/migrations` 为入口，不凭本地代码推断目标数据库已迁移。
+- `server/db/seed.ts` 可创建/提升管理员，更新套餐及示例 agent 并补绑定；重跑会覆盖部分配置，不是只补缺。无管理员口令时会生成并打印口令，避免传播日志。
+- `server/utils/embedding.ts` 将向量存为 JSONB 数组，在内存做余弦检索，**不是 pgvector**；默认分块 800/100、检索 top-5，向量失败或无命中可降级 Bigram。混合知识库有向量命中时优先向量结果，不是将两种得分直接混排。
+- `server/utils/billing.ts` 中金额单位是整数分，额度 `null` 表示不限量，日额度按 UTC+8 划分；条件 upsert 原子扣额。Redis 不是额度账本。
+- 会员开通依赖事务、用户级 advisory lock、订单 pending 条件更新及唯一约束保证幂等；续费顺延到期时间。修改支付不能移除这些并发约束。
+- 下单金额来自服务端套餐；微信通知需要原始请求体验签。订单查询 GET 会查询支付渠道、补开通或关单，**不是无副作用查询**。
+- Mock 支付并非生产绝对禁用：生产显式启用 `MOCK_PAY_ENABLED=true` 后仍可用。不要通过真实或 mock 支付替代普通静态验证。
+- `server/utils/auth.ts` 使用 Better Auth 的 admin/bearer 插件；`server/utils/guard.ts` 的 `requireAdmin` 要求 `role === 'admin'`。当前认证配置显式关闭 Origin/CSRF 检查，不能把 trustedOrigins 存在当作这些保护已开启；涉及认证改动需重新评估，本文不是安全验收结论。
+- `server/utils/tools.ts` 的 HTTP 工具调用 `outbound.ts` 的 URL/DNS 校验，15 秒超时、输出截取 4000 字符；`ALLOW_PRIVATE_OUTBOUND=true` 可绕过校验。这不是覆盖 MCP、embedding 等全部请求的全局出站保护。
+- Redis 未配置时限流降级单进程内存，缓存回源；不要宣称无 Redis 的多实例部署仍有全局一致限流。原样复制 Web example 会配置 Redis URL，并不等同于禁用 Redis。
+- Nitro 自动导入是实际运行约定，不因 handler 缺少显式 `db/createError` import 就判错；独立 tsx 脚本不应假设具备同样环境。
+
+### 前端配套与代码风格
+
+- Mobile 路由入口是 `packages/mobile/src/router/index.ts`，主导航为 `/tabs/home`、`/tabs/membership`、`/tabs/me`；聊天为 `/chat/:agentId`，微信回调为 `/wechat-callback`。
+- Mobile Vite 的 `/api` dev/preview 代理读取 `API_PROXY_TARGET`（默认 localhost:3000）；代理不会随生产静态包发布。原生本地 dist 使用 `VITE_API_BASE` 配后端；`CAPACITOR_SERVER_URL` 则让 WebView 加载远端页面。保留 Vite 的 `vue-router` dedupe，避免 Ionic 与应用持有不同路由实例。
+- 双端生成式 UI 映射分别在 `packages/webapp/app/utils/json-ui.ts` 与 `packages/mobile/src/components/json-ui.ts`；Web 消息组件为 `packages/webapp/app/components/ChatMessage.vue`。
+- i18n 入口分别是 `packages/webapp/app/plugins/i18n.ts`、`packages/mobile/src/i18n.ts`，翻译在各自 locales 目录；不要因 commons 有旧 i18n/api/store 就假设两端已全面接入它们。
+- Prettier 配置在 `packages/config/src/prettier/prettier.config.mjs`：4 空格、单引号、分号、尾逗号、宽度 160、LF；插件可能重排 imports 和 Tailwind class。
+- `.husky/pre-commit` 只执行 lint-staged，不执行 typecheck/test；其 ESLint 文件模式不含 Vue，不能以提交成功代替完整检查。
+- `packages/webapp/app/utils/app-icons.ts` 是生成文件。新增图标应改 `packages/webapp/scripts/generate-icons.mjs` 的 NAMES，再运行 `pnpm --filter @repo/webapp icons`，不要手改生成结果。
+
+## 7. 已知文档/配置偏差（静态核实，不是本次修复项）
+
+1. 根 pnpm 声明是 12.4.2，CI 显式安装 12.4.1；依赖/CI 任务应一起核对，不在普通业务或文档任务中顺手更改。
+2. README 的“冒烟测试含 DB 连通性”不意味着测试成功时 DB 一定可用；该脚本可跳过数据库检查。
+
+## 8. 如何维护这份知识
+
+- 优先更新稳定事实：模块职责、契约位置、关键链路、命令前提与副作用、常见陷阱。
+- 不写入临时分支、单次报错、机器绝对路径、密钥或一次性的测试通过结论。
+- 修改 package scripts、共享别名、认证方式、数据库初始化或聊天协议时，同步更新对应章节。
+- 不需要把所有 API 和组件抄进本文。遵循“本文定位 → 阅读相关实现 → 最小修改 → 针对性验证”的顺序。

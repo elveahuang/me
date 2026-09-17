@@ -1,5 +1,5 @@
 /**
- * Web / Mobile 共用契约层（webapp 与 mobile 通过构建别名 `#contract` 引用）。
+ * Web / Mobile 共用契约层（webapp 与 mobile 通过构建别名 `@commons/contract` 引用）。
  *
  * 目标：两端的接口类型、错误提示、金额/日期格式化、主题状态机只有一个事实来源，
  * 避免再次出现「移动端按 A 结构解析、服务端返回 B 结构」而整页崩溃的问题。
