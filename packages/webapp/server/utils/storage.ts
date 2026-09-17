@@ -191,4 +191,51 @@ export function assertFileSize(config: Pick<StorageConfig, 'maxFileSizeMb'>, siz
     }
 }
 
+/**
+ * 服务端中转上传的硬上限。
+ *
+ * readMultipartFormData() 会把整个请求体读进内存，因此必须在解析前依据
+ * Content-Length 拒绝超大请求，否则单次上传就可能耗尽 Node 进程内存。
+ * 超过该上限的文件应走预签名直传（浏览器 → 对象存储，不经过 Node）。
+ */
+export const RELAY_UPLOAD_HARD_LIMIT_MB = 64;
+
+/** multipart 边界、字段名、CRLF 等协议开销的宽容量 */
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
+/** 中转上传的实际上限：取配置值与硬上限中的较小者 */
+export function relayLimitBytes(maxFileSizeMb: number | null | undefined): number {
+    return Math.min(maxFileSizeMb || 20, RELAY_UPLOAD_HARD_LIMIT_MB) * 1024 * 1024;
+}
+
+/**
+ * 读取请求体之前的前置校验。
+ * 依据 Content-Length 提前拒绝超大请求，避免把整个请求体读入内存。
+ */
+export function assertRelayRequestAllowed(contentLength: unknown, maxFileSizeMb: number | null | undefined): void {
+    const limit = relayLimitBytes(maxFileSizeMb);
+    const length = Number(contentLength);
+    if (Number.isFinite(length) && length > limit + MULTIPART_OVERHEAD_BYTES) {
+        // 413 而非 400：语义上是「请求体过大」，前端可据此提示改用直传
+        throw createError({
+            statusCode: 413,
+            statusMessage: `文件超过 ${Math.round(limit / 1024 / 1024)}MB 限制，请压缩后重试或改用直传`,
+        });
+    }
+}
+
+/**
+ * 解析 multipart 后再次校验实际字节数。
+ * 兼容未携带 Content-Length 的 chunked 请求，也防止伪造长度绕过前置校验。
+ */
+export function assertRelayPayloadSize(actualBytes: number, maxFileSizeMb: number | null | undefined): void {
+    const limit = relayLimitBytes(maxFileSizeMb);
+    if (actualBytes > limit) {
+        throw createError({
+            statusCode: 413,
+            statusMessage: `文件超过 ${Math.round(limit / 1024 / 1024)}MB 限制，请压缩后重试或改用直传`,
+        });
+    }
+}
+
 export { DEFAULT_PRESIGN_EXPIRES };

@@ -251,12 +251,23 @@ export interface AttachmentsResponse {
 
 export const ATTACHMENT_MAX_SIZE_MB = 20;
 
+/**
+ * 服务端中转上传的硬上限（与服务端 RELAY_UPLOAD_HARD_LIMIT_MB 保持一致）。
+ * 超过该值的文件必须走预签名直传，前端可据此提前给出提示而不是等请求被拒。
+ */
+export const ATTACHMENT_RELAY_LIMIT_MB = 64;
+
 /** 上传前的本地校验：返回错误文案，通过返回 null（两端共用同一套规则） */
 export function validateAttachmentFile(file: { name: string; size: number; type: string }, maxSizeMb = ATTACHMENT_MAX_SIZE_MB): string | null {
     if (!file.name) return '文件名不能为空';
     if (file.size <= 0) return '文件内容为空';
     if (file.size > maxSizeMb * 1024 * 1024) return `文件超过 ${maxSizeMb}MB 限制`;
     return null;
+}
+
+/** 是否超出服务端中转上限（超出时前端应改用直传通道） */
+export function exceedsRelayLimit(size: number, maxSizeMb = ATTACHMENT_MAX_SIZE_MB): boolean {
+    return size > Math.min(maxSizeMb, ATTACHMENT_RELAY_LIMIT_MB) * 1024 * 1024;
 }
 
 /** 字节数转可读体积（1.5 KB / 2.3 MB） */

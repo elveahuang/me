@@ -2,7 +2,8 @@ import { attachments } from '../db/schema';
 import { db } from '../utils/db';
 import { requireUser } from '../utils/guard';
 import {
-    assertFileSize,
+    assertRelayPayloadSize,
+    assertRelayRequestAllowed,
     buildObjectKey,
     buildPublicUrl,
     isMimeAllowed,
@@ -18,10 +19,14 @@ import {
  * multipart/form-data：file（必填）+ category（可选）
  * 走服务端 putObject 而不是前端直传，原因：
  * 自建对象存储（RustFS / MinIO）通常没有配置浏览器跨域规则，直传会先在 CORS 预检失败。
- * 需要直传时可用 POST /api/attachments/presign 获取预签名地址。
+ * 超过 RELAY_UPLOAD_HARD_LIMIT_MB 的文件应改用 POST /api/attachments/presign 直传。
  */
 export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
+
+    // 解析请求体前先按 Content-Length 拦截，避免超大请求被整体读入内存
+    const config = await resolveStorageConfig(null);
+    assertRelayRequestAllowed(getHeader(event, 'content-length'), config.maxFileSizeMb);
 
     const parts = (await readMultipartFormData(event)) ?? [];
     const filePart = parts.find((part) => part.name === 'file');
@@ -35,8 +40,8 @@ export default defineEventHandler(async (event) => {
     const mimeType = filePart.type || 'application/octet-stream';
     const size = filePart.data.length;
 
-    const config = await resolveStorageConfig(null);
-    assertFileSize(config, size);
+    // 兜底：伪造 Content-Length 或 chunked 请求在解析后再次校验
+    assertRelayPayloadSize(size, config.maxFileSizeMb);
     if (!isMimeAllowed(config, mimeType)) {
         throw createError({ statusCode: 400, statusMessage: `该存储不允许上传 ${mimeType} 类型文件` });
     }
