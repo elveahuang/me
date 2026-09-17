@@ -21,6 +21,8 @@
         "@ai-sdk/mcp": "^2.0.52",
         "@ai-sdk/openai": "^4.0.69",
         "@ai-sdk/vue": "^4.0.105",
+        "@aws-sdk/client-s3": "^3.1134.0",
+        "@aws-sdk/s3-request-presigner": "^3.1134.0",
         "@better-auth/core": "^1.7.5",
         "@comark/nuxt": "^0.7.0",
         "@comark/vue": "^0.7.0",

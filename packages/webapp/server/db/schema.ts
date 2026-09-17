@@ -400,6 +400,142 @@ export const userMembershipsRelations = relations(userMemberships, ({ one }) => 
 }));
 
 // ==========================================
+// OBJECT STORAGE（S3 协议：RustFS / MinIO / AWS S3 / 阿里云 OSS 等）
+// ==========================================
+// 附件本体存放在对象存储，数据库只保存元数据与对象 key。
+// accessKeyId / secretAccessKey 属敏感字段，接口返回时必须脱敏（见 server/utils/s3.ts）。
+export const storageConfigs = pgTable('storage_configs', {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    provider: text('provider').notNull().default('s3'), // 预留多协议，当前仅 s3
+    endpoint: text('endpoint').notNull(),
+    region: text('region').notNull().default('us-east-1'),
+    bucket: text('bucket').notNull(),
+    accessKeyId: text('access_key_id').notNull().default(''),
+    secretAccessKey: text('secret_access_key').notNull().default(''),
+    // RustFS / MinIO 等自建存储通常只支持 path-style（http://host/bucket/key）
+    forcePathStyle: boolean('force_path_style').notNull().default(true),
+    // 公开访问前缀（CDN / 反向代理）。留空表示私有桶，下载走预签名 URL
+    publicBaseUrl: text('public_base_url').notNull().default(''),
+    prefix: text('prefix').notNull().default('uploads'),
+    maxFileSizeMb: integer('max_file_size_mb').notNull().default(20),
+    // 允许的 MIME 前缀白名单，如 ["image/", "application/pdf"]；空数组表示不限制
+    allowedMimeTypes: jsonb('allowed_mime_types').$type<string[]>().notNull().default([]),
+    enabled: boolean('enabled').notNull().default(true),
+    isDefault: boolean('is_default').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const attachments = pgTable(
+    'attachments',
+    {
+        id: text('id').primaryKey(),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        storageConfigId: text('storage_config_id').references(() => storageConfigs.id, { onDelete: 'set null' }),
+        // 对象存储中的 key（相对桶根路径）
+        objectKey: text('object_key').notNull(),
+        filename: text('filename').notNull(),
+        mimeType: text('mime_type').notNull().default('application/octet-stream'),
+        size: integer('size').notNull().default(0),
+        // 业务分类：chat 会话附件 / avatar 头像 / document 文档 / image 图片 / other 其他
+        category: text('category').notNull().default('other'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (t) => [index('attachments_user_id_idx').on(t.userId), index('attachments_created_at_idx').on(t.createdAt)],
+);
+
+// ==========================================
+// 资讯新闻
+// ==========================================
+export const news = pgTable(
+    'news',
+    {
+        id: text('id').primaryKey(),
+        title: text('title').notNull(),
+        summary: text('summary').notNull().default(''),
+        // Markdown 正文，两端用同一套渲染
+        content: text('content').notNull().default(''),
+        coverImage: text('cover_image').notNull().default(''),
+        category: text('category').notNull().default('general'),
+        tags: jsonb('tags').$type<string[]>().notNull().default([]),
+        status: text('status').notNull().default('draft'), // draft | published
+        pinned: boolean('pinned').notNull().default(false),
+        viewCount: integer('view_count').notNull().default(0),
+        authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+        publishedAt: timestamp('published_at'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [index('news_status_published_idx').on(t.status, t.publishedAt), index('news_category_idx').on(t.category)],
+);
+
+// ==========================================
+// 宣传栏（运营位 / 公告横幅）
+// ==========================================
+export const bulletins = pgTable(
+    'bulletins',
+    {
+        id: text('id').primaryKey(),
+        title: text('title').notNull(),
+        content: text('content').notNull().default(''),
+        imageUrl: text('image_url').notNull().default(''),
+        linkUrl: text('link_url').notNull().default(''),
+        linkText: text('link_text').notNull().default(''),
+        // 展示位置：home 首页 / chat 对话页 / global 全站
+        position: text('position').notNull().default('home'),
+        level: text('level').notNull().default('info'), // info | success | warning | danger
+        enabled: boolean('enabled').notNull().default(true),
+        sortOrder: integer('sort_order').notNull().default(0),
+        // 投放时间窗，留空表示长期有效
+        startsAt: timestamp('starts_at'),
+        endsAt: timestamp('ends_at'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [index('bulletins_position_enabled_idx').on(t.position, t.enabled)],
+);
+
+// ==========================================
+// 消息通知
+// ==========================================
+// audience = all 时对所有用户可见（含未来注册用户），不写入 recipients；
+// audience = users 时按 targetUsers 展开为收件人记录。已读状态统一存 recipients。
+export const notifications = pgTable(
+    'notifications',
+    {
+        id: text('id').primaryKey(),
+        title: text('title').notNull(),
+        content: text('content').notNull().default(''),
+        type: text('type').notNull().default('system'), // system | announcement | activity | billing
+        level: text('level').notNull().default('info'), // info | success | warning | danger
+        audience: text('audience').notNull().default('all'), // all | users
+        linkUrl: text('link_url').notNull().default(''),
+        createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (t) => [index('notifications_created_at_idx').on(t.createdAt)],
+);
+
+export const notificationRecipients = pgTable(
+    'notification_recipients',
+    {
+        id: text('id').primaryKey(),
+        notificationId: text('notification_id')
+            .notNull()
+            .references(() => notifications.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        readAt: timestamp('read_at'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (t) => [uniqueIndex('notification_recipients_unique_idx').on(t.notificationId, t.userId), index('notification_recipients_user_idx').on(t.userId)],
+);
+
+// ==========================================
 // INFERRED TYPES
 // ==========================================
 export type User = typeof user.$inferSelect;
@@ -417,3 +553,9 @@ export type MembershipPlan = typeof membershipPlans.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type UserMembership = typeof userMemberships.$inferSelect;
 export type UsageCounter = typeof usageCounters.$inferSelect;
+export type StorageConfig = typeof storageConfigs.$inferSelect;
+export type Attachment = typeof attachments.$inferSelect;
+export type News = typeof news.$inferSelect;
+export type Bulletin = typeof bulletins.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NotificationRecipient = typeof notificationRecipients.$inferSelect;
