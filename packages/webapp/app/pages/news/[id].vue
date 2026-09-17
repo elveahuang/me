@@ -24,10 +24,26 @@ async function load(id: string) {
     }
 }
 
-onMounted(() => load(String(route.params.id)));
+// 用 useAsyncData 承载首屏请求：SSR 拉取后客户端复用同一份 payload，不会二次请求。
+// 浏览量按 (用户, 文章) 半小时去重，因此即使重复调用也不会虚增计数。
+const { data: initial } = await useAsyncData(`news-${route.params.id}`, () => $fetch(`/api/news/${route.params.id}`).catch(() => null));
+
+if (initial.value) {
+    article.value = initial.value;
+    loading.value = false;
+}
+
+async function reload() {
+    const id = String(route.params.id);
+    // 首屏已由 useAsyncData 填充，仅在切换文章时重新请求
+    if (article.value?.id === id) return;
+    await load(id);
+}
+
+onMounted(reload);
 watch(
     () => route.params.id,
-    (next) => next && load(String(next)),
+    () => void reload(),
 );
 
 useHead({
