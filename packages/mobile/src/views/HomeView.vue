@@ -6,10 +6,12 @@ import { useI18n } from 'vue-i18n';
 import { api, extractApiError, fetchSession } from '../api/auth';
 import BulletinBanner from '../components/BulletinBanner.vue';
 import { useTheme } from '../composables/useTheme';
+import { useUnread } from '../composables/useUnread';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
 const { toggleMode } = useTheme();
+const { unread, refresh: refreshUnread } = useUnread();
 
 const agents = ref<AgentSummary[]>([]);
 const searchKeyword = ref('');
@@ -42,6 +44,7 @@ onMounted(async () => {
         favorites.value = [];
     }
     loadAgents();
+    void refreshUnread();
     const session = await fetchSession();
     userName.value = session?.user?.name ?? '';
 });
@@ -99,7 +102,15 @@ const filteredAgents = computed(() => {
                 <ion-title class="!text-lg font-black">{{ userName ? `${userName}，你好 👋` : t('agents.title') }}</ion-title>
                 <template v-slot:end>
                     <router-link to="/news" class="app-btn app-btn-ghost mr-1 !px-2.5" :title="t('nav.news')">📰</router-link>
-                    <router-link to="/notifications" class="app-btn app-btn-ghost mr-1 !px-2.5" :title="t('nav.notifications')">🔔</router-link>
+                    <router-link to="/notifications" class="app-btn app-btn-ghost relative mr-1 !px-2.5" :title="t('nav.notifications')">
+                        🔔
+                        <span
+                            v-if="unread"
+                            class="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[color:var(--danger)] px-1 text-[9px] font-bold text-white"
+                        >
+                            {{ unread > 99 ? '99+' : unread }}
+                        </span>
+                    </router-link>
                     <button type="button" class="app-btn app-btn-ghost mr-1 !px-2.5" title="切换深浅色" @click="toggleMode">🌓</button>
                 </template>
             </ion-toolbar>

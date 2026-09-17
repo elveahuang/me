@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatDate, formatRelativeTime, type NewsArticle, type NewsSummary } from '@commons/contract';
-import { IonContent, IonHeader, IonTitle, IonToolbar } from '@ionic/vue';
+import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -32,6 +32,12 @@ watch(
     () => route.params.id,
     (next) => next && load(String(next)),
 );
+
+/** 下拉刷新：重新拉取正文与相关推荐 */
+async function handleRefresh(event: CustomEvent) {
+    await load(String(route.params.id));
+    (event.target as HTMLIonRefresherElement).complete();
+}
 </script>
 
 <template>
@@ -44,6 +50,12 @@ watch(
         </ion-header>
 
         <ion-content>
+            <template v-slot:fixed>
+                <ion-refresher @ion-refresh="handleRefresh">
+                    <ion-refresher-content pulling-text="下拉刷新" refreshing-spinner="crescent" />
+                </ion-refresher>
+            </template>
+
             <div class="space-y-4 p-4">
                 <div v-if="loading" class="space-y-3">
                     <div class="app-skeleton h-7 w-3/4" />

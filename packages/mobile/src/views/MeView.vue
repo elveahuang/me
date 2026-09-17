@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, fetchSession, signOut, type SessionPayload } from '../api/auth';
 import ThemeSettings from '../components/ThemeSettings.vue';
+import { useUnread } from '../composables/useUnread';
 import { setMobileLocale } from '../i18n';
 import PageShell from './PageShell.vue';
 
@@ -22,7 +23,8 @@ const error = ref('');
 const membership = computed(() => me.value?.membership ?? null);
 const stats = computed(() => me.value?.stats);
 const recentOrders = computed(() => orders.value.slice(0, 3));
-const unreadCount = ref(0);
+// 未读数来自共享 composable：在消息页标记已读后，返回本页角标自动同步
+const { unread: unreadCount, refresh: refreshUnread, resetUnread } = useUnread();
 
 const languageActions = [
     { text: '简体中文 (zh-CN)', handler: () => setMobileLocale('zh-CN') },
@@ -39,12 +41,7 @@ async function loadData() {
         me.value = meRes;
         orders.value = orderRes.orders;
         // 未读角标为辅助信息，失败不影响个人中心其余内容
-        try {
-            const unreadRes = await api<{ unread: number }>('/api/notifications/unread');
-            unreadCount.value = unreadRes.unread ?? 0;
-        } catch {
-            unreadCount.value = 0;
-        }
+        void refreshUnread(true);
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
     } finally {
@@ -62,6 +59,8 @@ onMounted(loadData);
 async function logout() {
     if (!confirm(t('profile.logoutConfirm'))) return;
     await signOut();
+    // 清空共享未读状态，避免下一个登录账号看到上一个账号的角标
+    resetUnread();
     router.replace('/login');
 }
 

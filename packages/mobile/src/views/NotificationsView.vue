@@ -4,13 +4,16 @@ import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherConten
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError } from '../api/auth';
+import { useUnread } from '../composables/useUnread';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
 
 const items = ref<NotificationRecord[]>([]);
 const total = ref(0);
+// 本页未读数：列表接口的返回值作为权威值，同时同步到共享状态供其他页面角标使用
 const unread = ref(0);
+const { setUnread } = useUnread();
 const page = ref(1);
 const pageSize = 15;
 const loading = ref(false);
@@ -50,6 +53,7 @@ async function load(reset = false) {
         items.value = res.items;
         total.value = res.total;
         unread.value = res.unread;
+        setUnread(res.unread);
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
     } finally {
@@ -73,6 +77,7 @@ async function markRead(item: NotificationRecord) {
         item.read = true;
         item.readAt = new Date().toISOString();
         unread.value = res.unread;
+        setUnread(res.unread);
     } catch {
         // 标记已读失败不打断浏览
     }
@@ -84,6 +89,7 @@ async function markAllRead() {
         const res = await api<{ unread: number }>('/api/notifications/read', { method: 'POST', body: JSON.stringify({}) });
         items.value = items.value.map((item) => ({ ...item, read: true, readAt: item.readAt ?? new Date().toISOString() }));
         unread.value = res.unread;
+        setUnread(res.unread);
         success.value = t('notifications.allRead');
         setTimeout(() => (success.value = ''), 2500);
         if (filterUnread.value) await load(true);
