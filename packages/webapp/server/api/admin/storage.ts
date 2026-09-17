@@ -1,5 +1,5 @@
-import { desc, eq } from 'drizzle-orm';
-import { storageConfigs } from '../../db/schema';
+import { desc, eq, sql } from 'drizzle-orm';
+import { attachments, storageConfigs } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
 import { invalidateStorageConfigCache, sanitizeStorageConfig } from '../../utils/storage';
@@ -112,5 +112,24 @@ export default defineEventHandler(async (event) => {
     }
 
     const rows = await db.select().from(storageConfigs).orderBy(desc(storageConfigs.isDefault), desc(storageConfigs.createdAt));
-    return rows.map(sanitizeStorageConfig);
+
+    /**
+     * 每个存储下的附件数量与占用：单次聚合查询，避免逐个配置查表（N+1）。
+     * 管理端据此判断哪份配置在用、是否已有历史附件（有引用时不可删除）。
+     */
+    const usage = await db
+        .select({
+            storageConfigId: attachments.storageConfigId,
+            count: sql<number>`count(*)::int`,
+            bytes: sql<number>`coalesce(sum(${attachments.size}), 0)::bigint`,
+        })
+        .from(attachments)
+        .groupBy(attachments.storageConfigId);
+    const usageMap = new Map(usage.map((row) => [row.storageConfigId ?? '', { count: row.count, bytes: Number(row.bytes) }]));
+
+    return rows.map((row) => ({
+        ...sanitizeStorageConfig(row),
+        attachmentCount: usageMap.get(row.id)?.count ?? 0,
+        attachmentBytes: usageMap.get(row.id)?.bytes ?? 0,
+    }));
 });

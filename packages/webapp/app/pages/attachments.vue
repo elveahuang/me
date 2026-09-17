@@ -21,14 +21,47 @@ const dragActive = ref(false);
 const uploadCategory = ref('chat');
 const previewUrl = ref('');
 
+interface CategoryStat {
+    category: string;
+    count: number;
+    bytes: number;
+}
+/** 全量分类占用（不随筛选变化，便于稳定展示空间去向） */
+const stats = ref<{ totalCount: number; totalBytes: number; byCategory: CategoryStat[] }>({ totalCount: 0, totalBytes: 0, byCategory: [] });
+
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const canUpload = computed(() => !uploading.value);
+
+/** 各分类的数量，用于筛选按钮角标 */
+const categoryCounts = computed(() => {
+    const map = new Map<string, number>();
+    for (const row of stats.value.byCategory) map.set(row.category, row.count);
+    return map;
+});
+
+/** 概要文案：总数 + 占用体积（+ 筛选结果条数），在脚本内拼装以保证 i18n 一致 */
+const summaryText = computed(() => {
+    let text = t('attachments.totalCount', { n: stats.value.totalCount });
+    if (stats.value.totalBytes) text += ` · ${formatBytes(stats.value.totalBytes)}`;
+    if (total.value !== stats.value.totalCount) text += ` · ${t('attachments.filteredCount', { n: total.value })}`;
+    return text;
+});
+
+/** 分类占用占比对应的进度条宽度；占比过小时保留可见宽度 */
+function usageWidth(bytes: number): string {
+    if (!stats.value.totalBytes) return '0%';
+    return `${Math.max(2, Math.round((bytes / stats.value.totalBytes) * 100))}%`;
+}
 
 async function load() {
     loading.value = true;
     error.value = '';
     try {
-        const res = await $fetch<{ attachments: AttachmentRecord[]; total: number }>('/api/attachments', {
+        const res = await $fetch<{
+            attachments: AttachmentRecord[];
+            total: number;
+            stats?: { totalCount: number; totalBytes: number; byCategory: CategoryStat[] };
+        }>('/api/attachments', {
             query: {
                 page: page.value,
                 pageSize,
@@ -38,6 +71,7 @@ async function load() {
         });
         attachments.value = res.attachments;
         total.value = res.total;
+        if (res.stats) stats.value = res.stats;
     } catch (e) {
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
@@ -223,8 +257,22 @@ function iconFor(mime: string): string {
                 @click="category = c.value"
             >
                 {{ c.label }}
+                <span v-if="c.value !== 'all' && categoryCounts.get(c.value)" class="ml-0.5 opacity-70">{{ categoryCounts.get(c.value) }}</span>
             </button>
-            <span class="text-faint ml-auto text-xs">{{ t('attachments.totalCount', { n: total }) }}</span>
+            <span class="text-faint ml-auto text-xs">{{ summaryText }}</span>
+        </div>
+
+        <div v-if="stats.byCategory.length > 1" class="app-card p-4">
+            <p class="text-xs font-bold">{{ t('attachments.usageTitle') }}</p>
+            <div class="mt-3 space-y-2">
+                <div v-for="row in stats.byCategory" :key="row.category" class="flex items-center gap-3">
+                    <span class="text-faint w-20 shrink-0 text-[11px]">{{ categoryLabel(row.category) }}</span>
+                    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[color:var(--surface-3)]">
+                        <div class="h-full rounded-full bg-[color:var(--brand-500)]" :style="{ width: usageWidth(row.bytes) }" />
+                    </div>
+                    <span class="text-faint w-24 shrink-0 text-right text-[11px]">{{ formatBytes(row.bytes) }} · {{ row.count }}</span>
+                </div>
+            </div>
         </div>
 
         <div v-if="loading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

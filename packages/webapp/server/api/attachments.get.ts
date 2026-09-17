@@ -34,6 +34,28 @@ export default defineEventHandler(async (event) => {
         .from(attachments)
         .where(where);
 
+    /**
+     * 分类占用统计：无论当前筛选如何，都返回该用户的全量分布，
+     * 这样切换分类时侧边统计不会跟着筛选结果跳动，用户能稳定看到"空间用在哪"。
+     */
+    const stats = await db
+        .select({
+            category: attachments.category,
+            count: sql<number>`count(*)::int`,
+            bytes: sql<number>`coalesce(sum(${attachments.size}), 0)::bigint`,
+        })
+        .from(attachments)
+        .where(eq(attachments.userId, session.user.id))
+        .groupBy(attachments.category);
+
+    const categoryStats = stats.map((row) => ({
+        category: row.category,
+        count: row.count,
+        bytes: Number(row.bytes),
+    }));
+    const totalCount = categoryStats.reduce((sum, row) => sum + row.count, 0);
+    const totalBytes = categoryStats.reduce((sum, row) => sum + row.bytes, 0);
+
     // 同一份存储配置只解析一次
     let config = null;
     try {
@@ -59,7 +81,17 @@ export default defineEventHandler(async (event) => {
         }),
     );
 
-    return { attachments: items, total: totalRow?.count ?? 0, page, pageSize };
+    return {
+        attachments: items,
+        total: totalRow?.count ?? 0,
+        page,
+        pageSize,
+        stats: {
+            totalCount,
+            totalBytes,
+            byCategory: categoryStats,
+        },
+    };
 });
 
 async function safePresign(config: Awaited<ReturnType<typeof resolveStorageConfig>>, key: string): Promise<string | null> {

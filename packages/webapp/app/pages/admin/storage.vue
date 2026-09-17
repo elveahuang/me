@@ -21,6 +21,9 @@ interface StorageConfigItem {
     enabled: boolean;
     isDefault: boolean;
     createdAt: string;
+    /** 该存储下的附件数量与占用（列表接口附带） */
+    attachmentCount?: number;
+    attachmentBytes?: number;
 }
 
 const { t } = useI18n();
@@ -403,6 +406,9 @@ async function copyKey(key: string) {
                         <p class="mt-1.5 font-mono text-xs text-gray-500">{{ c.endpoint }} / {{ c.bucket }} · {{ c.region }}</p>
                         <p class="mt-1 text-[11px] text-gray-400">
                             {{ c.hasCredentials ? c.accessKeyIdPreview : '⚠ 未配置密钥' }} · {{ c.prefix }}/ · ≤{{ c.maxFileSizeMb }}MB
+                            <template v-if="c.attachmentCount">
+                                · {{ c.attachmentCount }} {{ t('storage.attFilesUnit') }} / {{ formatBytes(c.attachmentBytes) }}
+                            </template>
                         </p>
                     </div>
                     <div class="flex shrink-0 items-center gap-2 text-xs">

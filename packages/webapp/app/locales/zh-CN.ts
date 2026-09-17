@@ -199,6 +199,8 @@ export default {
         deleteConfirm: '确定删除「{name}」吗？删除后不可恢复。',
         empty: '还没有上传任何附件',
         emptyHint: '上传第一个文件，开始管理你的资料',
+        usageTitle: '空间占用分布',
+        filteredCount: '筛选结果 {n}',
     },
     news: {
         title: '资讯中心',
@@ -284,6 +286,7 @@ export default {
         activeRunning: '投放中',
         activePending: '未生效',
         sortOrder: '排序',
+        attFilesUnit: '个文件',
     },
     admin: {
         dashboardTitle: '运营监控大盘',

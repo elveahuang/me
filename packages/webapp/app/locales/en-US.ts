@@ -204,6 +204,8 @@ export default {
         deleteConfirm: 'Delete "{name}"? This cannot be undone.',
         empty: 'No attachments yet',
         emptyHint: 'Upload your first file to get started',
+        usageTitle: 'Storage usage',
+        filteredCount: 'filtered {n}',
     },
     news: {
         title: 'News Center',
@@ -289,6 +291,7 @@ export default {
         activeRunning: 'Live',
         activePending: 'Inactive',
         sortOrder: 'Order',
+        attFilesUnit: 'files',
     },
     admin: {
         dashboardTitle: 'Operations Dashboard',
