@@ -155,7 +155,43 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 1. 根 pnpm 声明是 12.4.2，CI 显式安装 12.4.1；依赖/CI 任务应一起核对，不在普通业务或文档任务中顺手更改。
 2. README 的“冒烟测试含 DB 连通性”不意味着测试成功时 DB 一定可用；该脚本可跳过数据库检查。
 
-## 8. 如何维护这份知识
+## 8. 快速导航与最小阅读范围
+
+开始任务时先读本文对应章节，再按下列入口读取实现及直接消费者。路径存在不代表实现已通过运行验证；不要为了理解一个页面重新扫描全部 packages。
+
+### 常见任务从哪里开始
+
+以下路径均相对仓库根目录：
+
+| 任务                         | 首选入口与联动文件                                                                                                                                                                                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 修改智能体管理字段或能力绑定 | `packages/webapp/app/pages/admin/agents.vue` → `packages/webapp/server/api/admin/agents/[id].patch.ts` → `packages/webapp/server/utils/agent-skills.ts`；新增持久化字段再查 `packages/webapp/server/db/schema.ts`                                                                 |
+| 修改其他管理资源             | 从 `packages/webapp/app/pages/admin/` 对应页面进入 `packages/webapp/server/api/admin/`；知识库页面为 `knowledge.vue`、API 为 `knowledge-bases`，MCP 页面为 `mcp.vue`、API 为 `mcp-servers`，不要假设名称相同                                                                      |
+| 修改移动端页面或导航         | `packages/mobile/src/router/index.ts` → `packages/mobile/src/views/` 对应页面；底部导航在 `TabsView.vue`，会员在 `MembershipView.vue`，个人中心在 `MeView.vue`                                                                                                                    |
+| 修改登录、会话与跨域         | Web 的 `packages/webapp/app/composables/useSession.ts`；Mobile 的 `packages/mobile/src/api/client.ts` 与 `packages/mobile/src/api/auth.ts`；后端联查 `packages/webapp/server/utils/auth.ts`、`packages/webapp/server/utils/guard.ts`、`packages/webapp/server/middleware/cors.ts` |
+| 修改生成式 UI 组件或 schema  | `packages/webapp/server/utils/catalog.ts`、`packages/webapp/server/utils/system-prompt.ts`；同步两端 `json-ui.ts` 映射及 Web 的 `packages/webapp/app/components/json-ui/`、Mobile 的 `packages/mobile/src/components/Jr*.vue`                                                     |
+| 修改知识库上传、分块或索引   | `packages/webapp/server/api/admin/knowledge-bases/[kbId]/documents.ts` → `packages/webapp/server/utils/embedding.ts`；重建入口为同目录的 `reindex.post.ts`，对话检索消费者为 `packages/webapp/server/api/chat.post.ts`                                                            |
+| 修改套餐、会员或订单展示     | Web 的 `packages/webapp/app/pages/pricing.vue`、`packages/webapp/app/pages/profile.vue`；Mobile 的 `MembershipView.vue`、`MeView.vue`；联查共享契约、`packages/webapp/server/api/billing/` 和 `packages/webapp/server/utils/billing.ts`                                           |
+| 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                      |
+| 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                               |
+
+### 阅读实现时不能跳过的边界
+
+- 管理接口可能使用不带方法后缀的文件并在内部按 HTTP 方法分支，例如知识库 `documents.ts`；不要只搜索 `.post.ts` 就认定上传接口不存在。
+- 智能体更新接口先更新主表，再分别替换能力绑定。不要把一次 HTTP 请求等同于整个更新已处于同一事务；修改一致性逻辑时读取 `agent-skills.ts` 的实现。
+- 知识库上传当前将文件按 UTF-8 文本解码，multipart 文件限制为 2MB；不是通用 PDF/Word 解析入口。JSON 上传分支单独处理，不可将文件分支的限制当作两种输入都已覆盖。
+- 文档上传会调用 embedding 供应商；失败可保存空向量并将文档标记为 `ready`。因此 `ready` 不等于向量生成成功，也不代表上传是无外部副作用操作。
+- `catalog.ts` 定义 Card、Stat、Badge、Alert 的模型输出 schema。即使注释声称共用目录，也应检查客户端实际导入和注册方式；新增组件须同步提示词、属性定义和双端渲染。
+- 移动路由守卫会读取会话，微信回调被单独放行。不要把回调跳转问题只当作页面路由配置问题而忽略 token 接收与 API 域名。
+
+### 最小验证与知识更新
+
+- 文档修改：核对新增路径和描述，针对文档执行格式检查及 `git diff --check`；不启动应用、数据库或外部服务。
+- 页面或共享契约修改：检查直接消费者及对应包类型；涉及共享代码则检查双端，不用单端通过代表双端通过。
+- API、schema 或业务链路修改：区分静态检查、模块测试、真实 HTTP/数据库验证；执行会写数据或调用外部服务的验证前先确认环境与授权。
+- 记录稳定约束与入口，不记录一次性 lint 报错为永久事实。任务结束总结实际改动、已验证范围和未验证边界；不要为了让检查通过扩大到无关修复。
+
+## 9. 如何维护这份知识
 
 - 优先更新稳定事实：模块职责、契约位置、关键链路、命令前提与副作用、常见陷阱。
 - 不写入临时分支、单次报错、机器绝对路径、密钥或一次性的测试通过结论。
