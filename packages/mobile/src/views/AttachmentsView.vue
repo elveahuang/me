@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ATTACHMENT_CATEGORIES, formatBytes, formatDate, type AttachmentRecord } from '@commons/contract';
+import { ATTACHMENT_CATEGORIES, formatBytes, formatDate, type AttachmentRecord, type AttachmentsResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -42,7 +42,7 @@ async function load(reset = false) {
         const query = new URLSearchParams({ page: String(page.value), pageSize: String(pageSize) });
         if (category.value !== 'all') query.set('category', category.value);
         if (keyword.value.trim()) query.set('keyword', keyword.value.trim());
-        const data = await api<{ attachments: AttachmentRecord[]; total: number }>(`/api/attachments?${query.toString()}`);
+        const data = await api<AttachmentsResponse>(`/api/attachments?${query.toString()}`);
         items.value = data.attachments;
         total.value = data.total;
     } catch (e) {

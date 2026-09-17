@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDate, type NewsArticle, type NewsSummary } from '@commons/contract';
+import { extractApiError, formatDate, type NewsDetailResponse } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ middleware: 'auth' });
@@ -8,7 +8,7 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
-const article = ref<(NewsArticle & { related?: NewsSummary[] }) | null>(null);
+const article = ref<NewsDetailResponse | null>(null);
 const loading = ref(true);
 const error = ref('');
 
@@ -16,7 +16,7 @@ async function load(id: string) {
     loading.value = true;
     error.value = '';
     try {
-        article.value = await $fetch(`/api/news/${id}`);
+        article.value = await $fetch<NewsDetailResponse>(`/api/news/${id}`);
     } catch (e) {
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
@@ -26,7 +26,7 @@ async function load(id: string) {
 
 // 用 useAsyncData 承载首屏请求：SSR 拉取后客户端复用同一份 payload，不会二次请求。
 // 浏览量按 (用户, 文章) 半小时去重，因此即使重复调用也不会虚增计数。
-const { data: initial } = await useAsyncData(`news-${route.params.id}`, () => $fetch(`/api/news/${route.params.id}`).catch(() => null));
+const { data: initial } = await useAsyncData(`news-${route.params.id}`, () => $fetch<NewsDetailResponse>(`/api/news/${route.params.id}`).catch(() => null));
 
 if (initial.value) {
     article.value = initial.value;

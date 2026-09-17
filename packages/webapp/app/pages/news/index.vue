@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDate, type NewsSummary } from '@commons/contract';
+import { extractApiError, formatDate, type NewsListResponse, type NewsSummary } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ middleware: 'auth' });
@@ -22,7 +22,7 @@ async function load() {
     loading.value = true;
     error.value = '';
     try {
-        const res = await $fetch<{ items: NewsSummary[]; total: number; categories: { value: string; count: number }[] }>('/api/news', {
+        const res = await $fetch<NewsListResponse>('/api/news', {
             query: {
                 page: page.value,
                 pageSize,
@@ -32,7 +32,7 @@ async function load() {
         });
         items.value = res.items;
         total.value = res.total;
-        categories.value = res.categories;
+        categories.value = res.categories ?? [];
     } catch (e) {
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {

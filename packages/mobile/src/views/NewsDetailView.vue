@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDate, formatRelativeTime, type NewsArticle, type NewsSummary } from '@commons/contract';
+import { formatDate, formatRelativeTime, type NewsDetailResponse } from '@commons/contract';
 import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -11,7 +11,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-const article = ref<(NewsArticle & { related?: NewsSummary[] }) | null>(null);
+const article = ref<NewsDetailResponse | null>(null);
 const loading = ref(true);
 const error = ref('');
 
@@ -19,7 +19,7 @@ async function load(id: string) {
     loading.value = true;
     error.value = '';
     try {
-        article.value = await api<NewsArticle & { related?: NewsSummary[] }>(`/api/news/${id}`);
+        article.value = await api<NewsDetailResponse>(`/api/news/${id}`);
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
     } finally {

@@ -247,6 +247,14 @@ export interface AttachmentRecord {
 export interface AttachmentsResponse {
     attachments: AttachmentRecord[];
     total: number;
+    page?: number;
+    pageSize?: number;
+    /** 按用户全量统计（不随 category/keyword 筛选变化） */
+    stats?: {
+        totalCount: number;
+        totalBytes: number;
+        byCategory: { category: string; count: number; bytes: number }[];
+    };
 }
 
 export const ATTACHMENT_MAX_SIZE_MB = 20;
@@ -307,6 +315,15 @@ export interface NewsListResponse {
     total: number;
     page: number;
     pageSize: number;
+    /** 分类聚合，供筛选栏展示「分类名 (数量)」 */
+    categories?: { value: string; count: number }[];
+}
+
+/** GET /api/news/:id 的响应：正文 + 相关推荐 + 本次是否计入浏览量 */
+export interface NewsDetailResponse extends NewsArticle {
+    related?: NewsSummary[];
+    /** 浏览量按 (用户, 文章) 去重，false 表示该用户窗口内已读过，本次未计数 */
+    viewCounted?: boolean;
 }
 
 // ============================================================

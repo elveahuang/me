@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ATTACHMENT_CATEGORIES, extractApiError, formatBytes, formatDate, type AttachmentRecord } from '@commons/contract';
+import { ATTACHMENT_CATEGORIES, extractApiError, formatBytes, formatDate, type AttachmentRecord, type AttachmentsResponse } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ middleware: 'auth' });
@@ -21,13 +21,8 @@ const dragActive = ref(false);
 const uploadCategory = ref('chat');
 const previewUrl = ref('');
 
-interface CategoryStat {
-    category: string;
-    count: number;
-    bytes: number;
-}
 /** 全量分类占用（不随筛选变化，便于稳定展示空间去向） */
-const stats = ref<{ totalCount: number; totalBytes: number; byCategory: CategoryStat[] }>({ totalCount: 0, totalBytes: 0, byCategory: [] });
+const stats = ref<NonNullable<AttachmentsResponse['stats']>>({ totalCount: 0, totalBytes: 0, byCategory: [] });
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const canUpload = computed(() => !uploading.value);
@@ -57,11 +52,7 @@ async function load() {
     loading.value = true;
     error.value = '';
     try {
-        const res = await $fetch<{
-            attachments: AttachmentRecord[];
-            total: number;
-            stats?: { totalCount: number; totalBytes: number; byCategory: CategoryStat[] };
-        }>('/api/attachments', {
+        const res = await $fetch<AttachmentsResponse>('/api/attachments', {
             query: {
                 page: page.value,
                 pageSize,
