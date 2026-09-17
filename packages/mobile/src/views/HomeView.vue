@@ -4,6 +4,7 @@ import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar,
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError, fetchSession } from '../api/auth';
+import BulletinBanner from '../components/BulletinBanner.vue';
 import { useTheme } from '../composables/useTheme';
 import PageShell from './PageShell.vue';
 
@@ -97,6 +98,8 @@ const filteredAgents = computed(() => {
             <ion-toolbar>
                 <ion-title class="!text-lg font-black">{{ userName ? `${userName}，你好 👋` : t('agents.title') }}</ion-title>
                 <template v-slot:end>
+                    <router-link to="/news" class="app-btn app-btn-ghost mr-1 !px-2.5" :title="t('nav.news')">📰</router-link>
+                    <router-link to="/notifications" class="app-btn app-btn-ghost mr-1 !px-2.5" :title="t('nav.notifications')">🔔</router-link>
                     <button type="button" class="app-btn app-btn-ghost mr-1 !px-2.5" title="切换深浅色" @click="toggleMode">🌓</button>
                 </template>
             </ion-toolbar>
@@ -134,6 +137,7 @@ const filteredAgents = computed(() => {
             </template>
 
             <div class="p-4">
+                <BulletinBanner position="home" />
                 <p class="text-faint mb-3 text-[11px]">{{ t('agents.subtitle') }}</p>
 
                 <div v-if="error" class="app-alert app-alert-danger mb-3">{{ error }}</div>

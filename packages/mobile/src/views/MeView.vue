@@ -22,6 +22,7 @@ const error = ref('');
 const membership = computed(() => me.value?.membership ?? null);
 const stats = computed(() => me.value?.stats);
 const recentOrders = computed(() => orders.value.slice(0, 3));
+const unreadCount = ref(0);
 
 const languageActions = [
     { text: '简体中文 (zh-CN)', handler: () => setMobileLocale('zh-CN') },
@@ -37,6 +38,13 @@ async function loadData() {
         const [meRes, orderRes] = await Promise.all([api<MeResponse>('/api/me'), api<OrdersResponse>('/api/billing/orders')]);
         me.value = meRes;
         orders.value = orderRes.orders;
+        // 未读角标为辅助信息，失败不影响个人中心其余内容
+        try {
+            const unreadRes = await api<{ unread: number }>('/api/notifications/unread');
+            unreadCount.value = unreadRes.unread ?? 0;
+        } catch {
+            unreadCount.value = 0;
+        }
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
     } finally {
@@ -133,6 +141,26 @@ function orderStatusText(s: string): string {
                             <span class="font-bold">{{ formatDate(membership.expiresAt) }}</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- 功能入口 -->
+                <div class="app-card divide-y divide-[color:var(--line)] p-0">
+                    <router-link to="/news" class="flex items-center gap-3 p-3.5 transition-colors active:bg-[color:var(--surface-3)]">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--surface-3)] text-base">📰</span>
+                        <span class="flex-1 text-xs font-bold">{{ t('nav.news') }}</span>
+                        <span class="text-faint text-xs">›</span>
+                    </router-link>
+                    <router-link to="/notifications" class="flex items-center gap-3 p-3.5 transition-colors active:bg-[color:var(--surface-3)]">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--surface-3)] text-base">🔔</span>
+                        <span class="flex-1 text-xs font-bold">{{ t('nav.notifications') }}</span>
+                        <span v-if="unreadCount" class="app-badge app-badge-danger !text-[10px]">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+                        <span class="text-faint text-xs">›</span>
+                    </router-link>
+                    <router-link to="/attachments" class="flex items-center gap-3 p-3.5 transition-colors active:bg-[color:var(--surface-3)]">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--surface-3)] text-base">📎</span>
+                        <span class="flex-1 text-xs font-bold">{{ t('nav.attachments') }}</span>
+                        <span class="text-faint text-xs">›</span>
+                    </router-link>
                 </div>
 
                 <!-- 主题设置 -->

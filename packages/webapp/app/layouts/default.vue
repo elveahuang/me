@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 /**
@@ -21,6 +21,27 @@ const drawerOpen = ref(false);
 const drawerRef = ref<HTMLElement | null>(null);
 
 /**
+ * 未读消息角标。登录态就绪后取一次，客户端每 60 秒刷新。
+ * 未登录或接口不可用时静默保持 0，不影响外壳可用性。
+ */
+const unreadCount = ref(0);
+
+async function refreshUnread() {
+    if (!session.value) {
+        unreadCount.value = 0;
+        return;
+    }
+    try {
+        const res = await $fetch<{ unread: number }>('/api/notifications/unread');
+        unreadCount.value = res.unread ?? 0;
+    } catch {
+        // 角标属于辅助信息，失败时不打扰用户
+    }
+}
+
+let unreadTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
  * useAsyncData（不加 await）：SSR 渲染器会等待其 resolve，因此首屏就是正确的登录态，
  * 不会先渲染「登录/注册」再闪成用户名；客户端则复用同一份 payload，不重复请求。
  */
@@ -29,6 +50,9 @@ useAsyncData('shell-session', () => load(), { server: true });
 const navLinks = computed(() => [
     { to: '/', label: t('nav.home'), icon: 'dots-grid' },
     { to: '/chat', label: t('nav.chat'), icon: 'chat-outline' },
+    { to: '/news', label: t('nav.news'), icon: 'newspaper-variant-outline' },
+    { to: '/notifications', label: t('nav.notifications'), icon: 'bell-outline' },
+    { to: '/attachments', label: t('nav.attachments'), icon: 'folder-multiple-outline' },
     { to: '/pricing', label: t('nav.pricing'), icon: 'crown-outline' },
 ]);
 
@@ -64,11 +88,25 @@ watch(
     () => (drawerOpen.value = false),
 );
 
+// 进入通知页即视为已查看，刷新角标避免停留在旧数值
+watch(
+    () => route.path,
+    (path) => {
+        if (path === '/notifications') void refreshUnread();
+    },
+);
+
+onMounted(() => {
+    void refreshUnread();
+    unreadTimer = setInterval(() => void refreshUnread(), 60_000);
+});
+
 onBeforeUnmount(() => {
     if (import.meta.client) {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onKeydown);
     }
+    if (unreadTimer) clearInterval(unreadTimer);
 });
 
 if (import.meta.client) {
@@ -133,6 +171,23 @@ async function logout() {
                 </nav>
 
                 <div class="ml-auto flex items-center gap-1.5">
+                    <!-- 消息入口（带未读角标） -->
+                    <NuxtLink
+                        v-if="session"
+                        to="/notifications"
+                        class="app-btn app-btn-ghost app-btn-icon relative"
+                        :title="t('notifications.title')"
+                        :aria-label="t('notifications.title')"
+                    >
+                        <AppIcon name="bell-outline" :size="18" />
+                        <span
+                            v-if="unreadCount"
+                            class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[color:var(--danger)] px-1 text-[9px] font-bold text-white"
+                        >
+                            {{ unreadCount > 99 ? '99+' : unreadCount }}
+                        </span>
+                    </NuxtLink>
+
                     <!-- 外观设置：桌面端收进下拉，避免头部堆一排主题按钮 -->
                     <AppDropdown class="hidden lg:block" align="right" width="18rem">
                         <template #trigger="{ toggle, attrs }">

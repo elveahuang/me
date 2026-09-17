@@ -43,6 +43,16 @@ const navGroups = computed(() => [
         ],
     },
     {
+        title: t('nav.content'),
+        items: [
+            { path: '/admin/news', label: t('nav.news'), icon: '📰' },
+            { path: '/admin/bulletins', label: t('nav.bulletins'), icon: '📣' },
+            { path: '/admin/notifications', label: t('nav.notifications'), icon: '🔔' },
+            { path: '/admin/storage', label: t('nav.storage'), icon: '☁️' },
+            { path: '/admin/attachments', label: t('nav.attachments'), icon: '📎' },
+        ],
+    },
+    {
         title: t('nav.operations'),
         items: [
             { path: '/admin/conversations', label: t('nav.conversations'), icon: '💬' },

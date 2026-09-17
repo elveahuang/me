@@ -218,6 +218,186 @@ export interface CreateOrderRequest {
 }
 
 // ============================================================
+// 附件管理（对象存储，S3 协议）
+// ============================================================
+
+export type AttachmentCategory = 'chat' | 'image' | 'document' | 'avatar' | 'other';
+
+export const ATTACHMENT_CATEGORIES: { value: AttachmentCategory; label: string; labelEn: string }[] = [
+    { value: 'chat', label: '会话附件', labelEn: 'Chat' },
+    { value: 'image', label: '图片素材', labelEn: 'Image' },
+    { value: 'document', label: '业务文档', labelEn: 'Document' },
+    { value: 'avatar', label: '头像', labelEn: 'Avatar' },
+    { value: 'other', label: '其他文件', labelEn: 'Other' },
+];
+
+export interface AttachmentRecord {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    category: AttachmentCategory | string;
+    createdAt: string;
+    /** 可直接访问的地址（公开桶为公共 URL，私有桶为限时预签名 URL） */
+    url: string | null;
+    /** 资源是否是图片，便于列表直接决定是否显示缩略图 */
+    isImage: boolean;
+}
+
+export interface AttachmentsResponse {
+    attachments: AttachmentRecord[];
+    total: number;
+}
+
+export const ATTACHMENT_MAX_SIZE_MB = 20;
+
+/** 上传前的本地校验：返回错误文案，通过返回 null（两端共用同一套规则） */
+export function validateAttachmentFile(file: { name: string; size: number; type: string }, maxSizeMb = ATTACHMENT_MAX_SIZE_MB): string | null {
+    if (!file.name) return '文件名不能为空';
+    if (file.size <= 0) return '文件内容为空';
+    if (file.size > maxSizeMb * 1024 * 1024) return `文件超过 ${maxSizeMb}MB 限制`;
+    return null;
+}
+
+/** 字节数转可读体积（1.5 KB / 2.3 MB） */
+export function formatBytes(size: number | null | undefined): string {
+    const value = Math.max(0, Number(size) || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+    return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+// ============================================================
+// 资讯新闻
+// ============================================================
+
+export type NewsStatus = 'draft' | 'published';
+
+export interface NewsSummary {
+    id: string;
+    title: string;
+    summary: string;
+    coverImage: string;
+    category: string;
+    tags: string[];
+    pinned: boolean;
+    viewCount: number;
+    publishedAt: string | null;
+    createdAt: string;
+}
+
+export interface NewsArticle extends NewsSummary {
+    content: string;
+}
+
+export interface NewsListResponse {
+    items: NewsSummary[];
+    total: number;
+    page: number;
+    pageSize: number;
+}
+
+// ============================================================
+// 宣传栏（运营位 / 公告横幅）
+// ============================================================
+
+export type BulletinPosition = 'home' | 'chat' | 'global';
+export type BulletinLevel = 'info' | 'success' | 'warning' | 'danger';
+
+export const BULLETIN_POSITIONS: { value: BulletinPosition; label: string; labelEn: string }[] = [
+    { value: 'home', label: '首页', labelEn: 'Home' },
+    { value: 'chat', label: '对话页', labelEn: 'Chat' },
+    { value: 'global', label: '全站', labelEn: 'Global' },
+];
+
+export const BULLETIN_LEVELS: { value: BulletinLevel; label: string; labelEn: string }[] = [
+    { value: 'info', label: '信息', labelEn: 'Info' },
+    { value: 'success', label: '推荐', labelEn: 'Success' },
+    { value: 'warning', label: '提醒', labelEn: 'Warning' },
+    { value: 'danger', label: '重要', labelEn: 'Important' },
+];
+
+export interface BulletinRecord {
+    id: string;
+    title: string;
+    content: string;
+    imageUrl: string;
+    linkUrl: string;
+    linkText: string;
+    position: BulletinPosition | string;
+    level: BulletinLevel | string;
+    enabled: boolean;
+    sortOrder: number;
+    startsAt: string | null;
+    endsAt: string | null;
+    createdAt: string;
+}
+
+export interface BulletinsResponse {
+    bulletins: BulletinRecord[];
+}
+
+/** 判断宣传栏当前是否在投放时间窗内（两端与管理端共用） */
+export function isBulletinActive(bulletin: Pick<BulletinRecord, 'enabled' | 'startsAt' | 'endsAt'>, now = Date.now()): boolean {
+    if (!bulletin.enabled) return false;
+    if (bulletin.startsAt && new Date(bulletin.startsAt).getTime() > now) return false;
+    if (bulletin.endsAt && new Date(bulletin.endsAt).getTime() < now) return false;
+    return true;
+}
+
+// ============================================================
+// 消息通知
+// ============================================================
+
+export type NotificationType = 'system' | 'announcement' | 'activity' | 'billing';
+export type NotificationAudience = 'all' | 'users';
+
+export const NOTIFICATION_TYPES: { value: NotificationType; label: string; labelEn: string }[] = [
+    { value: 'system', label: '系统消息', labelEn: 'System' },
+    { value: 'announcement', label: '平台公告', labelEn: 'Announcement' },
+    { value: 'activity', label: '活动通知', labelEn: 'Activity' },
+    { value: 'billing', label: '账单提醒', labelEn: 'Billing' },
+];
+
+export interface NotificationRecord {
+    id: string;
+    title: string;
+    content: string;
+    type: NotificationType | string;
+    level: BulletinLevel | string;
+    audience: NotificationAudience | string;
+    linkUrl: string;
+    createdAt: string;
+    readAt: string | null;
+    read: boolean;
+}
+
+export interface NotificationsResponse {
+    items: NotificationRecord[];
+    total: number;
+    unread: number;
+    page: number;
+    pageSize: number;
+}
+
+/** 相对时间文案（分钟/小时/天），超过 7 天回退日期 */
+export function formatRelativeTime(iso: string | null | undefined, locale = 'zh-CN'): string {
+    if (!iso) return '-';
+    const time = new Date(iso).getTime();
+    if (Number.isNaN(time)) return '-';
+    const diff = Date.now() - time;
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diff < minute) return locale === 'zh-CN' ? '刚刚' : 'Just now';
+    if (diff < hour) return locale === 'zh-CN' ? `${Math.floor(diff / minute)} 分钟前` : `${Math.floor(diff / minute)} min ago`;
+    if (diff < day) return locale === 'zh-CN' ? `${Math.floor(diff / hour)} 小时前` : `${Math.floor(diff / hour)} h ago`;
+    if (diff < 7 * day) return locale === 'zh-CN' ? `${Math.floor(diff / day)} 天前` : `${Math.floor(diff / day)} d ago`;
+    return formatDate(iso, locale);
+}
+
+// ============================================================
 // 错误与展示辅助
 // ============================================================
 

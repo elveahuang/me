@@ -46,6 +46,8 @@ const features = computed(() => [
 
 <template>
     <div class="space-y-14 py-6">
+        <BulletinBanner position="home" />
+
         <!-- Hero 主视觉 -->
         <section class="app-card relative overflow-hidden p-8 text-center sm:p-14">
             <div class="bg-brand-soft-gradient pointer-events-none absolute inset-0 opacity-70" />

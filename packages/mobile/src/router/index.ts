@@ -26,6 +26,10 @@ const routes: RouteRecordRaw[] = [
     { path: '/membership', redirect: '/tabs/membership' },
     { path: '/me', redirect: '/tabs/me' },
     { path: '/chat/:agentId', name: 'Chat', component: ChatView },
+    { path: '/news', name: 'News', component: () => import('../views/NewsView.vue') },
+    { path: '/news/:id', name: 'NewsDetail', component: () => import('../views/NewsDetailView.vue') },
+    { path: '/notifications', name: 'Notifications', component: () => import('../views/NotificationsView.vue') },
+    { path: '/attachments', name: 'Attachments', component: () => import('../views/AttachmentsView.vue') },
     { path: '/wechat-callback', name: 'WechatCallback', component: () => import('../views/WechatCallbackView.vue') },
 ];
 
