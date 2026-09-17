@@ -8,7 +8,8 @@ import eslintTypescript from 'typescript-eslint';
 import vueParser from 'vue-eslint-parser';
 
 export default defineConfigWithVueTs(
-    globalIgnores(['**/node_modules/', '**/dist/']),
+    // app-icons.ts 是 generate-icons.mjs 的构建产物（内联 SVG 路径），格式由脚本保证，不参与 lint
+    globalIgnores(['**/node_modules/', '**/dist/', '**/app/utils/app-icons.ts']),
     eslintTypescript.configs.recommended,
     vuePlugin.configs['flat/essential'],
     vueTsConfigs.recommended,
@@ -49,6 +50,10 @@ export default defineConfigWithVueTs(
             'vue/require-valid-default-prop': 'off',
             'vue/no-mutating-props': 'off',
             'vue/valid-v-for': 'off',
+            // Ionic(Stencil) 的具名插槽只能用原生 slot 属性——v-slot 不会作用到自定义元素上，
+            // 官方 Ionic Vue 示例同样写作 <ion-tab-bar slot="bottom">，因此仅对 ion-* 放行。
+            // 注意：该规则的 ignore 值是「正则片段」而非 glob，所以写成 ion-.*
+            'vue/no-deprecated-slot-attribute': ['error', { ignore: ['ion-.*'] }],
             'no-async-promise-executor': 'off',
         },
     },

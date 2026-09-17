@@ -37,6 +37,15 @@ export default {
         themeLight: '浅色',
         themeDark: '深色',
         themeAuto: '跟随系统',
+        // 外壳与通用交互（导航抽屉 / 无障碍 / 状态提示）
+        navigation: '导航',
+        openMenu: '打开导航菜单',
+        skipToContent: '跳到主要内容',
+        systemStatus: '服务状态',
+        loadFailed: '加载失败',
+        emptyHint: '暂时没有数据，稍后再试',
+        more: '更多',
+        viewDetail: '查看详情',
     },
     nav: {
         home: '首页',
@@ -163,6 +172,10 @@ export default {
         quotaUsage: '今日配额消耗情况',
         preferences: '界面偏好',
         languageSelect: '显示语言',
+        themeColor: '主题配色',
+        appearance: '外观模式',
+        appearanceHint: '浅色 / 深色 / 跟随系统',
+        themeColorHint: '蓝色 / 绿色 / 黄色 / 红色',
         logoutConfirm: '确定要退出登录吗？',
     },
     admin: {

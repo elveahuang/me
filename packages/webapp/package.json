@@ -11,6 +11,8 @@
         "db:seed": "tsx server/db/seed.ts",
         "auth:secret": "npx auth@latest secret",
         "smoke-test": "tsx scripts/smoke-test.ts",
+        "icons": "node scripts/generate-icons.mjs",
+        "icons:check": "node scripts/generate-icons.mjs --check",
         "typecheck": "nuxt typecheck",
         "test": "tsx scripts/smoke-test.ts"
     },

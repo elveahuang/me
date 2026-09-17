@@ -5,7 +5,9 @@ const config = {
         'at-rule-no-unknown': [
             true,
             {
-                ignoreAtRules: ['extends', 'tailwind', 'layer', 'apply', 'use'],
+                // Tailwind v4 的专属 at-rule（@theme / @custom-variant / @source / @variant 等）不在标准语法内，
+                // 不忽略会让 `pnpm stylelint` 对整个项目报假错误。
+                ignoreAtRules: ['extends', 'tailwind', 'layer', 'apply', 'use', 'theme', 'custom-variant', 'source', 'variant', 'utility', 'reference'],
             },
         ],
         'block-no-empty': null,

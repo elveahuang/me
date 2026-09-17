@@ -2,3 +2,5 @@
 dist
 auto-imports.d.ts
 typed-router.d.ts
+# 构建期生成：packages/webapp/scripts/generate-icons.mjs 产出，由脚本保证格式
+packages/webapp/app/utils/app-icons.ts

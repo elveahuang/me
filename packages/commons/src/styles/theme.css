@@ -74,7 +74,9 @@ html[data-brand='red'] {
     --surface: #ffffff;
     --surface-2: #f8fafc;
     --surface-3: #f1f5f9;
+    --surface-hover: #f1f5f9;
     --surface-inverse: #0f172a;
+    --overlay: rgb(15 23 42 / 0.45);
     --content: #0f172a;
     --content-soft: #475569;
     --content-muted: #64748b;
@@ -86,6 +88,14 @@ html[data-brand='red'] {
     --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.06);
     --shadow-sm: 0 4px 14px -6px rgb(var(--shadow-color) / 0.18);
     --shadow-md: 0 18px 40px -22px rgb(var(--shadow-color) / 0.35);
+    --shadow-lg: 0 28px 60px -28px rgb(var(--shadow-color) / 0.45);
+
+    /* 圆角阶梯：组件类统一引用，避免各处写死 rem */
+    --radius-xs: 0.5rem;
+    --radius-sm: 0.7rem;
+    --radius-md: 0.85rem;
+    --radius-lg: 1.25rem;
+    --radius-xl: 1.5rem;
 
     --success: oklch(62.7% 0.194 149.214);
     --info: oklch(62.3% 0.214 259.815);
@@ -113,7 +123,9 @@ html[data-brand='yellow'] {
     --surface: #0b1220;
     --surface-2: #070c16;
     --surface-3: #131c2e;
+    --surface-hover: #172338;
     --surface-inverse: #f8fafc;
+    --overlay: rgb(2 6 16 / 0.66);
     --content: #f1f5f9;
     --content-soft: #cbd5e1;
     --content-muted: #94a3b8;
@@ -125,6 +137,7 @@ html[data-brand='yellow'] {
     --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.5);
     --shadow-sm: 0 4px 16px -8px rgb(var(--shadow-color) / 0.8);
     --shadow-md: 0 20px 45px -25px rgb(var(--shadow-color) / 0.9);
+    --shadow-lg: 0 32px 70px -32px rgb(var(--shadow-color) / 0.95);
 
     --success: oklch(79.2% 0.209 151.711);
     --info: oklch(70.7% 0.165 254.624);
@@ -148,11 +161,26 @@ html[data-brand='yellow'].dark {
  * 基础排版与滚动条
  * ============================================================ */
 body {
-    background-color: var(--surface-2);
+    font-family: var(--font-sans);
     color: var(--content);
+    background-color: var(--surface-2);
+    text-rendering: optimizelegibility;
     transition:
         background-color 0.25s ease,
         color 0.25s ease;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 触屏端点按高亮：默认的蓝色方块在移动端壳里很突兀 */
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 键盘可达性：只在键盘导航时显示焦点环，鼠标点击不显示 */
+:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
 }
 
 ::selection {
@@ -176,6 +204,11 @@ body {
 
 ::-webkit-scrollbar-track {
     background-color: transparent;
+}
+
+/* 横向滚动条过粗会挤压内容行高（表格 / 胶囊栏常见） */
+::-webkit-scrollbar:horizontal {
+    height: 6px;
 }
 
 /* ============================================================
@@ -238,18 +271,18 @@ body {
 }
 
 .bg-brand {
-    background-color: var(--brand);
     color: var(--on-brand);
+    background-color: var(--brand);
 }
 
 .bg-brand-strong {
-    background-color: var(--brand-strong);
     color: var(--on-brand);
+    background-color: var(--brand-strong);
 }
 
 .bg-brand-soft {
-    background-color: var(--brand-soft);
     color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
 }
 
 .border-brand {
@@ -270,8 +303,8 @@ body {
 
 /* 品牌渐变（Hero / 头像底色） */
 .bg-brand-gradient {
-    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
     color: var(--on-brand);
+    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
 }
 
 .bg-brand-soft-gradient {
@@ -300,9 +333,9 @@ body {
 }
 
 .app-card-hover:hover {
-    transform: translateY(-2px);
     border-color: var(--brand-soft-border);
     box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
 }
 
 .app-panel {
@@ -317,37 +350,83 @@ body {
 
 .app-btn {
     display: inline-flex;
+    gap: 0.4rem;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    border-radius: 0.85rem;
     padding: 0.6rem 1.1rem;
     font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.1rem;
+    text-align: center;
+    white-space: nowrap;
     cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
     transition:
         background-color 0.18s ease,
         color 0.18s ease,
         border-color 0.18s ease,
         transform 0.12s ease,
         box-shadow 0.18s ease;
-    border: 1px solid transparent;
-    text-align: center;
 }
 
-.app-btn:disabled {
-    opacity: 0.55;
+.app-btn:disabled,
+.app-btn[aria-disabled='true'] {
     cursor: not-allowed;
+    opacity: 0.55;
 }
 
 .app-btn:not(:disabled):active {
     transform: scale(0.97);
 }
 
+/* 尺寸阶梯：小按钮用于表格行内操作，大按钮用于表单主提交 */
+.app-btn-sm {
+    gap: 0.25rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    line-height: 1rem;
+    border-radius: var(--radius-sm);
+}
+
+.app-btn-lg {
+    padding: 0.8rem 1.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    border-radius: var(--radius-md);
+}
+
+/* 纯图标按钮：正方形，避免不同图标宽度造成行内错位 */
+.app-btn-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    border-radius: var(--radius-sm);
+}
+
+.app-btn-icon.app-btn-sm {
+    width: 1.85rem;
+    height: 1.85rem;
+}
+
+.app-btn-icon.app-btn-lg {
+    width: 2.75rem;
+    height: 2.75rem;
+}
+
+.app-btn-block {
+    width: 100%;
+}
+
+/* 载入态：按钮内配合 .app-spinner 使用，禁用指针事件防止重复提交 */
+.app-btn[data-loading='true'] {
+    pointer-events: none;
+    opacity: 0.75;
+}
+
 .app-btn-primary {
-    background-color: var(--brand);
     color: var(--on-brand);
+    background-color: var(--brand);
     box-shadow: var(--shadow-xs);
 }
 
@@ -356,8 +435,8 @@ body {
 }
 
 .app-btn-soft {
-    background-color: var(--brand-soft);
     color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
     border-color: var(--brand-soft-border);
 }
 
@@ -366,42 +445,58 @@ body {
 }
 
 .app-btn-outline {
-    background-color: var(--surface);
     color: var(--content);
+    background-color: var(--surface);
     border-color: var(--line-strong);
     box-shadow: var(--shadow-xs);
 }
 
 .app-btn-outline:not(:disabled):hover {
-    border-color: var(--brand);
     color: var(--brand);
+    border-color: var(--brand);
 }
 
 .app-btn-ghost {
-    background-color: transparent;
     color: var(--content-soft);
+    background-color: transparent;
 }
 
 .app-btn-ghost:not(:disabled):hover {
-    background-color: var(--surface-3);
     color: var(--content);
+    background-color: var(--surface-3);
 }
 
 .app-btn-danger {
-    background-color: color-mix(in oklab, var(--danger) 12%, transparent);
     color: var(--danger);
+    background-color: color-mix(in oklab, var(--danger) 12%, transparent);
     border-color: color-mix(in oklab, var(--danger) 30%, transparent);
+}
+
+.app-btn-danger:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--danger) 20%, transparent);
+}
+
+/* 危险主操作（二次确认弹窗的确认键）：实底才能与取消键拉开层级 */
+.app-btn-danger-solid {
+    color: #fff;
+    background-color: var(--danger);
+    box-shadow: var(--shadow-xs);
+}
+
+.app-btn-danger-solid:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--danger) 85%, #000);
 }
 
 .app-input {
     width: 100%;
-    border-radius: 0.85rem;
-    border: 1px solid var(--line);
-    background-color: var(--surface);
-    color: var(--content);
     padding: 0.65rem 0.9rem;
+    font-family: inherit;
     font-size: 0.875rem;
+    color: var(--content);
     outline: none;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
     transition:
         border-color 0.18s ease,
         box-shadow 0.18s ease,
@@ -417,101 +512,206 @@ body {
     box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
+.app-input:disabled,
+.app-input[readonly] {
+    color: var(--content-muted);
+    cursor: not-allowed;
+    background-color: var(--surface-3);
+}
+
+/* 校验失败：红边 + 与下方 .app-help 联动 */
+.app-input[aria-invalid='true'] {
+    border-color: color-mix(in oklab, var(--danger) 60%, transparent);
+}
+
+.app-input[aria-invalid='true']:focus {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 25%, transparent);
+}
+
+textarea.app-input {
+    min-height: 5.5rem;
+    line-height: 1.5rem;
+    resize: vertical;
+}
+
+/* 原生 select 的下拉箭头需要自绘，否则各平台外观差异极大 */
+select.app-input {
+    padding-right: 2.2rem;
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2394a3b8' d='M7.41 8.58L12 13.17l4.59-4.59L18 10l-6 6l-6-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    background-size: 1.1rem;
+}
+
+.app-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--content-soft);
+}
+
+.app-help {
+    margin-top: 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1.1rem;
+    color: var(--content-dim);
+}
+
+.app-help-error {
+    color: var(--danger);
+}
+
+/* 单选/多选：跟随品牌色，尺寸放大到可点区域 */
+.app-checkbox {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--brand);
+    cursor: pointer;
+}
+
+/* 开关（管理端启用/禁用态统一用它，替代纯文字按钮） */
+.app-switch {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    width: 2.5rem;
+    height: 1.4rem;
+    cursor: pointer;
+    background-color: var(--surface-3);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.app-switch[aria-checked='true'] {
+    background-color: var(--brand);
+    border-color: var(--brand);
+}
+
+.app-switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.app-switch::after {
+    position: absolute;
+    top: 50%;
+    left: 0.15rem;
+    width: 1rem;
+    height: 1rem;
+    content: '';
+    background-color: #fff;
+    border-radius: 999px;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.3);
+    transform: translateY(-50%);
+    transition: left 0.2s ease;
+}
+
+.app-switch[aria-checked='true']::after {
+    left: calc(100% - 1.15rem);
+}
+
 .app-chip {
     display: inline-flex;
-    align-items: center;
     gap: 0.25rem;
-    border-radius: 999px;
+    align-items: center;
     padding: 0.15rem 0.55rem;
     font-size: 0.68rem;
     font-weight: 600;
-    background-color: var(--surface-3);
     color: var(--content-soft);
+    background-color: var(--surface-3);
     border: 1px solid var(--line);
+    border-radius: 999px;
 }
 
 .app-chip-brand {
-    background-color: var(--brand-soft);
     color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
     border-color: var(--brand-soft-border);
 }
 
 .app-badge {
     display: inline-flex;
-    align-items: center;
     gap: 0.3rem;
-    border-radius: 999px;
+    align-items: center;
     padding: 0.2rem 0.6rem;
     font-size: 0.7rem;
     font-weight: 700;
+    border-radius: 999px;
 }
 
 .app-badge-success {
-    background-color: color-mix(in oklab, var(--success) 16%, transparent);
     color: var(--success);
+    background-color: color-mix(in oklab, var(--success) 16%, transparent);
 }
 
 .app-badge-warning {
-    background-color: color-mix(in oklab, var(--warning) 18%, transparent);
     color: var(--warning);
+    background-color: color-mix(in oklab, var(--warning) 18%, transparent);
 }
 
 .app-badge-danger {
-    background-color: color-mix(in oklab, var(--danger) 16%, transparent);
     color: var(--danger);
+    background-color: color-mix(in oklab, var(--danger) 16%, transparent);
 }
 
 .app-badge-info {
-    background-color: color-mix(in oklab, var(--info) 16%, transparent);
     color: var(--info);
+    background-color: color-mix(in oklab, var(--info) 16%, transparent);
 }
 
 .app-badge-neutral {
-    background-color: var(--surface-3);
     color: var(--content-muted);
+    background-color: var(--surface-3);
 }
 
 /* 提示块（生成式 UI 的 Alert / 页面级提示共用） */
 .app-alert {
-    border-radius: 0.9rem;
-    border: 1px solid transparent;
     padding: 0.6rem 0.9rem;
     font-size: 0.85rem;
     line-height: 1.3rem;
+    border: 1px solid transparent;
+    border-radius: 0.9rem;
 }
 
 .app-alert-info {
-    border-color: color-mix(in oklab, var(--info) 32%, transparent);
-    background-color: color-mix(in oklab, var(--info) 10%, transparent);
     color: var(--info);
+    background-color: color-mix(in oklab, var(--info) 10%, transparent);
+    border-color: color-mix(in oklab, var(--info) 32%, transparent);
 }
 
 .app-alert-success {
-    border-color: color-mix(in oklab, var(--success) 32%, transparent);
-    background-color: color-mix(in oklab, var(--success) 10%, transparent);
     color: var(--success);
+    background-color: color-mix(in oklab, var(--success) 10%, transparent);
+    border-color: color-mix(in oklab, var(--success) 32%, transparent);
 }
 
 .app-alert-warning {
-    border-color: color-mix(in oklab, var(--warning) 35%, transparent);
-    background-color: color-mix(in oklab, var(--warning) 12%, transparent);
     color: var(--warning);
+    background-color: color-mix(in oklab, var(--warning) 12%, transparent);
+    border-color: color-mix(in oklab, var(--warning) 35%, transparent);
 }
 
 .app-alert-danger {
-    border-color: color-mix(in oklab, var(--danger) 32%, transparent);
-    background-color: color-mix(in oklab, var(--danger) 10%, transparent);
     color: var(--danger);
+    background-color: color-mix(in oklab, var(--danger) 10%, transparent);
+    border-color: color-mix(in oklab, var(--danger) 32%, transparent);
 }
 
 .app-avatar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 1rem;
-    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
-    color: var(--on-brand);
     font-weight: 800;
+    color: var(--on-brand);
+    background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+    border-radius: 1rem;
 }
 
 /* 用于展示 emoji / 图标头像（浅色柔和底 + 不强制文字色） */
@@ -519,9 +719,9 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 1rem;
     background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-100) 80%, transparent), color-mix(in oklab, var(--brand-300) 45%, transparent));
     border: 1px solid var(--brand-soft-border);
+    border-radius: 1rem;
 }
 
 .dark .app-avatar-icon {
@@ -529,8 +729,8 @@ body {
 }
 
 .app-link {
-    color: var(--brand);
     font-weight: 600;
+    color: var(--brand);
     transition: color 0.18s ease;
 }
 
@@ -540,102 +740,952 @@ body {
 }
 
 .app-nav-link {
-    border-radius: 0.7rem;
     padding: 0.4rem 0.75rem;
-    color: var(--content-soft);
     font-weight: 600;
+    color: var(--content-soft);
+    border-radius: 0.7rem;
     transition:
         background-color 0.18s ease,
         color 0.18s ease;
 }
 
 .app-nav-link:hover {
-    background-color: var(--surface-3);
     color: var(--content);
+    background-color: var(--surface-3);
 }
 
 .app-nav-link-active {
-    background-color: var(--brand-soft);
     color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
 }
 
 .app-progress {
-    height: 0.6rem;
     width: 100%;
+    height: 0.6rem;
     overflow: hidden;
-    border-radius: 999px;
     background-color: var(--surface-3);
+    border-radius: 999px;
 }
 
 .app-progress-bar {
     height: 100%;
-    border-radius: 999px;
     background-image: linear-gradient(90deg, var(--brand-500), var(--brand-700));
+    border-radius: 999px;
     transition: width 0.4s ease;
+}
+
+/* ============================================================
+ * 数据表格
+ * 用法：<div class="app-table-wrap"><table class="app-table">…</table></div>
+ * app-table-wrap 负责圆角裁剪与横向滚动，窄屏下表格不再撑破页面。
+ * ============================================================ */
+.app-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    -webkit-overflow-scrolling: touch;
 }
 
 .app-table {
     width: 100%;
+    min-width: 100%;
+    font-size: 0.8rem;
     border-collapse: collapse;
-    font-size: 0.75rem;
 }
 
 .app-table thead {
-    background-color: var(--surface-3);
+    font-size: 0.7rem;
+    font-weight: 700;
     color: var(--content-muted);
-    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    background-color: var(--surface-3);
 }
 
 .app-table th,
 .app-table td {
-    padding: 0.7rem 0.75rem;
+    padding: 0.7rem 0.9rem;
+    vertical-align: middle;
     text-align: left;
+    white-space: nowrap;
+}
+
+/* 允许长文本列换行（标题、描述），需配合 th/td 上的 .app-table-cell-wrap */
+.app-table .app-table-cell-wrap {
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .app-table tbody tr + tr {
     border-top: 1px solid var(--line);
 }
 
+.app-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.app-table tbody tr:hover {
+    background-color: var(--surface-hover);
+}
+
+/* 行内操作按钮固定在右侧，滚动时不易被内容挤走 */
+.app-table .app-table-actions {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* 窄屏下的卡片式列表替代（移动端展示表格数据时使用） */
+.app-list-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0.9rem;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+}
+
+/* ============================================================
+ * 弹窗 / 抽屉
+ *
+ * 注意：抽屉与遮罩用 CSS animation 而不是「给外层容器加 transform 过渡」。
+ * 外层一旦带上 transform/filter，就会成为 position:fixed 子元素的包含块，
+ * 而这个容器自身高度为 0，抽屉会被压成 0 高度（只剩一条空带、遮罩也盖不住屏幕）。
+ * animation 直接作用在 fixed 元素自身，既不产生包含块问题，也不依赖 JS 的下一帧回调。
+ * ============================================================ */
+.app-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: var(--overlay);
+    backdrop-filter: blur(3px);
+    animation: app-overlay-in 0.18s ease;
+}
+
+.app-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 32rem;
+    max-height: calc(100vh - 2rem);
+    overflow: hidden;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    animation: app-modal-in 0.2s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.app-modal-sm {
+    max-width: 24rem;
+}
+
+.app-modal-lg {
+    max-width: 48rem;
+}
+
+.app-modal-header {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.app-modal-body {
+    flex: 1;
+    padding: 1.1rem;
+    overflow-y: auto;
+}
+
+.app-modal-footer {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0.9rem 1.1rem;
+    background-color: var(--surface-2);
+    border-top: 1px solid var(--line);
+}
+
+/* 移动端弹窗改为底部抽屉，贴近主流移动端交互 */
+@media (max-width: 640px) {
+    .app-modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .app-modal {
+        max-width: none;
+        max-height: 88vh;
+        border-bottom: 0;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        animation-name: app-sheet-in;
+    }
+}
+
+@keyframes app-modal-in {
+    from {
+        opacity: 0;
+        transform: translateY(0.5rem) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes app-sheet-in {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* 右侧/左侧抽屉（导航、筛选面板） */
+.app-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background-color: var(--overlay);
+    backdrop-filter: blur(3px);
+    animation: app-overlay-in 0.18s ease;
+}
+
+.app-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 61;
+    display: flex;
+    flex-direction: column;
+    width: min(19rem, 82vw);
+    background-color: var(--surface);
+    border-right: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+}
+
+.app-drawer-right {
+    right: 0;
+    border-right: 0;
+    border-left: 1px solid var(--line);
+    animation: app-drawer-in-right 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.app-drawer-left {
+    left: 0;
+    animation: app-drawer-in-left 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.app-drawer-body {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+@keyframes app-overlay-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes app-drawer-in-left {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes app-drawer-in-right {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
 .app-skeleton {
     background-image: linear-gradient(90deg, var(--surface-3), color-mix(in oklab, var(--surface-3) 60%, var(--surface)), var(--surface-3));
     background-size: 200% 100%;
-    animation: app-skeleton 1.4s ease-in-out infinite;
     border-radius: 0.75rem;
+    animation: app-skeleton 1.4s ease-in-out infinite;
 }
 
 @keyframes app-skeleton {
     0% {
         background-position: 200% 0;
     }
+
     100% {
         background-position: -200% 0;
     }
 }
 
+/* 骨架屏组合：卡片骨架用于列表首屏加载，替代裸转圈 */
+.app-skeleton-card {
+    height: 7rem;
+    border-radius: var(--radius-lg);
+}
+
+.app-skeleton-text {
+    height: 0.85rem;
+    border-radius: 999px;
+}
+
+/* ============================================================
+ * 载入 / 空状态
+ * ============================================================ */
+.app-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid color-mix(in oklab, currentcolor 25%, transparent);
+    border-top-color: currentcolor;
+    border-radius: 999px;
+    animation: app-spin 0.7s linear infinite;
+}
+
+.app-spinner-lg {
+    width: 1.6rem;
+    height: 1.6rem;
+    border-width: 3px;
+}
+
+@keyframes app-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.app-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    font-size: 0.75rem;
+    color: var(--content-dim);
+}
+
+.app-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.25rem;
+    text-align: center;
+}
+
+.app-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+    color: var(--content-dim);
+    background-color: var(--surface-3);
+    border-radius: var(--radius-lg);
+}
+
+.app-empty-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--content);
+}
+
+.app-empty-desc {
+    max-width: 22rem;
+    font-size: 0.75rem;
+    line-height: 1.15rem;
+    color: var(--content-dim);
+}
+
+/* ============================================================
+ * 页面头部（后台各页统一）
+ * ============================================================ */
+.app-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.app-page-title {
+    font-size: 1.25rem;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+}
+
+.app-page-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.75rem;
+    color: var(--content-dim);
+}
+
+.app-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* ============================================================
+ * 统计卡片
+ * ============================================================ */
+.app-stat {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 1.1rem 1.25rem;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.app-stat:hover {
+    border-color: var(--brand-soft-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.app-stat-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--content-muted);
+}
+
+.app-stat-value {
+    margin-top: 0.35rem;
+    font-size: 1.5rem;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.app-stat-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
+    border-radius: var(--radius-md);
+}
+
+/* ============================================================
+ * 侧边导航 / 分段控件
+ * ============================================================ */
+.app-sidebar-group-title {
+    padding: 0 0.75rem 0.35rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--content-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.app-sidebar-link {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--content-soft);
+    border-radius: var(--radius-sm);
+    transition:
+        background-color 0.16s ease,
+        color 0.16s ease;
+}
+
+.app-sidebar-link:hover {
+    color: var(--content);
+    background-color: var(--surface-hover);
+}
+
+.app-sidebar-link-active {
+    font-weight: 800;
+    color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
+}
+
+/* 胶囊分段控件（时间范围 / 视图切换） */
+.app-segmented {
+    display: inline-flex;
+    gap: 0.15rem;
+    align-items: center;
+    padding: 0.2rem;
+    background-color: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+}
+
+.app-segmented-item {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--content-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition:
+        background-color 0.16s ease,
+        color 0.16s ease;
+}
+
+.app-segmented-item:hover {
+    color: var(--content);
+}
+
+.app-segmented-item[aria-pressed='true'] {
+    color: var(--content);
+    background-color: var(--surface);
+    box-shadow: var(--shadow-xs);
+}
+
+/* ============================================================
+ * 浮层提示（Toast）
+ * ============================================================ */
+.app-toast-stack {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: min(22rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.app-toast {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.78rem;
+    line-height: 1.15rem;
+    color: var(--content);
+    pointer-events: auto;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    animation: app-toast-in 0.22s ease;
+}
+
+.app-toast-success {
+    border-color: color-mix(in oklab, var(--success) 40%, transparent);
+}
+
+.app-toast-error {
+    border-color: color-mix(in oklab, var(--danger) 40%, transparent);
+}
+
+@keyframes app-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.5rem);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================
+ * 图标
+ * 两端各自的图标组件（web: AppIcon / mobile: ion-icon）都引用 .app-icon，
+ * 统一垂直对齐与不压缩行为，避免文字旁的图标被 flex 压扁。
+ * ============================================================ */
+.app-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: -0.15em;
+    fill: currentcolor;
+}
+
+.app-icon-missing {
+    display: inline-block;
+    border: 1px dashed var(--danger);
+    border-radius: var(--radius-xs);
+}
+
+/* 浮层下拉面板（用户菜单 / 外观设置 / 列表筛选） */
+.app-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    z-index: 50;
+    min-width: 12rem;
+    padding: 0.4rem;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.app-dropdown-right {
+    right: 0;
+}
+
+.app-dropdown-left {
+    left: 0;
+}
+
+.app-dropdown-item {
+    display: flex;
+    gap: 0.55rem;
+    align-items: center;
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--content-soft);
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition:
+        background-color 0.16s ease,
+        color 0.16s ease;
+}
+
+.app-dropdown-item:hover {
+    color: var(--content);
+    background-color: var(--surface-hover);
+}
+
+.app-dropdown-item-danger:hover {
+    color: var(--danger);
+    background-color: color-mix(in oklab, var(--danger) 12%, transparent);
+}
+
+.app-dropdown-label {
+    padding: 0.4rem 0.6rem 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--content-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.app-dropdown-divider {
+    margin: 0.3rem 0;
+    border-top: 1px solid var(--line);
+}
+
+/* 跳转到主内容：仅键盘聚焦时可见 */
+.app-skip-link {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 100;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--on-brand);
+    background-color: var(--brand);
+    border-radius: var(--radius-sm);
+    transform: translateY(-200%);
+    transition: transform 0.15s ease;
+}
+
+.app-skip-link:focus {
+    transform: translateY(0);
+}
+
+/* 浮层动画：下拉与抽屉共用 */
+.app-fade-enter-active,
+.app-fade-leave-active {
+    transition:
+        opacity 0.16s ease,
+        transform 0.16s ease;
+}
+
+.app-fade-enter-from,
+.app-fade-leave-to {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+}
+
+/* ============================================================
+ * 移动端安全区（刘海屏 / 底部手势条）
+ * ============================================================ */
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-x {
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+}
+
 /* 聊天气泡 */
 .app-bubble-user {
-    background-color: var(--brand);
     color: var(--on-brand);
+    background-color: var(--brand);
     border-radius: 1.1rem 1.1rem 0.35rem 1.1rem;
 }
 
 .app-bubble-assistant {
-    background-color: var(--surface);
     color: var(--content);
+    background-color: var(--surface);
     border: 1px solid var(--line);
     border-radius: 1.1rem 1.1rem 1.1rem 0.35rem;
     box-shadow: var(--shadow-xs);
 }
 
+/* ============================================================
+ * Markdown 渲染（Comark 输出的辅助消息正文）
+ * 两端共用：模型输出的标题/列表/代码块/表格/引用以前没有任何样式，
+ * 全部挤成一段纯文本，这里是唯一的样式来源。
+ * ============================================================ */
+.markdown-body {
+    font-size: 0.875rem;
+    line-height: 1.7;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.markdown-body > *:first-child {
+    margin-top: 0;
+}
+
+.markdown-body > *:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-body p {
+    margin: 0.6em 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+    margin: 1.15em 0 0.5em;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.markdown-body h1 {
+    font-size: 1.45em;
+}
+
+.markdown-body h2 {
+    font-size: 1.25em;
+}
+
+.markdown-body h3 {
+    font-size: 1.1em;
+}
+
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+    font-size: 1em;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 1.5em;
+    margin: 0.6em 0;
+}
+
+.markdown-body ul {
+    list-style: disc;
+}
+
+.markdown-body ul ul {
+    list-style: circle;
+}
+
+.markdown-body ol {
+    list-style: decimal;
+}
+
+.markdown-body li {
+    margin: 0.2em 0;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+    margin: 0.2em 0;
+}
+
+.markdown-body a {
+    font-weight: 600;
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.markdown-body strong {
+    font-weight: 700;
+}
+
+.markdown-body em {
+    font-style: italic;
+}
+
+.markdown-body del {
+    opacity: 0.65;
+}
+
+.markdown-body code {
+    padding: 0.15em 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background-color: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xs);
+}
+
+.markdown-body pre {
+    padding: 0.85rem 1rem;
+    margin: 0.8em 0;
+    overflow-x: auto;
+    background-color: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+}
+
+.markdown-body pre code {
+    padding: 0;
+    font-size: 0.82em;
+    line-height: 1.65;
+    background-color: transparent;
+    border: 0;
+}
+
+.markdown-body blockquote {
+    padding: 0.15em 0 0.15em 0.9em;
+    margin: 0.8em 0;
+    color: var(--content-muted);
+    border-left: 3px solid var(--brand-soft-border);
+}
+
+.markdown-body hr {
+    margin: 1.2em 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+.markdown-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+}
+
+/* 表格用 block + max-width 才能横向滚动，否则窄屏会把气泡撑破 */
+.markdown-body table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    margin: 0.8em 0;
+    overflow-x: auto;
+    font-size: 0.85em;
+    border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+    padding: 0.4em 0.7em;
+    text-align: left;
+    border: 1px solid var(--line);
+}
+
+.markdown-body th {
+    font-weight: 700;
+    background-color: var(--surface-3);
+}
+
+.markdown-body input[type='checkbox'] {
+    margin-right: 0.4em;
+    accent-color: var(--brand);
+}
+
+/* 用户气泡是品牌实底，正文里的代码/引用需要跟着反转，否则出现白底黑字方块 */
+.app-bubble-user .markdown-body,
+.app-bubble-user .markdown-body code,
+.app-bubble-user .markdown-body blockquote,
+.app-bubble-user .markdown-body a {
+    color: inherit;
+}
+
+.app-bubble-user .markdown-body code {
+    background-color: color-mix(in oklab, var(--on-brand) 18%, transparent);
+    border-color: color-mix(in oklab, var(--on-brand) 30%, transparent);
+}
+
+.app-bubble-user .markdown-body pre {
+    background-color: color-mix(in oklab, var(--on-brand) 16%, transparent);
+    border-color: color-mix(in oklab, var(--on-brand) 26%, transparent);
+}
+
+.app-bubble-user .markdown-body blockquote {
+    border-left-color: color-mix(in oklab, var(--on-brand) 45%, transparent);
+}
+
+.app-bubble-user .markdown-body th,
+.app-bubble-user .markdown-body td {
+    border-color: color-mix(in oklab, var(--on-brand) 30%, transparent);
+}
+
+.app-bubble-user .markdown-body th {
+    background-color: color-mix(in oklab, var(--on-brand) 16%, transparent);
+}
+
 /* 主题切换器（两端共用外观） */
 .app-theme-dot {
-    height: 1.15rem;
     width: 1.15rem;
-    border-radius: 999px;
-    border: 2px solid transparent;
+    height: 1.15rem;
     cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 999px;
     transition:
         transform 0.15s ease,
         border-color 0.15s ease;
@@ -654,10 +1704,22 @@ body {
     *,
     *::before,
     *::after {
+        transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
     }
+}
+
+/*
+ * 字体栈：显式列出中文回退字体（PingFang SC / 微软雅黑 / 思源黑体）。
+ * Tailwind 默认栈在部分系统上会把中文回退到衬线体，导致中英文混排字重不一致。
+ * 这里覆盖 Tailwind 的 --font-sans / --font-mono，body 与 .markdown-body 都复用同一份。
+ */
+@theme {
+    --font-sans:
+        ui-sans-serif, system-ui, -apple-system, 'Segoe UI', roboto, 'Helvetica Neue', arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+        'Noto Sans SC', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+    --font-mono: ui-monospace, sfmono-regular, menlo, monaco, consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 @theme inline {
