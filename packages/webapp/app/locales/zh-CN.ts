@@ -281,6 +281,9 @@ export default {
         attDeleteConfirm: '确定删除附件「{name}」吗？',
         copyKey: '复制 Key',
         rustfsHint: 'RustFS 部署示例：Endpoint 填 http://<host>:9000，Region 填 us-east-1，并开启路径风格访问。',
+        activeRunning: '投放中',
+        activePending: '未生效',
+        sortOrder: '排序',
     },
     admin: {
         dashboardTitle: '运营监控大盘',

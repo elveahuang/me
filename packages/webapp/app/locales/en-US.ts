@@ -286,6 +286,9 @@ export default {
         attDeleteConfirm: 'Delete attachment "{name}"?',
         copyKey: 'Copy key',
         rustfsHint: 'RustFS example: Endpoint http://<host>:9000, Region us-east-1, path-style enabled.',
+        activeRunning: 'Live',
+        activePending: 'Inactive',
+        sortOrder: 'Order',
     },
     admin: {
         dashboardTitle: 'Operations Dashboard',

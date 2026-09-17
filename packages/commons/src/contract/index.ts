@@ -357,6 +357,40 @@ export function isBulletinActive(bulletin: Pick<BulletinRecord, 'enabled' | 'sta
     return true;
 }
 
+/** 投放时间窗的覆盖范围描述，管理端列表展示用 */
+export function bulletinWindowText(startsAt: string | null, endsAt: string | null, locale = 'zh-CN'): string {
+    if (!startsAt && !endsAt) return locale === 'zh-CN' ? '长期有效' : 'Always on';
+    return `${startsAt ? formatDate(startsAt, locale) : '—'} ~ ${endsAt ? formatDate(endsAt, locale) : '—'}`;
+}
+
+/**
+ * `<input type="date">` 的日期字符串转投放时间窗边界。
+ *
+ * 关键点：结束日期必须覆盖「当天最后一刻」而不是当天 00:00。
+ * 直接 `new Date('2026-09-20').toISOString()` 得到的是 00:00 UTC（北京时间 08:00），
+ * 会让运营选了 9/20 的活动在 9/20 当天上午就提前下线。
+ *
+ * @param mode 'start' 取当天 00:00:00.000，'end' 取当天 23:59:59.999（均为本地时区）
+ */
+export function dateInputToBoundary(value: string | null | undefined, mode: 'start' | 'end'): Date | null {
+    if (!value) return null;
+    const [year, month, day] = value.split('-').map((part) => Number(part));
+    if (!year || !month || !day) return null;
+    const date = mode === 'start' ? new Date(year, month - 1, day, 0, 0, 0, 0) : new Date(year, month - 1, day, 23, 59, 59, 999);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** ISO 时间戳转 `<input type="date">` 需要的 YYYY-MM-DD（按本地时区，避免跨时区错一天） */
+export function isoToDateInput(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // ============================================================
 // 消息通知
 // ============================================================

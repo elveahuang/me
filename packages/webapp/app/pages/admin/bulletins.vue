@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { BULLETIN_LEVELS, BULLETIN_POSITIONS, extractApiError, formatDate, type BulletinRecord } from '@commons/contract';
+import {
+    BULLETIN_LEVELS,
+    BULLETIN_POSITIONS,
+    bulletinWindowText,
+    dateInputToBoundary,
+    extractApiError,
+    isBulletinActive,
+    isoToDateInput,
+    type BulletinRecord,
+} from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -62,14 +71,10 @@ function openEdit(row: BulletinRecord) {
         level: row.level,
         enabled: row.enabled,
         sortOrder: row.sortOrder,
-        startsAt: toDateInput(row.startsAt),
-        endsAt: toDateInput(row.endsAt),
+        startsAt: isoToDateInput(row.startsAt),
+        endsAt: isoToDateInput(row.endsAt),
     });
     error.value = '';
-}
-
-function toDateInput(iso: string | null): string {
-    return iso ? String(iso).slice(0, 10) : '';
 }
 
 async function save() {
@@ -90,8 +95,9 @@ async function save() {
             level: form.level,
             enabled: form.enabled,
             sortOrder: Number(form.sortOrder) || 0,
-            startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
-            endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
+            // 开始取当天 00:00、结束取当天 23:59:59，保证结束日当天仍完整投放
+            startsAt: dateInputToBoundary(form.startsAt, 'start')?.toISOString() ?? null,
+            endsAt: dateInputToBoundary(form.endsAt, 'end')?.toISOString() ?? null,
         };
         if (editing.value?.id) {
             await $fetch(`/api/admin/bulletins/${editing.value.id}`, { method: 'PATCH', body });
@@ -134,15 +140,6 @@ function positionLabel(value: string) {
 
 function levelLabel(value: string) {
     return BULLETIN_LEVELS.find((item) => item.value === value)?.label ?? value;
-}
-
-/** 投放状态：启用 + 处于时间窗内才算生效中 */
-function isActive(row: BulletinRecord): boolean {
-    if (!row.enabled) return false;
-    const now = Date.now();
-    if (row.startsAt && new Date(row.startsAt).getTime() > now) return false;
-    if (row.endsAt && new Date(row.endsAt).getTime() < now) return false;
-    return true;
 }
 </script>
 
@@ -212,16 +209,15 @@ function isActive(row: BulletinRecord): boolean {
                             <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">{{ positionLabel(row.position) }}</span>
                             <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{{ levelLabel(row.level) }}</span>
                             <span
-                                :class="isActive(row) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'"
+                                :class="isBulletinActive(row) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'"
                                 class="rounded-full px-2 py-0.5 text-[10px] font-bold"
                             >
-                                {{ isActive(row) ? '投放中' : '未生效' }}
+                                {{ isBulletinActive(row) ? t('storage.activeRunning') : t('storage.activePending') }}
                             </span>
                         </div>
                         <p class="mt-1.5 line-clamp-2 text-xs text-gray-500">{{ row.content || '—' }}</p>
                         <p class="mt-1.5 text-[11px] text-gray-400">
-                            排序 {{ row.sortOrder }}
-                            <template v-if="row.startsAt || row.endsAt"> · {{ formatDate(row.startsAt) }} ~ {{ formatDate(row.endsAt) }} </template>
+                            {{ t('storage.sortOrder') }} {{ row.sortOrder }} · {{ bulletinWindowText(row.startsAt, row.endsAt) }}
                         </p>
                     </div>
                     <div class="flex shrink-0 flex-col items-end gap-1 text-xs">
