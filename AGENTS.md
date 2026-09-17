@@ -28,7 +28,7 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口             |
 | `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                      |
 
-当前核心栈：Vue 3、Nuxt 4、Tailwind CSS 4、Nuxt UI、Ionic/Capacitor、AI SDK 7、Better Auth、Drizzle ORM、PostgreSQL。依赖的精确版本查各 `package.json` 和 `pnpm-lock.yaml`，不要根据旧 README 或记忆选择版本。
+当前核心栈：Vue 3、Nuxt 4、Tailwind CSS 4、Nuxt UI、Ionic/Capacitor、AI SDK 7、Better Auth、Drizzle ORM、PostgreSQL。附件模块另用 `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`（S3 协议，兼容 RustFS / MinIO）。依赖的精确版本查各 `package.json` 和 `pnpm-lock.yaml`，不要根据旧 README 或记忆选择版本。
 
 **共享契约属于 commons 包，不是独立 workspace 包。**
 
@@ -89,6 +89,8 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
 - 修改接口字段、错误归一化、金额/日期/额度格式化时，先读共享契约，再同步服务端响应与两端消费者，避免另造同名类型。
 - 主题先改共享语义变量，再查 Web 样式和 Mobile 的 Ionic 映射；不要为单页硬编码一套颜色绕过浅色/深色/品牌色。
+- 用户端内容页入口：Web 在 `app/pages/` 下的 `news/`、`notifications.vue`、`attachments.vue`；移动端对应 `src/views/NewsView.vue`、`NewsDetailView.vue`、`NotificationsView.vue`、`AttachmentsView.vue`，导航入口分别在 `TabsView.vue`（底部）与 `HomeView.vue`/`MeView.vue`（顶部与列表）。
+- 管理端内容模块页面：`app/pages/admin/news.vue`、`bulletins.vue`、`notifications.vue`、`storage.vue`（存储配置 + 附件总览）；侧栏分组见 `app/layouts/admin.vue` 的 `navGroups`。
 
 ## 6. 服务端定位原则
 
@@ -104,6 +106,10 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | 会话列表与消息历史             | `server/api/conversations/`、`server/api/conversations.get.ts`、`server/api/conversations.post.ts` |
 | 管理端资源配置                 | `server/api/admin/` 下 agents/providers/skills/tools/mcp-servers/knowledge-bases 等资源            |
 | 套餐、账单、支付               | `server/api/plans.get.ts`、`server/api/billing/`、`server/api/pay/`                                |
+| 附件与对象存储                 | `server/api/attachments*.ts`、`server/api/admin/storage*`、`server/utils/storage.ts`               |
+| 资讯新闻                       | `server/api/news*`、`server/api/admin/news*`                                                       |
+| 宣传栏                         | `server/api/bulletins.get.ts`、`server/api/admin/bulletins*`                                       |
+| 消息通知                       | `server/api/notifications*`、`server/api/admin/notifications*`、`server/utils/notify.ts`           |
 | 运行时配置保护                 | `server/plugins/env-guard.ts`                                                                      |
 
 - Skill 是注入系统提示词的可复用指令块；Tool 是可执行工具。不能因为旧文档把二者混用就重新合并数据模型。
@@ -140,6 +146,22 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - Redis 未配置时限流降级单进程内存，缓存回源；不要宣称无 Redis 的多实例部署仍有全局一致限流。原样复制 Web example 会配置 Redis URL，并不等同于禁用 Redis。
 - Nitro 自动导入是实际运行约定，不因 handler 缺少显式 `db/createError` import 就判错；独立 tsx 脚本不应假设具备同样环境。
 
+### 内容运营与附件模块（资讯 / 宣传栏 / 通知 / 附件）
+
+四个模块的表都在 `server/db/schema.ts` 尾部，迁移为 `0002_sweet_madripoor.sql`；共享类型与格式化函数在 `packages/commons/src/contract/index.ts` 的对应小节。
+
+- **附件是 S3 协议，不是本地磁盘**。`server/utils/storage.ts` 是唯一适配层，面向 RustFS / MinIO / AWS S3 等；自建存储默认 `forcePathStyle=true`。改存储行为时改这一处，不要在各 handler 里各写一套。
+- **两条上传通道必须都保留**：`POST /api/attachments`（服务端中转，兼容未配 CORS 的桶）与 `POST /api/attachments/presign` + `/complete`（前端直传）。直传的 `complete` 会校验 objectKey 必须落在当前配置 prefix 下且不含 `..`，否则用户可以"认领"任意已存在对象。
+- **中转上传有硬上限**（`RELAY_UPLOAD_HARD_LIMIT_MB=64`）：`readMultipartFormData()` 会把请求体读进内存，因此 `assertRelayRequestAllowed()` 在解析前按 Content-Length 拒绝，解析后 `assertRelayPayloadSize()` 兜底。调大上限前先确认内存占用。
+- **私有桶返回预签名 URL**（默认 1 小时），配置 `publicBaseUrl` 时改走公共地址；`presignDownload` 只在本地签名，不产生存储侧请求。存储配置接口一律经 `sanitizeStorageConfig()` 脱敏，`secretAccessKey` 回传掩码 `********` 表示"不修改"。
+- 附件列表的 `stats` 按用户全量统计，**不随 category/keyword 筛选变化**；管理端存储列表用一次聚合查询带出各配置占用（避免 N+1）。
+- **通知的受众语义**：`audience=all` 不预展开收件人（含未来注册用户），`users` 在创建时展开。因此广播的 `targetCount` 用当前用户总数当分母，会随时间增长而下降，这是正确表现。`markNotificationsRead()` 只对当前用户可见的通知写入已读记录，改动时不要绕过该可见性过滤。
+- **宣传栏的时间窗**：结束日期取当天 23:59:59.999（`dateInputToBoundary(value, 'end')`），不是当天 00:00——否则选到当天的活动会在当天上午提前下线。用户端与管理端共用 `isBulletinActive()`。
+- **资讯浏览量按 (用户, 文章) 30 分钟去重**：Redis 可用时跨实例生效，否则降级进程内 Map。详情页用 `useAsyncData` 承载首屏，避免 SSR 后客户端二次请求。
+- 用户端 `/news`、`/notifications`、`/attachments` 与移动端同名路由都需要登录；管理端在 `/admin/news`、`/admin/bulletins`、`/admin/notifications`、`/admin/storage`。`/admin/storage` 页面同时承载存储配置与附件总览。
+- 移动端未读角标用 `packages/mobile/src/composables/useUnread.ts` 的共享单例，不要在页面里各自维护未读数，否则读完消息返回后角标不同步。
+- 移动端拍照上传走 `@capacitor/camera`（仅原生壳展示入口，动态导入因此只进附件分包）；仓库内暂无 android/ios 原生工程，接入原生构建时需另行声明相机权限。
+
 ### 前端配套与代码风格
 
 - Mobile 路由入口是 `packages/mobile/src/router/index.ts`，主导航为 `/tabs/home`、`/tabs/membership`、`/tabs/me`；聊天为 `/chat/:agentId`，微信回调为 `/wechat-callback`。
@@ -174,6 +196,10 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | 修改套餐、会员或订单展示     | Web 的 `packages/webapp/app/pages/pricing.vue`、`packages/webapp/app/pages/profile.vue`；Mobile 的 `MembershipView.vue`、`MeView.vue`；联查共享契约、`packages/webapp/server/api/billing/` 和 `packages/webapp/server/utils/billing.ts`                                           |
 | 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                      |
 | 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                               |
+| 修改附件 / 对象存储          | `packages/webapp/server/utils/storage.ts` → `packages/webapp/server/api/attachments*`（上传/直传/下载代理）→ 用户端 `packages/webapp/app/pages/attachments.vue` 与移动端 `packages/mobile/src/views/AttachmentsView.vue`；管理端 `packages/webapp/app/pages/admin/storage.vue`    |
+| 修改资讯新闻                 | `packages/webapp/server/api/news*`、`packages/webapp/server/api/admin/news*` → Web 的 `app/pages/news/`、`app/pages/admin/news.vue` 与移动端 `NewsView.vue`、`NewsDetailView.vue`；契约 `NewsSummary`/`NewsDetailResponse`                                                        |
+| 修改宣传栏                   | `packages/webapp/server/api/bulletins.get.ts`、`packages/webapp/server/api/admin/bulletins*` → 两端 `BulletinBanner.vue` 与管理端 `admin/bulletins.vue`；时间窗边界用契约的 `dateInputToBoundary()`                                                                               |
+| 修改消息通知                 | `packages/webapp/server/utils/notify.ts`、`server/api/notifications*`、`server/api/admin/notifications*` → Web 的 `app/pages/notifications.vue`、`admin/notifications.vue` 与移动端 `NotificationsView.vue`；移动端未读角标走 `composables/useUnread.ts`                          |
 
 ### 阅读实现时不能跳过的边界
 
