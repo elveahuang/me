@@ -108,14 +108,31 @@ export default defineEventHandler(async (event) => {
         : [];
     const statsMap = new Map(stats.map((row) => [row.notificationId, row]));
 
+    /**
+     * 广播通知没有收件人行，targetCount 恒为 0，管理端无法展示到达率。
+     * 这里补充当前用户总数作为分母（一次查询，与页大小无关）。
+     * 注意：用户数会随时间增长，因此广播的到达率会随新增用户自然下降——
+     * 这是广播语义（对"当时及之后"的全部用户可见）的正确表现，不是统计误差。
+     */
+    const hasBroadcast = items.some((item) => item.audience === 'all');
+    const [userCountRow] = hasBroadcast ? await db.select({ count: sql<number>`count(*)::int` }).from(user) : [{ count: 0 }];
+    const broadcastBase = userCountRow?.count ?? 0;
+
     return {
-        items: items.map((item) => ({
-            ...item,
-            readCount: statsMap.get(item.id)?.readCount ?? 0,
-            targetCount: statsMap.get(item.id)?.targetCount ?? 0,
-        })),
+        items: items.map((item) => {
+            const stat = statsMap.get(item.id);
+            const isBroadcast = item.audience === 'all';
+            return {
+                ...item,
+                readCount: stat?.readCount ?? 0,
+                // 广播用当前用户总数当分母；定向用实际收件人数
+                targetCount: isBroadcast ? broadcastBase : (stat?.targetCount ?? 0),
+                audienceBase: isBroadcast ? 'all-users' : 'selected',
+            };
+        }),
         total: totalRow?.count ?? 0,
         page,
         pageSize,
+        broadcastBase,
     };
 });

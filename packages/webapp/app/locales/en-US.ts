@@ -242,6 +242,9 @@ export default {
         filterAll: 'All',
         filterUnread: 'Unread only',
         viewAll: 'View all',
+        readUnit: 'read',
+        peopleUnit: 'people',
+        audienceBaseAll: 'of all users',
     },
     storage: {
         title: 'Storage',

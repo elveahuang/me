@@ -237,6 +237,9 @@ export default {
         filterAll: '全部消息',
         filterUnread: '仅未读',
         viewAll: '查看全部',
+        readUnit: '人已读',
+        peopleUnit: '人',
+        audienceBaseAll: '按总用户数',
     },
     storage: {
         title: '存储配置',

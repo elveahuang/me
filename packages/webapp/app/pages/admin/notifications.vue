@@ -6,7 +6,10 @@ definePageMeta({ layout: 'admin', middleware: 'admin' });
 
 interface AdminNotificationRow extends Omit<NotificationRecord, 'read' | 'readAt'> {
     readCount: number;
+    /** 广播为当前用户总数，定向为实际收件人数 */
     targetCount: number;
+    /** 分母口径：all-users=全员广播，selected=定向推送 */
+    audienceBase?: 'all-users' | 'selected';
 }
 
 interface TargetUser {
@@ -172,12 +175,20 @@ function typeLabel(value: string) {
     return NOTIFICATION_TYPES.find((item) => item.value === value)?.label ?? value;
 }
 
+/**
+ * 已读展示：
+ * - 定向推送：已读数 / 收件人数
+ * - 全员广播：已读数 / 总用户数（分母由服务端返回，会随新增用户增长）
+ */
 function readRate(row: AdminNotificationRow): string {
-    if (row.audience === 'all') {
-        // 全员广播没有预先展开收件人，只能展示已读数
-        return row.readCount ? `${row.readCount} 人已读` : '暂无已读';
-    }
+    if (!row.targetCount) return `${row.readCount} ${t('notifications.readUnit')}`;
     return `${row.readCount} / ${row.targetCount}`;
+}
+
+/** 已读百分比，用于进度条；分母为 0 时返回 0 */
+function readPercent(row: AdminNotificationRow): number {
+    if (!row.targetCount) return 0;
+    return Math.min(100, Math.round((row.readCount / row.targetCount) * 100));
 }
 </script>
 
@@ -317,9 +328,17 @@ function readRate(row: AdminNotificationRow): string {
                                 <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{{ typeLabel(row.type) }}</span>
                             </td>
                             <td class="py-3 pr-4 text-xs text-gray-500">
-                                {{ row.audience === 'all' ? t('notifications.sendToAll') : `${row.targetCount} 人` }}
+                                {{ row.audience === 'all' ? t('notifications.sendToAll') : `${row.targetCount} ${t('notifications.peopleUnit')}` }}
                             </td>
-                            <td class="py-3 pr-4 text-xs text-gray-500">{{ readRate(row) }}</td>
+                            <td class="py-3 pr-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
+                                        <div class="h-full rounded-full bg-emerald-500" :style="{ width: `${readPercent(row)}%` }" />
+                                    </div>
+                                    <span class="text-xs text-gray-500">{{ readRate(row) }}</span>
+                                    <span class="text-[10px] text-gray-400">{{ readPercent(row) }}%</span>
+                                </div>
+                            </td>
                             <td class="py-3 pr-4 text-xs text-gray-400">{{ formatDate(row.createdAt) }}</td>
                             <td class="py-3 text-xs">
                                 <button class="text-red-500 hover:underline" @click="remove(row)">{{ t('common.delete') }}</button>
