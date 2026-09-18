@@ -22,6 +22,8 @@ const statusData = ref<MembershipStatus | null>(null);
 const plans = ref<Plan[]>([]);
 const orders = ref<OrderRecord[]>([]);
 const period = ref<'monthly' | 'yearly'>('monthly');
+const loading = ref(true);
+const loadError = ref('');
 
 // 支付弹窗状态
 const showPayModal = ref(false);
@@ -33,6 +35,8 @@ const paying = ref(false);
 const payError = ref('');
 
 async function loadData() {
+    loadError.value = '';
+    loading.value = true;
     try {
         const [mStatus, pData, oData] = await Promise.all([
             $fetch<MembershipStatus>('/api/billing/membership'),
@@ -43,7 +47,10 @@ async function loadData() {
         plans.value = pData.plans;
         orders.value = oData.orders;
     } catch (e) {
-        console.error('加载会员数据失败:', e);
+        // 失败时给出可见提示：否则页面没有任何套餐卡片，用户会以为平台不卖会员
+        loadError.value = extractApiError(e, t('common.loadFailed'));
+    } finally {
+        loading.value = false;
     }
 }
 
@@ -166,6 +173,14 @@ function orderStatusText(status: string): string {
         <div class="mx-auto max-w-2xl text-center">
             <h1 class="text-3xl font-black tracking-tight sm:text-4xl">{{ t('billing.title') }}</h1>
             <p class="text-muted-2 mt-2 text-sm">{{ t('billing.subtitle') }}</p>
+        </div>
+
+        <!-- 加载失败提示：否则页面无套餐卡片，用户会以为平台不提供会员 -->
+        <div v-if="loadError" class="app-alert app-alert-danger mx-auto flex max-w-2xl items-center justify-between gap-3">
+            <span class="text-xs">{{ loadError }}</span>
+            <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[11px]" @click="loadData">
+                {{ t('common.retry') }}
+            </button>
         </div>
 
         <!-- 当前会员状态卡片 -->

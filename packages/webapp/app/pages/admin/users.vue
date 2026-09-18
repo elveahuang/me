@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -17,6 +18,7 @@ interface AdminUser {
 const users = ref<AdminUser[]>([]);
 const q = ref('');
 const loading = ref(true);
+const loadError = ref('');
 const roleFilter = ref('all');
 
 const filteredUsers = computed(() => {
@@ -36,9 +38,14 @@ const bannedCount = computed(() => users.value.filter((u) => u.banned).length);
 
 async function load() {
     loading.value = true;
+    loadError.value = '';
     try {
         const res = await $fetch<{ users: AdminUser[] }>('/api/admin/users');
         users.value = res.users ?? (res as unknown as AdminUser[]);
+    } catch (e) {
+        // 失败时给出可见提示，避免列表空态被误读为「搜索无结果」
+        users.value = [];
+        loadError.value = extractApiError(e, t('common.loadFailed'));
     } finally {
         loading.value = false;
     }
@@ -188,7 +195,15 @@ async function removeUser(userId: string) {
                         </tr>
                         <tr v-if="!filteredUsers.length && !loading">
                             <td colspan="6" class="p-12 text-center">
-                                <div class="flex flex-col items-center">
+                                <!-- 区分「加载失败」与「筛选无结果」 -->
+                                <div v-if="loadError" class="flex flex-col items-center">
+                                    <span class="mb-1.5 text-3xl">⚠️</span>
+                                    <p class="text-sm font-bold text-red-600">{{ loadError }}</p>
+                                    <button type="button" class="text-primary-600 mt-2 text-xs font-bold hover:underline" @click="load">
+                                        {{ t('common.retry') }}
+                                    </button>
+                                </div>
+                                <div v-else class="flex flex-col items-center">
                                     <span class="mb-1.5 text-3xl">👥</span>
                                     <p class="text-sm font-bold text-slate-700">{{ t('admin.noData') }}</p>
                                     <p class="mt-0.5 text-xs text-slate-400">未找到符合当前搜索或角色过滤条件的用户</p>

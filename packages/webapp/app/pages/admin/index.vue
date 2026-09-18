@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -46,14 +47,24 @@ interface StatsData {
 
 const stats = ref<StatsData | null>(null);
 const loading = ref(true);
+const loadError = ref('');
 
-onMounted(async () => {
+async function load() {
+    loading.value = true;
+    loadError.value = '';
     try {
         stats.value = await $fetch<StatsData>('/api/admin/stats');
+    } catch (e) {
+        // 失败时 stats 保持 null：若无提示，所有 KPI 会显示 0，
+        // 看起来像「平台没有数据」而不是「接口挂了」
+        stats.value = null;
+        loadError.value = extractApiError(e, t('common.loadFailed'));
     } finally {
         loading.value = false;
     }
-});
+}
+
+onMounted(load);
 
 const maxModelCount = computed(() => {
     if (!stats.value?.modelUsage?.length) return 1;
@@ -63,6 +74,14 @@ const maxModelCount = computed(() => {
 
 <template>
     <div class="space-y-8">
+        <!-- 加载失败提示：否则所有 KPI 显示 0，会被误读为「平台无数据」 -->
+        <div v-if="loadError" class="flex items-center justify-between gap-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            <span>{{ loadError }}</span>
+            <button type="button" class="shrink-0 rounded-lg bg-white px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-100" @click="load">
+                {{ t('common.retry') }}
+            </button>
+        </div>
+
         <!-- 头部欢迎与快捷入口 -->
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

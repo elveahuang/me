@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -23,6 +24,8 @@ interface MessageRow {
 const conversations = ref<ConversationRow[]>([]);
 const detail = ref<{ conversation: ConversationRow; messages: MessageRow[] } | null>(null);
 const searchKeyword = ref('');
+const loading = ref(false);
+const error = ref('');
 
 const filteredConversations = computed(() => {
     const q = searchKeyword.value.trim().toLowerCase();
@@ -37,20 +40,40 @@ const filteredConversations = computed(() => {
 });
 
 async function load() {
-    conversations.value = await $fetch('/api/admin/conversations');
+    loading.value = true;
+    error.value = '';
+    try {
+        conversations.value = await $fetch<ConversationRow[]>('/api/admin/conversations');
+    } catch (e) {
+        // 失败时清空列表并给出提示，避免把「加载失败」显示成「没有会话」
+        conversations.value = [];
+        error.value = extractApiError(e, t('common.loadFailed'));
+    } finally {
+        loading.value = false;
+    }
 }
 
 onMounted(load);
 
 async function open(row: ConversationRow) {
-    detail.value = await $fetch(`/api/admin/conversations/${row.id}`);
+    error.value = '';
+    try {
+        detail.value = await $fetch(`/api/admin/conversations/${row.id}`);
+    } catch (e) {
+        error.value = extractApiError(e, t('common.loadFailed'));
+    }
 }
 
 async function remove(id: string) {
     if (!confirm(t('chat.deleteConfirm'))) return;
-    await $fetch(`/api/admin/conversations/${id}`, { method: 'DELETE' });
-    detail.value = null;
-    await load();
+    error.value = '';
+    try {
+        await $fetch(`/api/admin/conversations/${id}`, { method: 'DELETE' });
+        detail.value = null;
+        await load();
+    } catch (e) {
+        error.value = extractApiError(e, t('common.error'));
+    }
 }
 
 function textOf(parts: MessageRow['parts']) {
@@ -99,6 +122,11 @@ function textOf(parts: MessageRow['parts']) {
                     ✕
                 </button>
             </div>
+        </div>
+
+        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ error }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
 
         <div class="flex flex-col gap-6 lg:flex-row">

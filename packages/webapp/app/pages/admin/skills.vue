@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
+
 definePageMeta({ layout: 'admin', middleware: 'admin' });
 
 interface SkillItem {
@@ -12,6 +14,9 @@ interface SkillItem {
 const skills = ref<SkillItem[]>([]);
 const editing = ref<Partial<SkillItem> | null>(null);
 const formError = ref('');
+const error = ref('');
+const success = ref('');
+const saving = ref(false);
 
 const form = reactive({
     name: '',
@@ -20,8 +25,20 @@ const form = reactive({
     enabled: true,
 });
 
+/** 列表级错误提示（表单错误仍走 formError，避免互相覆盖） */
+function fail(e: unknown, fallback = '操作失败') {
+    success.value = '';
+    error.value = extractApiError(e, fallback);
+}
+
 async function load() {
-    skills.value = await $fetch('/api/admin/skills');
+    error.value = '';
+    try {
+        skills.value = await $fetch<SkillItem[]>('/api/admin/skills');
+    } catch (e) {
+        skills.value = [];
+        fail(e, '加载 Skill 列表失败');
+    }
 }
 
 onMounted(load);
@@ -48,35 +65,60 @@ async function save() {
         formError.value = '名称必填';
         return;
     }
-    const body = {
-        name: form.name,
-        description: form.description,
-        instructions: form.instructions,
-        enabled: form.enabled,
-    };
-    if (editing.value?.id) {
-        await $fetch(`/api/admin/skills/${editing.value.id}`, { method: 'PATCH', body });
-    } else {
-        await $fetch('/api/admin/skills', { method: 'POST', body });
+    saving.value = true;
+    formError.value = '';
+    try {
+        const body = {
+            name: form.name,
+            description: form.description,
+            instructions: form.instructions,
+            enabled: form.enabled,
+        };
+        if (editing.value?.id) {
+            await $fetch(`/api/admin/skills/${editing.value.id}`, { method: 'PATCH', body });
+        } else {
+            await $fetch('/api/admin/skills', { method: 'POST', body });
+        }
+        editing.value = null;
+        success.value = '已保存';
+        await load();
+    } catch (e) {
+        formError.value = extractApiError(e, '保存失败');
+    } finally {
+        saving.value = false;
     }
-    editing.value = null;
-    await load();
 }
 
 async function toggle(skill: SkillItem) {
-    await $fetch(`/api/admin/skills/${skill.id}`, { method: 'PATCH', body: { enabled: !skill.enabled } });
-    await load();
+    error.value = '';
+    try {
+        await $fetch(`/api/admin/skills/${skill.id}`, { method: 'PATCH', body: { enabled: !skill.enabled } });
+        await load();
+    } catch (e) {
+        fail(e, '切换状态失败');
+    }
 }
 
 async function remove(id: string) {
     if (!confirm('确认删除该 Skill？')) return;
-    await $fetch(`/api/admin/skills/${id}`, { method: 'DELETE' });
-    await load();
+    error.value = '';
+    try {
+        await $fetch(`/api/admin/skills/${id}`, { method: 'DELETE' });
+        success.value = '已删除';
+        await load();
+    } catch (e) {
+        fail(e, '删除失败');
+    }
 }
 </script>
 
 <template>
     <div>
+        <div v-if="error" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ error }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">重试</button>
+        </div>
+        <div v-if="success" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
         <div class="mb-6 flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">Skill 管理</h1>

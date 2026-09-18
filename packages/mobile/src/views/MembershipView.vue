@@ -31,9 +31,12 @@ const qrCodeDataUrl = ref('');
 const pollingTimer = ref<number | null>(null);
 const payError = ref('');
 const paySuccess = ref(false);
+/** 页面级加载错误：与支付弹层内的 payError 分开，避免失败被只在弹层渲染的文案吞掉 */
+const loadError = ref('');
 
 async function loadData() {
     loading.value = true;
+    loadError.value = '';
     try {
         const [sRes, pRes, oRes] = await Promise.all([
             api<MembershipStatus>('/api/billing/membership'),
@@ -44,7 +47,7 @@ async function loadData() {
         plans.value = pRes.plans.filter((p) => p.enabled);
         orders.value = oRes.orders;
     } catch (e) {
-        payError.value = extractError(e, t('common.error'));
+        loadError.value = extractError(e, t('common.error'));
     } finally {
         loading.value = false;
     }
@@ -199,8 +202,22 @@ function orderStatusText(s: string): string {
             </template>
 
             <div class="space-y-5 p-4">
+                <!-- 加载失败提示：否则首屏请求失败时页面只剩默认值，看起来像"没有套餐" -->
+                <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                    <span>{{ loadError }}</span>
+                    <button type="button" class="app-btn app-btn-soft shrink-0 !px-2.5 !py-1 !text-[10px]" @click="loadData">
+                        {{ t('common.retry') }}
+                    </button>
+                </div>
+
+                <!-- 首次加载骨架：避免失败/加载中显示成"免费版"造成误解 -->
+                <div v-if="loading && !plans.length" class="space-y-3">
+                    <div class="app-skeleton h-32" />
+                    <div class="app-skeleton h-48" />
+                </div>
+
                 <!-- 当前会员状态 -->
-                <div class="app-card overflow-hidden">
+                <div v-else class="app-card overflow-hidden">
                     <div class="bg-brand-gradient p-5">
                         <div class="flex items-center justify-between">
                             <div>

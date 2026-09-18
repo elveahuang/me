@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -21,6 +22,7 @@ interface AdminOrderRow {
 
 const orders = ref<AdminOrderRow[]>([]);
 const loading = ref(true);
+const loadError = ref('');
 const statusFilter = ref('all');
 const searchKeyword = ref('');
 
@@ -56,11 +58,14 @@ const pendingCount = computed(() => orders.value.filter((o) => o.status === 'pen
 
 async function load() {
     loading.value = true;
+    loadError.value = '';
     try {
         const res = await $fetch<{ orders: AdminOrderRow[] }>('/api/admin/orders');
         orders.value = res.orders;
-    } catch (e: any) {
-        console.error('加载订单失败:', e);
+    } catch (e) {
+        // 失败时必须给出可见提示：否则表格走空态分支，把「请求失败」显示成「没有订单」
+        orders.value = [];
+        loadError.value = extractApiError(e, t('common.loadFailed'));
     } finally {
         loading.value = false;
     }
@@ -189,7 +194,15 @@ onMounted(load);
                         </tr>
                         <tr v-if="!filteredOrders.length && !loading">
                             <td colspan="9" class="p-14 text-center">
-                                <div class="mx-auto flex flex-col items-center">
+                                <!-- 加载失败与「筛选无结果」必须区分：否则用户会把故障当成没有数据 -->
+                                <div v-if="loadError" class="mx-auto flex flex-col items-center">
+                                    <span class="mb-2 text-3xl">⚠️</span>
+                                    <p class="text-sm font-bold text-red-600">{{ loadError }}</p>
+                                    <button type="button" class="text-primary-600 mt-3 text-xs font-bold hover:underline" @click="load">
+                                        {{ t('common.retry') }}
+                                    </button>
+                                </div>
+                                <div v-else class="mx-auto flex flex-col items-center">
                                     <span class="mb-2 text-3xl">🧾</span>
                                     <p class="text-sm font-bold text-slate-700">{{ t('admin.noData') }}</p>
                                     <p class="mt-1 text-xs text-slate-400">未找到符合当前过滤条件的订单流水</p>
