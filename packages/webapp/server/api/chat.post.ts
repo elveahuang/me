@@ -1,11 +1,12 @@
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, stepCountIs, streamText, type UIMessage } from 'ai';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import {
     agentKnowledgeBases,
     agentMcpServers,
     agentSkills,
     agentTools,
     agents,
+    attachments as attachmentsTable,
     conversations,
     messages as messagesTable,
     skills,
@@ -28,18 +29,33 @@ const MAX_CONTEXT_MESSAGES = 24;
 const USER_PART_TYPES = new Set(['text', 'file', 'image', 'data']);
 
 /**
+ * 站内附件路径白名单：私有桶的附件以 `/api/attachments/{id}/raw` 形式保存
+ * （见 /api/attachments/chat-parts）。这是唯一允许的相对地址形式——
+ * 其他相对路径会被 AI SDK 的 `new URL()` 抛错，一旦落库就会让整个会话永久 500。
+ */
+const INTERNAL_ATTACHMENT_PATH = /^\/api\/attachments\/[0-9a-f-]{36}\/raw$/i;
+
+/** 从站内路径里取出附件 id（非站内路径返回 null） */
+function internalAttachmentId(url: string): string | null {
+    const match = url.match(/^\/api\/attachments\/([0-9a-f-]{36})\/raw$/i);
+    return match ? match[1]! : null;
+}
+
+/**
  * 只保留结构合法的用户 part。
  *
- * 除了类型白名单，还要校验各类型的必需字段：
- * file/image 的 url 必须是绝对地址——AI SDK 在构造模型消息时会对 url 调用 `new URL()`，
- * 相对路径会抛 TypeError。该 part 一旦落库就会成为历史的一部分，
- * 此后该会话每次请求都会 500（等于被永久毒化），因此必须在入口拦掉。
+ * file/image 的 url 允许两种形式：
+ * 1. 绝对地址（http/https/data）——公开桶地址或用户自贴的外链
+ * 2. 站内附件路径 `/api/attachments/{id}/raw`——私有桶附件，浏览器带 cookie 可读，
+ *    模型侧由 toModelParts() 转成文字说明
+ * 其他相对路径一律拒绝：AI SDK 构造模型消息时会对 url 调用 `new URL()`，
+ * 抛错会让该会话此后每次请求都 500（等于被永久毒化），必须在入口拦掉。
  */
 function sanitizeUserParts(parts: unknown): unknown[] {
     if (!Array.isArray(parts)) return [];
     return parts.filter((part) => {
         if (!part || typeof part !== 'object') return false;
-        const candidate = part as { type?: unknown; text?: unknown; url?: unknown };
+        const candidate = part as { type?: unknown; text?: unknown; url?: unknown; mediaType?: unknown };
         if (typeof candidate.type !== 'string' || !USER_PART_TYPES.has(candidate.type)) return false;
 
         if (candidate.type === 'text') {
@@ -47,6 +63,11 @@ function sanitizeUserParts(parts: unknown): unknown[] {
         }
         if (candidate.type === 'file' || candidate.type === 'image') {
             if (typeof candidate.url !== 'string' || !candidate.url) return false;
+            // mediaType 是 AI SDK 的必需字段，缺失会让下游供应商调用失败
+            if (typeof candidate.mediaType !== 'string' || !candidate.mediaType) return false;
+            if (candidate.url.startsWith('/')) {
+                return INTERNAL_ATTACHMENT_PATH.test(candidate.url);
+            }
             try {
                 const parsed = new URL(candidate.url);
                 return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'data:';
@@ -56,6 +77,36 @@ function sanitizeUserParts(parts: unknown): unknown[] {
         }
         // data part：任意 JSON 结构，保留
         return true;
+    });
+}
+
+/**
+ * 校验站内附件引用确实属于当前用户。
+ * 只做格式校验不够：否则用户可以伪造 `/api/attachments/{别人的id}/raw`，
+ * 让 assistant 回复里出现指向他人附件的链接（虽然是 404，但仍是越权引用）。
+ * 返回过滤后的 parts，并顺带丢弃引用不存在/非本人的附件。
+ */
+async function filterOwnedAttachmentRefs(parts: unknown[], userId: string): Promise<unknown[]> {
+    const ids = parts
+        .map((p) => {
+            const url = (p as { url?: unknown })?.url;
+            return typeof url === 'string' && url.startsWith('/') ? internalAttachmentId(url) : null;
+        })
+        .filter((id): id is string => Boolean(id));
+
+    if (!ids.length) return parts;
+
+    const rows = await db
+        .select({ id: attachmentsTable.id })
+        .from(attachmentsTable)
+        .where(and(inArray(attachmentsTable.id, ids), eq(attachmentsTable.userId, userId)));
+    const owned = new Set(rows.map((row) => row.id));
+
+    return parts.filter((p) => {
+        const url = (p as { url?: unknown })?.url;
+        if (typeof url !== 'string' || !url.startsWith('/')) return true;
+        const id = internalAttachmentId(url);
+        return id ? owned.has(id) : false;
     });
 }
 
@@ -149,7 +200,9 @@ export default defineEventHandler(async (event) => {
     if (incoming.length > 0) {
         for (const m of incoming) {
             if (m.role !== 'user') continue;
-            const parts = sanitizeUserParts(m.parts);
+            const sanitized = sanitizeUserParts(m.parts);
+            // 站内附件引用必须是当前用户自己的附件，否则丢弃该 part
+            const parts = await filterOwnedAttachmentRefs(sanitized, session.user.id);
             if (!parts.length) continue;
             // id 是主键且必填：客户端未带 id 时服务端补一个，
             // 否则 insert 会因 undefined 参数报 500 —— 而额度在此之前已经扣掉了。
@@ -260,8 +313,26 @@ export default defineEventHandler(async (event) => {
     });
 
     // 12. 流式生成（带温度、Token 限制与思维链传递）
+    /**
+     * 私有桶附件在历史里以站内路径 `/api/attachments/{id}/raw` 形式保存：
+     * 浏览器能带 cookie 读取（会话 UI 正常显示），但**模型侧无法抓取**该地址。
+     * 直接交给 convertToModelMessages 会让部分供应商尝试下载并失败，
+     * 因此这里把这类 part 转成文字说明，模型至少知道"用户附了一个什么文件"。
+     */
+    const toModelParts = (parts: unknown[]) =>
+        parts.map((part) => {
+            const p = part as { type?: string; url?: string; filename?: string; mediaType?: string };
+            if ((p?.type === 'file' || p?.type === 'image') && typeof p.url === 'string' && p.url.startsWith('/api/')) {
+                return {
+                    type: 'text' as const,
+                    text: `[用户附带了文件：${p.filename || '未命名'}（${p.mediaType || '未知类型'}）]`,
+                };
+            }
+            return part;
+        });
+
     const modelMessages = await convertToModelMessages(
-        optimizedWindow.map((m) => ({ id: '', role: m.role as UIMessage['role'], parts: m.parts as UIMessage['parts'] })),
+        optimizedWindow.map((m) => ({ id: '', role: m.role as UIMessage['role'], parts: toModelParts(m.parts as unknown[]) as UIMessage['parts'] })),
     );
     const maxSteps = agent.maxSteps ?? 6;
 

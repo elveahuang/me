@@ -48,8 +48,9 @@ const navGroups = computed(() => [
             { path: '/admin/news', label: t('nav.news'), icon: '📰' },
             { path: '/admin/bulletins', label: t('nav.bulletins'), icon: '📣' },
             { path: '/admin/notifications', label: t('nav.notifications'), icon: '🔔' },
-            { path: '/admin/storage', label: t('nav.storage'), icon: '☁️' },
-            { path: '/admin/attachments', label: t('nav.attachments'), icon: '📎' },
+            // 附件总览与存储配置在同一页（/admin/storage），不再单列 /admin/attachments——
+            // 那个路径没有对应页面文件，点进去是 404
+            { path: '/admin/storage', label: t('nav.storageAndAttachments'), icon: '☁️' },
         ],
     },
     {

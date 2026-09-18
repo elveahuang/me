@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Chat } from '@ai-sdk/vue';
-import { extractApiError, isQuotaError, type AgentDetail, type ConversationSummary } from '@commons/contract';
-import { DefaultChatTransport, type UIMessage } from 'ai';
+import { extractApiError, formatBytes, isQuotaError, type AgentDetail, type AttachmentRecord, type ConversationSummary } from '@commons/contract';
+import { DefaultChatTransport, type FileUIPart, type UIMessage } from 'ai';
 import { useI18n } from 'vue-i18n';
 import { downloadMarkdownFile, formatConversationMarkdown } from '~/utils/markdown-export';
 
@@ -20,6 +20,95 @@ const currentConversationId = ref<string | null>((route.query.c as string) || nu
 const input = ref('');
 const chat = shallowRef<Chat<UIMessage> | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
+
+/** 待发送的附件（发送成功后清空；失败时保留，避免用户重选） */
+const pendingAttachments = ref<AttachmentRecord[]>([]);
+const attachPickerOpen = ref(false);
+const attachOptions = ref<AttachmentRecord[]>([]);
+const attachLoading = ref(false);
+const attachError = ref('');
+const chatFileInput = ref<HTMLInputElement | null>(null);
+const uploadingInChat = ref(false);
+
+/**
+ * 把待发送附件解析成 AI SDK 的 FileUIPart。
+ *
+ * 必须走服务端的 chat-parts 接口而不能直接用附件列表里的 url：
+ * 列表返回的是**预签名地址**（默认 1 小时过期），写进消息历史后就成了死链。
+ * chat-parts 对私有桶返回稳定的站内路径，公开桶返回公共地址。
+ */
+async function resolveChatParts(items: AttachmentRecord[]): Promise<FileUIPart[]> {
+    if (!items.length) return [];
+    try {
+        const res = await $fetch<{ parts: FileUIPart[] }>('/api/attachments/chat-parts', {
+            method: 'POST',
+            body: { ids: items.map((a) => a.id) },
+        });
+        if (res.parts?.length) return res.parts;
+    } catch {
+        // 接口异常时回退站内路径：虽不如服务端权威，但不会写入会过期的签名地址
+    }
+    return items.map((item) => ({
+        type: 'file' as const,
+        mediaType: item.mimeType || 'application/octet-stream',
+        filename: item.filename,
+        url: `/api/attachments/${item.id}/raw`,
+    }));
+}
+
+/** 打开附件选择器：拉取最近上传的附件供选择 */
+async function openAttachPicker() {
+    attachPickerOpen.value = true;
+    attachLoading.value = true;
+    attachError.value = '';
+    try {
+        const res = await $fetch<{ attachments: AttachmentRecord[] }>('/api/attachments', { query: { pageSize: 25 } });
+        attachOptions.value = res.attachments;
+    } catch (e) {
+        attachError.value = extractApiError(e, t('common.loadFailed'));
+    } finally {
+        attachLoading.value = false;
+    }
+}
+
+function pickAttachment(item: AttachmentRecord) {
+    if (pendingAttachments.value.some((a) => a.id === item.id)) return;
+    if (pendingAttachments.value.length >= 5) {
+        attachError.value = t('chat.attachLimit');
+        return;
+    }
+    pendingAttachments.value.push(item);
+    attachPickerOpen.value = false;
+}
+
+function removePending(id: string) {
+    pendingAttachments.value = pendingAttachments.value.filter((a) => a.id !== id);
+}
+
+/** 在聊天里直接选本地文件上传（无需先去附件页） */
+async function onChatFileChange(event: Event) {
+    const el = event.target as HTMLInputElement;
+    const file = el.files?.[0];
+    el.value = '';
+    if (!file) return;
+    uploadingInChat.value = true;
+    attachError.value = '';
+    try {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('category', 'chat');
+        const created = await $fetch<AttachmentRecord>('/api/attachments', { method: 'POST', body: form });
+        if (pendingAttachments.value.length >= 5) {
+            attachError.value = t('chat.attachLimit');
+        } else {
+            pendingAttachments.value.push(created);
+        }
+    } catch (e) {
+        attachError.value = extractApiError(e, t('common.error'));
+    } finally {
+        uploadingInChat.value = false;
+    }
+}
 
 const searchQuery = ref('');
 const showScrollBottom = ref(false);
@@ -93,7 +182,8 @@ onMounted(async () => {
 
 async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
-    if (!text) return;
+    // 允许只发附件（无文字）
+    if (!text && !pendingAttachments.value.length) return;
 
     // 首次发送时自动创建会话。创建失败必须保留输入内容：
     // 否则用户输入被清空又没发出去，只能重新敲一遍。
@@ -110,9 +200,12 @@ async function handleSubmit(overrideText?: string) {
         }
     }
 
+    const files = await resolveChatParts(pendingAttachments.value);
     input.value = '';
+    pendingAttachments.value = [];
     submitError.value = '';
-    current.sendMessage({ text });
+    // AI SDK 的 sendMessage 支持 { text, files }：files 会作为 file part 进入消息
+    current.sendMessage(files.length ? { text, files } : { text });
     nextTick(scrollToBottom);
 }
 
@@ -416,7 +509,30 @@ const starterPrompts = computed(() => [
 
             <!-- 输入栏 -->
             <form class="p-3.5" style="border-top: 1px solid var(--line); background-color: var(--surface)" @submit.prevent="() => handleSubmit()">
+                <!-- 待发送附件 -->
+                <div v-if="pendingAttachments.length" class="mb-2 flex flex-wrap gap-2">
+                    <span v-for="a in pendingAttachments" :key="a.id" class="app-chip max-w-[14rem] !py-1">
+                        <AppIcon :name="a.isImage ? 'file-image-outline' : 'file-outline'" :size="13" />
+                        <span class="truncate">{{ a.filename }}</span>
+                        <span class="text-faint text-[10px]">{{ formatBytes(a.size) }}</span>
+                        <button type="button" class="text-faint hover:text-default" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
+                    </span>
+                </div>
+                <div v-if="attachError" class="app-alert app-alert-danger mb-2 text-[11px]">{{ attachError }}</div>
+
                 <div class="relative flex items-center gap-2.5">
+                    <!-- 附件入口：选择已有附件或直接上传 -->
+                    <button
+                        type="button"
+                        class="app-btn app-btn-ghost app-btn-icon shrink-0"
+                        :title="t('chat.attach')"
+                        :disabled="uploadingInChat"
+                        @click="openAttachPicker"
+                    >
+                        <AppIcon name="paperclip" :size="18" />
+                    </button>
+                    <input ref="chatFileInput" type="file" class="hidden" @change="onChatFileChange" />
+
                     <div class="relative flex-1">
                         <input v-model="input" :placeholder="t('chat.inputPlaceholder')" class="app-input w-full !pr-8" />
                         <button
@@ -447,5 +563,51 @@ const starterPrompts = computed(() => [
                 </div>
             </form>
         </section>
+
+        <!-- 附件选择弹层：列最近上传的附件，也可直接上传新文件 -->
+        <Teleport to="body">
+            <div v-if="attachPickerOpen" class="app-modal-backdrop" @click.self="attachPickerOpen = false">
+                <div class="app-card w-full max-w-lg p-5">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black">{{ t('chat.attach') }}</h3>
+                        <button type="button" class="text-faint hover:text-default" @click="attachPickerOpen = false">✕</button>
+                    </div>
+
+                    <div class="mt-3 flex gap-2">
+                        <button type="button" class="app-btn app-btn-outline !py-1.5 text-xs" :disabled="uploadingInChat" @click="chatFileInput?.click()">
+                            <AppIcon name="tray-arrow-up" :size="14" />
+                            <span>{{ uploadingInChat ? t('attachments.uploading') : t('chat.uploadAndAttach') }}</span>
+                        </button>
+                        <NuxtLink to="/attachments" class="app-btn app-btn-ghost !py-1.5 text-xs">{{ t('attachments.title') }} →</NuxtLink>
+                    </div>
+
+                    <div v-if="attachLoading" class="mt-3 space-y-2">
+                        <div v-for="i in 3" :key="i" class="app-skeleton h-10" />
+                    </div>
+                    <div v-else-if="attachOptions.length" class="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                        <button
+                            v-for="item in attachOptions"
+                            :key="item.id"
+                            type="button"
+                            class="app-card app-card-hover flex w-full items-center gap-3 p-2.5 text-left"
+                            @click="pickAttachment(item)"
+                        >
+                            <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[color:var(--surface-3)]">
+                                <img v-if="item.isImage && item.url" :src="item.url" :alt="item.filename" class="h-full w-full object-cover" />
+                                <AppIcon v-else :name="'file-outline'" :size="16" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-xs font-bold">{{ item.filename }}</span>
+                                <span class="text-faint text-[10px]">{{ formatBytes(item.size) }}</span>
+                            </span>
+                            <span v-if="pendingAttachments.some((a) => a.id === item.id)" class="app-badge app-badge-success shrink-0 !text-[10px]">
+                                {{ t('common.confirm') }}
+                            </span>
+                        </button>
+                    </div>
+                    <p v-else class="text-faint mt-3 py-8 text-center text-xs">{{ t('attachments.empty') }}</p>
+                </div>
+            </div>
+        </Teleport>
     </div>
 </template>
