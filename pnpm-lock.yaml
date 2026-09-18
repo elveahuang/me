@@ -531,7 +531,7 @@ importers:
         specifier: ^4.2.2
         version: 4.2.2
       '@types/node':
-        specifier: ^26.5.1
+        specifier: ^26.6.1
         version: 26.6.1
       '@types/qrcode':
         specifier: ^1.5.6
@@ -559,7 +559,7 @@ importers:
         version: 3.5.43
       '@vue/eslint-config-prettier':
         specifier: ^10.2.0
-        version: 10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)
+        version: 10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)
       '@vue/eslint-config-typescript':
         specifier: ^14.9.0
         version: 14.9.0(eslint-plugin-vue@10.11.0(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(vue-eslint-parser@10.4.1(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
@@ -583,7 +583,7 @@ importers:
         version: 8.2.0
       eslint-plugin-prettier:
         specifier: ^5.5.6
-        version: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)
+        version: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)
       eslint-plugin-vue:
         specifier: ^10.11.0
         version: 10.11.0(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(vue-eslint-parser@10.4.1(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))
@@ -600,14 +600,14 @@ importers:
         specifier: ^0.12.7
         version: 0.12.7
       prettier:
-        specifier: ^3.9.7
-        version: 3.9.7
+        specifier: ^3.9.8
+        version: 3.9.8
       prettier-plugin-organize-imports:
         specifier: ^4.3.0
-        version: 4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
+        version: 4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
       prettier-plugin-tailwindcss:
         specifier: ^0.8.1
-        version: 0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.7)
+        version: 0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.8)
       stylelint:
         specifier: ^17.15.0
         version: 17.15.0(supports-color@10.2.2)(typescript@6.0.3)
@@ -628,7 +628,7 @@ importers:
         version: 8.1.1(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
       stylelint-prettier:
         specifier: ^5.0.3
-        version: 5.0.3(prettier@3.9.7)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
+        version: 5.0.3(prettier@3.9.8)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -695,7 +695,7 @@ importers:
         version: 8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
       '@vue/eslint-config-prettier':
         specifier: ^10.2.0
-        version: 10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)
+        version: 10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)
       '@vue/eslint-config-typescript':
         specifier: ^14.9.0
         version: 14.9.0(eslint-plugin-vue@10.11.0(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(vue-eslint-parser@10.4.1(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
@@ -713,7 +713,7 @@ importers:
         version: 8.2.0
       eslint-plugin-prettier:
         specifier: ^5.5.6
-        version: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)
+        version: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)
       eslint-plugin-vue:
         specifier: ^10.11.0
         version: 10.11.0(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(vue-eslint-parser@10.4.1(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))
@@ -721,14 +721,14 @@ importers:
         specifier: ^17.12.0
         version: 17.12.0
       prettier:
-        specifier: ^3.9.7
-        version: 3.9.7
+        specifier: ^3.9.8
+        version: 3.9.8
       prettier-plugin-organize-imports:
         specifier: ^4.3.0
-        version: 4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
+        version: 4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
       prettier-plugin-tailwindcss:
         specifier: ^0.8.1
-        version: 0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.7)
+        version: 0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.8)
       stylelint:
         specifier: ^17.15.0
         version: 17.15.0(supports-color@10.2.2)(typescript@6.0.3)
@@ -749,7 +749,7 @@ importers:
         version: 8.1.1(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
       stylelint-prettier:
         specifier: ^5.0.3
-        version: 5.0.3(prettier@3.9.7)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
+        version: 5.0.3(prettier@3.9.8)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3))
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -854,14 +854,14 @@ importers:
         specifier: ^4.0.105
         version: 4.0.105(vue@3.5.43(typescript@6.0.3))(zod@4.6.5)
       '@aws-sdk/client-s3':
-        specifier: ^3.1134.0
-        version: 3.1134.0
+        specifier: ^3.1135.0
+        version: 3.1135.0
       '@aws-sdk/s3-presigned-post':
         specifier: ^3.1135.0
         version: 3.1135.0
       '@aws-sdk/s3-request-presigner':
-        specifier: ^3.1134.0
-        version: 3.1134.0
+        specifier: ^3.1135.0
+        version: 3.1135.0
       '@better-auth/core':
         specifier: ^1.7.5
         version: 1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.28.17)(nanostores@1.5.3)
@@ -954,7 +954,7 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.104.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
       '@types/node':
-        specifier: ^26.5.1
+        specifier: ^26.6.1
         version: 26.6.1
       '@types/pg':
         specifier: ^8.23.1
@@ -1097,10 +1097,6 @@ packages:
     resolution: {integrity: sha512-6uTniZc87q+B5eXouGTl+7Tmc482rEeCcvxpsvREP8EfF0gvloRZ41UOA9sbSJlyy8TbqIBXb3kKfKarEArUQA==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/client-s3@3.1134.0':
-    resolution: {integrity: sha512-dHgbuWMkladVNpR5gEQ7K9ub20w/hcf9IJXtMr+S3/rYpr6Z4gWUEX1seAPj00nAxJqtAaYvX3wdr2BVukZXXQ==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/client-s3@3.1135.0':
     resolution: {integrity: sha512-/1CVA0M+TaEOzgM02DUST1NzQTjbY8OumDKPETjzo4owypkZZMxu1ADecFbzeG73hje/XLNAJfGepQ3a40CGnw==}
     engines: {node: '>=20.0.0'}
@@ -1153,8 +1149,8 @@ packages:
     resolution: {integrity: sha512-i8WH/TrEyNU/9AKYumbY9AsJ6aGgbv7KZ/7yyM+onT6nFUV3ucez046tWuA/Xi9cce0YpfHjA+bcxrXJY4wnPw==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/s3-request-presigner@3.1134.0':
-    resolution: {integrity: sha512-75DC3biOXXmSWqCN2hwJmhMPjDdgc1twjNJEknuWhY9M/E9eFIQufXkwOQx5raNTg6P/FbCgk9tp4y2SZ7vZFA==}
+  '@aws-sdk/s3-request-presigner@3.1135.0':
+    resolution: {integrity: sha512-e8fkfFrsROsL2xa4X2Elui7SApBSb+vsJ0XlVdifv7MPOuwPzQ0oQsC1/BQxT1/Hx3IuOVdT0EF9dU87aKse8A==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/signature-v4-multi-region@3.996.46':
@@ -4299,11 +4295,11 @@ packages:
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
-  '@posthog/core@1.54.3':
-    resolution: {integrity: sha512-Xttyf9OSViNw89aMW1Cdpl9dCY0t00FqzDc1JLJsxhqEwBqUP9aCzNToPt7NVu+I0M9yp7608abNYdO8hal7nQ==}
+  '@posthog/core@1.54.5':
+    resolution: {integrity: sha512-7N/Su3EnQpGaPSYgB7Ha0UQms47GObytCvuFjcKgSTEVlUWKO42hs38Zhb5O1S5VTxK1vPzavomieoGVrCOiZg==}
 
-  '@posthog/types@1.412.1':
-    resolution: {integrity: sha512-FxXsb9YOOME8bJI5K09qKeSvLjnZQ2dPV7wZpI7a8sERQtXkAuhBcPB/balCnVE7TYwhgtHj5NQss9BgQ5bAfQ==}
+  '@posthog/types@1.412.2':
+    resolution: {integrity: sha512-taxTh8o6n7ZVlC8qBypZvF+6w7/18yNkS9XDiGCbutGTKqIljfzYi/7pumgwN3mcnl/n0e9A+JhF05+nLd4Xaw==}
 
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
@@ -6196,8 +6192,8 @@ packages:
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
-  baseline-browser-mapping@2.11.24:
-    resolution: {integrity: sha512-hYrgxie335U08WqICoGqKRzV1HFXv6zdxwJE4ekCb80CM9a0SVVsN4QPwT67RraRo+9h8IATk6uxHJw7QSkdOg==}
+  baseline-browser-mapping@2.11.25:
+    resolution: {integrity: sha512-gMmEShwwq7FJqMwvfRwvCl00v4kN+KOfJqXn+f4nrufak5gNHJOksd/60Dvjuz7sI8Y5WiSFBa8FEYr+zoyqCw==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -7291,8 +7287,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.430:
-    resolution: {integrity: sha512-e1QEj72Y4zd8RlNZVmoTg+iCOSVwpk05IOiiQwdrkwCSVlZfPthevErhE+nckGd2YbsXfp1SkisznhGVIXP2NQ==}
+  electron-to-chromium@1.5.431:
+    resolution: {integrity: sha512-AAVihz2YwJeOdAynX8MUtqpvjY0gaiARp/7+r4kwqgzqXMrfG1qDN7vwT80uxAoOQRPcZH8t73EI+CA/1OJN8A==}
 
   element-plus@2.14.5:
     resolution: {integrity: sha512-bghYy/S+qg87enHPXELirhEdDqsVAUGcGpbGIeG8dz0kwpIkGz7gYsifulBshXX74iRtHib85XWQj0uSH2A1Yg==}
@@ -9312,8 +9308,8 @@ packages:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
 
-  openai@7.17.0:
-    resolution: {integrity: sha512-w1FD52GfPRIFJsWebDha43/Bs2Xx7rwtbG33jXTIgXdKpHqOA8G9XPqFEH0OXcoPgdfsiN+BbHkoJMY3rmcJnA==}
+  openai@7.18.0:
+    resolution: {integrity: sha512-S+xxaUf9VzIHEPDUpUFnRgvR2Ho0K1yZEaSJ8gd7xQlCNm4sdOD7/QaKWLRTYK3MK6KhwpD3cOEC0F4OPG698A==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
@@ -9939,8 +9935,8 @@ packages:
     engines: {node: '>=10.13.0'}
     hasBin: true
 
-  prettier@3.9.7:
-    resolution: {integrity: sha512-T3mF5P7HFzZVLDQuCUNtJj6WK1pcpLMweMNUVwGb01bLNkH9AkKxtZvmInw8K6bnn2O3d6/5RHl6zSHiBAD0Og==}
+  prettier@3.9.8:
+    resolution: {integrity: sha512-WRFq3Wn3WId7LLROfMLdH7xaFr2jR62wU8nLO6rQUOLOxNZUviyJQs1M0iIhLexSFy+L+w0ch66wtoO2jRjG0A==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -11933,20 +11929,6 @@ snapshots:
       '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/client-s3@3.1134.0':
-    dependencies:
-      '@aws-sdk/checksums': 3.1001.0
-      '@aws-sdk/core': 3.978.0
-      '@aws-sdk/credential-provider-node': 3.972.83
-      '@aws-sdk/middleware-sdk-s3': 3.972.76
-      '@aws-sdk/signature-v4-multi-region': 3.996.46
-      '@aws-sdk/types': 3.974.5
-      '@smithy/core': 3.34.1
-      '@smithy/fetch-http-handler': 5.8.0
-      '@smithy/node-http-handler': 4.12.1
-      '@smithy/types': 4.18.0
-      tslib: 2.8.1
-
   '@aws-sdk/client-s3@3.1135.0':
     dependencies:
       '@aws-sdk/checksums': 3.1001.0
@@ -12086,7 +12068,7 @@ snapshots:
       '@smithy/types': 4.18.0
       tslib: 2.8.1
 
-  '@aws-sdk/s3-request-presigner@3.1134.0':
+  '@aws-sdk/s3-request-presigner@3.1135.0':
     dependencies:
       '@aws-sdk/core': 3.978.0
       '@aws-sdk/signature-v4-multi-region': 3.996.46
@@ -12377,7 +12359,7 @@ snapshots:
       drizzle-orm: 0.41.0(@cloudflare/workers-types@4.20260702.1)(@electric-sql/pglite@0.5.8)(@prisma/client@5.22.0)(@types/pg@8.23.1)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.23.0)(postgres@3.4.9)
       open: 10.2.0
       pg: 8.23.0
-      prettier: 3.9.7
+      prettier: 3.9.8
       prompts: 2.4.2
       semver: 7.8.5
       yocto-spinner: 0.2.3
@@ -16683,18 +16665,18 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@posthog/core@1.54.3':
+  '@posthog/core@1.54.5':
     dependencies:
-      '@posthog/types': 1.412.1
+      '@posthog/types': 1.412.2
 
-  '@posthog/types@1.412.1': {}
+  '@posthog/types@1.412.2': {}
 
   '@preact/signals-core@1.14.4': {}
 
   '@prettier/plugin-xml@2.2.0':
     dependencies:
       '@xml-tools/parser': 1.0.11
-      prettier: 3.9.7
+      prettier: 3.9.8
 
   '@prisma/client@5.22.0': {}
 
@@ -18079,12 +18061,12 @@ snapshots:
 
   '@vue/devtools-shared@8.2.1': {}
 
-  '@vue/eslint-config-prettier@10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)':
+  '@vue/eslint-config-prettier@10.2.0(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)':
     dependencies:
       eslint: 10.10.0(jiti@2.7.0)(supports-color@10.2.2)
       eslint-config-prettier: 10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))
-      eslint-plugin-prettier: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7)
-      prettier: 3.9.7
+      eslint-plugin-prettier: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8)
+      prettier: 3.9.8
     transitivePeerDependencies:
       - '@types/eslint'
 
@@ -18293,7 +18275,7 @@ snapshots:
       lowlight: 3.3.0
       lucide: 1.47.0
       marked: 18.0.13
-      openai: 7.17.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+      openai: 7.18.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@smithy/hash-node'
@@ -18470,7 +18452,7 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.11.24: {}
+  baseline-browser-mapping@2.11.25: {}
 
   better-auth@1.4.21(@prisma/client@5.22.0)(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.41.0(@cloudflare/workers-types@4.20260702.1)(@electric-sql/pglite@0.5.8)(@prisma/client@5.22.0)(@types/pg@8.23.1)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.23.0)(postgres@3.4.9))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(svelte@5.57.0(@typescript-eslint/types@8.70.0))(vue@3.5.43(typescript@6.0.3)):
     dependencies:
@@ -18681,9 +18663,9 @@ snapshots:
 
   browserslist@4.29.0:
     dependencies:
-      baseline-browser-mapping: 2.11.24
+      baseline-browser-mapping: 2.11.25
       caniuse-lite: 1.0.30001810
-      electron-to-chromium: 1.5.430
+      electron-to-chromium: 1.5.431
       node-releases: 2.0.56
       update-browserslist-db: 1.3.3(browserslist@4.29.0)
 
@@ -19363,7 +19345,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.430: {}
+  electron-to-chromium@1.5.431: {}
 
   element-plus@2.14.5(vue@3.5.43(typescript@6.0.3)):
     dependencies:
@@ -19668,10 +19650,10 @@ snapshots:
     dependencies:
       htmlparser2: 10.1.0
 
-  eslint-plugin-prettier@5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.7):
+  eslint-plugin-prettier@5.5.6(eslint-config-prettier@10.1.8(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2)))(eslint@10.10.0(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.9.8):
     dependencies:
       eslint: 10.10.0(jiti@2.7.0)(supports-color@10.2.2)
-      prettier: 3.9.7
+      prettier: 3.9.8
       prettier-linter-helpers: 1.0.1
       synckit: 0.11.13
     optionalDependencies:
@@ -22292,7 +22274,7 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@7.17.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5):
+  openai@7.18.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.83
       '@smithy/signature-v4': 5.7.3
@@ -22769,7 +22751,7 @@ snapshots:
 
   posthog-node@5.52.4:
     dependencies:
-      '@posthog/core': 1.54.3
+      '@posthog/core': 1.54.5
 
   powershell-utils@0.1.0: {}
 
@@ -22798,22 +22780,22 @@ snapshots:
     dependencies:
       fast-diff: 1.3.0
 
-  prettier-plugin-organize-imports@4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)):
+  prettier-plugin-organize-imports@4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)):
     dependencies:
-      prettier: 3.9.7
+      prettier: 3.9.8
       typescript: 6.0.3
     optionalDependencies:
       vue-tsc: 3.3.11(typescript@6.0.3)
 
-  prettier-plugin-tailwindcss@0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.7):
+  prettier-plugin-tailwindcss@0.8.1(prettier-plugin-organize-imports@4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3)))(prettier@3.9.8):
     dependencies:
-      prettier: 3.9.7
+      prettier: 3.9.8
     optionalDependencies:
-      prettier-plugin-organize-imports: 4.3.0(prettier@3.9.7)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
+      prettier-plugin-organize-imports: 4.3.0(prettier@3.9.8)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
 
   prettier@2.8.8: {}
 
-  prettier@3.9.7: {}
+  prettier@3.9.8: {}
 
   pretty-bytes@7.1.3: {}
 
@@ -23811,9 +23793,9 @@ snapshots:
       postcss-sorting: 10.0.0(postcss@8.5.28)
       stylelint: 17.15.0(supports-color@10.2.2)(typescript@6.0.3)
 
-  stylelint-prettier@5.0.3(prettier@3.9.7)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3)):
+  stylelint-prettier@5.0.3(prettier@3.9.8)(stylelint@17.15.0(supports-color@10.2.2)(typescript@6.0.3)):
     dependencies:
-      prettier: 3.9.7
+      prettier: 3.9.8
       prettier-linter-helpers: 1.0.1
       stylelint: 17.15.0(supports-color@10.2.2)(typescript@6.0.3)
 

@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1789401827903,
-      "tag": "0000_lively_la_nuit",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1789448311239,
-      "tag": "0001_lying_husk",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1789662025114,
-      "tag": "0002_sweet_madripoor",
+      "when": 1789702002190,
+      "tag": "0000_smiling_peter_quill",
       "breakpoints": true
     }
   ]
