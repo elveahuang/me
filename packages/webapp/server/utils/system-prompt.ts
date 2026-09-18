@@ -12,6 +12,20 @@ function interpolateVariables(template: string, vars: Record<string, string>): s
     });
 }
 
+// 服务器进程时区不可信（容器多为 UTC），但提示词按“业务时钟=东八区”书写，且与 billing 的 UTC+8 日额度划分对齐。
+// 用固定 timeZone 格式化，避免直接 toLocaleString/toISOString 把 UTC 时间错标成 UTC+8、或跨零点给出错误日期。
+const BEIJING_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+const BEIJING_DATETIME = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+});
+
 /**
  * 组装智能体最终系统提示词：
  * 1. 人设/规则（支持 {{user_name}}, {{user_role}}, {{current_date}}, {{agent_name}} 模版插值）
@@ -31,11 +45,12 @@ export function buildSystemPrompt(
     const sections: string[] = [];
 
     const now = new Date();
+    const beijingDateTime = BEIJING_DATETIME.format(now);
     const vars: Record<string, string> = {
         user_name: userContext?.name?.trim() || '用户',
         user_role: userContext?.role?.trim() || '普通用户',
-        current_date: now.toISOString().slice(0, 10),
-        current_time: now.toLocaleString('zh-CN'),
+        current_date: BEIJING_DATE.format(now),
+        current_time: beijingDateTime,
         agent_name: agent.name,
     };
 
@@ -44,7 +59,7 @@ export function buildSystemPrompt(
     }
 
     // 注入基础时空与用户信息上下文
-    const contextLines = [`- 当前日期与时间：${now.toLocaleString('zh-CN')} (UTC+8)`];
+    const contextLines = [`- 当前日期与时间：${beijingDateTime} (UTC+8)`];
     if (userContext?.name) {
         contextLines.push(`- 当前用户昵称：${userContext.name}`);
     }

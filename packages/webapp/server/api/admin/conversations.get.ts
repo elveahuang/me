@@ -5,7 +5,10 @@ import { requireAdmin } from '../../utils/guard';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
-    const userId = getQuery(event).userId as string | undefined;
+    // 查询参数可能是数组（?userId=a&userId=b）或非字符串；直接当作 id 传给 eq() 会让
+    // postgres-js 把数组展开成标量参数并报 500，这里显式收敛为单个字符串。
+    const rawUserId = getQuery(event).userId;
+    const userId = typeof rawUserId === 'string' && rawUserId ? rawUserId : undefined;
 
     const rows = await db
         .select({

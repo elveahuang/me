@@ -1,5 +1,6 @@
 import { asc, desc, eq } from 'drizzle-orm';
 import { bulletins } from '../../db/schema';
+import { normalizeLink, parseDateInput } from '../../utils/content-ops';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
 
@@ -11,31 +12,6 @@ import { requireAdmin } from '../../utils/guard';
 const EDITABLE = ['title', 'content', 'imageUrl', 'linkText', 'position', 'level'] as const;
 const POSITIONS = ['home', 'chat', 'global'];
 const LEVELS = ['info', 'success', 'warning', 'danger'];
-
-function normalizeLink(raw: unknown): string {
-    const value = String(raw ?? '').trim();
-    if (!value) return '';
-    if (value.startsWith('/')) return value;
-    let parsed: URL;
-    try {
-        parsed = new URL(value);
-    } catch {
-        throw createError({ statusCode: 400, statusMessage: '跳转链接必须是 http/https 地址或以 / 开头的站内路径' });
-    }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw createError({ statusCode: 400, statusMessage: '跳转链接仅允许 http/https 协议' });
-    }
-    return value;
-}
-
-function parseDate(raw: unknown): Date | null {
-    if (raw === null || raw === undefined || raw === '') return null;
-    const date = new Date(String(raw));
-    if (Number.isNaN(date.getTime())) {
-        throw createError({ statusCode: 400, statusMessage: '时间格式不正确' });
-    }
-    return date;
-}
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
@@ -53,8 +29,8 @@ export default defineEventHandler(async (event) => {
         patch.linkUrl = normalizeLink(body.linkUrl);
         if (!POSITIONS.includes(String(patch.position))) patch.position = 'home';
         if (!LEVELS.includes(String(patch.level))) patch.level = 'info';
-        const startsAt = parseDate(body.startsAt);
-        const endsAt = parseDate(body.endsAt);
+        const startsAt = parseDateInput(body.startsAt);
+        const endsAt = parseDateInput(body.endsAt);
         if (startsAt && endsAt && startsAt > endsAt) {
             throw createError({ statusCode: 400, statusMessage: '结束时间不能早于开始时间' });
         }

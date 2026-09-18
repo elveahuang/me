@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { notificationRecipients, notifications, user } from '../../db/schema';
+import { normalizeLink } from '../../utils/content-ops';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
 import { createNotification } from '../../utils/notify';
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
             type: TYPES.includes(String(body.type)) ? String(body.type) : 'system',
             level: LEVELS.includes(String(body.level)) ? String(body.level) : 'info',
             audience,
-            linkUrl: String(body.linkUrl ?? ''),
+            linkUrl: normalizeLink(body.linkUrl),
             createdBy: session.user.id,
             userIds,
         });

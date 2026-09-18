@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { membershipPlans, orders } from '../../../db/schema';
+import { membershipPlans, orders, userMemberships } from '../../../db/schema';
 import { invalidatePlansCache } from '../../../utils/billing';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
@@ -17,9 +17,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: '免费套餐不可删除（可编辑或下架）' });
     }
 
-    const [referenced] = await db.select({ id: orders.id }).from(orders).where(eq(orders.planId, id)).limit(1);
-    if (referenced) {
-        throw createError({ statusCode: 400, statusMessage: '该套餐已有订单记录，请改为下架（enabled=false）' });
+    const [referencedOrder, referencedMembership] = await Promise.all([
+        db.select({ id: orders.id }).from(orders).where(eq(orders.planId, id)).limit(1),
+        db.select({ id: userMemberships.id }).from(userMemberships).where(eq(userMemberships.planId, id)).limit(1),
+    ]);
+    if (referencedOrder.length || referencedMembership.length) {
+        throw createError({ statusCode: 400, statusMessage: '该套餐已有订单或会员记录，请改为下架（enabled=false）' });
     }
 
     const deleted = await db.delete(membershipPlans).where(eq(membershipPlans.id, id)).returning({ id: membershipPlans.id });
