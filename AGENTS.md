@@ -94,6 +94,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 主题先改共享语义变量，再查 Web 样式和 Mobile 的 Ionic 映射；不要为单页硬编码一套颜色绕过浅色/深色/品牌色。
 - 用户端内容页入口：Web 在 `app/pages/` 下的 `news/`、`notifications.vue`、`attachments.vue`；移动端对应 `src/views/NewsView.vue`、`NewsDetailView.vue`、`NotificationsView.vue`、`AttachmentsView.vue`，导航入口分别在 `TabsView.vue`（底部）与 `HomeView.vue`/`MeView.vue`（顶部与列表）。
 - 管理端内容模块页面：`app/pages/admin/news.vue`、`bulletins.vue`、`notifications.vue`、`storage.vue`（存储配置 + 附件总览）；侧栏分组见 `app/layouts/admin.vue` 的 `navGroups`。
+- **管理端新增/编辑统一走右侧滑出抽屉 `AdminDrawer`**（`app/components/AdminDrawer.vue`，Nuxt 自动导入）。列表页只保留列表 + 加载/错误/空态，实体表单不再内联在列表上方。全部 13 个 CRUD 页均已接入：`skills/tools/providers/mcp/plans/news/bulletins/agents/notifications/storage/knowledge`（knowledge 的新建与编辑各用一个抽屉；notifications 的发送表单；storage 的配置表单）。约定：`:open` 绑 `editing !== null`（或各自开关），标题 `editing?.id ? t('common.edit') : t('adminForm.<x>New')`，页脚顺序 取消→保存，宽表单传 `width-class="sm:max-w-2xl"`；抽屉 slot 内的 `editing` 必须可选链（`editing?.id`），vue-tsc 会对未打开的 slot 体也做类型检查。`conversations/orders/users/index` 无新增/编辑表单，会话详情是只读侧栏面板，不套用抽屉。
 
 ## 6. 服务端定位原则
 
