@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 429, statusMessage: `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试` });
     }
 
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const parsed = CreateOrderSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: `参数错误: ${parsed.error.issues[0]?.message ?? ''}` });

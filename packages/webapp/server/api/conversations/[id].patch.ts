@@ -11,7 +11,7 @@ const PatchConversationSchema = z.object({
 export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
     const id = getRouterParam(event, 'id')!;
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
 
     const parsed = PatchConversationSchema.safeParse(body);
     if (!parsed.success) {

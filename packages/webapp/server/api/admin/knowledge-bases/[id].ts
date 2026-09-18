@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
         return { ok: true };
     }
 
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const key of ['name', 'description', 'embeddingModel'] as const) {
         if (body[key] !== undefined) patch[key] = body[key];
@@ -24,5 +24,6 @@ export default defineEventHandler(async (event) => {
     if (body.embeddingProviderId !== undefined) patch.embeddingProviderId = body.embeddingProviderId || null;
     await db.update(knowledgeBases).set(patch).where(eq(knowledgeBases.id, id));
     const [row] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
+    if (!row) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });
     return row;
 });

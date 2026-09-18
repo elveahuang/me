@@ -22,7 +22,7 @@ const PlanSchema = z.object({
 /** 新建套餐 */
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const parsed = PlanSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: `参数错误: ${parsed.error.issues[0]?.message ?? ''}` });

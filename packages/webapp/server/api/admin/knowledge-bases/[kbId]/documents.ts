@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
             content = filePart.data.toString('utf-8');
             title = titlePart?.data.toString('utf-8') || filePart.filename || '未命名文档';
         } else {
-            const body = await readBody(event);
+            const body = (await readBody(event)) ?? {};
             title = body.title || '未命名文档';
             content = body.content || '';
         }

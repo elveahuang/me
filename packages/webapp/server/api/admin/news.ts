@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
     const status = typeof query.status === 'string' && query.status !== 'all' ? query.status : '';
     const category = typeof query.category === 'string' && query.category !== 'all' ? query.category : '';
     const keyword = typeof query.keyword === 'string' ? query.keyword.trim() : '';
-    const page = Math.max(1, Number(query.page) || 1);
+    const page = Math.min(Math.max(1, Math.floor(Number(query.page)) || 1), 1e6); // 上界夹逼并取整：?page=Infinity/小数/超大值会让 offset 溢出或非整数而被 PG 拒绝
     const pageSize = Math.min(Math.max(1, Number(query.pageSize) || 20), 100);
 
     const filters = [];

@@ -7,7 +7,7 @@ import { requireAdmin } from '../../../utils/guard';
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     const id = getRouterParam(event, 'id')!;
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const key of ['name', 'emoji', 'avatar', 'description', 'systemPrompt', 'model', 'enabled', 'temperature', 'maxTokens', 'maxSteps'] as const) {
@@ -29,5 +29,6 @@ export default defineEventHandler(async (event) => {
         await replaceAgentMcpServers(id, body.mcpIds);
     }
     const [row] = await db.select().from(agents).where(eq(agents.id, id));
+    if (!row) throw createError({ statusCode: 404, statusMessage: '智能体不存在' });
     return row;
 });

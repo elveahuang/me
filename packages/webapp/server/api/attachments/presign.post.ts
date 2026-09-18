@@ -13,7 +13,7 @@ import { assertFileSize, buildObjectKey, isMimeAllowed, presignUpload, presignUp
  */
 export default defineEventHandler(async (event) => {
     await requireUser(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const filename = sanitizeFilename(body?.filename || 'file');
     const mimeType = typeof body?.mimeType === 'string' && body.mimeType ? body.mimeType : 'application/octet-stream';
     const category = typeof body?.category === 'string' && body.category ? body.category : 'other';

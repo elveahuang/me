@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
         return { ok: true };
     }
 
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
 
     // server 名用作运行时工具前缀（mcp_<name>_<tool>），重名会导致工具集合并时静默覆盖
     if (body.name !== undefined) {

@@ -6,7 +6,7 @@ import { requireAdmin } from '../../../utils/guard';
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     const id = getRouterParam(event, 'id')!;
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const key of ['name', 'description', 'instructions', 'enabled'] as const) {
@@ -14,5 +14,6 @@ export default defineEventHandler(async (event) => {
     }
     await db.update(skills).set(patch).where(eq(skills.id, id));
     const [row] = await db.select().from(skills).where(eq(skills.id, id));
+    if (!row) throw createError({ statusCode: 404, statusMessage: '技能不存在' });
     return row;
 });

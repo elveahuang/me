@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
     await requireAdmin(event);
 
     if (getMethod(event) === 'POST') {
-        const body = await readBody(event);
+        const body = (await readBody(event)) ?? {};
         const patch = buildPatch(body ?? {});
         const name = String(patch.name ?? '').trim();
         const bucket = String(patch.bucket ?? '').trim();

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
     await requireAdmin(event);
 
     if (getMethod(event) === 'POST') {
-        const body = await readBody(event);
+        const body = (await readBody(event)) ?? {};
         if (!body.name || !body.url) {
             throw createError({ statusCode: 400, statusMessage: 'name 和 url 必填' });
         }

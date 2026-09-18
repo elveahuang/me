@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     const id = getRouterParam(event, 'id');
     if (!id) throw createError({ statusCode: 400, statusMessage: '缺少套餐 ID' });
 
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const parsed = PlanPatchSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: `参数错误: ${parsed.error.issues[0]?.message ?? ''}` });

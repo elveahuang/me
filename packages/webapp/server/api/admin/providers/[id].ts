@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
         return { ok: true };
     }
 
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const key of ['name', 'baseUrl', 'enabled', 'isDefault'] as const) {
         if (body[key] !== undefined) patch[key] = key === 'baseUrl' ? String(body[key]).replace(/\/+$/, '') : body[key];
@@ -29,5 +29,7 @@ export default defineEventHandler(async (event) => {
     }
     await db.update(providers).set(patch).where(eq(providers.id, id));
     const [row] = await db.select().from(providers).where(eq(providers.id, id));
-    return { ...row!, apiKey: maskKey(row!.apiKey) };
+    // 未知 id 时 row 为 undefined，直接展开会抛 TypeError 变成 500
+    if (!row) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
+    return { ...row, apiKey: maskKey(row.apiKey) };
 });

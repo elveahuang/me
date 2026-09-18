@@ -5,7 +5,7 @@ import { requireUser } from '../utils/guard';
 
 export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     if (!body.agentId) {
         throw createError({ statusCode: 400, statusMessage: 'agentId is required' });
     }

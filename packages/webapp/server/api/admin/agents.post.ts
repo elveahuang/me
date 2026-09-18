@@ -6,7 +6,7 @@ import { requireAdmin } from '../../utils/guard';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     if (!body.name) {
         throw createError({ statusCode: 400, statusMessage: 'name is required' });
     }

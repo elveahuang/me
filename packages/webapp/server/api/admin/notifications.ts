@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const audience = typeof query.audience === 'string' && query.audience !== 'all' ? query.audience : '';
     const type = typeof query.type === 'string' && query.type !== 'all' ? query.type : '';
-    const page = Math.max(1, Number(query.page) || 1);
+    const page = Math.min(Math.max(1, Math.floor(Number(query.page)) || 1), 1e6); // 上界夹逼并取整：?page=Infinity/小数/超大值会让 offset 溢出或非整数而被 PG 拒绝
     const pageSize = Math.min(Math.max(1, Number(query.pageSize) || 20), 100);
 
     const filters = [];

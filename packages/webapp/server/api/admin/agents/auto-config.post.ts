@@ -33,7 +33,7 @@ async function loadOptions() {
 /** AI 自动配置智能体：根据描述生成 name/avatar/systemPrompt/模型/Skills/MCP/知识库 草案 */
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const parsed = AutoConfigSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: '请描述这个智能体的用途（至少 5 个字）' });

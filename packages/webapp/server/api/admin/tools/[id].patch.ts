@@ -6,7 +6,7 @@ import { requireAdmin } from '../../../utils/guard';
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     const id = getRouterParam(event, 'id')!;
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
 
     // 更新 HTTP 工具的 URL 时校验协议（仅允许 http/https）
     if (body.config?.url !== undefined) {
@@ -27,5 +27,6 @@ export default defineEventHandler(async (event) => {
     }
     await db.update(tools).set(patch).where(eq(tools.id, id));
     const [row] = await db.select().from(tools).where(eq(tools.id, id));
+    if (!row) throw createError({ statusCode: 404, statusMessage: '工具不存在' });
     return row;
 });

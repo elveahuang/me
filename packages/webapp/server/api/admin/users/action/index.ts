@@ -5,7 +5,7 @@ const ROLES = ['admin', 'editor', 'user'];
 
 export default defineEventHandler(async (event) => {
     const session = await requireAdmin(event);
-    const body = await readBody(event);
+    const body = (await readBody(event)) ?? {};
     const { userId, action } = body;
     if (!userId || !['set-role', 'ban', 'unban'].includes(action)) {
         throw createError({ statusCode: 400, statusMessage: 'userId and valid action are required' });

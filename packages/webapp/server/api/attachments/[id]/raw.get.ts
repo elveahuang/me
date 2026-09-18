@@ -23,7 +23,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const config = await resolveStoredStorageConfig(row.storageConfigId);
-    const object = await getObject(config, row.objectKey);
+    let object: Awaited<ReturnType<typeof getObject>>;
+    try {
+        object = await getObject(config, row.objectKey);
+    } catch (error) {
+        // 不把 S3 SDK 的错误原文（含桶名/endpoint 等信息）透给客户端，只回通用状态码并留服务端日志。
+        console.error('[attachments] 下载代理读取对象失败:', error);
+        throw createError({ statusCode: 502, statusMessage: '文件暂时无法读取，请稍后重试' });
+    }
     const body = object.Body as unknown as NodeJS.ReadableStream | undefined;
     if (!body) {
         throw createError({ statusCode: 502, statusMessage: '对象存储未返回文件内容' });
