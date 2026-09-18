@@ -214,12 +214,12 @@ async function remove(id: string) {
                         <td colspan="4" class="bg-gray-50 px-4 py-3">
                             <div class="flex flex-wrap gap-2">
                                 <span
-                                    v-for="t in toolInfo(s).tools"
-                                    :key="t.name"
-                                    :title="t.description"
+                                    v-for="tool in toolInfo(s).tools"
+                                    :key="tool.name"
+                                    :title="tool.description"
                                     class="rounded-full bg-white px-3 py-1 font-mono text-xs text-gray-600 shadow-sm"
                                 >
-                                    {{ t.name }}
+                                    {{ tool.name }}
                                 </span>
                             </div>
                         </td>

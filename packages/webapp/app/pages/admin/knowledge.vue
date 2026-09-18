@@ -195,9 +195,13 @@ async function addDoc() {
 
 async function removeDoc(id: string) {
     if (!current.value || !confirm(t('adminForm.kbDocDeleteConfirm'))) return;
-    await $fetch(`/api/admin/knowledge-bases/${current.value.id}/documents/${id}`, { method: 'DELETE' });
-    docs.value = await $fetch(`/api/admin/knowledge-bases/${current.value.id}/documents`);
-    await load();
+    try {
+        await $fetch(`/api/admin/knowledge-bases/${current.value.id}/documents/${id}`, { method: 'DELETE' });
+        docs.value = await $fetch(`/api/admin/knowledge-bases/${current.value.id}/documents`);
+        await load();
+    } catch (e) {
+        message.value = extractApiError(e, t('adminForm.deleteFailed'));
+    }
 }
 
 async function search() {

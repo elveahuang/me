@@ -3,12 +3,12 @@ import type { AgentSummary } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const session = await fetchSession(ssrCookieHeaders());
 
 const { data: agents } = await useFetch<AgentSummary[]>('/api/agents');
 
-const features = computed(() => [
+const featureDefs = [
     {
         icon: '🧠',
         title: '深度思考与多模型调度',
@@ -41,7 +41,13 @@ const features = computed(() => [
         descEn: 'Free/Pro/Max tiers with WeChat and mock sandbox pay, backed by advisory transaction locks.',
         tag: 'Quota & Billing',
     },
-]);
+];
+
+// 按当前语言选取中/英文案：此前 titleEn/descEn 定义了却从没被渲染，切到 en-US 仍显示中文。
+const features = computed(() => {
+    const en = locale.value.toLowerCase().startsWith('en');
+    return featureDefs.map((f) => ({ icon: f.icon, tag: f.tag, title: en ? f.titleEn : f.title, desc: en ? f.descEn : f.desc }));
+});
 </script>
 
 <template>
@@ -112,7 +118,7 @@ const features = computed(() => [
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
-                <div v-for="f in features" :key="f.title" class="app-card app-card-hover p-6 sm:p-7">
+                <div v-for="f in features" :key="f.tag" class="app-card app-card-hover p-6 sm:p-7">
                     <div class="flex items-center justify-between">
                         <span class="text-3xl">{{ f.icon }}</span>
                         <span class="app-chip font-mono text-[10px] font-bold">{{ f.tag }}</span>

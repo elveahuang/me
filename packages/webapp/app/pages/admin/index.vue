@@ -110,8 +110,13 @@ const maxModelCount = computed(() => {
             </div>
         </div>
 
+        <!-- 首次加载骨架：接口未回来前不渲染 KPI/明细，避免全 0 被误读为「平台没有数据」 -->
+        <div v-if="loading && !stats" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div v-for="n in 6" :key="n" class="app-skeleton h-28 rounded-3xl" />
+        </div>
+
         <!-- 核心 KPI 指标卡片 -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div v-else-if="stats" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
                 <p class="text-xs font-bold text-slate-400">{{ t('admin.usersCount') }}</p>
                 <p class="mt-2 text-2xl font-black text-slate-900">{{ stats?.users ?? 0 }}</p>
@@ -145,7 +150,7 @@ const maxModelCount = computed(() => {
         </div>
 
         <!-- 详细数据面板：模型使用热度 + 最新动态 -->
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div v-if="stats" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <!-- 模型调用活跃度排行 -->
             <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs">
                 <div class="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">

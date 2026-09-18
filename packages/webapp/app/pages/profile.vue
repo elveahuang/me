@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { BRAND_PRESETS, MODE_PRESETS, formatDate, formatYuan, quotaUsedPercent, type MeResponse, type OrdersResponse } from '@commons/contract';
+import {
+    BRAND_PRESETS,
+    extractApiError,
+    MODE_PRESETS,
+    formatDate,
+    formatYuan,
+    quotaUsedPercent,
+    type MeResponse,
+    type OrdersResponse,
+} from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { authClient, fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
 
@@ -11,13 +20,22 @@ const { brand, mode, setBrand, setMode } = useTheme();
 
 const session = await fetchSession(ssrCookieHeaders());
 
-// 聚合的用户信息与会员状态
-const { data: meData } = await useFetch<MeResponse>('/api/me');
-const { data: ordersData } = await useFetch<OrdersResponse>('/api/billing/orders');
+// 聚合的用户信息与会员状态：两次 useFetch 互不依赖，并发发出而非串行等待；
+// 捕获 error 以便接口失败时给出提示与重试，而不是静默显示 0 与「免费会员」误导用户。
+const [me, orders] = await Promise.all([useFetch<MeResponse>('/api/me'), useFetch<OrdersResponse>('/api/billing/orders')]);
+const meData = me.data;
+const ordersData = orders.data;
+const profileError = computed(() => {
+    const err = me.error.value ?? orders.error.value;
+    return err ? extractApiError(err, t('common.loadFailed')) : '';
+});
+async function retryProfile() {
+    await Promise.all([me.refresh(), orders.refresh()]);
+}
 
 const membership = computed(() => meData.value?.membership ?? null);
 const stats = computed(() => meData.value?.stats);
-const orders = computed(() => ordersData.value?.orders ?? []);
+const orderList = computed(() => ordersData.value?.orders ?? []);
 
 const quotaPercent = computed(() => quotaUsedPercent(membership.value?.usedToday, membership.value?.chatQuotaPerDay));
 
@@ -48,6 +66,12 @@ function orderStatusText(status: string): string {
 
 <template>
     <div class="mx-auto max-w-5xl space-y-7">
+        <!-- 接口失败提示：不显示的话用户会把「加载失败」读成「没有数据/免费会员」 -->
+        <div v-if="profileError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
+            <span>{{ profileError }}</span>
+            <button type="button" class="app-btn app-btn-outline shrink-0 !py-1 text-xs" @click="retryProfile">{{ t('common.retry') }}</button>
+        </div>
+
         <!-- 头部个人名片 -->
         <div class="app-card flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
             <div class="flex items-center gap-5">
@@ -214,7 +238,7 @@ function orderStatusText(status: string): string {
             <p class="text-faint mt-0.5 text-xs">最近订单明细记录</p>
 
             <div class="mt-4 overflow-x-auto">
-                <table v-if="orders.length" class="app-table">
+                <table v-if="orderList.length" class="app-table">
                     <thead>
                         <tr>
                             <th>{{ t('billing.orderNo') }}</th>
@@ -226,7 +250,7 @@ function orderStatusText(status: string): string {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="order in orders" :key="order.id">
+                        <tr v-for="order in orderList" :key="order.id">
                             <td class="text-muted-2 font-mono">{{ order.orderNo }}</td>
                             <td>{{ order.period === 'yearly' ? t('billing.yearly') : t('billing.monthly') }}</td>
                             <td class="font-black">¥{{ formatYuan(order.amountCents) }}</td>
