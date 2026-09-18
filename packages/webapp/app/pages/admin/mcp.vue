@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -22,6 +23,8 @@ interface McpTool {
 const servers = ref<McpItem[]>([]);
 const editing = ref<Partial<McpItem> | null>(null);
 const formError = ref('');
+/** 列表级错误（加载/切换/删除失败时提示） */
+const listError = ref('');
 const toolResult = ref<Record<string, { ok: boolean; message: string; tools: McpTool[] }>>({});
 
 const form = reactive({
@@ -33,7 +36,13 @@ const form = reactive({
 });
 
 async function load() {
-    servers.value = await $fetch('/api/admin/mcp-servers');
+    try {
+        servers.value = await $fetch<McpItem[]>('/api/admin/mcp-servers');
+        listError.value = '';
+    } catch (e) {
+        servers.value = [];
+        listError.value = extractApiError(e, t('adminForm.loadFailed'));
+    }
 }
 
 onMounted(load);
@@ -64,24 +73,38 @@ async function save() {
         formError.value = t('adminForm.mcpInvalidHeaders');
         return;
     }
-    const body = { ...form, headers };
-    if (editing.value?.id) {
-        await $fetch(`/api/admin/mcp-servers/${editing.value.id}`, { method: 'PATCH', body });
-    } else {
-        await $fetch('/api/admin/mcp-servers', { method: 'POST', body });
+    if (!form.name.trim() || !form.url.trim()) {
+        formError.value = t('adminForm.requiredName');
+        return;
     }
-    editing.value = null;
-    await load();
+    formError.value = '';
+    try {
+        const body = { ...form, headers };
+        if (editing.value?.id) {
+            await $fetch(`/api/admin/mcp-servers/${editing.value.id}`, { method: 'PATCH', body });
+        } else {
+            await $fetch('/api/admin/mcp-servers', { method: 'POST', body });
+        }
+        editing.value = null;
+        await load();
+    } catch (e) {
+        formError.value = extractApiError(e, t('adminForm.saveFailed'));
+    }
 }
 
 async function listTools(s: McpItem) {
     toolResult.value[s.id] = { ok: true, message: t('adminForm.mcpConnecting'), tools: [] };
-    const res = await $fetch<{ ok: boolean; message?: string; tools: McpTool[] }>(`/api/admin/mcp-servers/${s.id}/tools`);
-    toolResult.value[s.id] = {
-        ok: res.ok,
-        message: res.ok ? t('adminForm.mcpToolsFound', { count: res.tools.length }) : (res.message ?? t('adminForm.mcpConnectFailed')),
-        tools: res.tools,
-    };
+    try {
+        const res = await $fetch<{ ok: boolean; message?: string; tools: McpTool[] }>(`/api/admin/mcp-servers/${s.id}/tools`);
+        toolResult.value[s.id] = {
+            ok: res.ok,
+            message: res.ok ? t('adminForm.mcpToolsFound', { count: res.tools.length }) : (res.message ?? t('adminForm.mcpConnectFailed')),
+            tools: res.tools ?? [],
+        };
+    } catch (e) {
+        // 接口报错时也要落一个结果，否则文案会永久停在「连接中…」
+        toolResult.value[s.id] = { ok: false, message: extractApiError(e, t('adminForm.mcpConnectFailed')), tools: [] };
+    }
 }
 
 /**
@@ -92,19 +115,33 @@ function toolInfo(s: McpItem): { ok: boolean; message: string; tools: McpTool[] 
 }
 
 async function toggle(s: McpItem) {
-    await $fetch(`/api/admin/mcp-servers/${s.id}`, { method: 'PATCH', body: { enabled: !s.enabled } });
-    await load();
+    listError.value = '';
+    try {
+        await $fetch(`/api/admin/mcp-servers/${s.id}`, { method: 'PATCH', body: { enabled: !s.enabled } });
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.operationFailed'));
+    }
 }
 
 async function remove(id: string) {
     if (!confirm(t('adminForm.mcpDeleteConfirm'))) return;
-    await $fetch(`/api/admin/mcp-servers/${id}`, { method: 'DELETE' });
-    await load();
+    listError.value = '';
+    try {
+        await $fetch(`/api/admin/mcp-servers/${id}`, { method: 'DELETE' });
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.deleteFailed'));
+    }
 }
 </script>
 
 <template>
     <div>
+        <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ listError }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div class="mb-6 flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.mcpTitle') }}</h1>

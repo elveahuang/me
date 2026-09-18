@@ -69,8 +69,7 @@ function goPage(next: number) {
 
 <template>
     <div class="space-y-6">
-        <BulletinBanner position="global" />
-
+        <!-- 全站宣传栏由 default 布局统一渲染，这里不再重复放置，避免同一内容出现两次 -->
         <div>
             <h1 class="text-2xl font-black tracking-tight">{{ t('news.title') }}</h1>
             <p class="text-faint mt-1 text-xs">{{ t('news.subtitle') }}</p>

@@ -416,6 +416,11 @@ const starterPrompts = computed(() => [
                 </div>
             </div>
 
+            <!-- 对话页宣传栏（管理端可投放 chat / global 位置） -->
+            <div class="px-4 pt-3">
+                <BulletinBanner position="chat" />
+            </div>
+
             <!-- 消息列表与冷启动卡片 -->
             <div ref="scrollRef" class="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" style="background-color: var(--surface-2)" @scroll="onScroll">
                 <template v-if="chat && chat.messages.length > 0">

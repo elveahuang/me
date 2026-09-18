@@ -30,6 +30,8 @@ const kbs = ref<KbItem[]>([]);
 const current = ref<KbItem | null>(null);
 const docs = ref<DocItem[]>([]);
 const message = ref('');
+/** 列表级错误（与操作提示 message 分开，避免互相覆盖） */
+const listError = ref('');
 
 const newKb = reactive({ name: '', description: '', embeddingModel: 'text-embedding-3-small' });
 const docForm = reactive({ title: '', content: '' });
@@ -69,33 +71,58 @@ async function reindex(kb: KbItem) {
 }
 
 async function load() {
-    kbs.value = await $fetch('/api/admin/knowledge-bases');
+    try {
+        kbs.value = await $fetch<KbItem[]>('/api/admin/knowledge-bases');
+        listError.value = '';
+    } catch (e) {
+        // 失败时清空并提示：否则表格走空态，会被读成「还没有知识库」
+        kbs.value = [];
+        listError.value = extractApiError(e, t('adminForm.loadFailed'));
+    }
 }
 
 onMounted(load);
 
 async function createKb() {
-    if (!newKb.name.trim()) return;
-    await $fetch('/api/admin/knowledge-bases', { method: 'POST', body: { ...newKb } });
-    Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
-    await load();
+    if (!newKb.name.trim()) {
+        message.value = t('adminForm.requiredName');
+        return;
+    }
+    message.value = '';
+    try {
+        await $fetch('/api/admin/knowledge-bases', { method: 'POST', body: { ...newKb } });
+        Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+        await load();
+    } catch (e) {
+        message.value = extractApiError(e, t('adminForm.saveFailed'));
+    }
 }
 
 async function open(kb: KbItem) {
     current.value = kb;
-    docs.value = await $fetch(`/api/admin/knowledge-bases/${kb.id}/documents`);
     searchHits.value = [];
     message.value = '';
+    try {
+        docs.value = await $fetch(`/api/admin/knowledge-bases/${kb.id}/documents`);
+    } catch (e) {
+        docs.value = [];
+        message.value = extractApiError(e, t('adminForm.loadFailed'));
+    }
 }
 
 async function removeKb(id: string) {
     if (!confirm(t('adminForm.kbDeleteConfirm'))) return;
-    await $fetch(`/api/admin/knowledge-bases/${id}`, { method: 'DELETE' });
-    if (current.value?.id === id) {
-        current.value = null;
-        docs.value = [];
+    message.value = '';
+    try {
+        await $fetch(`/api/admin/knowledge-bases/${id}`, { method: 'DELETE' });
+        if (current.value?.id === id) {
+            current.value = null;
+            docs.value = [];
+        }
+        await load();
+    } catch (e) {
+        message.value = extractApiError(e, t('adminForm.deleteFailed'));
     }
-    await load();
 }
 
 async function addDoc() {
@@ -144,10 +171,16 @@ async function removeDoc(id: string) {
 
 async function search() {
     if (!current.value || !searchQuery.value.trim()) return;
-    const res = await $fetch<{ hits: HitItem[] }>(`/api/admin/knowledge-bases/${current.value.id}/search`, {
-        query: { q: searchQuery.value },
-    });
-    searchHits.value = res.hits;
+    message.value = '';
+    try {
+        const res = await $fetch<{ hits: HitItem[] }>(`/api/admin/knowledge-bases/${current.value.id}/search`, {
+            query: { q: searchQuery.value },
+        });
+        searchHits.value = res.hits;
+    } catch (e) {
+        searchHits.value = [];
+        message.value = extractApiError(e, t('adminForm.operationFailed'));
+    }
 }
 </script>
 
@@ -156,6 +189,11 @@ async function search() {
         <div class="w-1/2">
             <h1 class="mb-2 text-2xl font-bold text-gray-800">{{ t('adminForm.kbTitle') }}</h1>
             <p class="mb-4 text-xs text-gray-400">{{ t('adminForm.kbSubtitle') }}</p>
+
+            <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+                {{ listError }}
+                <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+            </div>
 
             <div class="mb-4 flex gap-2 rounded-2xl bg-white p-4 shadow-sm">
                 <input v-model="newKb.name" :placeholder="t('adminForm.kbNamePlaceholder')" class="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm" />

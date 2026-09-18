@@ -22,6 +22,8 @@ const HEADERS_SAMPLE = '{"Authorization": "Bearer xxx"}';
 const tools = ref<ToolItem[]>([]);
 const editing = ref<Partial<ToolItem> | null>(null);
 const formError = ref('');
+/** 列表级错误（切换/删除失败时提示，避免静默） */
+const listError = ref('');
 
 const form = reactive({
     name: '',
@@ -36,7 +38,13 @@ const form = reactive({
 });
 
 async function load() {
-    tools.value = await $fetch('/api/admin/tools');
+    try {
+        tools.value = await $fetch<ToolItem[]>('/api/admin/tools');
+        listError.value = '';
+    } catch (e) {
+        tools.value = [];
+        listError.value = extractApiError(e, t('adminForm.loadFailed'));
+    }
 }
 
 onMounted(load);
@@ -130,19 +138,33 @@ async function save() {
 }
 
 async function toggle(tool: ToolItem) {
-    await $fetch(`/api/admin/tools/${tool.id}`, { method: 'PATCH', body: { enabled: !tool.enabled } });
-    await load();
+    listError.value = '';
+    try {
+        await $fetch(`/api/admin/tools/${tool.id}`, { method: 'PATCH', body: { enabled: !tool.enabled } });
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.operationFailed'));
+    }
 }
 
 async function remove(id: string) {
     if (!confirm(t('adminForm.toolDeleteConfirm'))) return;
-    await $fetch(`/api/admin/tools/${id}`, { method: 'DELETE' });
-    await load();
+    listError.value = '';
+    try {
+        await $fetch(`/api/admin/tools/${id}`, { method: 'DELETE' });
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.deleteFailed'));
+    }
 }
 </script>
 
 <template>
     <div>
+        <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ listError }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div class="mb-6 flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.toolTitle') }}</h1>

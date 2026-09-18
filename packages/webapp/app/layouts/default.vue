@@ -224,6 +224,10 @@ async function logout() {
         </header>
 
         <main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+            <!-- 全站宣传栏：位置选「全站」的内容在每个页面出现（组件自身在无内容时不渲染） -->
+            <div class="mb-4">
+                <BulletinBanner position="global" />
+            </div>
             <slot />
         </main>
 

@@ -54,11 +54,18 @@ async function load() {
 onMounted(load);
 
 async function action(userId: string, act: string, extra?: Record<string, unknown>) {
-    await ($fetch as any)('/api/admin/users/action', {
-        method: 'POST',
-        body: { userId, action: act, ...extra },
-    });
-    await load();
+    loadError.value = '';
+    try {
+        await ($fetch as any)('/api/admin/users/action', {
+            method: 'POST',
+            body: { userId, action: act, ...extra },
+        });
+        await load();
+    } catch (e) {
+        // 失败必须重新拉取：否则下拉框停留在新选的角色上，看起来像改成功了
+        loadError.value = extractApiError(e, t('adminForm.operationFailed'));
+        await load();
+    }
 }
 
 async function setRole(userId: string, event: Event) {
@@ -67,14 +74,23 @@ async function setRole(userId: string, event: Event) {
 }
 
 async function removeUser(userId: string) {
-    if (!confirm('确认删除该用户账号？')) return;
-    await $fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
-    await load();
+    if (!confirm(t('adminForm.deleteConfirm'))) return;
+    loadError.value = '';
+    try {
+        await $fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+        await load();
+    } catch (e) {
+        loadError.value = extractApiError(e, t('adminForm.deleteFailed'));
+    }
 }
 </script>
 
 <template>
     <div class="space-y-6">
+        <div v-if="loadError" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ loadError }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ t('nav.users') }}</h1>

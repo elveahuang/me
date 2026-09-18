@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 definePageMeta({ layout: 'admin', middleware: 'admin' });
@@ -35,8 +36,11 @@ const form = reactive({
 async function load() {
     try {
         plans.value = await $fetch<AdminPlan[]>('/api/admin/plans');
-    } catch (e: any) {
-        console.error('加载套餐列表失败:', e);
+        errorMessage.value = null;
+    } catch (e) {
+        // 失败时清空并提示：否则表格空态会被读成「还没有套餐」
+        plans.value = [];
+        errorMessage.value = extractApiError(e, t('common.loadFailed'));
     }
 }
 
@@ -125,18 +129,19 @@ async function save() {
         }
         editing.value = null;
         await load();
-    } catch (e: any) {
-        errorMessage.value = e.data?.statusMessage || e.message || '保存失败';
+    } catch (e) {
+        // 直接读 e.data 在 e 为原生 Error 时会抛 TypeError，统一走契约层的归一化
+        errorMessage.value = extractApiError(e, t('adminForm.saveFailed'));
     }
 }
 
 async function remove(id: string) {
-    if (!confirm('确认删除该套餐？')) return;
+    if (!confirm(t('adminForm.deleteConfirm'))) return;
     try {
         await $fetch(`/api/admin/plans/${id}`, { method: 'DELETE' });
         await load();
-    } catch (e: any) {
-        alert(e.data?.statusMessage || e.message || '删除失败');
+    } catch (e) {
+        errorMessage.value = extractApiError(e, t('adminForm.deleteFailed'));
     }
 }
 </script>
