@@ -1,6 +1,6 @@
 import { defineConfig } from 'drizzle-kit';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve } from 'path';
 
 function loadEnv() {
     try {

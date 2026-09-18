@@ -916,6 +916,9 @@ importers:
       nuxt:
         specifier: ^4.5.2
         version: 4.5.2(6bffe7e8e88f78d3c687f258632e545d)
+      path:
+        specifier: ^0.12.7
+        version: 0.12.7
       pg:
         specifier: ^8.23.0
         version: 8.23.0
