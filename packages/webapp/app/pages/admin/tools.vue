@@ -24,6 +24,8 @@ const editing = ref<Partial<ToolItem> | null>(null);
 const formError = ref('');
 /** 列表级错误（切换/删除失败时提示，避免静默） */
 const listError = ref('');
+/** 保存中标记：防止重复提交并在请求期间禁用按钮 */
+const saving = ref(false);
 
 const form = reactive({
     name: '',
@@ -109,6 +111,7 @@ function openEdit(tool: ToolItem) {
 }
 
 async function save() {
+    if (saving.value) return;
     formError.value = '';
     const config = buildConfig();
     if (config === null) return;
@@ -123,18 +126,20 @@ async function save() {
         enabled: form.enabled,
         config,
     };
+    saving.value = true;
     try {
         if (editing.value?.id) {
             await $fetch(`/api/admin/tools/${editing.value.id}`, { method: 'PATCH', body });
         } else {
             await $fetch('/api/admin/tools', { method: 'POST', body });
         }
+        editing.value = null;
+        await load();
     } catch (e) {
         formError.value = extractApiError(e, t('adminForm.saveFailed'));
-        return;
+    } finally {
+        saving.value = false;
     }
-    editing.value = null;
-    await load();
 }
 
 async function toggle(tool: ToolItem) {
@@ -225,10 +230,10 @@ async function remove(id: string) {
             <label class="flex items-center gap-1 text-sm text-gray-600"> <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }} </label>
             <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
             </div>
         </div>
 

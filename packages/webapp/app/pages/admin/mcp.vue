@@ -26,6 +26,8 @@ const formError = ref('');
 /** 列表级错误（加载/切换/删除失败时提示） */
 const listError = ref('');
 const toolResult = ref<Record<string, { ok: boolean; message: string; tools: McpTool[] }>>({});
+/** 保存中标记：防止重复提交并在请求期间禁用按钮 */
+const saving = ref(false);
 
 const form = reactive({
     name: '',
@@ -66,6 +68,7 @@ function openEdit(s: McpItem) {
 }
 
 async function save() {
+    if (saving.value) return;
     let headers: Record<string, string>;
     try {
         headers = JSON.parse(form.headersText || '{}');
@@ -78,6 +81,7 @@ async function save() {
         return;
     }
     formError.value = '';
+    saving.value = true;
     try {
         const body = { ...form, headers };
         if (editing.value?.id) {
@@ -89,6 +93,8 @@ async function save() {
         await load();
     } catch (e) {
         formError.value = extractApiError(e, t('adminForm.saveFailed'));
+    } finally {
+        saving.value = false;
     }
 }
 
@@ -172,8 +178,10 @@ async function remove(id: string) {
             <label class="flex items-center gap-1 text-sm text-gray-600"><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label>
             <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">{{ t('adminForm.save') }}</button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                    {{ t('adminForm.save') }}
+                </button>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
             </div>
         </div>
 
