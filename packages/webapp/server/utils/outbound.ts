@@ -41,6 +41,26 @@ export function isPrivateAddress(ip: string): boolean {
     return false;
 }
 
+/**
+ * 校验管理员配置的出站基址（模型供应商 baseUrl、MCP url）是否为合法 http/https 绝对地址。
+ * 只做协议/可解析性校验，不做私网拦截：自建模型网关与内网 MCP 是合法部署形态，
+ * 运行期出站是否放行由 assertSafeOutboundUrl（受 ALLOW_PRIVATE_OUTBOUND 控制）负责。
+ * 返回去掉末尾斜杠的规范化地址。
+ */
+export function assertAbsoluteHttpUrl(label: string, raw: unknown): string {
+    const value = String(raw ?? '').trim();
+    let url: URL;
+    try {
+        url = new URL(value);
+    } catch {
+        throw createError({ statusCode: 400, statusMessage: `${label}必须是合法的 http/https 地址` });
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+        throw createError({ statusCode: 400, statusMessage: `${label}仅允许 http/https 协议` });
+    }
+    return value.replace(/\/+$/, '');
+}
+
 /** 校验 URL 协议与解析后的目标 IP；不合法时抛 400 */
 export async function assertSafeOutboundUrl(raw: string): Promise<void> {
     if (process.env.ALLOW_PRIVATE_OUTBOUND === 'true') return;

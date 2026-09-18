@@ -1,7 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { providers } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
+import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
 
 function maskKey(key: string) {
     if (!key) return '';
@@ -19,15 +20,28 @@ export default defineEventHandler(async (event) => {
 
     const body = (await readBody(event)) ?? {};
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    for (const key of ['name', 'baseUrl', 'enabled', 'isDefault'] as const) {
-        if (body[key] !== undefined) patch[key] = key === 'baseUrl' ? String(body[key]).replace(/\/+$/, '') : body[key];
+    for (const key of ['name', 'enabled', 'isDefault'] as const) {
+        if (body[key] !== undefined) patch[key] = body[key];
     }
+    if (body.baseUrl !== undefined) patch.baseUrl = assertAbsoluteHttpUrl('baseUrl', body.baseUrl);
     if (Array.isArray(body.models)) patch.models = body.models;
     // apiKey 只有在明确传入新值时才更新（掩码回传不覆盖真实 key）
     if (typeof body.apiKey === 'string' && body.apiKey && !body.apiKey.includes('****')) {
         patch.apiKey = body.apiKey;
     }
-    await db.update(providers).set(patch).where(eq(providers.id, id));
+
+    const becomesDefault = patch.isDefault === true;
+    await db.transaction(async (tx) => {
+        // 提升为默认时先清掉其它默认，且与本行更新同事务，避免出现两个默认供应商。
+        if (becomesDefault) {
+            await tx
+                .update(providers)
+                .set({ isDefault: false, updatedAt: new Date() })
+                .where(and(eq(providers.isDefault, true), ne(providers.id, id)));
+        }
+        await tx.update(providers).set(patch).where(eq(providers.id, id));
+    });
+
     const [row] = await db.select().from(providers).where(eq(providers.id, id));
     // 未知 id 时 row 为 undefined，直接展开会抛 TypeError 变成 500
     if (!row) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });

@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { providers } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
+import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { ensureDefaultProvider } from '../../utils/providers';
 
 function maskKey(key: string) {
@@ -17,15 +18,23 @@ export default defineEventHandler(async (event) => {
         if (!body.name || !body.baseUrl) {
             throw createError({ statusCode: 400, statusMessage: 'name 和 baseUrl 必填' });
         }
+        const baseUrl = assertAbsoluteHttpUrl('baseUrl', body.baseUrl);
+        const isDefault = Boolean(body.isDefault ?? false);
         const id = crypto.randomUUID();
-        await db.insert(providers).values({
-            id,
-            name: body.name,
-            baseUrl: body.baseUrl.replace(/\/+$/, ''),
-            apiKey: body.apiKey ?? '',
-            models: body.models ?? [],
-            enabled: body.enabled ?? true,
-            isDefault: body.isDefault ?? false,
+        // 设为默认要清除其它默认，且与本次插入同事务：否则中途失败会留下 0 个或 2 个默认供应商。
+        await db.transaction(async (tx) => {
+            if (isDefault) {
+                await tx.update(providers).set({ isDefault: false, updatedAt: new Date() }).where(eq(providers.isDefault, true));
+            }
+            await tx.insert(providers).values({
+                id,
+                name: body.name,
+                baseUrl,
+                apiKey: body.apiKey ?? '',
+                models: body.models ?? [],
+                enabled: body.enabled ?? true,
+                isDefault,
+            });
         });
         const [row] = await db.select().from(providers).where(eq(providers.id, id));
         return { ...row!, apiKey: maskKey(row!.apiKey) };
