@@ -68,9 +68,20 @@ function stopPolling() {
     }
 }
 
+/** 轮询上限：渠道不可达时订单会一直是 pending，没有上限就会永久轮询 */
+const POLL_MAX_ATTEMPTS = 150; // 150 × 2s = 5 分钟
+let pollAttempts = 0;
+
 function startPolling(orderNo: string) {
     stopPolling();
+    pollAttempts = 0;
     pollingTimer.value = window.setInterval(async () => {
+        pollAttempts += 1;
+        if (pollAttempts > POLL_MAX_ATTEMPTS) {
+            stopPolling();
+            payError.value = t('billing.pollTimeout');
+            return;
+        }
         try {
             const data = await api<{ status: string }>(`/api/billing/orders/${orderNo}`);
             if (data.status === 'paid') {
@@ -109,7 +120,17 @@ function invokeWeixinJsapi(params: JsapiParams) {
 }
 
 async function handleSubscribe(plan: Plan) {
-    if (plan.code === 'free' || paying.value) return;
+    // 免费套餐无需下单：给出说明而不是静默返回（否则按钮点了没反应）
+    if (plan.code === 'free') {
+        payError.value = t('billing.freePlanHint');
+        return;
+    }
+    // 未开放所选周期时提前提示，避免显示 ¥0.00 并等到下单才报错
+    if (period.value === 'yearly' && !plan.yearlyPriceCents) {
+        payError.value = t('billing.periodUnavailable');
+        return;
+    }
+    if (paying.value) return;
     paying.value = true;
     payError.value = '';
     paySuccess.value = false;

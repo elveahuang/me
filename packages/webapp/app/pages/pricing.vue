@@ -64,9 +64,21 @@ function stopPolling() {
     }
 }
 
+/** 轮询上限：订单 2 小时过期，但渠道不可达时状态会一直是 pending，
+ *  没有上限就会永久轮询（移动端同样处理）。到点停止并提示用户手动刷新。 */
+const POLL_MAX_ATTEMPTS = 150; // 150 × 2s = 5 分钟
+let pollAttempts = 0;
+
 function startPolling(orderNo: string) {
     stopPolling();
+    pollAttempts = 0;
     pollingTimer.value = setInterval(async () => {
+        pollAttempts += 1;
+        if (pollAttempts > POLL_MAX_ATTEMPTS) {
+            stopPolling();
+            payError.value = t('billing.pollTimeout');
+            return;
+        }
         try {
             const res = await $fetch<{ status: string }>(`/api/billing/orders/${orderNo}`);
             if (res.status === 'paid') {
@@ -103,7 +115,17 @@ function invokeWeixinJsapi(params: JsapiParams) {
 }
 
 async function handleBuy(plan: Plan) {
-    if (plan.code === 'free') return;
+    // 免费套餐无需下单：直接给出说明，避免按钮点了没有任何反应
+    if (plan.code === 'free') {
+        loadError.value = '';
+        payError.value = t('billing.freePlanHint');
+        return;
+    }
+    // 该套餐未配置所选周期价格时提前提示（此前会显示 ¥0.00 并在下单时才报错）
+    if (period.value === 'yearly' && !plan.yearlyPriceCents) {
+        payError.value = t('billing.periodUnavailable');
+        return;
+    }
     paying.value = true;
     payError.value = '';
     try {

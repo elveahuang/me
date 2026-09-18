@@ -171,6 +171,9 @@ export default {
         faq1A: '每天北京时间 00:00 自动刷新每日额度。',
         faq2Q: '沙箱支付会扣真实费用吗？',
         faq2A: '不会，沙箱仅供功能模拟与开发调试使用。',
+        freePlanHint: '免费版无需购买，随时可升级到付费套餐',
+        periodUnavailable: '该套餐未开放按年订阅，请选择按月',
+        pollTimeout: '等待支付超时，请稍后在「我的 → 我的订单」查看结果',
     },
     admin: {
         tableEmpty: '暂无记录',

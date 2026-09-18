@@ -299,6 +299,11 @@ export default {
         toolDeleteConfirm: 'Delete this tool?',
         loadingContent: 'Loading content…',
         newsContentPlaceholder: 'Content (Markdown supported)',
+        imageUrlPlaceholder: 'Image URL — pick from attachments or type one',
+        coverImagePlaceholder: 'Cover image (pick from attachments)',
+        bulletinImagePlaceholder: 'Image (optional, pick from attachments)',
+        pickFromAttachments: 'Pick from attachments',
+        uploadImage: 'Upload new image',
     },
     billing: {
         title: 'Membership & Subscriptions',
@@ -342,6 +347,9 @@ export default {
         faq1A: 'Daily chat quotas are automatically refreshed every day at 00:00 (UTC+8).',
         faq2Q: 'Can I request a refund?',
         faq2A: 'Full refund is supported within 24 hours if no quota has been consumed.',
+        freePlanHint: 'The free tier needs no purchase — upgrade to a paid plan anytime',
+        periodUnavailable: 'Yearly billing is not available for this plan, please choose monthly',
+        pollTimeout: 'Timed out waiting for payment — refresh the page or check Profile → Orders later',
     },
     profile: {
         title: 'User Profile',

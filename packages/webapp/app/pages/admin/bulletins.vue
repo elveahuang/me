@@ -162,7 +162,10 @@ function levelLabel(value: string) {
             <div class="grid gap-3 sm:grid-cols-2">
                 <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
                 <textarea v-model="form.content" rows="2" placeholder="内容描述" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
-                <input v-model="form.imageUrl" placeholder="配图 URL（可选）" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
+                <!-- 配图：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
+                <div class="sm:col-span-2">
+                    <ImagePicker v-model="form.imageUrl" :placeholder="t('adminForm.bulletinImagePlaceholder')" />
+                </div>
                 <input v-model="form.linkUrl" placeholder="跳转链接，如 /pricing 或 https://…" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 <input v-model="form.linkText" placeholder="按钮文案，如「了解详情」" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 <select v-model="form.position" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">

@@ -171,6 +171,9 @@ export default {
         faq1A: 'Refreshes every day at 00:00 (UTC+8).',
         faq2Q: 'Does sandbox pay charge real money?',
         faq2A: 'No, sandbox pay is for development and testing only.',
+        freePlanHint: 'The free tier needs no purchase — upgrade anytime',
+        periodUnavailable: 'Yearly billing is not available for this plan, please choose monthly',
+        pollTimeout: 'Timed out waiting for payment — check Me → Orders shortly',
     },
     admin: {
         tableEmpty: 'No records yet',

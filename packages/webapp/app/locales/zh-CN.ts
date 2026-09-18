@@ -301,6 +301,12 @@ export default {
         // 资讯编辑
         loadingContent: '正在加载正文…',
         newsContentPlaceholder: '正文（支持 Markdown）',
+        // 图片选择（封面 / 配图 / 头像）
+        imageUrlPlaceholder: '图片地址，可从附件选择或直接填写',
+        coverImagePlaceholder: '封面图（可从附件选择）',
+        bulletinImagePlaceholder: '配图（可选，可从附件选择）',
+        pickFromAttachments: '从附件选择',
+        uploadImage: '上传新图片',
     },
     billing: {
         title: '会员与订阅方案',
@@ -344,6 +350,9 @@ export default {
         faq1A: '所有会员类型的每日对话配额均在每日 00:00 (UTC+8) 自动重置刷新。',
         faq2Q: '订阅支持退款吗？',
         faq2A: '支持购买后 24 小时内未消耗配额全额原路退款，请联系客服处理。',
+        freePlanHint: '免费版无需购买，随时可升级到付费套餐',
+        periodUnavailable: '该套餐未开放按年订阅，请选择按月',
+        pollTimeout: '等待支付超时，请刷新页面或稍后在「个人中心 → 订单」查看结果',
     },
     profile: {
         title: '个人账号中心',

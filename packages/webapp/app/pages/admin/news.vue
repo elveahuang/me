@@ -221,7 +221,10 @@ function goPage(next: number) {
                 <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
                 <input v-model="form.category" placeholder="分类，如 product / guide" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 <input v-model="form.tagsText" placeholder="标签，逗号分隔" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input v-model="form.coverImage" placeholder="封面图 URL" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
+                <!-- 封面：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
+                <div class="sm:col-span-2">
+                    <ImagePicker v-model="form.coverImage" :placeholder="t('adminForm.coverImagePlaceholder')" />
+                </div>
                 <textarea
                     v-model="form.summary"
                     rows="2"
