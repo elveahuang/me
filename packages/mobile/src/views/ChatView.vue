@@ -18,12 +18,14 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, apiUrl, extractApiError as extractError, getToken } from '../api/auth';
 import { uiComponents } from '../components/json-ui';
+import { useDialog } from '../composables/useDialog';
 import { useTheme } from '../composables/useTheme';
 import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
 const { toggleMode } = useTheme();
+const { confirmDialog, toast } = useDialog();
 const route = useRoute();
 const router = useRouter();
 const agentId = route.params.agentId as string;
@@ -135,27 +137,36 @@ async function loadConversations() {
     }
 }
 
+/** 快速切换会话时的过期响应护栏：迟到的响应不得覆盖用户当前选中的会话 */
+let chatToken = 0;
+
 async function switchConversation(conv: ConversationSummary) {
+    const token = ++chatToken;
     conversationId.value = conv.id;
     try {
         const res = await api<{ messages: ChatMessage[] }>(`/api/conversations/${conv.id}`);
+        if (token !== chatToken) return;
         chat.value = buildChat(conv.id, (res.messages ?? []) as unknown as UIMessage[]);
     } catch {
+        if (token !== chatToken) return;
         chat.value = buildChat(conv.id);
     }
     convModalOpen.value = false;
 }
 
 async function startNewConversation() {
+    const token = ++chatToken;
     try {
         const res = await api<{ id: string }>('/api/conversations', {
             method: 'POST',
             body: JSON.stringify({ agentId }),
         });
+        if (token !== chatToken) return;
         conversationId.value = res.id;
         chat.value = buildChat(res.id);
         await loadConversations();
     } catch (e) {
+        if (token !== chatToken) return;
         loadError.value = extractError(e, t('common.error'));
     }
     convModalOpen.value = false;
@@ -163,7 +174,7 @@ async function startNewConversation() {
 
 async function deleteConv(id: string, event: Event) {
     event.stopPropagation();
-    if (!confirm(t('chat.deleteConfirm'))) return;
+    if (!(await confirmDialog(t('chat.deleteConfirm')))) return;
     try {
         await api(`/api/conversations/${id}`, { method: 'DELETE' });
         await loadConversations();
@@ -175,7 +186,7 @@ async function deleteConv(id: string, event: Event) {
             }
         }
     } catch (e) {
-        alert(extractError(e, t('common.error')));
+        toast(extractError(e, t('common.error')));
     }
 }
 
@@ -342,7 +353,7 @@ function pickAttachment(item: AttachmentRecord) {
 /** 复制当前会话为 Markdown 文本 */
 async function copyConversationMarkdown() {
     if (!chat.value?.messages?.length) {
-        alert(t('chat.noMessages'));
+        toast(t('chat.noMessages'));
         return;
     }
     const currentConv = conversations.value.find((c) => c.id === conversationId.value);
@@ -371,9 +382,9 @@ async function copyConversationMarkdown() {
 
     try {
         await navigator.clipboard.writeText(lines.join('\n'));
-        alert(t('common.copied'));
+        toast(t('common.copied'));
     } catch {
-        alert(t('common.error'));
+        toast(t('common.error'));
     }
 }
 </script>

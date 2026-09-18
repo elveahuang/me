@@ -6,12 +6,14 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, fetchSession, signOut, type SessionPayload } from '../api/auth';
 import ThemeSettings from '../components/ThemeSettings.vue';
+import { useDialog } from '../composables/useDialog';
 import { useUnread } from '../composables/useUnread';
 import { setMobileLocale } from '../i18n';
 import PageShell from './PageShell.vue';
 
 const { t, locale } = useI18n();
 const router = useRouter();
+const { confirmDialog } = useDialog();
 
 const session = ref<SessionPayload | null>(null);
 const me = ref<MeResponse | null>(null);
@@ -57,7 +59,7 @@ async function handleRefresh(event: CustomEvent) {
 onMounted(loadData);
 
 async function logout() {
-    if (!confirm(t('profile.logoutConfirm'))) return;
+    if (!(await confirmDialog(t('profile.logoutConfirm')))) return;
     await signOut();
     // 清空共享未读状态，避免下一个登录账号看到上一个账号的角标
     resetUnread();
@@ -199,9 +201,17 @@ function orderStatusText(s: string): string {
             </div>
 
             <div v-else class="flex h-full flex-col items-center justify-center p-8 text-center">
-                <div class="app-skeleton h-14 w-14 !rounded-2xl" />
-                <div class="app-skeleton mt-3 h-4 w-32" />
-                <p class="text-faint mt-4 text-xs">{{ loading ? t('common.loading') : t('common.error') }}</p>
+                <template v-if="loading">
+                    <div class="app-skeleton h-14 w-14 !rounded-2xl" />
+                    <div class="app-skeleton mt-3 h-4 w-32" />
+                    <p class="text-faint mt-4 text-xs">{{ t('common.loading') }}</p>
+                </template>
+                <!-- 会话拉取失败时空白骨架会被读成「还在加载」，这里显式报错并给重试入口 -->
+                <template v-else>
+                    <p class="text-3xl">⚠️</p>
+                    <p class="text-faint mt-3 text-xs">{{ error || t('common.error') }}</p>
+                    <button type="button" class="app-btn app-btn-outline mt-4 !px-4 !py-1.5 text-xs" @click="loadData">{{ t('common.retry') }}</button>
+                </template>
             </div>
         </ion-content>
 

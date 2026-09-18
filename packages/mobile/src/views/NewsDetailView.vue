@@ -5,6 +5,7 @@ import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, extractApiError } from '../api/auth';
+import MobileMarkdownContent from '../components/MobileMarkdownContent.vue';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();

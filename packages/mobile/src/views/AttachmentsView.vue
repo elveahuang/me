@@ -4,10 +4,12 @@ import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherConten
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, apiUrl, extractApiError, getToken } from '../api/auth';
+import { useDialog } from '../composables/useDialog';
 import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
+const { confirmDialog } = useDialog();
 
 /** 原生壳才提供「拍照/相册」入口，浏览器保留单文件选择器即可 */
 const nativeShell = isNativeShell();
@@ -29,8 +31,8 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize))
 const categoryLabel = computed(() => (category.value === 'all' ? t('common.all') : category.value));
 
 const categoryActions = [
-    { text: t('common.all'), handler: () => (category.value = 'all') },
-    ...ATTACHMENT_CATEGORIES.map((item) => ({ text: item.label, handler: () => (category.value = item.value) })),
+    { text: t('common.all'), handler: () => changeCategory('all') },
+    ...ATTACHMENT_CATEGORIES.map((item) => ({ text: item.label, handler: () => changeCategory(item.value) })),
     { text: t('common.cancel'), role: 'cancel' },
 ];
 
@@ -124,7 +126,7 @@ async function pickAndUpload(source: 'file' | 'photo' = 'file') {
 }
 
 async function remove(item: AttachmentRecord) {
-    if (!confirm(t('attachments.deleteConfirm', { name: item.filename }))) return;
+    if (!(await confirmDialog(t('attachments.deleteConfirm', { name: item.filename })))) return;
     try {
         await api(`/api/attachments/${item.id}`, { method: 'DELETE' });
         flashSuccess(t('common.deleted'), 2500);
