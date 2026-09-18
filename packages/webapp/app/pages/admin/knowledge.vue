@@ -34,6 +34,9 @@ const message = ref('');
 const listError = ref('');
 
 const newKb = reactive({ name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+/** 新建知识库抽屉开关 */
+const createOpen = ref(false);
+const createError = ref('');
 /** 编辑中的知识库（后端支持 PATCH，此前没有入口，写错名字只能删库重建） */
 const editingKb = ref<KbItem | null>(null);
 const editForm = reactive({ name: '', description: '', embeddingModel: '' });
@@ -86,18 +89,26 @@ async function load() {
 
 onMounted(load);
 
+/** 打开新建抽屉：清空上次输入与错误 */
+function openCreateKb() {
+    Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+    createError.value = '';
+    createOpen.value = true;
+}
+
 async function createKb() {
+    createError.value = '';
     if (!newKb.name.trim()) {
-        message.value = t('adminForm.requiredName');
+        createError.value = t('adminForm.requiredName');
         return;
     }
-    message.value = '';
     try {
         await $fetch('/api/admin/knowledge-bases', { method: 'POST', body: { ...newKb } });
         Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+        createOpen.value = false;
         await load();
     } catch (e) {
-        message.value = extractApiError(e, t('adminForm.saveFailed'));
+        createError.value = extractApiError(e, t('adminForm.saveFailed'));
     }
 }
 
@@ -222,57 +233,19 @@ async function search() {
 <template>
     <div class="flex gap-6">
         <div class="w-1/2">
-            <h1 class="mb-2 text-2xl font-bold text-gray-800">{{ t('adminForm.kbTitle') }}</h1>
-            <p class="mb-4 text-xs text-gray-400">{{ t('adminForm.kbSubtitle') }}</p>
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.kbTitle') }}</h1>
+                    <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.kbSubtitle') }}</p>
+                </div>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreateKb">
+                    {{ t('adminForm.kbCreate') }}
+                </button>
+            </div>
 
             <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
                 {{ listError }}
                 <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
-            </div>
-
-            <!-- 编辑知识库：改名/描述/embedding 模型（此前只能删库重建） -->
-            <div v-if="editingKb" class="mb-4 space-y-2 rounded-2xl bg-white p-4 shadow-sm">
-                <p class="text-xs font-bold text-gray-600">{{ t('adminForm.kbEditTitle') }}</p>
-                <div class="flex gap-2">
-                    <input
-                        v-model="editForm.name"
-                        :placeholder="t('adminForm.kbNamePlaceholder')"
-                        class="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <input
-                        v-model="editForm.description"
-                        :placeholder="t('adminForm.description')"
-                        class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <input
-                        v-model="editForm.embeddingModel"
-                        :placeholder="t('adminForm.kbEmbeddingModel')"
-                        class="w-52 rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    />
-                </div>
-                <div class="flex gap-2">
-                    <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="saveKb">
-                        {{ t('adminForm.save') }}
-                    </button>
-                    <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
-                </div>
-            </div>
-
-            <div class="mb-4 flex gap-2 rounded-2xl bg-white p-4 shadow-sm">
-                <input v-model="newKb.name" :placeholder="t('adminForm.kbNamePlaceholder')" class="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input
-                    v-model="newKb.description"
-                    :placeholder="t('adminForm.description')"
-                    class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="newKb.embeddingModel"
-                    :placeholder="t('adminForm.kbEmbeddingModel')"
-                    class="w-52 rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                />
-                <button class="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700" @click="createKb">
-                    {{ t('adminForm.kbCreate') }}
-                </button>
             </div>
 
             <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
@@ -369,5 +342,61 @@ async function search() {
                 </div>
             </div>
         </div>
+
+        <!-- 新建知识库：名称/描述/embedding 模型 -->
+        <AdminDrawer :open="createOpen" :title="t('adminForm.kbCreate')" @close="createOpen = false">
+            <div class="space-y-3">
+                <input
+                    v-model="newKb.name"
+                    :placeholder="t('adminForm.kbNamePlaceholder')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <input
+                    v-model="newKb.description"
+                    :placeholder="t('adminForm.description')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <input
+                    v-model="newKb.embeddingModel"
+                    :placeholder="t('adminForm.kbEmbeddingModel')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                />
+                <p v-if="createError" class="text-xs text-red-600">{{ createError }}</p>
+            </div>
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="createOpen = false">{{ t('adminForm.cancel') }}</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="createKb">
+                    {{ t('adminForm.save') }}
+                </button>
+            </template>
+        </AdminDrawer>
+
+        <!-- 编辑知识库：改名/描述/embedding 模型（此前只能删库重建） -->
+        <AdminDrawer :open="Boolean(editingKb)" :title="t('adminForm.kbEditTitle')" @close="editingKb = null">
+            <div class="space-y-3">
+                <input
+                    v-model="editForm.name"
+                    :placeholder="t('adminForm.kbNamePlaceholder')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <input
+                    v-model="editForm.description"
+                    :placeholder="t('adminForm.description')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <input
+                    v-model="editForm.embeddingModel"
+                    :placeholder="t('adminForm.kbEmbeddingModel')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                />
+                <p v-if="listError" class="text-xs text-red-600">{{ listError }}</p>
+            </div>
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="saveKb">
+                    {{ t('adminForm.save') }}
+                </button>
+            </template>
+        </AdminDrawer>
     </div>
 </template>
