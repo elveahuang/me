@@ -184,7 +184,7 @@ async function logout() {
                 </div>
 
                 <button class="app-btn app-btn-danger w-full !py-3" @click="logout">{{ t('nav.logout') }}</button>
-                <p class="text-faint pb-4 text-center text-[10px]">EE Agent Platform · v26.4.0</p>
+                <p class="text-faint pb-4 text-center text-[10px]">ME Agent Platform · v26.4.0</p>
             </div>
 
             <div v-else class="flex h-full flex-col items-center justify-center p-8 text-center">

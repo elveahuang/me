@@ -1,6 +1,6 @@
 export default {
     common: {
-        appName: 'EE 智能体',
+        appName: 'ME 智能体',
         loading: '加载中…',
         save: '保存',
         saved: '已保存',

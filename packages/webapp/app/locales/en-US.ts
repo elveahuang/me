@@ -1,7 +1,7 @@
 export default {
     common: {
-        appName: 'EE Agent Platform',
-        adminAppName: 'EE Admin Console',
+        appName: 'ME Agent Platform',
+        adminAppName: 'ME Admin Console',
         loading: 'Loading…',
         save: 'Save',
         saved: 'Saved',

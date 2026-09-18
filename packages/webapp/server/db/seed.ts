@@ -267,7 +267,7 @@ async function main() {
 
         const docId = crypto.randomUUID();
         const docContent = [
-            'EE 平台是一个全栈 AI 智能体平台，支持网页端（Nuxt 4 + Vue 3）与移动端（Ionic 9 + Capacitor）两种入口，数据与账号全量互通。',
+            'ME 平台是一个全栈 AI 智能体平台，支持网页端（Nuxt 4 + Vue 3）与移动端（Ionic 9 + Capacitor）两种入口，数据与账号全量互通。',
             '',
             '## 智能体体系',
             '智能体由管理员在后台统一创建与配置，支持设定人设提示词、Temperature、Max Tokens、Max Steps 等参数，并可自由挂载 Skills、MCP 服务器与 RAG 知识库。',
@@ -283,7 +283,7 @@ async function main() {
         await db.insert(kbDocuments).values({
             id: docId,
             kbId: guideKbId,
-            title: 'EE 智能体平台使用指南',
+            title: 'ME 智能体平台使用指南',
             content: docContent,
             chunkCount: chunks.length,
             status: 'ready',

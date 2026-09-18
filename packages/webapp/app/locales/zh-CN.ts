@@ -1,7 +1,7 @@
 export default {
     common: {
-        appName: 'EE 智能体平台',
-        adminAppName: 'EE 管理后台',
+        appName: 'ME 智能体平台',
+        adminAppName: 'ME 管理后台',
         loading: '加载中…',
         save: '保存',
         saved: '已保存',

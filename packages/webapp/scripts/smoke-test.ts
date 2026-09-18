@@ -34,8 +34,8 @@ async function runSmokeTests() {
     const bg1 = bigrams('你好世界');
     assert(bg1.has('你好') && bg1.has('好世') && bg1.has('世界'), '正确提取中文 Bigram 集合');
 
-    const scoreHigh = bigramScore('平台使用指南', '这是EE智能体平台使用指南，包含计费与对话');
-    const scoreLow = bigramScore('今天天气怎么样', '这是EE智能体平台使用指南，包含计费与对话');
+    const scoreHigh = bigramScore('平台使用指南', '这是ME智能体平台使用指南，包含计费与对话');
+    const scoreLow = bigramScore('今天天气怎么样', '这是ME智能体平台使用指南，包含计费与对话');
     assert(scoreHigh > scoreLow && scoreHigh > 0.5, '关键词重叠率精准打分');
 
     // 2. 测试滑窗限流算法（内存降级与计数逻辑）

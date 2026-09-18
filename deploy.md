@@ -1,6 +1,6 @@
 # 部署指南（Docker / Podman Compose）
 
-用一份 Compose 文件把 EE 智能体平台跑起来：PostgreSQL + Redis + Web/API，可选 RustFS 对象存储（附件功能需要）。
+用一份 Compose 文件把 ME 智能体平台跑起来：PostgreSQL + Redis + Web/API，可选 RustFS 对象存储（附件功能需要）。
 
 本文所有命令都在**仓库根目录**执行，且已在 Docker + Compose V2 上完整跑通（含构建、迁移、健康检查、附件上传、重启与 down/up 数据持久化）。
 

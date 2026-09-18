@@ -9,8 +9,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const remoteUrl = process.env.CAPACITOR_SERVER_URL;
 
 const config: CapacitorConfig = {
-    appId: 'com.ee.app',
-    appName: 'EE',
+    appId: 'com.ee.app', // 原生应用包标识：属于持久身份，改动会影响已安装应用的升级/关联，暂保留
+    appName: 'ME',
     webDir: 'dist',
     server: {
         androidScheme: 'https',

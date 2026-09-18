@@ -101,7 +101,7 @@ const currentRouteName = computed(() => {
                     <div
                         class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-sm font-black text-white shadow-xs"
                     >
-                        EE
+                        ME
                     </div>
                     <span
                         class="hidden bg-gradient-to-r from-emerald-700 to-teal-800 bg-clip-text text-base font-black tracking-tight text-transparent sm:inline-block"
@@ -197,7 +197,7 @@ const currentRouteName = computed(() => {
 
                 <!-- 侧边栏底部简要状态 -->
                 <div v-if="!sidebarCollapsed" class="border-t border-slate-100 bg-slate-50/50 p-3 text-center text-[11px] text-slate-400">
-                    EE Platform v26.3 · Admin
+                    ME Platform v26.3 · Admin
                 </div>
             </aside>
 

@@ -1,5 +1,5 @@
 # ============================================================================
-# EE 智能体平台 —— Docker / Podman Compose 部署
+# ME 智能体平台 —— Docker / Podman Compose 部署
 #
 # 快速开始（在仓库根目录执行）：
 #   node deploy/init-env.mjs                       # 生成 deploy/.env（随机强密钥）

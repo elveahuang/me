@@ -47,7 +47,7 @@ watch(
 );
 
 useHead({
-    title: () => (article.value ? `${article.value.title} - EE` : 'EE'),
+    title: () => (article.value ? `${article.value.title} - ME` : 'ME'),
 });
 </script>
 

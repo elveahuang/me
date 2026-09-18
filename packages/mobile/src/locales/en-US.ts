@@ -1,6 +1,6 @@
 export default {
     common: {
-        appName: 'EE Agent',
+        appName: 'ME Agent',
         loading: 'Loading…',
         save: 'Save',
         saved: 'Saved',

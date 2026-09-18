@@ -215,7 +215,7 @@ async function logout() {
                 </div>
 
                 <div class="app-divider text-faint mt-6 flex items-center justify-between pt-4 text-xs">
-                    <span>EE Agent Platform</span>
+                    <span>ME Agent Platform</span>
                     <span>v26.4.0</span>
                 </div>
             </div>

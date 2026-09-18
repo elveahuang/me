@@ -106,7 +106,7 @@ export class WechatPayProvider implements PaymentProvider {
                 payer_client_ip: ctx.clientIp ?? '127.0.0.1',
                 h5_info: {
                     type: 'Wap',
-                    app_name: 'EE',
+                    app_name: 'ME',
                     app_url: process.env.BETTER_AUTH_URL ?? 'https://localhost:3000',
                 },
             })) as { h5_url: string };

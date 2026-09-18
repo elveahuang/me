@@ -1,4 +1,4 @@
-# EE 智能体平台
+# ME 智能体平台
 
 基于 Nuxt 4 + Vue 3 的智能体对话平台：Web（Nuxt UI）与移动端（Ionic + Capacitor）共用一套后端，支持自定义模型供应商、可配置
 Skill 工具、MCP 服务器接入、RAG
