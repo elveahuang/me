@@ -39,6 +39,7 @@ const createOpen = ref(false);
 const createError = ref('');
 /** 编辑中的知识库（后端支持 PATCH，此前没有入口，写错名字只能删库重建） */
 const editingKb = ref<KbItem | null>(null);
+const editError = ref('');
 const editForm = reactive({ name: '', description: '', embeddingModel: '' });
 const docForm = reactive({ title: '', content: '' });
 const searchQuery = ref('');
@@ -128,16 +129,16 @@ async function open(kb: KbItem) {
 function openEditKb(kb: KbItem) {
     editingKb.value = kb;
     Object.assign(editForm, { name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
-    listError.value = '';
+    editError.value = '';
 }
 
 async function saveKb() {
     if (!editingKb.value) return;
     if (!editForm.name.trim()) {
-        listError.value = t('adminForm.requiredName');
+        editError.value = t('adminForm.requiredName');
         return;
     }
-    listError.value = '';
+    editError.value = '';
     try {
         const updated = await $fetch<KbItem>(`/api/admin/knowledge-bases/${editingKb.value.id}`, {
             method: 'PATCH',
@@ -148,7 +149,7 @@ async function saveKb() {
         editingKb.value = null;
         await load();
     } catch (e) {
-        listError.value = extractApiError(e, t('adminForm.saveFailed'));
+        editError.value = extractApiError(e, t('adminForm.saveFailed'));
     }
 }
 
@@ -389,7 +390,7 @@ async function search() {
                     :placeholder="t('adminForm.kbEmbeddingModel')"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
                 />
-                <p v-if="listError" class="text-xs text-red-600">{{ listError }}</p>
+                <p v-if="editError" class="text-xs text-red-600">{{ editError }}</p>
             </div>
             <template #footer>
                 <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
