@@ -42,6 +42,7 @@ async function load() {
 
 onMounted(load);
 
+/** 搜索防抖；卸载时清理，避免组件销毁后仍触发请求 */
 let timer: ReturnType<typeof setTimeout> | null = null;
 watch(keyword, () => {
     if (timer) clearTimeout(timer);
@@ -49,6 +50,9 @@ watch(keyword, () => {
         page.value = 1;
         void load();
     }, 300);
+});
+onBeforeUnmount(() => {
+    if (timer) clearTimeout(timer);
 });
 
 watch(category, () => {

@@ -82,6 +82,19 @@ watch(userKeyword, () => {
     userTimer = setTimeout(() => void searchUsers(), 300);
 });
 
+/** 用户搜索防抖与成功提示定时器：卸载时一并清理 */
+onBeforeUnmount(() => {
+    if (userTimer) clearTimeout(userTimer);
+    if (successTimer) clearTimeout(successTimer);
+});
+
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 2500) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
+
 async function searchUsers() {
     searchingUsers.value = true;
     try {

@@ -250,6 +250,7 @@ async function loadAttachments() {
 
 onMounted(loadAttachments);
 
+/** 附件搜索防抖；卸载时清理，避免组件销毁后仍触发请求 */
 let attTimer: ReturnType<typeof setTimeout> | null = null;
 watch(attKeyword, () => {
     if (attTimer) clearTimeout(attTimer);
@@ -258,12 +259,30 @@ watch(attKeyword, () => {
         loadAttachments();
     }, 300);
 });
+onBeforeUnmount(() => {
+    if (attTimer) clearTimeout(attTimer);
+    if (successTimer) clearTimeout(successTimer);
+});
+
+/** 成功提示自动消失；集中管理便于卸载时清理 */
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 2000) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
 
 async function removeAttachment(row: AdminAttachmentRow) {
     if (!confirm(t('storage.attDeleteConfirm', { name: row.filename }))) return;
+    error.value = '';
     try {
         const res = await $fetch<{ storageDeleted: boolean; storageError?: string }>(`/api/admin/attachments/${row.id}`, { method: 'DELETE' });
-        success.value = res.storageDeleted ? t('common.deleted') : `${t('common.deleted')}（存储清理失败：${res.storageError}）`;
+        // storageError 可能为空：仅在确有错误时拼接，避免出现「存储清理失败：undefined」
+        if (res.storageDeleted) {
+            flashSuccess(t('common.deleted'));
+        } else {
+            flashSuccess(`${t('common.deleted')}（${t('storage.attDeletePartial')}${res.storageError || t('common.none')}）`);
+        }
         await Promise.all([loadAttachments(), load()]);
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
@@ -273,8 +292,7 @@ async function removeAttachment(row: AdminAttachmentRow) {
 async function copyKey(key: string) {
     try {
         await navigator.clipboard.writeText(key);
-        success.value = t('common.copied');
-        setTimeout(() => (success.value = ''), 2000);
+        flashSuccess(t('common.copied'));
     } catch {
         // 剪贴板不可用时静默忽略
     }

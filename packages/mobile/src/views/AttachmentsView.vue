@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ATTACHMENT_CATEGORIES, formatBytes, formatDate, type AttachmentRecord, type AttachmentsResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, apiUrl, extractApiError, getToken } from '../api/auth';
 import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
@@ -59,11 +59,24 @@ async function handleRefresh(event: CustomEvent) {
 
 onMounted(() => load(true));
 
+/** 搜索防抖；卸载时清理，避免页面销毁后仍触发请求 */
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 function onSearch() {
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => void load(true), 300);
 }
+
+/** 成功提示自动消失；集中管理便于卸载时清理 */
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 3000) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
+onUnmounted(() => {
+    if (searchTimer) clearTimeout(searchTimer);
+    if (successTimer) clearTimeout(successTimer);
+});
 
 function changeCategory(value: string) {
     category.value = value;
@@ -104,8 +117,7 @@ async function pickAndUpload(source: 'file' | 'photo' = 'file') {
     progress.value = 0;
 
     if (done) {
-        success.value = t('attachments.uploadedCount', { n: done });
-        setTimeout(() => (success.value = ''), 3000);
+        flashSuccess(t('attachments.uploadedCount', { n: done }));
         await load(true);
     }
     if (failures.length) error.value = failures.join('；');
@@ -115,8 +127,7 @@ async function remove(item: AttachmentRecord) {
     if (!confirm(t('attachments.deleteConfirm', { name: item.filename }))) return;
     try {
         await api(`/api/attachments/${item.id}`, { method: 'DELETE' });
-        success.value = t('common.deleted');
-        setTimeout(() => (success.value = ''), 2500);
+        flashSuccess(t('common.deleted'), 2500);
         await load();
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));

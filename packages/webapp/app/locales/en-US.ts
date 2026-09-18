@@ -453,6 +453,7 @@ export default {
         activePending: 'Inactive',
         sortOrder: 'Order',
         attFilesUnit: 'files',
+        attDeletePartial: 'storage cleanup failed: ',
     },
     admin: {
         dashboardTitle: 'Operations Dashboard',

@@ -72,6 +72,10 @@ async function load() {
 
 onMounted(load);
 
+/**
+ * 搜索防抖。卸载时必须清理：否则在 SPA 内快速进出页面时，
+ * 待触发的定时器仍会调用 load() 发起网络请求并写已卸载组件的状态。
+ */
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 watch(keyword, () => {
     if (searchTimer) clearTimeout(searchTimer);
@@ -79,6 +83,19 @@ watch(keyword, () => {
         page.value = 1;
         load();
     }, 300);
+});
+
+/** 成功提示的自动消失定时器，同样需要在卸载时清理 */
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 2000) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
+
+onBeforeUnmount(() => {
+    if (searchTimer) clearTimeout(searchTimer);
+    if (successTimer) clearTimeout(successTimer);
 });
 
 watch(category, () => {
@@ -163,8 +180,7 @@ async function copyLink(item: AttachmentRecord) {
         const res = await $fetch<{ url: string }>(`/api/attachments/${item.id}/url`);
         if (!res.url) throw new Error('empty');
         await navigator.clipboard.writeText(res.url);
-        success.value = t('common.copied');
-        setTimeout(() => (success.value = ''), 2000);
+        flashSuccess(t('common.copied'));
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
     }

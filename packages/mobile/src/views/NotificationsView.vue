@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatRelativeTime, NOTIFICATION_TYPES, type NotificationRecord, type NotificationsResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError } from '../api/auth';
 import { useUnread } from '../composables/useUnread';
@@ -68,6 +68,17 @@ async function handleRefresh(event: CustomEvent) {
 
 onMounted(() => load(true));
 
+/** 成功提示自动消失；卸载时清理，避免定时器在页面销毁后写状态 */
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 2500) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
+onUnmounted(() => {
+    if (successTimer) clearTimeout(successTimer);
+});
+
 watch([filterUnread, type], () => void load(true));
 
 async function markRead(item: NotificationRecord) {
@@ -90,8 +101,7 @@ async function markAllRead() {
         items.value = items.value.map((item) => ({ ...item, read: true, readAt: item.readAt ?? new Date().toISOString() }));
         unread.value = res.unread;
         setUnread(res.unread);
-        success.value = t('notifications.allRead');
-        setTimeout(() => (success.value = ''), 2500);
+        flashSuccess(t('notifications.allRead'));
         if (filterUnread.value) await load(true);
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));

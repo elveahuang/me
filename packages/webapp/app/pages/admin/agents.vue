@@ -52,6 +52,9 @@ const kbList = ref<KbItem[]>([]);
 const mcpList = ref<{ id: string; name: string }[]>([]);
 const providerList = ref<ProviderItem[]>([]);
 const editing = ref<Partial<AgentItem> | null>(null);
+const formError = ref('');
+const listError = ref('');
+const saving = ref(false);
 
 const autoConfigModalOpen = ref(false);
 const autoConfigPrompt = ref('');
@@ -193,11 +196,24 @@ async function handleAutoConfig() {
 }
 
 async function save() {
-    const body = { ...form, providerId: form.providerId || null };
-    if (editing.value?.id) {
-        await $fetch(`/api/admin/agents/${editing.value.id}`, { method: 'PATCH', body });
-    } else {
-        await $fetch('/api/admin/agents', { method: 'POST', body });
+    if (!form.name.trim()) {
+        formError.value = t('adminForm.requiredName');
+        return;
+    }
+    formError.value = '';
+    saving.value = true;
+    try {
+        const body = { ...form, providerId: form.providerId || null };
+        if (editing.value?.id) {
+            await $fetch(`/api/admin/agents/${editing.value.id}`, { method: 'PATCH', body });
+        } else {
+            await $fetch('/api/admin/agents', { method: 'POST', body });
+        }
+    } catch (e) {
+        formError.value = extractApiError(e, t('adminForm.saveFailed'));
+        return;
+    } finally {
+        saving.value = false;
     }
     editing.value = null;
     await load();
@@ -205,13 +221,22 @@ async function save() {
 
 async function remove(id: string) {
     if (!confirm(t('adminForm.agentDeleteConfirm'))) return;
-    await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' });
-    await load();
+    listError.value = '';
+    try {
+        await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' });
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.deleteFailed'));
+    }
 }
 </script>
 
 <template>
     <div>
+        <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ listError }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div class="mb-6 flex items-center justify-between">
             <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.agentTitle') }}</h1>
             <div class="flex items-center gap-2">
@@ -343,8 +368,11 @@ async function remove(id: string) {
                     <span v-if="!mcpList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoMcp') }}</span>
                 </div>
             </div>
+            <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">{{ t('adminForm.save') }}</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                    {{ t('adminForm.save') }}
+                </button>
                 <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
             </div>
         </div>

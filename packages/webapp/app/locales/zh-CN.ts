@@ -454,6 +454,7 @@ export default {
         activePending: '未生效',
         sortOrder: '排序',
         attFilesUnit: '个文件',
+        attDeletePartial: '存储清理失败：',
     },
     admin: {
         dashboardTitle: '运营监控大盘',

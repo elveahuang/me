@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDate, type NewsListResponse, type NewsSummary } from '@commons/contract';
 import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError } from '../api/auth';
 import BulletinBanner from '../components/BulletinBanner.vue';
@@ -45,11 +45,15 @@ async function handleRefresh(event: CustomEvent) {
 
 onMounted(() => load(true));
 
+/** 搜索防抖；卸载时清理，避免页面销毁后仍触发请求 */
 let timer: ReturnType<typeof setTimeout> | null = null;
 function onSearch() {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => void load(true), 300);
 }
+onUnmounted(() => {
+    if (timer) clearTimeout(timer);
+});
 </script>
 
 <template>

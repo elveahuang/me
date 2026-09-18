@@ -51,6 +51,17 @@ async function load() {
 
 onMounted(load);
 
+/** 成功提示自动消失；卸载时清理，避免定时器在组件销毁后写状态 */
+let successTimer: ReturnType<typeof setTimeout> | null = null;
+function flashSuccess(text: string, ms = 2500) {
+    success.value = text;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => (success.value = ''), ms);
+}
+onBeforeUnmount(() => {
+    if (successTimer) clearTimeout(successTimer);
+});
+
 watch([filter, type], () => {
     page.value = 1;
     void load();
@@ -79,8 +90,7 @@ async function markAllRead() {
         const res = await $fetch<{ updated: number; unread: number }>('/api/notifications/read', { method: 'POST', body: {} });
         items.value = items.value.map((item) => ({ ...item, read: true, readAt: item.readAt ?? new Date().toISOString() }));
         unread.value = res.unread;
-        success.value = t('notifications.allRead');
-        setTimeout(() => (success.value = ''), 2500);
+        flashSuccess(t('notifications.allRead'));
         if (filter.value === 'unread') await load();
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
