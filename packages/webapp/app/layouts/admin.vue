@@ -37,6 +37,7 @@ const navGroups = computed(() => [
             { path: '/admin/agents', label: t('nav.agents'), icon: '🤖' },
             { path: '/admin/skills', label: t('nav.skills'), icon: '⚡' },
             { path: '/admin/tools', label: t('nav.tools'), icon: '🛠️' },
+            { path: '/admin/providers', label: t('nav.providers'), icon: '🌐' },
             { path: '/admin/mcp', label: t('nav.mcp'), icon: '🔌' },
             { path: '/admin/knowledge', label: t('nav.knowledge'), icon: '📚' },
         ],

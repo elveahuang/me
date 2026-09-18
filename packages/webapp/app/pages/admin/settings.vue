@@ -7,14 +7,11 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-type TabKey = 'storage' | 'providers';
-const tabs = computed<{ key: TabKey; label: string }[]>(() => [
-    { key: 'storage', label: t('nav.storage') },
-    { key: 'providers', label: t('nav.providers') },
-]);
+type TabKey = 'storage';
+const tabs = computed<{ key: TabKey; label: string }[]>(() => [{ key: 'storage', label: t('nav.storage') }]);
 
-/** 当前分区由 ?tab= 决定，便于仪表盘等入口直接深链到指定分区 */
-const active = computed<TabKey>(() => (route.query.tab === 'providers' ? 'providers' : 'storage'));
+/** 当前分区由 ?tab= 决定，便于深链到指定分区 */
+const active = computed<TabKey>(() => 'storage');
 
 function setTab(key: TabKey) {
     router.replace({ query: { ...route.query, tab: key } });

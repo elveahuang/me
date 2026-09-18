@@ -81,7 +81,7 @@ export default {
     },
     settings: {
         title: 'System Settings',
-        subtitle: 'Central hub for platform-level configuration: object storage and model providers',
+        subtitle: 'Central hub for platform-level configuration',
         storageHint: 'Configure the S3-compatible object storage (RustFS / MinIO / AWS S3) used by attachments; the default one is used for new uploads',
         providersHint: 'Configure the OpenAI-compatible model providers used by chat and generation; the default one is used when no model is specified',
     },

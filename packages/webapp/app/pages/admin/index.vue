@@ -158,9 +158,7 @@ const maxModelCount = computed(() => {
                         <span>⚡</span>
                         <span>{{ t('admin.modelUsage') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/settings?tab=providers" class="text-xs font-bold text-emerald-600 hover:underline">
-                        {{ t('nav.providers') }} ›
-                    </NuxtLink>
+                    <NuxtLink to="/admin/providers" class="text-xs font-bold text-emerald-600 hover:underline"> {{ t('nav.providers') }} › </NuxtLink>
                 </div>
 
                 <div v-if="stats?.modelUsage?.length" class="space-y-3.5">
