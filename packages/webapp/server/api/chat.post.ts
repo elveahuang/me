@@ -118,6 +118,36 @@ function dropUnownedAttachmentRefs(parts: unknown[], owned: Set<string>): unknow
     });
 }
 
+/** uuid 形态校验：conversations.id 是 uuid 列，非法串会在 PostgreSQL 抛 22P02 */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 把客户端传入的 messages 夹成可安全遍历的形状，只保留 role/parts 结构合法的条目。
+ *
+ * 必须在扣额之前调用：后续代码会对 `m.parts.filter(...)`、`m.role` 取值，
+ * 数组里混进 null/字符串/无 parts 的对象会在 consumeChatQuota 之后抛 TypeError，
+ * 用户白白损失一次配额却拿不到回复。畸形条目按与 sanitizeUserParts 一致的策略丢弃。
+ */
+function normalizeIncomingMessages(value: unknown): UIMessage[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((m): m is UIMessage => {
+        if (!m || typeof m !== 'object') return false;
+        const candidate = m as { role?: unknown; parts?: unknown };
+        return typeof candidate.role === 'string' && Array.isArray(candidate.parts);
+    });
+}
+
+/** 从 parts 中拼出纯文本，用于会话标题与 RAG 检索词 */
+function partsToText(parts: unknown): string {
+    if (!Array.isArray(parts)) return '';
+    return parts
+        .filter(
+            (p): p is { type: 'text'; text: string } => !!p && (p as { type?: unknown }).type === 'text' && typeof (p as { text?: unknown }).text === 'string',
+        )
+        .map((p) => p.text)
+        .join('');
+}
+
 export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
 
@@ -127,11 +157,21 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 429, statusMessage: `请求过于频繁，请 ${limited.retryAfterSec} 秒后再试` });
     }
 
-    const body = await readBody<{ messages: UIMessage[]; conversationId?: string; agentId?: string }>(event);
-    const { messages: incoming, conversationId, agentId } = body ?? {};
+    const body = await readBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown }>(event);
+    const incoming = normalizeIncomingMessages(body?.messages);
+    const agentId = typeof body?.agentId === 'string' ? body.agentId : '';
+    const conversationId = typeof body?.conversationId === 'string' ? body.conversationId : '';
 
-    if (!agentId || !incoming?.length) {
+    // 必须带一条结构完整的 user 消息：只传 assistant 消息同样会走完扣额与生成，
+    // 但服务端没有任何新输入可落库，等于用一次配额触发一轮无意义的模型调用。
+    if (!agentId || !incoming.some((m) => m.role === 'user')) {
         throw createError({ statusCode: 400, statusMessage: 'agentId and messages are required' });
+    }
+
+    // 会话 id 直接进 uuid 列的等值查询：非法值会在**扣额之后**抛 22P02 变成 500，
+    // 这里先夹住，让无效或过期的 id 得到一个明确的 400 而不是白扣配额。
+    if (conversationId && !UUID_RE.test(conversationId)) {
+        throw createError({ statusCode: 400, statusMessage: 'conversationId 非法' });
     }
 
     // 防滥用：检查请求体体积（上限 512KB）
@@ -178,11 +218,7 @@ export default defineEventHandler(async (event) => {
     let row = conversationId ? (await db.select().from(conversations).where(eq(conversations.id, conversationId)))[0] : undefined;
 
     const lastUserMessage = [...incoming].reverse().find((m) => m.role === 'user');
-    const lastUserText =
-        lastUserMessage?.parts
-            .filter((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')
-            .map((p) => p.text)
-            .join('') ?? '';
+    const lastUserText = partsToText(lastUserMessage?.parts);
 
     if (!row) {
         const newId = crypto.randomUUID();
@@ -283,11 +319,7 @@ export default defineEventHandler(async (event) => {
                     .slice(0, -1)
                     .reverse()
                     .find((m) => m.role === 'user');
-                const prevText = prevUserMsg?.parts
-                    .filter((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')
-                    .map((p) => p.text)
-                    .join('')
-                    .trim();
+                const prevText = partsToText(prevUserMsg?.parts).trim();
                 if (prevText) {
                     searchKeyword = `${prevText} ${searchKeyword}`;
                 }
