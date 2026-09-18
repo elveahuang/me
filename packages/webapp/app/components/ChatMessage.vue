@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Markdown } from '@comark/vue';
 import jsonRender from '@comark/vue/plugins/json-render';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { uiComponents } from '~/utils/json-ui';
 
@@ -12,6 +12,7 @@ const props = defineProps<{ message: { id?: string; role: string; parts: any[] }
 const isUser = computed(() => props.message.role === 'user');
 const reasoningExpanded = ref(false);
 const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
 // json-render 插件：把 Markdown 中的 ```json-render 代码块渲染成生成式 UI 组件
 const plugins = [jsonRender()];
@@ -68,11 +69,17 @@ async function copyMessageText() {
     try {
         await navigator.clipboard.writeText(texts);
         copied.value = true;
-        setTimeout(() => (copied.value = false), 2000);
+        if (copiedTimer) clearTimeout(copiedTimer);
+        copiedTimer = setTimeout(() => (copied.value = false), 2000);
     } catch {
         // 剪贴板不可用时静默失败
     }
 }
+
+// 组件卸载（如切换会话/清空记录）时清理，避免定时器在销毁后回写已失效状态
+onBeforeUnmount(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+});
 </script>
 
 <template>

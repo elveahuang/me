@@ -30,6 +30,8 @@ const showPayModal = ref(false);
 const activeOrder = ref<CreateOrderResponse | null>(null);
 const qrDataUrl = ref<string>('');
 const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
+// 支付成功后延时关闭弹窗的定时器：需在手动关闭与卸载时清理，否则会在销毁后回写或重复关闭
+const closeTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const paySuccess = ref(false);
 const paying = ref(false);
 const payError = ref('');
@@ -55,13 +57,29 @@ async function loadData() {
 }
 
 onMounted(loadData);
-onUnmounted(stopPolling);
+onUnmounted(() => {
+    stopPolling();
+    clearCloseTimer();
+});
 
 function stopPolling() {
     if (pollingTimer.value) {
         clearInterval(pollingTimer.value);
         pollingTimer.value = null;
     }
+}
+
+function clearCloseTimer() {
+    if (closeTimer.value) {
+        clearTimeout(closeTimer.value);
+        closeTimer.value = null;
+    }
+}
+
+/** 支付成功后延时关闭弹窗；重复调用只保留最后一次计划。 */
+function scheduleAutoClose() {
+    clearCloseTimer();
+    closeTimer.value = setTimeout(closePayModal, 1800);
 }
 
 /** 轮询上限：订单 2 小时过期，但渠道不可达时状态会一直是 pending，
@@ -85,7 +103,7 @@ function startPolling(orderNo: string) {
                 stopPolling();
                 paySuccess.value = true;
                 await loadData();
-                setTimeout(closePayModal, 1800);
+                scheduleAutoClose();
             } else if (res.status === 'closed') {
                 stopPolling();
                 payError.value = t('billing.payFailed');
@@ -107,7 +125,7 @@ function invokeWeixinJsapi(params: JsapiParams) {
         if (res?.err_msg === 'get_brand_wcpay_request:ok') {
             paySuccess.value = true;
             loadData();
-            setTimeout(closePayModal, 1800);
+            scheduleAutoClose();
         } else if (res?.err_msg !== 'get_brand_wcpay_request:cancel') {
             payError.value = t('billing.payFailed');
         }
@@ -165,6 +183,7 @@ async function handleMockPay() {
 }
 
 function closePayModal() {
+    clearCloseTimer();
     stopPolling();
     showPayModal.value = false;
     activeOrder.value = null;
