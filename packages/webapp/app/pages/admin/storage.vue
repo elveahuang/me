@@ -110,7 +110,8 @@ function openEdit(item: StorageConfigItem) {
         endpoint: item.endpoint,
         region: item.region,
         bucket: item.bucket,
-        accessKeyId: item.accessKeyIdPreview ? '' : '',
+        // 编辑态不回填密钥：留空即表示保持原密钥（见 buildBody 的条件展开）
+        accessKeyId: '',
         secretAccessKey: '',
         forcePathStyle: item.forcePathStyle,
         publicBaseUrl: item.publicBaseUrl,
