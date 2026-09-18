@@ -21,12 +21,15 @@ interface AdminPlan {
 const plans = ref<AdminPlan[]>([]);
 const editing = ref<Partial<AdminPlan> | null>(null);
 const errorMessage = ref<string | null>(null);
+/** 提交中标记：抽屉页脚原本没有 disabled，双击会创建两条重复套餐 */
+const saving = ref(false);
 
 const form = reactive({
     code: '',
     name: '',
     description: '',
-    chatQuotaPerDay: null as number | null,
+    /** 空串是 number 输入框「留空=不限量」的取值，不能当作 0 */
+    chatQuotaPerDay: null as number | null | '',
     monthlyPriceYuan: '0',
     yearlyPriceYuan: '',
     enabled: true,
@@ -77,6 +80,7 @@ function openEdit(plan: AdminPlan) {
 }
 
 async function save() {
+    if (saving.value) return;
     errorMessage.value = null;
     if (!form.code.trim()) {
         errorMessage.value = '套餐编码不能为空';
@@ -89,6 +93,21 @@ async function save() {
     const monthlyPriceCents = Math.round(parseFloat(form.monthlyPriceYuan || '0') * 100);
     const yearlyPriceCents = form.yearlyPriceYuan.trim() ? Math.round(parseFloat(form.yearlyPriceYuan) * 100) : null;
 
+    // 输入框清空后 v-model 给的是空串，Number('') 会得到 0：服务端 chatQuotaPerDay 要求
+    // 正整数或 null，0 会被 .positive() 拒成 400，"留空不限"根本提交不出去。
+    const quotaInput = form.chatQuotaPerDay;
+    const chatQuotaPerDay = quotaInput === '' || quotaInput === null || quotaInput === undefined ? null : Number(quotaInput);
+    if (chatQuotaPerDay !== null && (!Number.isInteger(chatQuotaPerDay) || chatQuotaPerDay < 1)) {
+        errorMessage.value = '每日对话配额需为正整数，留空表示不限量';
+        return;
+    }
+
+    const sortOrder = Number(form.sortOrder);
+    if (!Number.isInteger(sortOrder)) {
+        errorMessage.value = '显示排序需为整数';
+        return;
+    }
+
     if (Number.isNaN(monthlyPriceCents) || monthlyPriceCents < 0) {
         errorMessage.value = '月付价格必须为非负数';
         return;
@@ -98,6 +117,7 @@ async function save() {
         return;
     }
 
+    saving.value = true;
     try {
         if (editing.value?.id) {
             await $fetch(`/api/admin/plans/${editing.value.id}`, {
@@ -105,11 +125,11 @@ async function save() {
                 body: {
                     name: form.name.trim(),
                     description: form.description.trim(),
-                    chatQuotaPerDay: form.chatQuotaPerDay === null || form.chatQuotaPerDay === undefined ? null : Number(form.chatQuotaPerDay),
+                    chatQuotaPerDay,
                     monthlyPriceCents,
                     yearlyPriceCents,
                     enabled: form.enabled,
-                    sortOrder: Number(form.sortOrder) || 0,
+                    sortOrder,
                 },
             });
         } else {
@@ -119,11 +139,11 @@ async function save() {
                     code: form.code.trim(),
                     name: form.name.trim(),
                     description: form.description.trim(),
-                    chatQuotaPerDay: form.chatQuotaPerDay === null || form.chatQuotaPerDay === undefined ? null : Number(form.chatQuotaPerDay),
+                    chatQuotaPerDay,
                     monthlyPriceCents,
                     yearlyPriceCents,
                     enabled: form.enabled,
-                    sortOrder: Number(form.sortOrder) || 0,
+                    sortOrder,
                 },
             });
         }
@@ -132,6 +152,8 @@ async function save() {
     } catch (e) {
         // 直接读 e.data 在 e 为原生 Error 时会抛 TypeError，统一走契约层的归一化
         errorMessage.value = extractApiError(e, t('adminForm.saveFailed'));
+    } finally {
+        saving.value = false;
     }
 }
 
@@ -245,16 +267,18 @@ async function remove(id: string) {
             </div>
             <template #footer>
                 <button
-                    class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200"
+                    class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200 disabled:opacity-50"
+                    :disabled="saving"
                     @click="editing = null"
                 >
                     {{ t('common.cancel') }}
                 </button>
                 <button
-                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
+                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+                    :disabled="saving"
                     @click="save"
                 >
-                    {{ t('common.save') }}
+                    {{ saving ? t('common.loading') : t('common.save') }}
                 </button>
             </template>
         </AdminDrawer>
