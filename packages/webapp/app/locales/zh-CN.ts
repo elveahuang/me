@@ -78,6 +78,13 @@ export default {
         storageAndAttachments: '存储与附件',
         attachments: '附件管理',
         content: '内容运营',
+        systemSettings: '系统设置',
+    },
+    settings: {
+        title: '系统设置',
+        subtitle: '集中管理平台级配置项：对象存储与模型供应商',
+        storageHint: '配置附件所用的 S3 协议对象存储（RustFS / MinIO / AWS S3），默认配置用于新上传',
+        providersHint: '配置对话与生成所用的 OpenAI 兼容模型供应商，默认供应商用于未显式指定模型的请求',
     },
     chat: {
         newChat: '新建会话',

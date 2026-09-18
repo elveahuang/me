@@ -37,7 +37,6 @@ const navGroups = computed(() => [
             { path: '/admin/agents', label: t('nav.agents'), icon: '🤖' },
             { path: '/admin/skills', label: t('nav.skills'), icon: '⚡' },
             { path: '/admin/tools', label: t('nav.tools'), icon: '🛠️' },
-            { path: '/admin/providers', label: t('nav.providers'), icon: '🌐' },
             { path: '/admin/mcp', label: t('nav.mcp'), icon: '🔌' },
             { path: '/admin/knowledge', label: t('nav.knowledge'), icon: '📚' },
         ],
@@ -48,9 +47,6 @@ const navGroups = computed(() => [
             { path: '/admin/news', label: t('nav.news'), icon: '📰' },
             { path: '/admin/bulletins', label: t('nav.bulletins'), icon: '📣' },
             { path: '/admin/notifications', label: t('nav.notifications'), icon: '🔔' },
-            // 附件总览与存储配置在同一页（/admin/storage），不再单列 /admin/attachments——
-            // 那个路径没有对应页面文件，点进去是 404
-            { path: '/admin/storage', label: t('nav.storageAndAttachments'), icon: '☁️' },
         ],
     },
     {
@@ -60,7 +56,12 @@ const navGroups = computed(() => [
             { path: '/admin/plans', label: t('nav.plans'), icon: '💳' },
             { path: '/admin/orders', label: t('nav.orders'), icon: '🧾' },
             { path: '/admin/users', label: t('nav.users'), icon: '👥' },
+            { path: '/admin/attachments', label: t('nav.attachments'), icon: '📎' },
         ],
+    },
+    {
+        title: t('nav.systemSettings'),
+        items: [{ path: '/admin/settings', label: t('nav.systemSettings'), icon: '⚙️' }],
     },
 ]);
 

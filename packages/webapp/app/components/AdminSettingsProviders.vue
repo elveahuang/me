@@ -2,8 +2,6 @@
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
-definePageMeta({ layout: 'admin', middleware: 'admin' });
-
 const { t } = useI18n();
 
 interface ProviderItem {
@@ -142,21 +140,19 @@ async function remove(id: string) {
 </script>
 
 <template>
-    <div>
-        <div v-if="error" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
-            {{ error }}
-            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
-        </div>
-        <div v-if="success" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
-        <div class="mb-6 flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.providerTitle') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.providerSubtitle') }}</p>
-            </div>
+    <div class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-xs text-gray-400">{{ t('settings.providersHint') }}</p>
             <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
                 {{ t('adminForm.providerNew') }}
             </button>
         </div>
+
+        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {{ error }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
+        <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.providerNew')" @close="editing = null">
             <div class="space-y-3">
