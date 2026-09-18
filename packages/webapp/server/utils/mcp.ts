@@ -1,6 +1,6 @@
 import { createMCPClient, type MCPClient } from '@ai-sdk/mcp';
 import type { ToolSet } from 'ai';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { mcpServers } from '../db/schema';
 import { db } from './db';
 
@@ -48,13 +48,17 @@ export async function connectEnabledMcpServers(serverIds: string[]) {
     const connections: McpConnection[] = [];
     if (!serverIds.length) return connections;
 
-    const rows = (await db.select().from(mcpServers).where(eq(mcpServers.enabled, true))).filter((s) => serverIds.includes(s.id));
-    for (const row of rows) {
-        try {
-            connections.push(await connectMcpServer(row));
-        } catch (error) {
-            console.error(`[mcp:${row.name}] 连接失败，跳过该服务器的工具:`, error);
-        }
+    // 直接在 SQL 里用 inArray 取「已启用且被本智能体绑定」的服务器，
+    // 不要全表拉取启用项后在 JS 里 filter——MCP 服务器数量会随运营增长。
+    const rows = await db
+        .select()
+        .from(mcpServers)
+        .where(and(inArray(mcpServers.id, [...new Set(serverIds)]), eq(mcpServers.enabled, true)));
+    // 并发建连：每个服务器的失败已被单独捕获，互不影响，串行会把连接延迟线性累加到首 token 前。
+    const settled = await Promise.allSettled(rows.map((row) => connectMcpServer(row)));
+    for (const [i, r] of settled.entries()) {
+        if (r.status === 'fulfilled') connections.push(r.value);
+        else console.error(`[mcp:${rows[i].name}] 连接失败，跳过该服务器的工具:`, r.reason);
     }
     return connections;
 }

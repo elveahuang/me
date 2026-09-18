@@ -80,28 +80,36 @@ function sanitizeUserParts(parts: unknown): unknown[] {
     });
 }
 
+/** 收集 parts 中所有站内附件引用 id（去重前） */
+function collectInternalAttachmentIds(parts: unknown[]): string[] {
+    const ids: string[] = [];
+    for (const p of parts) {
+        const url = (p as { url?: unknown })?.url;
+        if (typeof url === 'string' && url.startsWith('/')) {
+            const id = internalAttachmentId(url);
+            if (id) ids.push(id);
+        }
+    }
+    return ids;
+}
+
 /**
- * 校验站内附件引用确实属于当前用户。
+ * 校验站内附件引用确实属于当前用户（一次查库拿回全部合法 id）。
  * 只做格式校验不够：否则用户可以伪造 `/api/attachments/{别人的id}/raw`，
- * 让 assistant 回复里出现指向他人附件的链接（虽然是 404，但仍是越权引用）。
- * 返回过滤后的 parts，并顺带丢弃引用不存在/非本人的附件。
+ * 让 assistant 回复里出现指向他人附件的链接。返回属于该用户的 id 集合。
  */
-async function filterOwnedAttachmentRefs(parts: unknown[], userId: string): Promise<unknown[]> {
-    const ids = parts
-        .map((p) => {
-            const url = (p as { url?: unknown })?.url;
-            return typeof url === 'string' && url.startsWith('/') ? internalAttachmentId(url) : null;
-        })
-        .filter((id): id is string => Boolean(id));
-
-    if (!ids.length) return parts;
-
+async function ownedAttachmentIds(ids: string[], userId: string): Promise<Set<string>> {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return new Set();
     const rows = await db
         .select({ id: attachmentsTable.id })
         .from(attachmentsTable)
-        .where(and(inArray(attachmentsTable.id, ids), eq(attachmentsTable.userId, userId)));
-    const owned = new Set(rows.map((row) => row.id));
+        .where(and(inArray(attachmentsTable.id, unique), eq(attachmentsTable.userId, userId)));
+    return new Set(rows.map((row) => row.id));
+}
 
+/** 丢弃引用了不存在/非本人附件的 part，其余原样保留 */
+function dropUnownedAttachmentRefs(parts: unknown[], owned: Set<string>): unknown[] {
     return parts.filter((p) => {
         const url = (p as { url?: unknown })?.url;
         if (typeof url !== 'string' || !url.startsWith('/')) return true;
@@ -197,28 +205,34 @@ export default defineEventHandler(async (event) => {
     // 6. 落库客户端消息（按消息 id 幂等）
     //    只接受 user 角色：服务端历史是上下文唯一事实来源，
     //    否则客户端可以伪造 assistant 回复与 tool 结果污染后续所有轮次。
-    if (incoming.length > 0) {
-        for (const m of incoming) {
-            if (m.role !== 'user') continue;
-            const sanitized = sanitizeUserParts(m.parts);
-            // 站内附件引用必须是当前用户自己的附件，否则丢弃该 part
-            const parts = await filterOwnedAttachmentRefs(sanitized, session.user.id);
-            if (!parts.length) continue;
+    //    先做本地清洗，再一次性查回所有站内附件的归属，最后一条事务批量写入，
+    //    避免「每条消息一次归属查询 + 一次 INSERT + 一次 UPDATE」的往返放大。
+    const candidateMessages = incoming
+        .filter((m) => m.role === 'user')
+        .map((m) => ({
             // id 是主键且必填：客户端未带 id 时服务端补一个，
             // 否则 insert 会因 undefined 参数报 500 —— 而额度在此之前已经扣掉了。
-            const messageId = typeof m.id === 'string' && m.id.trim() ? m.id : `cmsg_${crypto.randomUUID()}`;
-            await db
-                .insert(messagesTable)
-                .values({
-                    id: messageId,
-                    conversationId: conversation.id,
-                    role: 'user',
-                    parts,
-                })
-                .onConflictDoNothing();
+            id: typeof m.id === 'string' && m.id.trim() ? m.id : `cmsg_${crypto.randomUUID()}`,
+            parts: sanitizeUserParts(m.parts),
+        }))
+        .filter((m) => m.parts.length);
+
+    const owned = await ownedAttachmentIds(
+        candidateMessages.flatMap((m) => collectInternalAttachmentIds(m.parts)),
+        session.user.id,
+    );
+    const rowsToInsert = candidateMessages
+        .map((m) => ({ id: m.id, parts: dropUnownedAttachmentRefs(m.parts, owned) }))
+        .filter((m) => m.parts.length)
+        .map((m) => ({ id: m.id, conversationId: conversation.id, role: 'user' as const, parts: m.parts }));
+
+    // 消息与会话 updatedAt 必须原子推进：批量写消息 + bump 会话时间放同一事务。
+    await db.transaction(async (tx) => {
+        if (rowsToInsert.length) {
+            await tx.insert(messagesTable).values(rowsToInsert).onConflictDoNothing();
         }
-    }
-    await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversation.id));
+        await tx.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversation.id));
+    });
 
     // 7. 从数据库取权威历史（最近 MAX_CONTEXT_MESSAGES 条，按 seq 稳定排序），
     //    既控制长会话 Token 成本，也避免客户端传入的历史污染上下文

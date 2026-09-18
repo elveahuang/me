@@ -17,22 +17,45 @@ export default defineEventHandler(async (event) => {
     const allMcp = await db.select({ id: mcpServers.id, name: mcpServers.name }).from(mcpServers);
     const providerRows = await db.select({ id: providers.id, name: providers.name, models: providers.models }).from(providers);
 
-    return rows.map((agent) => ({
-        ...agent,
-        skillIds: bindings.filter((b) => b.agentId === agent.id).map((b) => b.skillId),
-        skills: bindings
-            .filter((b) => b.agentId === agent.id)
-            .map((b) => allSkills.find((s) => s.id === b.skillId))
-            .filter(Boolean),
-        toolIds: toolBindings.filter((b) => b.agentId === agent.id).map((b) => b.toolId),
-        tools: toolBindings
-            .filter((b) => b.agentId === agent.id)
-            .map((b) => allTools.find((t) => t.id === b.toolId))
-            .filter(Boolean),
-        kbIds: kbBindings.filter((b) => b.agentId === agent.id).map((b) => b.kbId),
-        knowledgeBases: allKbs.filter((k) => kbBindings.some((b) => b.agentId === agent.id && b.kbId === k.id)),
-        mcpIds: mcpBindings.filter((b) => b.agentId === agent.id).map((b) => b.mcpServerId),
-        mcpServers: allMcp.filter((m) => mcpBindings.some((b) => b.agentId === agent.id && b.mcpServerId === m.id)),
-        provider: providerRows.find((p) => p.id === agent.providerId) ?? null,
-    }));
+    // 预分组，避免对每个 agent 遍历全部绑定并对每条绑定 .find（O(agents × bindings)）：
+    // 按 agentId 建一次索引，实体表按 id 建 Map，列表组装退化为线性拼接。
+    const skillsById = new Map(allSkills.map((s) => [s.id, s]));
+    const toolsById = new Map(allTools.map((t) => [t.id, t]));
+    const providerById = new Map(providerRows.map((p) => [p.id, p]));
+    const groupAgentIds = <T extends { agentId: string }>(list: T[], key: (row: T) => string) => {
+        const map = new Map<string, string[]>();
+        for (const row of list) {
+            const value = key(row);
+            const bucket = map.get(row.agentId);
+            if (bucket) bucket.push(value);
+            else map.set(row.agentId, [value]);
+        }
+        return map;
+    };
+    const skillIdsByAgent = groupAgentIds(bindings, (b) => b.skillId);
+    const toolIdsByAgent = groupAgentIds(toolBindings, (b) => b.toolId);
+    const kbIdsByAgent = groupAgentIds(kbBindings, (b) => b.kbId);
+    const mcpIdsByAgent = groupAgentIds(mcpBindings, (b) => b.mcpServerId);
+    const kbById = new Map(allKbs.map((k) => [k.id, k]));
+    const mcpById = new Map(allMcp.map((m) => [m.id, m]));
+    const pick = <T>(ids: string[] | undefined, byId: Map<string, T>) => (ids ?? []).map((id) => byId.get(id)).filter((v): v is T => Boolean(v));
+
+    return rows.map((agent) => {
+        const skillIds = skillIdsByAgent.get(agent.id) ?? [];
+        const toolIds = toolIdsByAgent.get(agent.id) ?? [];
+        const kbIds = kbIdsByAgent.get(agent.id) ?? [];
+        const mcpIds = mcpIdsByAgent.get(agent.id) ?? [];
+        return {
+            ...agent,
+            skillIds,
+            skills: pick(skillIds, skillsById),
+            toolIds,
+            tools: pick(toolIds, toolsById),
+            kbIds,
+            knowledgeBases: pick(kbIds, kbById),
+            mcpIds,
+            mcpServers: pick(mcpIds, mcpById),
+            provider: providerById.get(agent.providerId) ?? null,
+        };
+    });
 });

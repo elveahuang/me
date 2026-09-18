@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { storageConfigs } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
@@ -65,12 +65,14 @@ export default defineEventHandler(async (event) => {
         // 允许清空；仅做提示性校验，不阻塞保存
     }
 
-    await db.update(storageConfigs).set(patch).where(eq(storageConfigs.id, id));
-
-    if (patch.isDefault === true) {
-        await db.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
-        await db.update(storageConfigs).set({ isDefault: true, updatedAt: new Date() }).where(eq(storageConfigs.id, id));
-    }
+    // 切换默认存储是「清其它 + 设本条」两步写，必须同事务，否则中途失败会留下零个或两个默认配置。
+    // patch 已含 isDefault:true 时，先清掉其它配置的默认位，再写本条即可，无需再对本条重复更新。
+    await db.transaction(async (tx) => {
+        if (patch.isDefault === true) {
+            await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(ne(storageConfigs.id, id));
+        }
+        await tx.update(storageConfigs).set(patch).where(eq(storageConfigs.id, id));
+    });
     invalidateStorageConfigCache();
 
     const [row] = await db.select().from(storageConfigs).where(eq(storageConfigs.id, id));

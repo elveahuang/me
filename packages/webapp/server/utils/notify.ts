@@ -31,22 +31,26 @@ export async function createNotification(input: CreateNotificationInput): Promis
         throw createError({ statusCode: 400, statusMessage: '定向推送至少需要选择一个用户' });
     }
     const id = crypto.randomUUID();
-    await db.insert(notifications).values({
-        id,
-        title: input.title,
-        content: input.content ?? '',
-        type: input.type ?? 'system',
-        level: input.level ?? 'info',
-        audience,
-        linkUrl: input.linkUrl ?? '',
-        createdBy: input.createdBy ?? null,
+    // 通知行与定向收件人行必须同事务：否则 recipients 写入失败会留下一条 audience='users'
+    // 但无人可见的孤儿通知。广播（all）不预展开收件人，只写一条通知。
+    await db.transaction(async (tx) => {
+        await tx.insert(notifications).values({
+            id,
+            title: input.title,
+            content: input.content ?? '',
+            type: input.type ?? 'system',
+            level: input.level ?? 'info',
+            audience,
+            linkUrl: input.linkUrl ?? '',
+            createdBy: input.createdBy ?? null,
+        });
+        if (audience === 'users') {
+            await tx
+                .insert(notificationRecipients)
+                .values(userIds.map((userId) => ({ id: crypto.randomUUID(), notificationId: id, userId })))
+                .onConflictDoNothing();
+        }
     });
-    if (audience === 'users') {
-        await db
-            .insert(notificationRecipients)
-            .values(userIds.map((userId) => ({ id: crypto.randomUUID(), notificationId: id, userId })))
-            .onConflictDoNothing();
-    }
     return id;
 }
 
