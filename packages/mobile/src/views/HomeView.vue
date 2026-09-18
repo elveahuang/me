@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AgentSummary } from '@commons/contract';
-import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
+import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError, fetchSession } from '../api/auth';
@@ -37,17 +37,26 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(async () => {
+onMounted(() => {
     try {
         favorites.value = JSON.parse(localStorage.getItem('mobile_favorite_agents') || '[]');
     } catch {
         favorites.value = [];
     }
+});
+
+// Ionic 标签页组件会随切换保活，onMounted 只在首次触发；
+// 每次进入 Home 标签时刷新列表/角标/昵称，避免从聊天等页面返回后看到旧数据。
+onIonViewWillEnter(() => {
     loadAgents();
     void refreshUnread();
+    void loadUserName();
+});
+
+async function loadUserName() {
     const session = await fetchSession();
     userName.value = session?.user?.name ?? '';
-});
+}
 
 const activeCategory = ref('all');
 

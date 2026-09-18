@@ -84,28 +84,60 @@ export interface SessionPayload {
     session?: { id: string; expiresAt: string };
 }
 
-/** 获取当前会话（服务端 /api/auth/get-session） */
-export async function fetchSession(): Promise<SessionPayload | null> {
-    try {
-        const res = await fetch(apiUrl('/api/auth/get-session'), {
-            credentials: 'include',
-            headers: authHeaders(),
-        });
-        if (!res.ok) return null;
-        const data = (await res.json()) as SessionPayload | null;
-        return data?.user ? data : null;
-    } catch {
-        return null;
-    }
+/** get-session 是纯读取，超时后可安全放弃；给足慢网络但仍避免永久挂起 */
+const SESSION_TIMEOUT_MS = 10_000;
+
+/**
+ * 最近一次确认过的会话。用于在瞬时故障（网络抖动 / 超时 / 5xx）时降级返回，
+ * 防止路由守卫把「已经登录、只是这一次请求失败」的用户误踢回登录页。
+ */
+let cachedSession: SessionPayload | null = null;
+/** 并发去重：守卫与页面可能同时拉会话，共用一次在途请求 */
+let inflightSession: Promise<SessionPayload | null> | null = null;
+
+/**
+ * 获取当前会话（服务端 /api/auth/get-session）。
+ * - 2xx：以服务端结果为准，刷新缓存。
+ * - 401/403：服务端明确拒绝当前凭据，判定为已登出，清缓存返回 null。
+ * - 其它（网络失败 / 超时 / 5xx / 其它 4xx）：视为瞬时故障，保留并返回缓存值，
+ *   冷启动无缓存时返回 null，交由调用方决定跳转。
+ */
+export function fetchSession(): Promise<SessionPayload | null> {
+    if (inflightSession) return inflightSession;
+    inflightSession = (async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), SESSION_TIMEOUT_MS);
+        try {
+            const res = await fetch(apiUrl('/api/auth/get-session'), {
+                credentials: 'include',
+                headers: authHeaders(),
+                signal: controller.signal,
+            });
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) cachedSession = null;
+                return cachedSession;
+            }
+            const data = (await res.json().catch(() => null)) as SessionPayload | null;
+            cachedSession = data?.user ? data : null;
+            return cachedSession;
+        } catch {
+            return cachedSession;
+        } finally {
+            clearTimeout(timer);
+            inflightSession = null;
+        }
+    })();
+    return inflightSession;
 }
 
-/** 退出登录：清空本地 token 与服务端会话 */
+/** 退出登录：清空本地 token、缓存与服务端会话 */
 export async function signOut(): Promise<void> {
     try {
         await authClient.signOut();
     } catch {
         // ignore
     }
+    cachedSession = null;
     setToken(null);
 }
 
