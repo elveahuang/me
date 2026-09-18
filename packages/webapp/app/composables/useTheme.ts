@@ -19,7 +19,10 @@ export function useTheme() {
         path: '/',
     });
 
-    const brand = computed<ThemeBrand>(() => (isThemeBrand(brandCookie.value) ? brandCookie.value : DEFAULT_BRAND));
+    // 新访客（无品牌 cookie）用系统基础设置的默认品牌色；SSR 即可输出正确 data-brand，不闪色。
+    const configuredBrand = useRuntimeConfig().public.siteSettings.themeBrand;
+    const fallbackBrand: ThemeBrand = isThemeBrand(configuredBrand) ? configuredBrand : DEFAULT_BRAND;
+    const brand = computed<ThemeBrand>(() => (isThemeBrand(brandCookie.value) ? brandCookie.value : fallbackBrand));
     const mode = computed<'light' | 'dark' | 'system'>(() => {
         const preference = colorMode.preference;
         return preference === 'light' || preference === 'dark' ? preference : 'system';

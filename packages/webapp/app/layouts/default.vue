@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n';
 const { t, locale } = useI18n();
 const { $setLocale } = useNuxtApp();
 const { session, load } = useSession();
+const siteTitle = useRuntimeConfig().public.siteSettings.siteTitle;
 
 const route = useRoute();
 const drawerOpen = ref(false);
@@ -144,7 +145,7 @@ async function logout() {
 
                 <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5">
                     <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">ME</span>
-                    <span class="text-brand hidden text-lg font-black tracking-tight sm:inline">{{ t('common.appName') }}</span>
+                    <span class="text-brand hidden text-lg font-black tracking-tight sm:inline">{{ siteTitle }}</span>
                 </NuxtLink>
 
                 <!-- 桌面端主导航 -->
@@ -269,7 +270,7 @@ async function logout() {
                     <div class="flex items-center justify-between border-b px-4 py-3" style="border-color: var(--line)">
                         <span class="flex items-center gap-2.5">
                             <span class="app-avatar h-8 w-8 text-xs">ME</span>
-                            <span class="text-sm font-black">{{ t('common.appName') }}</span>
+                            <span class="text-sm font-black">{{ siteTitle }}</span>
                         </span>
                         <button
                             type="button"

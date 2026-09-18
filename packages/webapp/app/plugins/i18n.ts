@@ -3,14 +3,13 @@ import enUS from '../locales/en-US';
 import zhCN from '../locales/zh-CN';
 
 export default defineNuxtPlugin((nuxtApp) => {
-    // 获取初始语言设置（支持客户端从 localStorage / cookie 获取）
-    let initialLocale = 'zh-CN';
+    // 新访客默认语言来自系统基础设置（SSR/客户端一致）；用户已存储的偏好始终优先。
+    const serverDefault = useRuntimeConfig().public.siteSettings.defaultLocale;
+    let initialLocale = serverDefault === 'en-US' ? 'en-US' : 'zh-CN';
     if (import.meta.client) {
         const stored = localStorage.getItem('app_locale');
         if (stored === 'en-US' || stored === 'zh-CN') {
             initialLocale = stored;
-        } else if (navigator.language.startsWith('en')) {
-            initialLocale = 'en-US';
         }
     }
 

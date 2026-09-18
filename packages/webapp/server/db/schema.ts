@@ -536,6 +536,20 @@ export const notificationRecipients = pgTable(
 );
 
 // ==========================================
+// 系统基础设置（单行）
+// ==========================================
+// 平台级默认值：系统标题、新访客首访默认语言/主题。始终只有 id='default' 一行，
+// 由 server/utils/system-settings.ts 负责读取（缺行时回退到内建默认）与 upsert。
+export const systemSettings = pgTable('system_settings', {
+    id: text('id').primaryKey(),
+    siteTitle: text('site_title').notNull().default('ME'),
+    defaultLocale: text('default_locale').notNull().default('zh-CN'), // zh-CN | en-US
+    themeMode: text('theme_mode').notNull().default('system'), // light | dark | system
+    themeBrand: text('theme_brand').notNull().default('green'), // blue | green | yellow | red
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ==========================================
 // INFERRED TYPES
 // ==========================================
 export type User = typeof user.$inferSelect;
@@ -559,3 +573,4 @@ export type News = typeof news.$inferSelect;
 export type Bulletin = typeof bulletins.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type NotificationRecipient = typeof notificationRecipients.$inferSelect;
+export type SystemSetting = typeof systemSettings.$inferSelect;

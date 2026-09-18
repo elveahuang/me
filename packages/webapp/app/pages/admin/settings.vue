@@ -7,11 +7,14 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-type TabKey = 'storage';
-const tabs = computed<{ key: TabKey; label: string }[]>(() => [{ key: 'storage', label: t('nav.storage') }]);
+type TabKey = 'basic' | 'storage';
+const tabs = computed<{ key: TabKey; label: string }[]>(() => [
+    { key: 'basic', label: t('nav.basic') },
+    { key: 'storage', label: t('nav.storage') },
+]);
 
-/** 当前分区由 ?tab= 决定，便于深链到指定分区 */
-const active = computed<TabKey>(() => 'storage');
+/** 当前分区由 ?tab= 决定，便于深链到指定分区；默认基础设置 */
+const active = computed<TabKey>(() => (route.query.tab === 'storage' ? 'storage' : 'basic'));
 
 function setTab(key: TabKey) {
     router.replace({ query: { ...route.query, tab: key } });
@@ -38,7 +41,7 @@ function setTab(key: TabKey) {
             </button>
         </div>
 
-        <AdminSettingsStorage v-if="active === 'storage'" />
-        <AdminSettingsProviders v-else />
+        <AdminSettingsBasic v-if="active === 'basic'" />
+        <AdminSettingsStorage v-else />
     </div>
 </template>

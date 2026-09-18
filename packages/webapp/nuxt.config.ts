@@ -18,6 +18,15 @@ export default defineNuxtConfig({
     },
     runtimeConfig: {
         deepseekApiKey: '',
+        public: {
+            // 系统基础设置的静态兜底；启动插件与管理端 PATCH 会用数据库值覆盖。需与 server/utils/system-settings.ts 的默认值保持一致。
+            siteSettings: {
+                siteTitle: 'ME',
+                defaultLocale: 'zh-CN',
+                themeMode: 'system',
+                themeBrand: 'green',
+            },
+        },
     },
     fonts: {
         providers: {
