@@ -161,6 +161,24 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 用户端 `/news`、`/notifications`、`/attachments` 与移动端同名路由都需要登录；管理端在 `/admin/news`、`/admin/bulletins`、`/admin/notifications`、`/admin/storage`。`/admin/storage` 页面同时承载存储配置与附件总览。
 - 移动端未读角标用 `packages/mobile/src/composables/useUnread.ts` 的共享单例，不要在页面里各自维护未读数，否则读完消息返回后角标不同步。
 - 移动端拍照上传走 `@capacitor/camera`（仅原生壳展示入口，动态导入因此只进附件分包）；仓库内暂无 android/ios 原生工程，接入原生构建时需另行声明相机权限。
+- **直传的体积上限由登记接口兜底**：S3 的 PUT 预签名 URL 无法携带 `content-length-range`，因此客户端自报的 size 不可信。`/api/attachments/complete` 会回源 `HeadObject` 读真实大小，超限则删除对象并拒绝登记；另有 `mode=post` 的预签名 POST policy 可在上传阶段直接拒绝。改动直传链路时不要绕过这一步校验。
+
+### 前端约定与易错点
+
+- **i18n 消息不能直接写 `{{x}}`**：vue-i18n 把它当插值语法，渲染时抛 `Not allowed nest placeholder` / `Invalid token in placeholder`。字面量大括号要写成 `{'{{'}…{'}}'}`；JSON 示例这类代码片段应放在组件内拼接，不要进 locale。改动 locale 后建议对每条消息做一次编译校验（`zh-CN`/`en-US` 与移动端两份都要查）。
+- **模板里不要用会遮蔽 i18n `t` 的循环变量名**：`v-for="t in list"` 会让同一模板内的 `t('...')` 变成「对象不可调用」。循环变量用具体名词（如 `tool in toolList`）。
+- **管理端页面需同时处理 loading / 错误 / 空态三种状态**：失败时若直接套用空态文案，用户会把「接口挂了」读成「没有数据」。列表页失败应清空数据并渲染错误提示 + 重试按钮。
+- **页面内的 `setTimeout`/`setInterval` 必须在卸载时清理**：搜索防抖与成功提示定时器若不清，SPA 内快速进出页面会在组件销毁后继续发请求或写状态。成功提示统一走 `flashSuccess()` 这类收敛的辅助函数，便于集中清理。
+- 修改共享契约后同步两端；`pnpm lint` 覆盖 Web server/app、Mobile src 与 Commons src，`.husky/pre-commit` 只跑 lint-staged（不含 Vue 的 ESLint），提交成功不等于通过检查。
+
+### 服务端健壮性约定
+
+- **无鉴权接口不得有副作用**：`/api/health` 是公开探针，模型检查必须走只读的 `peekModelAvailability()`，不要调 `resolveModel()`——后者会触发 `ensureDefaultProvider()` 写库。探针也不应回传供应商地址、数据库错误原文或运行环境信息。
+- **分页参数一律夹到合法区间**：`limit`/`offset` 的负数会被 PostgreSQL 拒绝（2201W/2201X）并把 SQL 细节透出到响应体，`page=Infinity` 会让 offset 溢出。统一用 `Math.min(Math.max(1, ...), 上限)` 与 `Math.max(0, ...)`。
+- **入参要防御 `undefined`**：`readBody` 对空请求体返回 undefined（解构即 500）；聊天请求的 `messages[].id` 缺失会让 drizzle 传 undefined 参数（同样 500，且额度已扣）。服务端应为缺失的主键补值，而不是依赖客户端。
+- **落库前校验 part 结构**：相对路径的 `file`/`image` part 会因 AI SDK 的 `new URL()` 抛错而让该会话**永久** 500（历史来自数据库，每轮都会重放）。`sanitizeUserParts()` 现在会校验 url 必须是绝对 http(s)/data 地址。
+- **多行写入要考虑事务**：文档行与分块行、默认存储切换的两条 update，失败时会留下不一致状态，需同事务执行。
+- **统计避免全表拉取**：计数用 `count(*) GROUP BY`，不要在应用层把整表查进内存再 filter；列表里的关联数据用一次 IN 查询后分组，避免 N+1。
 
 ### 前端配套与代码风格
 
