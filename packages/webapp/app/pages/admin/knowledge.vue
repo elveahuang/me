@@ -34,6 +34,9 @@ const message = ref('');
 const listError = ref('');
 
 const newKb = reactive({ name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+/** 编辑中的知识库（后端支持 PATCH，此前没有入口，写错名字只能删库重建） */
+const editingKb = ref<KbItem | null>(null);
+const editForm = reactive({ name: '', description: '', embeddingModel: '' });
 const docForm = reactive({ title: '', content: '' });
 const searchQuery = ref('');
 const searchHits = ref<HitItem[]>([]);
@@ -107,6 +110,34 @@ async function open(kb: KbItem) {
     } catch (e) {
         docs.value = [];
         message.value = extractApiError(e, t('adminForm.loadFailed'));
+    }
+}
+
+/** 打开编辑：改名 / 描述 / embedding 模型（服务端 PATCH 已支持） */
+function openEditKb(kb: KbItem) {
+    editingKb.value = kb;
+    Object.assign(editForm, { name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
+    listError.value = '';
+}
+
+async function saveKb() {
+    if (!editingKb.value) return;
+    if (!editForm.name.trim()) {
+        listError.value = t('adminForm.requiredName');
+        return;
+    }
+    listError.value = '';
+    try {
+        const updated = await $fetch<KbItem>(`/api/admin/knowledge-bases/${editingKb.value.id}`, {
+            method: 'PATCH',
+            body: { name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel },
+        });
+        // 同步当前面板标题，避免改名后仍显示旧名
+        if (current.value?.id === updated.id) current.value = { ...current.value, ...updated };
+        editingKb.value = null;
+        await load();
+    } catch (e) {
+        listError.value = extractApiError(e, t('adminForm.saveFailed'));
     }
 }
 
@@ -195,6 +226,34 @@ async function search() {
                 <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
             </div>
 
+            <!-- 编辑知识库：改名/描述/embedding 模型（此前只能删库重建） -->
+            <div v-if="editingKb" class="mb-4 space-y-2 rounded-2xl bg-white p-4 shadow-sm">
+                <p class="text-xs font-bold text-gray-600">{{ t('adminForm.kbEditTitle') }}</p>
+                <div class="flex gap-2">
+                    <input
+                        v-model="editForm.name"
+                        :placeholder="t('adminForm.kbNamePlaceholder')"
+                        class="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                        v-model="editForm.description"
+                        :placeholder="t('adminForm.description')"
+                        class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                        v-model="editForm.embeddingModel"
+                        :placeholder="t('adminForm.kbEmbeddingModel')"
+                        class="w-52 rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                    />
+                </div>
+                <div class="flex gap-2">
+                    <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="saveKb">
+                        {{ t('adminForm.save') }}
+                    </button>
+                    <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
+                </div>
+            </div>
+
             <div class="mb-4 flex gap-2 rounded-2xl bg-white p-4 shadow-sm">
                 <input v-model="newKb.name" :placeholder="t('adminForm.kbNamePlaceholder')" class="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 <input
@@ -231,6 +290,7 @@ async function search() {
                         <td class="p-4 text-gray-500">{{ kb.documentCount }} / {{ kb.chunkCount }}</td>
                         <td class="space-x-2 p-4">
                             <button class="text-green-600 hover:underline" @click="open(kb)">{{ t('adminForm.kbManage') }}</button>
+                            <button class="text-blue-600 hover:underline" @click="openEditKb(kb)">{{ t('adminForm.edit') }}</button>
                             <button class="text-blue-600 hover:underline disabled:opacity-50" :disabled="reindexing" @click="reindex(kb)">
                                 {{ t('adminForm.kbReindex') }}
                             </button>

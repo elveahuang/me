@@ -114,6 +114,11 @@ export default {
         sendPrompt: 'Send directly',
         copiedToast: 'Message copied',
         clearInput: 'Clear',
+        attach: 'Add attachment',
+        attachLimit: 'Up to 5 attachments per message',
+        uploadAndAttach: 'Upload & attach',
+        attachedFile: 'Attachment',
+        downloadFile: 'Download',
     },
     agents: {
         title: 'Agents Square',

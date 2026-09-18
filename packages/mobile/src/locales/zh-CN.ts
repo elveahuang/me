@@ -114,6 +114,11 @@ export default {
         sendPrompt: '直接发送',
         copiedToast: '消息内容已复制',
         clearInput: '清空内容',
+        attach: '添加附件',
+        attachLimit: '最多一次发送 5 个附件',
+        uploadAndAttach: '上传并添加',
+        attachedFile: '附件',
+        downloadFile: '下载',
     },
     agents: {
         title: '智能体广场',

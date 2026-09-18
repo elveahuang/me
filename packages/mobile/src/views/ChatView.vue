@@ -2,7 +2,15 @@
 import { Chat } from '@ai-sdk/vue';
 import { Markdown } from '@comark/vue';
 import jsonRender from '@comark/vue/plugins/json-render';
-import { extractApiError, isQuotaError, type AgentDetail, type ChatMessage, type ConversationSummary } from '@commons/contract';
+import {
+    extractApiError,
+    formatBytes,
+    isQuotaError,
+    type AgentDetail,
+    type AttachmentRecord,
+    type ChatMessage,
+    type ConversationSummary,
+} from '@commons/contract';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { IonBackButton, IonButtons, IonContent, IonHeader, IonModal, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';
@@ -11,6 +19,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { api, apiUrl, extractApiError as extractError, getToken } from '../api/auth';
 import { uiComponents } from '../components/json-ui';
 import { useTheme } from '../composables/useTheme';
+import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
@@ -28,14 +37,28 @@ const convModalOpen = ref(false);
 const sending = ref(false);
 const loadError = ref('');
 
+/** 待发送附件（发送成功后清空；失败保留，避免用户重选） */
+const pendingAttachments = ref<AttachmentRecord[]>([]);
+const attachPickerOpen = ref(false);
+const attachOptions = ref<AttachmentRecord[]>([]);
+const attachLoading = ref(false);
+const attachError = ref('');
+const attachUploading = ref(false);
+const nativeShell = isNativeShell();
+/** 附件图片大图预览 */
+const previewImage = ref('');
+
 const starterPrompts = computed(() => [
     t('chat.starterPrompts.0') || '🎯 介绍一下你的功能与擅长领域',
     t('chat.starterPrompts.1') || '💡 给我提供 3 个实用的任务建议',
     t('chat.starterPrompts.2') || '🛠️ 你可以使用哪些工具或技能？',
 ]);
 
-const segmentsOf = (message: UIMessage) => {
-    const out: { kind: 'text' | 'reasoning'; value: string }[] = [];
+type ChatSegment =
+    { kind: 'text'; value: string } | { kind: 'reasoning'; value: string } | { kind: 'file'; value: string; url: string; mediaType: string; isImage: boolean };
+
+const segmentsOf = (message: UIMessage): ChatSegment[] => {
+    const out: ChatSegment[] = [];
     for (const part of message.parts ?? []) {
         if (part.type === 'text' && part.text?.trim()) {
             out.push({ kind: 'text', value: part.text });
@@ -44,6 +67,20 @@ const segmentsOf = (message: UIMessage) => {
             if (rText?.trim()) {
                 out.push({ kind: 'reasoning', value: rText });
             }
+        } else if (part.type === 'file') {
+            // AI SDK 7 里图片也走 file part（靠 mediaType 区分），没有独立的 image 类型。
+            // 此前不处理 file，只发附件的消息会渲染成空白。
+            const filePart = part as { url?: unknown; filename?: unknown; mediaType?: unknown };
+            const url = typeof filePart.url === 'string' ? filePart.url : '';
+            if (!url) continue;
+            const mediaType = typeof filePart.mediaType === 'string' ? filePart.mediaType : 'application/octet-stream';
+            out.push({
+                kind: 'file',
+                value: typeof filePart.filename === 'string' && filePart.filename ? filePart.filename : t('chat.attachedFile'),
+                url,
+                mediaType,
+                isImage: mediaType.startsWith('image/'),
+            });
         }
     }
     return out;
@@ -210,14 +247,36 @@ watch(
 
 async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
-    if (!text || sending.value) return;
+    // 允许只发附件（无文字）
+    if ((!text && !pendingAttachments.value.length) || sending.value) return;
     if (!conversationId.value || !chat.value) {
         await startNewConversation();
     }
+
+    // 附件必须经服务端解析：私有桶的预签名地址会过期，不能写进消息历史
+    let files: { type: 'file'; mediaType: string; filename: string; url: string }[] = [];
+    if (pendingAttachments.value.length) {
+        try {
+            const res = await api<{ parts: typeof files }>('/api/attachments/chat-parts', {
+                method: 'POST',
+                body: JSON.stringify({ ids: pendingAttachments.value.map((a) => a.id) }),
+            });
+            files = res.parts ?? [];
+        } catch (e) {
+            loadError.value = extractError(e, t('common.error'));
+            return;
+        }
+    }
+
     input.value = '';
+    pendingAttachments.value = [];
     sending.value = true;
     try {
-        await chat.value?.sendMessage({ text });
+        if (files.length) {
+            await chat.value?.sendMessage({ text, files });
+        } else {
+            await chat.value?.sendMessage({ text });
+        }
         await loadConversations();
         nextTick(() => scrollToBottom());
     } catch (e) {
@@ -225,6 +284,59 @@ async function handleSubmit(overrideText?: string) {
     } finally {
         sending.value = false;
     }
+}
+
+/** 上传并暂存一个待发送附件（移动端复用 useUpload 的选择与进度能力） */
+async function attachFromDevice(source: 'file' | 'photo') {
+    if (pendingAttachments.value.length >= 5) {
+        loadError.value = t('chat.attachLimit');
+        return;
+    }
+    attachError.value = '';
+    try {
+        const picked = source === 'photo' ? await pickFiles({ source: 'photo', accept: 'image/*' }) : await pickFiles({ accept: '*/*' });
+        const file = picked[0];
+        if (!file) return;
+        attachUploading.value = true;
+        const created = (await uploadAttachment(file, 'chat')) as AttachmentRecord;
+        pendingAttachments.value.push(created);
+    } catch (e) {
+        attachError.value = extractError(e, t('common.error'));
+    } finally {
+        attachUploading.value = false;
+    }
+}
+
+function removePendingAttachment(id: string) {
+    pendingAttachments.value = pendingAttachments.value.filter((a) => a.id !== id);
+}
+
+/** 打开附件选择器：列出最近上传的附件 */
+async function openAttachPicker() {
+    attachPickerOpen.value = true;
+    attachLoading.value = true;
+    attachError.value = '';
+    try {
+        const res = await api<{ attachments: AttachmentRecord[] }>('/api/attachments?pageSize=25');
+        attachOptions.value = res.attachments;
+    } catch (e) {
+        attachError.value = extractError(e, t('common.error'));
+    } finally {
+        attachLoading.value = false;
+    }
+}
+
+function pickAttachment(item: AttachmentRecord) {
+    if (pendingAttachments.value.some((a) => a.id === item.id)) {
+        attachPickerOpen.value = false;
+        return;
+    }
+    if (pendingAttachments.value.length >= 5) {
+        attachError.value = t('chat.attachLimit');
+        return;
+    }
+    pendingAttachments.value.push(item);
+    attachPickerOpen.value = false;
 }
 
 /** 复制当前会话为 Markdown 文本 */
@@ -322,6 +434,22 @@ async function copyConversationMarkdown() {
                                     >
                                         💭 {{ seg.value }}
                                     </div>
+                                    <!-- 附件：图片可点开大图，其他文件给下载入口 -->
+                                    <div v-else-if="seg.kind === 'file'" class="my-1 flex flex-wrap gap-2">
+                                        <button
+                                            v-if="seg.isImage"
+                                            type="button"
+                                            class="overflow-hidden rounded-xl border"
+                                            style="border-color: var(--line)"
+                                            @click="previewImage = seg.url"
+                                        >
+                                            <img :src="seg.url" :alt="seg.value" class="max-h-44 object-cover" />
+                                        </button>
+                                        <a v-else :href="seg.url" target="_blank" rel="noopener" class="app-chip max-w-[14rem] !py-1.5" :title="seg.value">
+                                            <span class="truncate">{{ seg.value }}</span>
+                                            <span class="text-faint text-[9px]">{{ t('chat.downloadFile') }}</span>
+                                        </a>
+                                    </div>
                                     <Suspense v-else>
                                         <Markdown :value="seg.value as string" :plugins="plugins" :components="uiComponents" class="markdown-body" />
                                         <template #fallback>
@@ -405,7 +533,27 @@ async function copyConversationMarkdown() {
 
                 <!-- 输入栏 -->
                 <div class="sticky bottom-0 p-3" style="border-top: 1px solid var(--line); background-color: var(--surface)">
+                    <!-- 待发送附件 -->
+                    <div v-if="pendingAttachments.length" class="mb-2 flex flex-wrap gap-2">
+                        <span v-for="a in pendingAttachments" :key="a.id" class="app-chip max-w-[13rem] !py-1">
+                            <span class="truncate">{{ a.filename }}</span>
+                            <span class="text-faint text-[9px]">{{ formatBytes(a.size) }}</span>
+                            <button type="button" class="text-faint" @click="removePendingAttachment(a.id)">✕</button>
+                        </span>
+                    </div>
+                    <div v-if="attachError" class="app-alert app-alert-danger mb-2 text-[10px]">{{ attachError }}</div>
+
                     <div class="flex items-center gap-2">
+                        <!-- 附件入口 -->
+                        <button
+                            type="button"
+                            class="app-btn app-btn-ghost app-btn-icon shrink-0"
+                            :title="t('chat.attach')"
+                            :disabled="attachUploading"
+                            @click="openAttachPicker"
+                        >
+                            {{ attachUploading ? '⏳' : '📎' }}
+                        </button>
                         <div class="relative flex-1">
                             <input v-model="input" :placeholder="t('chat.inputPlaceholder')" class="app-input w-full !pr-7" @keyup.enter="handleSubmit()" />
                             <button
@@ -433,6 +581,65 @@ async function copyConversationMarkdown() {
                 </div>
             </div>
         </ion-content>
+
+        <!-- 附件选择弹层：可选最近上传的附件，也可直接拍照/选文件上传 -->
+        <ion-modal :is-open="attachPickerOpen" @did-dismiss="attachPickerOpen = false">
+            <ion-header class="ion-no-border">
+                <ion-toolbar>
+                    <ion-title class="!text-sm font-black">{{ t('chat.attach') }}</ion-title>
+                    <template v-slot:end>
+                        <ion-buttons>
+                            <button type="button" class="app-btn app-btn-ghost !px-2" @click="attachPickerOpen = false">✕</button>
+                        </ion-buttons>
+                    </template>
+                </ion-toolbar>
+            </ion-header>
+            <ion-content class="ion-padding">
+                <div class="flex gap-2">
+                    <button
+                        v-if="nativeShell"
+                        type="button"
+                        class="app-btn app-btn-outline flex-1 !py-2 text-xs"
+                        :disabled="attachUploading"
+                        @click="attachFromDevice('photo')"
+                    >
+                        📷 {{ t('attachments.takePhoto') }}
+                    </button>
+                    <button type="button" class="app-btn app-btn-outline flex-1 !py-2 text-xs" :disabled="attachUploading" @click="attachFromDevice('file')">
+                        {{ attachUploading ? t('attachments.uploading') : t('chat.uploadAndAttach') }}
+                    </button>
+                </div>
+
+                <div v-if="attachLoading" class="mt-3 space-y-2">
+                    <div v-for="i in 3" :key="i" class="app-skeleton h-12" />
+                </div>
+                <div v-else-if="attachOptions.length" class="mt-3 space-y-2">
+                    <button
+                        v-for="item in attachOptions"
+                        :key="item.id"
+                        type="button"
+                        class="app-card flex w-full items-center gap-3 p-2.5 text-left"
+                        @click="pickAttachment(item)"
+                    >
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[color:var(--surface-3)]">
+                            <img v-if="item.isImage && item.url" :src="item.url" :alt="item.filename" class="h-full w-full object-cover" />
+                            <span v-else class="text-sm">📄</span>
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-[11px] font-bold">{{ item.filename }}</span>
+                            <span class="text-faint text-[9px]">{{ formatBytes(item.size) }}</span>
+                        </span>
+                        <span v-if="pendingAttachments.some((a) => a.id === item.id)" class="app-badge app-badge-success shrink-0 !text-[9px]">✓</span>
+                    </button>
+                </div>
+                <p v-else class="text-faint mt-6 text-center text-xs">{{ t('attachments.empty') }}</p>
+            </ion-content>
+        </ion-modal>
+
+        <!-- 附件图片预览 -->
+        <div v-if="previewImage" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" @click="previewImage = ''">
+            <img :src="previewImage" alt="preview" class="max-h-full max-w-full rounded-xl object-contain" />
+        </div>
 
         <!-- 会话切换弹层 -->
         <ion-modal :is-open="convModalOpen" @did-dismiss="convModalOpen = false">

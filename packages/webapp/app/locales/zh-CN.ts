@@ -256,6 +256,7 @@ export default {
         kbManage: '管理',
         kbReindex: '重建索引',
         kbEmpty: '暂无知识库',
+        kbEditTitle: '编辑知识库',
         kbDeleteConfirm: '确认删除该知识库及其全部文档？',
         kbReindexConfirm: '确认重建「{name}」的向量索引？将重新调用嵌入接口（{chunks} 个分块）。',
         kbReindexing: '正在重建索引…',

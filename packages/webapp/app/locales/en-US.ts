@@ -255,6 +255,7 @@ export default {
         kbManage: 'Manage',
         kbReindex: 'Reindex',
         kbEmpty: 'No knowledge bases yet',
+        kbEditTitle: 'Edit knowledge base',
         kbDeleteConfirm: 'Delete this knowledge base and all its documents?',
         kbReindexConfirm: 'Reindex "{name}"? This calls the embedding provider again ({chunks} chunks).',
         kbReindexing: 'Reindexing…',
