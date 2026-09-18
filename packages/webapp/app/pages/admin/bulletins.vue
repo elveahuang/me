@@ -158,7 +158,7 @@ function levelLabel(value: string) {
         <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
         <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
 
-        <div v-if="editing !== null" class="space-y-3 rounded-2xl bg-white p-6 shadow-sm">
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
             <div class="grid gap-3 sm:grid-cols-2">
                 <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
                 <textarea v-model="form.content" rows="2" placeholder="内容描述" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
@@ -191,13 +191,13 @@ function levelLabel(value: string) {
                     <input v-model="form.endsAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 </div>
             </div>
-            <div class="flex gap-2">
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
                 <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
                     {{ t('common.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
-            </div>
-        </div>
+            </template>
+        </AdminDrawer>
 
         <div v-if="loading" class="space-y-3">
             <div v-for="i in 3" :key="i" class="h-20 animate-pulse rounded-2xl bg-white" />

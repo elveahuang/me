@@ -161,103 +161,103 @@ async function remove(id: string) {
             </button>
         </div>
 
-        <!-- 编辑 / 新建表单 -->
-        <div v-if="editing !== null" class="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs sm:p-8">
-            <h3 class="text-base font-black text-slate-900">{{ editing.id ? t('common.edit') : t('admin.addRecord') }}</h3>
-            <p v-if="errorMessage" class="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-600">{{ errorMessage }}</p>
+        <!-- 编辑 / 新建表单（右侧抽屉） -->
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
+            <div class="space-y-4">
+                <p v-if="errorMessage" class="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-600">{{ errorMessage }}</p>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐编码 (创建后不可修改)</label>
-                    <input
-                        v-model="form.code"
-                        :disabled="Boolean(editing.id)"
-                        placeholder="如 pro / max"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white disabled:bg-slate-100"
-                    />
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐编码 (创建后不可修改)</label>
+                        <input
+                            v-model="form.code"
+                            :disabled="Boolean(editing?.id)"
+                            placeholder="如 pro / max"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white disabled:bg-slate-100"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐名称</label>
+                        <input
+                            v-model="form.name"
+                            placeholder="如 专业版 Pro"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        />
+                    </div>
                 </div>
+
                 <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐名称</label>
+                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐描述与权益</label>
                     <input
-                        v-model="form.name"
-                        placeholder="如 专业版 Pro"
+                        v-model="form.description"
+                        placeholder="套餐核心权益简述"
                         class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
                     />
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">每日对话配额 (留空不限)</label>
+                        <input
+                            v-model="form.chatQuotaPerDay"
+                            type="number"
+                            placeholder="留空为无限制"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">月付价格 (元)</label>
+                        <input
+                            v-model="form.monthlyPriceYuan"
+                            type="number"
+                            step="0.01"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">年付价格 (元，留空不支持)</label>
+                        <input
+                            v-model="form.yearlyPriceYuan"
+                            type="number"
+                            step="0.01"
+                            placeholder="留空为无"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-bold text-slate-700">显示排序 (越小越靠前)</label>
+                        <input
+                            v-model="form.sortOrder"
+                            type="number"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        />
+                    </div>
+                    <div class="flex items-center gap-2 pt-6">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                            <input v-model="form.enabled" type="checkbox" class="rounded text-emerald-600" />
+                            <span>启用上架并对用户可见</span>
+                        </label>
+                    </div>
                 </div>
             </div>
-
-            <div>
-                <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐描述与权益</label>
-                <input
-                    v-model="form.description"
-                    placeholder="套餐核心权益简述"
-                    class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                />
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">每日对话配额 (留空不限)</label>
-                    <input
-                        v-model="form.chatQuotaPerDay"
-                        type="number"
-                        placeholder="留空为无限制"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                    />
-                </div>
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">月付价格 (元)</label>
-                    <input
-                        v-model="form.monthlyPriceYuan"
-                        type="number"
-                        step="0.01"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                    />
-                </div>
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">年付价格 (元，留空不支持)</label>
-                    <input
-                        v-model="form.yearlyPriceYuan"
-                        type="number"
-                        step="0.01"
-                        placeholder="留空为无"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                    />
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">显示排序 (越小越靠前)</label>
-                    <input
-                        v-model="form.sortOrder"
-                        type="number"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                    />
-                </div>
-                <div class="flex items-center gap-2 pt-6">
-                    <label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-                        <input v-model="form.enabled" type="checkbox" class="rounded text-emerald-600" />
-                        <span>启用上架并对用户可见</span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="flex gap-3 pt-2">
-                <button
-                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
-                    @click="save"
-                >
-                    {{ t('common.save') }}
-                </button>
+            <template #footer>
                 <button
                     class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200"
                     @click="editing = null"
                 >
                     {{ t('common.cancel') }}
                 </button>
-            </div>
-        </div>
+                <button
+                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
+                    @click="save"
+                >
+                    {{ t('common.save') }}
+                </button>
+            </template>
+        </AdminDrawer>
 
         <!-- 套餐表格 -->
         <div class="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">

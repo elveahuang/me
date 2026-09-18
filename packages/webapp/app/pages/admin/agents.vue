@@ -263,130 +263,145 @@ async function remove(id: string) {
             </div>
         </div>
 
-        <div v-if="editing !== null" class="mb-6 space-y-3 rounded-2xl bg-white p-6 shadow-sm">
-            <div class="grid grid-cols-2 gap-3">
-                <input v-model="form.name" :placeholder="t('adminForm.namePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input v-model="form.emoji" :placeholder="t('adminForm.agentEmojiPlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <input v-model="form.description" :placeholder="t('adminForm.description')" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <textarea
-                v-model="form.systemPrompt"
-                :placeholder="t('adminForm.systemPrompt')"
-                rows="3"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.provider') }}</label>
-                    <select v-model="form.providerId" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                        <option value="">{{ t('adminForm.defaultProvider') }}</option>
-                        <option v-for="p in providerList" :key="p.id" :value="p.id">{{ p.name }}</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.model') }}</label>
+        <AdminDrawer
+            :open="editing !== null"
+            :title="editing?.id ? t('common.edit') : t('adminForm.agentNew')"
+            width-class="sm:max-w-2xl"
+            @close="editing = null"
+        >
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <input v-model="form.name" :placeholder="t('adminForm.namePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                     <input
-                        v-model="form.model"
-                        list="provider-models"
-                        :placeholder="t('adminForm.modelIdPlaceholder')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    />
-                    <datalist id="provider-models">
-                        <option v-for="m in selectedProviderModels" :key="m" :value="m" />
-                    </datalist>
-                </div>
-            </div>
-            <div class="grid grid-cols-3 gap-3">
-                <div>
-                    <label class="mb-1 block text-xs text-gray-400">Temperature (0.0 ~ 2.0)</label>
-                    <input
-                        v-model.number="form.temperature"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="2"
-                        placeholder="0.7"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                        v-model="form.emoji"
+                        :placeholder="t('adminForm.agentEmojiPlaceholder')"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                 </div>
+                <input
+                    v-model="form.description"
+                    :placeholder="t('adminForm.description')"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <textarea
+                    v-model="form.systemPrompt"
+                    :placeholder="t('adminForm.systemPrompt')"
+                    rows="3"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.provider') }}</label>
+                        <select v-model="form.providerId" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                            <option value="">{{ t('adminForm.defaultProvider') }}</option>
+                            <option v-for="p in providerList" :key="p.id" :value="p.id">{{ p.name }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.model') }}</label>
+                        <input
+                            v-model="form.model"
+                            list="provider-models"
+                            :placeholder="t('adminForm.modelIdPlaceholder')"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        />
+                        <datalist id="provider-models">
+                            <option v-for="m in selectedProviderModels" :key="m" :value="m" />
+                        </datalist>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="mb-1 block text-xs text-gray-400">Temperature (0.0 ~ 2.0)</label>
+                        <input
+                            v-model.number="form.temperature"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="2"
+                            placeholder="0.7"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxTokensOptional') }}</label>
+                        <input
+                            v-model.number="form.maxTokens"
+                            type="number"
+                            min="1"
+                            :placeholder="t('adminForm.unlimitedPlaceholder')"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxStepsLabel') }}</label>
+                        <input
+                            v-model.number="form.maxSteps"
+                            type="number"
+                            min="1"
+                            max="30"
+                            placeholder="6"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                        />
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-sm text-gray-600">
+                    <label class="flex items-center gap-1"><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label>
+                    <label class="flex items-center gap-1">
+                        <input v-model="form.selfConfig" type="checkbox" />
+                        {{ t('adminForm.agentSelfConfigHint') }}
+                    </label>
+                </div>
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxTokensOptional') }}</label>
-                    <input
-                        v-model.number="form.maxTokens"
-                        type="number"
-                        min="1"
-                        :placeholder="t('adminForm.unlimitedPlaceholder')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
-                    />
+                    <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindSkill') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <label v-for="s in skillList" :key="s.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                            <input v-model="form.skillIds" type="checkbox" :value="s.id" />
+                            {{ s.name }}
+                        </label>
+                    </div>
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxStepsLabel') }}</label>
-                    <input
-                        v-model.number="form.maxSteps"
-                        type="number"
-                        min="1"
-                        max="30"
-                        placeholder="6"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
-                    />
+                    <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindTool') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
+                        <label v-for="tool in toolList" :key="tool.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                            <input v-model="form.toolIds" type="checkbox" :value="tool.id" />
+                            {{ tool.name }}
+                            <span class="text-[10px] text-gray-400">{{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}</span>
+                        </label>
+                        <span v-if="!toolList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoTools') }}</span>
+                    </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-4 text-sm text-gray-600">
-                <label class="flex items-center gap-1"><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label>
-                <label class="flex items-center gap-1">
-                    <input v-model="form.selfConfig" type="checkbox" />
-                    {{ t('adminForm.agentSelfConfigHint') }}
-                </label>
-            </div>
-            <div>
-                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindSkill') }}</p>
-                <div class="flex flex-wrap gap-2">
-                    <label v-for="s in skillList" :key="s.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        <input v-model="form.skillIds" type="checkbox" :value="s.id" />
-                        {{ s.name }}
-                    </label>
+                <div>
+                    <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindKb') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <label v-for="kb in kbList" :key="kb.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                            <input v-model="form.kbIds" type="checkbox" :value="kb.id" />
+                            {{ kb.name }}
+                        </label>
+                        <span v-if="!kbList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoKb') }}</span>
+                    </div>
                 </div>
-            </div>
-            <div>
-                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindTool') }}</p>
-                <div class="flex flex-wrap gap-2">
-                    <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
-                    <label v-for="tool in toolList" :key="tool.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        <input v-model="form.toolIds" type="checkbox" :value="tool.id" />
-                        {{ tool.name }}
-                        <span class="text-[10px] text-gray-400">{{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}</span>
-                    </label>
-                    <span v-if="!toolList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoTools') }}</span>
+                <div>
+                    <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindMcp') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <label v-for="m in mcpList" :key="m.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                            <input v-model="form.mcpIds" type="checkbox" :value="m.id" />
+                            {{ m.name }}
+                        </label>
+                        <span v-if="!mcpList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoMcp') }}</span>
+                    </div>
                 </div>
+                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             </div>
-            <div>
-                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindKb') }}</p>
-                <div class="flex flex-wrap gap-2">
-                    <label v-for="kb in kbList" :key="kb.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        <input v-model="form.kbIds" type="checkbox" :value="kb.id" />
-                        {{ kb.name }}
-                    </label>
-                    <span v-if="!kbList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoKb') }}</span>
-                </div>
-            </div>
-            <div>
-                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindMcp') }}</p>
-                <div class="flex flex-wrap gap-2">
-                    <label v-for="m in mcpList" :key="m.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        <input v-model="form.mcpIds" type="checkbox" :value="m.id" />
-                        {{ m.name }}
-                    </label>
-                    <span v-if="!mcpList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoMcp') }}</span>
-                </div>
-            </div>
-            <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
-            <div class="flex gap-2">
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
                 <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-            </div>
-        </div>
+            </template>
+        </AdminDrawer>
 
         <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
             <thead class="text-left text-gray-400">

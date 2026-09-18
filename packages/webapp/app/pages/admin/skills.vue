@@ -132,30 +132,34 @@ async function remove(id: string) {
             <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">{{ t('adminForm.skillNew') }}</button>
         </div>
 
-        <div v-if="editing !== null" class="mb-6 space-y-3 rounded-2xl bg-white p-6 shadow-sm">
-            <div class="grid grid-cols-2 gap-3">
-                <input v-model="form.name" :placeholder="t('adminForm.skillNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input
-                    v-model="form.description"
-                    :placeholder="t('adminForm.skillDescriptionPlaceholder')"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.skillNew')" @close="editing = null">
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <input v-model="form.name" :placeholder="t('adminForm.skillNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <input
+                        v-model="form.description"
+                        :placeholder="t('adminForm.skillDescriptionPlaceholder')"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                </div>
+                <textarea
+                    v-model="form.instructions"
+                    rows="8"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    :placeholder="t('adminForm.skillInstructionsPlaceholder')"
                 />
+                <label class="flex items-center gap-1 text-sm text-gray-600">
+                    <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}
+                </label>
+                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             </div>
-            <textarea
-                v-model="form.instructions"
-                rows="8"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                :placeholder="t('adminForm.skillInstructionsPlaceholder')"
-            />
-            <label class="flex items-center gap-1 text-sm text-gray-600"> <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }} </label>
-            <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
-            <div class="flex gap-2">
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
                 <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-            </div>
-        </div>
+            </template>
+        </AdminDrawer>
 
         <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
             <thead class="text-left text-gray-400">

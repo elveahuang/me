@@ -30,6 +30,12 @@ const error = ref('');
 const success = ref('');
 const sending = ref(false);
 const filterAudience = ref('all');
+const sendOpen = ref(false);
+
+function openSend() {
+    error.value = '';
+    sendOpen.value = true;
+}
 
 const form = reactive({
     title: '',
@@ -159,6 +165,7 @@ async function send() {
         success.value = t('notifications.sent');
         Object.assign(form, { title: '', content: '', linkUrl: '', audience: 'all' as const, type: 'system', level: 'info' });
         selectedUsers.value = [];
+        sendOpen.value = false;
         await load();
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
@@ -207,101 +214,108 @@ function readPercent(row: AdminNotificationRow): number {
 
 <template>
     <div class="space-y-6">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">{{ t('nav.notifications') }}</h1>
-            <p class="mt-1 text-xs text-gray-400">向全体用户或指定用户推送系统消息、平台公告、活动与账单提醒</p>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">{{ t('nav.notifications') }}</h1>
+                <p class="mt-1 text-xs text-gray-400">向全体用户或指定用户推送系统消息、平台公告、活动与账单提醒</p>
+            </div>
+            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openSend">{{ t('notifications.send') }}</button>
         </div>
 
         <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
         <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
 
-        <!-- 推送表单 -->
-        <div class="space-y-3 rounded-2xl bg-white p-6 shadow-sm">
-            <h2 class="text-sm font-bold text-gray-700">{{ t('notifications.send') }}</h2>
-            <div class="grid gap-3 sm:grid-cols-2">
-                <input
-                    v-model="form.title"
-                    :placeholder="t('notifications.pushTitle')"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                />
-                <textarea
-                    v-model="form.content"
-                    rows="3"
-                    :placeholder="t('notifications.pushContent')"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                />
-                <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option v-for="tp in NOTIFICATION_TYPES" :key="tp.value" :value="tp.value">{{ tp.label }}</option>
-                </select>
-                <select v-model="form.level" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option value="info">信息</option>
-                    <option value="success">推荐</option>
-                    <option value="warning">提醒</option>
-                    <option value="danger">重要</option>
-                </select>
-                <input
-                    v-model="form.linkUrl"
-                    placeholder="跳转链接（可选），如 /pricing"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                />
-            </div>
-
-            <!-- 受众选择 -->
-            <div class="rounded-xl bg-gray-50 p-3">
-                <div class="flex items-center gap-3">
-                    <label class="flex items-center gap-2 text-sm text-gray-700">
-                        <input v-model="form.audience" type="radio" value="all" />
-                        <span>{{ t('notifications.sendToAll') }}</span>
-                    </label>
-                    <label class="flex items-center gap-2 text-sm text-gray-700">
-                        <input v-model="form.audience" type="radio" value="users" />
-                        <span>{{ t('notifications.sendToUsers') }}</span>
-                    </label>
-                </div>
-
-                <div v-if="form.audience === 'users'" class="mt-3 space-y-2">
+        <!-- 推送表单（右侧抽屉） -->
+        <AdminDrawer :open="sendOpen" :title="t('notifications.send')" width-class="sm:max-w-2xl" @close="sendOpen = false">
+            <div class="space-y-3">
+                <p v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</p>
+                <div class="grid gap-3 sm:grid-cols-2">
                     <input
-                        v-model="userKeyword"
-                        :placeholder="t('notifications.selectUsers')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        v-model="form.title"
+                        :placeholder="t('notifications.pushTitle')"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
                     />
+                    <textarea
+                        v-model="form.content"
+                        rows="3"
+                        :placeholder="t('notifications.pushContent')"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+                    />
+                    <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        <option v-for="tp in NOTIFICATION_TYPES" :key="tp.value" :value="tp.value">{{ tp.label }}</option>
+                    </select>
+                    <select v-model="form.level" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        <option value="info">信息</option>
+                        <option value="success">推荐</option>
+                        <option value="warning">提醒</option>
+                        <option value="danger">重要</option>
+                    </select>
+                    <input
+                        v-model="form.linkUrl"
+                        placeholder="跳转链接（可选），如 /pricing"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+                    />
+                </div>
 
-                    <div v-if="selectedUsers.length" class="flex flex-wrap gap-2">
-                        <span
-                            v-for="user in selectedUsers"
-                            :key="user.id"
-                            class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700"
-                        >
-                            <span>{{ user.name }}（{{ user.email }}）</span>
-                            <button type="button" class="text-emerald-500 hover:text-emerald-800" @click="removeUser(user.id)">✕</button>
-                        </span>
+                <!-- 受众选择 -->
+                <div class="rounded-xl bg-gray-50 p-3">
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-2 text-sm text-gray-700">
+                            <input v-model="form.audience" type="radio" value="all" />
+                            <span>{{ t('notifications.sendToAll') }}</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700">
+                            <input v-model="form.audience" type="radio" value="users" />
+                            <span>{{ t('notifications.sendToUsers') }}</span>
+                        </label>
                     </div>
 
-                    <div class="max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white">
-                        <button
-                            v-for="user in userOptions"
-                            :key="user.id"
-                            type="button"
-                            class="flex w-full items-center justify-between border-b border-gray-50 px-3 py-2 text-left text-xs hover:bg-gray-50"
-                            @click="addUser(user)"
-                        >
-                            <span>
-                                <b class="text-gray-700">{{ user.name }}</b>
-                                <span class="ml-2 text-gray-400">{{ user.email }}</span>
+                    <div v-if="form.audience === 'users'" class="mt-3 space-y-2">
+                        <input
+                            v-model="userKeyword"
+                            :placeholder="t('notifications.selectUsers')"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+
+                        <div v-if="selectedUsers.length" class="flex flex-wrap gap-2">
+                            <span
+                                v-for="user in selectedUsers"
+                                :key="user.id"
+                                class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700"
+                            >
+                                <span>{{ user.name }}（{{ user.email }}）</span>
+                                <button type="button" class="text-emerald-500 hover:text-emerald-800" @click="removeUser(user.id)">✕</button>
                             </span>
-                            <span class="text-[10px] text-gray-400">{{ user.role }}</span>
-                        </button>
-                        <p v-if="!userOptions.length" class="px-3 py-4 text-center text-xs text-gray-400">
-                            {{ searchingUsers ? t('common.loading') : t('admin.noData') }}
-                        </p>
+                        </div>
+
+                        <div class="max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                            <button
+                                v-for="user in userOptions"
+                                :key="user.id"
+                                type="button"
+                                class="flex w-full items-center justify-between border-b border-gray-50 px-3 py-2 text-left text-xs hover:bg-gray-50"
+                                @click="addUser(user)"
+                            >
+                                <span>
+                                    <b class="text-gray-700">{{ user.name }}</b>
+                                    <span class="ml-2 text-gray-400">{{ user.email }}</span>
+                                </span>
+                                <span class="text-[10px] text-gray-400">{{ user.role }}</span>
+                            </button>
+                            <p v-if="!userOptions.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                {{ searchingUsers ? t('common.loading') : t('admin.noData') }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="sending" @click="send">
-                {{ sending ? t('common.loading') : t('notifications.send') }}
-            </button>
-        </div>
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="sendOpen = false">{{ t('common.cancel') }}</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="sending" @click="send">
+                    {{ sending ? t('common.loading') : t('notifications.send') }}
+                </button>
+            </template>
+        </AdminDrawer>
 
         <!-- 历史记录 -->
         <div class="rounded-2xl bg-white p-6 shadow-sm">

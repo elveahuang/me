@@ -220,45 +220,48 @@ function goPage(next: number) {
         <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
         <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
 
-        <!-- 编辑表单 -->
-        <div v-if="editing !== null" class="space-y-3 rounded-2xl bg-white p-6 shadow-sm">
-            <div class="grid gap-3 sm:grid-cols-2">
-                <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
-                <input v-model="form.category" placeholder="分类，如 product / guide" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input v-model="form.tagsText" placeholder="标签，逗号分隔" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <!-- 封面：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
-                <div class="sm:col-span-2">
-                    <ImagePicker v-model="form.coverImage" :placeholder="t('adminForm.coverImagePlaceholder')" />
-                </div>
-                <textarea
-                    v-model="form.summary"
-                    rows="2"
-                    placeholder="摘要（列表展示）"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                />
-                <div class="sm:col-span-2">
+        <!-- 编辑表单（右侧抽屉） -->
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
+            <div class="space-y-3">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
+                    <input v-model="form.category" placeholder="分类，如 product / guide" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <input v-model="form.tagsText" placeholder="标签，逗号分隔" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <!-- 封面：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
+                    <div class="sm:col-span-2">
+                        <ImagePicker v-model="form.coverImage" :placeholder="t('adminForm.coverImagePlaceholder')" />
+                    </div>
                     <textarea
-                        v-model="form.content"
-                        rows="10"
-                        :placeholder="loadingContent ? t('adminForm.loadingContent') : t('adminForm.newsContentPlaceholder')"
-                        :disabled="loadingContent"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs disabled:bg-gray-50 disabled:opacity-60"
+                        v-model="form.summary"
+                        rows="2"
+                        placeholder="摘要（列表展示）"
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
                     />
-                    <p v-if="loadingContent" class="mt-1 text-[11px] text-gray-400">{{ t('adminForm.loadingContent') }}</p>
+                    <div class="sm:col-span-2">
+                        <textarea
+                            v-model="form.content"
+                            rows="10"
+                            :placeholder="loadingContent ? t('adminForm.loadingContent') : t('adminForm.newsContentPlaceholder')"
+                            :disabled="loadingContent"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs disabled:bg-gray-50 disabled:opacity-60"
+                        />
+                        <p v-if="loadingContent" class="mt-1 text-[11px] text-gray-400">{{ t('adminForm.loadingContent') }}</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-4">
+                    <select v-model="form.status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        <option value="draft">草稿</option>
+                        <option value="published">已发布</option>
+                    </select>
+                    <input v-model="form.publishedAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <label class="flex items-center gap-2 text-sm text-gray-600">
+                        <input v-model="form.pinned" type="checkbox" />
+                        <span>置顶</span>
+                    </label>
                 </div>
             </div>
-            <div class="flex flex-wrap items-center gap-4">
-                <select v-model="form.status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option value="draft">草稿</option>
-                    <option value="published">已发布</option>
-                </select>
-                <input v-model="form.publishedAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <label class="flex items-center gap-2 text-sm text-gray-600">
-                    <input v-model="form.pinned" type="checkbox" />
-                    <span>置顶</span>
-                </label>
-            </div>
-            <div class="flex gap-2">
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
                 <button
                     class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
                     :disabled="saving || loadingContent"
@@ -266,9 +269,8 @@ function goPage(next: number) {
                 >
                     {{ t('common.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
-            </div>
-        </div>
+            </template>
+        </AdminDrawer>
 
         <!-- 列表 -->
         <div class="rounded-2xl bg-white p-6 shadow-sm">

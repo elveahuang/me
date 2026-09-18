@@ -182,60 +182,73 @@ async function remove(id: string) {
             </button>
         </div>
 
-        <div v-if="editing !== null" class="mb-6 space-y-3 rounded-2xl bg-white p-6 shadow-sm">
-            <div class="grid grid-cols-2 gap-3">
-                <input v-model="form.name" :placeholder="t('adminForm.toolNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option value="builtin_time">{{ t('adminForm.toolTypeBuiltin') }}</option>
-                    <option value="http">{{ t('adminForm.toolTypeHttp') }}</option>
-                </select>
-            </div>
-            <input v-model="form.description" :placeholder="t('adminForm.toolDescPlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-
-            <template v-if="form.type === 'http'">
-                <div class="grid grid-cols-[6rem_1fr] gap-3">
-                    <select v-model="form.method" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                        <option>GET</option>
-                        <option>POST</option>
-                        <option>PUT</option>
-                        <option>DELETE</option>
+        <AdminDrawer
+            :open="editing !== null"
+            :title="editing?.id ? t('common.edit') : t('adminForm.toolNew')"
+            width-class="sm:max-w-2xl"
+            @close="editing = null"
+        >
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <input v-model="form.name" :placeholder="t('adminForm.toolNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        <option value="builtin_time">{{ t('adminForm.toolTypeBuiltin') }}</option>
+                        <option value="http">{{ t('adminForm.toolTypeHttp') }}</option>
                     </select>
-                    <input
-                        v-model="form.url"
-                        :placeholder="t('adminForm.toolUrlPlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    />
                 </div>
-                <textarea
-                    v-model="form.parametersText"
-                    rows="4"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    :placeholder="`${t('adminForm.toolParamsLabel')}${PARAMS_SAMPLE}`"
+                <input
+                    v-model="form.description"
+                    :placeholder="t('adminForm.toolDescPlaceholder')"
+                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
-                <textarea
-                    v-model="form.headersText"
-                    rows="2"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    :placeholder="`${t('adminForm.toolHeadersLabel')}${HEADERS_SAMPLE}`"
-                />
-                <textarea
-                    v-if="form.method !== 'GET'"
-                    v-model="form.bodyTemplate"
-                    rows="2"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    :placeholder="t('adminForm.toolBodyPlaceholder')"
-                />
-            </template>
 
-            <label class="flex items-center gap-1 text-sm text-gray-600"> <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }} </label>
-            <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
-            <div class="flex gap-2">
+                <template v-if="form.type === 'http'">
+                    <div class="grid grid-cols-[6rem_1fr] gap-3">
+                        <select v-model="form.method" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                            <option>GET</option>
+                            <option>POST</option>
+                            <option>PUT</option>
+                            <option>DELETE</option>
+                        </select>
+                        <input
+                            v-model="form.url"
+                            :placeholder="t('adminForm.toolUrlPlaceholder')"
+                            class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        />
+                    </div>
+                    <textarea
+                        v-model="form.parametersText"
+                        rows="4"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        :placeholder="`${t('adminForm.toolParamsLabel')}${PARAMS_SAMPLE}`"
+                    />
+                    <textarea
+                        v-model="form.headersText"
+                        rows="2"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        :placeholder="`${t('adminForm.toolHeadersLabel')}${HEADERS_SAMPLE}`"
+                    />
+                    <textarea
+                        v-if="form.method !== 'GET'"
+                        v-model="form.bodyTemplate"
+                        rows="2"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        :placeholder="t('adminForm.toolBodyPlaceholder')"
+                    />
+                </template>
+
+                <label class="flex items-center gap-1 text-sm text-gray-600">
+                    <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}
+                </label>
+                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
+            </div>
+            <template #footer>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
                 <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-            </div>
-        </div>
+            </template>
+        </AdminDrawer>
 
         <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
             <thead class="text-left text-gray-400">
