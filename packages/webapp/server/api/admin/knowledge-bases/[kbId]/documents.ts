@@ -62,27 +62,38 @@ export default defineEventHandler(async (event) => {
         }
 
         const docId = crypto.randomUUID();
-        await db.insert(kbDocuments).values({
-            id: docId,
-            kbId,
-            title,
-            content,
-            chunkCount: chunks.length,
-            status: 'ready',
-        });
-        await db.insert(kbChunks).values(
-            chunks.map((content_, i) => ({
-                id: crypto.randomUUID(),
+        /**
+         * 文档行与分块行必须同事务写入。
+         * 分两次独立 insert 时，若分块写入失败会留下 chunkCount > 0 但实际无分块的文档，
+         * 检索侧读到它会永远命中不到内容，且管理端只显示"已就绪"。
+         */
+        await db.transaction(async (tx) => {
+            await tx.insert(kbDocuments).values({
+                id: docId,
                 kbId,
-                documentId: docId,
-                content: content_,
-                embedding: vectors[i] ?? [],
-            })),
-        );
+                title,
+                content,
+                chunkCount: chunks.length,
+                status: 'ready',
+            });
+            await tx.insert(kbChunks).values(
+                chunks.map((content_, i) => ({
+                    id: crypto.randomUUID(),
+                    kbId,
+                    documentId: docId,
+                    content: content_,
+                    embedding: vectors[i] ?? [],
+                })),
+            );
+        });
 
         const [row] = await db.select().from(kbDocuments).where(eq(kbDocuments.id, docId));
         return { ...row, provider: providerName };
     }
 
-    return db.select().from(kbDocuments).where(eq(kbDocuments.kbId, kbId)).orderBy(asc(kbDocuments.createdAt));
+    // 文档列表限制条数：单个知识库可能有大量文档，全量返回会拖慢管理端。
+    // 保持返回数组（管理端直接把响应赋给列表），只做上限截断而不改响应结构。
+    const query = getQuery(event);
+    const limit = Math.min(Math.max(1, Number(query.limit) || 200), 500);
+    return db.select().from(kbDocuments).where(eq(kbDocuments.kbId, kbId)).orderBy(asc(kbDocuments.createdAt)).limit(limit);
 });

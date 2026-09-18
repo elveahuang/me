@@ -54,6 +54,25 @@ export async function getEnabledProviders(): Promise<Provider[]> {
     return db.select().from(providers).where(eq(providers.enabled, true)).orderBy(asc(providers.createdAt));
 }
 
+/**
+ * 只读地探测模型可用性，不写库。
+ *
+ * 供健康检查等**无鉴权**的探针使用：resolveModel() 会调用 ensureDefaultProvider()，
+ * 在 providers 表为空时插入一行默认供应商——那意味着任何人都能通过 GET /api/health
+ * 触发数据库写入。探针只应读状态，不应有副作用。
+ */
+export async function peekModelAvailability(): Promise<{ available: boolean; providerName?: string; modelId?: string; reason?: string }> {
+    const enabled = await getEnabledProviders();
+    if (!enabled.length) {
+        return { available: false, reason: '尚未配置模型供应商' };
+    }
+    const provider = enabled.find((p) => p.isDefault) ?? enabled[0]!;
+    if (!provider.apiKey) {
+        return { available: false, providerName: provider.name, reason: '供应商未配置 API Key' };
+    }
+    return { available: true, providerName: provider.name, modelId: 'deepseek-chat' };
+}
+
 /** 解析智能体要用的模型；未指定供应商时回退到默认（第一个启用的）供应商。 */
 export async function resolveModel(providerId?: string | null, modelId?: string | null) {
     await ensureDefaultProvider();

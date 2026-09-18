@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
@@ -24,14 +24,30 @@ export default defineEventHandler(async (event) => {
     }
 
     const rows = await db.select().from(knowledgeBases).orderBy(asc(knowledgeBases.createdAt));
-    const docRows = await db.select({ id: kbDocuments.id, kbId: kbDocuments.kbId, status: kbDocuments.status }).from(kbDocuments);
-    const chunkRows = await db.select({ id: kbChunks.id, kbId: kbChunks.kbId }).from(kbChunks);
+
+    /**
+     * 统计只取聚合结果。
+     * 此前把 kb_documents / kb_chunks 的全部行查进内存再 filter 计数：
+     * chunk 表随文档增长会到百万级，列表接口会因此变成全表扫描 + 大内存占用。
+     */
+    const docCounts = await db
+        .select({ kbId: kbDocuments.kbId, count: sql<number>`count(*)::int` })
+        .from(kbDocuments)
+        .groupBy(kbDocuments.kbId);
+    const chunkCounts = await db
+        .select({ kbId: kbChunks.kbId, count: sql<number>`count(*)::int` })
+        .from(kbChunks)
+        .groupBy(kbChunks.kbId);
     const providerRows = await db.select({ id: providers.id, name: providers.name }).from(providers);
+
+    const docMap = new Map(docCounts.map((row) => [row.kbId, row.count]));
+    const chunkMap = new Map(chunkCounts.map((row) => [row.kbId, row.count]));
+    const providerMap = new Map(providerRows.map((row) => [row.id, row.name]));
 
     return rows.map((kb) => ({
         ...kb,
-        providerName: providerRows.find((p) => p.id === kb.embeddingProviderId)?.name,
-        documentCount: docRows.filter((d) => d.kbId === kb.id).length,
-        chunkCount: chunkRows.filter((c) => c.kbId === kb.id).length,
+        providerName: kb.embeddingProviderId ? providerMap.get(kb.embeddingProviderId) : undefined,
+        documentCount: docMap.get(kb.id) ?? 0,
+        chunkCount: chunkMap.get(kb.id) ?? 0,
     }));
 });

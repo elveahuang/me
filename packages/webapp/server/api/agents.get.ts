@@ -1,8 +1,14 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { agentSkills, agents, skills } from '../db/schema';
 import { db } from '../utils/db';
 import { requireUser } from '../utils/guard';
 
+/**
+ * 智能体广场列表。
+ *
+ * 技能绑定用一次 IN 查询取回后在内存分组，避免按 agent 逐个查询（N+1）：
+ * 列表页的 agent 数量会随运营增长，逐个查会线性放大数据库往返。
+ */
 export default defineEventHandler(async (event) => {
     await requireUser(event);
 
@@ -18,15 +24,25 @@ export default defineEventHandler(async (event) => {
         .where(eq(agents.enabled, true))
         .orderBy(asc(agents.createdAt));
 
-    const withSkills = await Promise.all(
-        rows.map(async (agent) => {
-            const bound = await db
-                .select({ id: skills.id, name: skills.name })
-                .from(agentSkills)
-                .innerJoin(skills, eq(skills.id, agentSkills.skillId))
-                .where(eq(agentSkills.agentId, agent.id));
-            return { ...agent, skills: bound };
-        }),
-    );
-    return withSkills;
+    if (!rows.length) return [];
+
+    const bound = await db
+        .select({ agentId: agentSkills.agentId, id: skills.id, name: skills.name })
+        .from(agentSkills)
+        .innerJoin(skills, eq(skills.id, agentSkills.skillId))
+        .where(
+            inArray(
+                agentSkills.agentId,
+                rows.map((row) => row.id),
+            ),
+        );
+
+    const byAgent = new Map<string, { id: string; name: string }[]>();
+    for (const item of bound) {
+        const list = byAgent.get(item.agentId) ?? [];
+        list.push({ id: item.id, name: item.name });
+        byAgent.set(item.agentId, list);
+    }
+
+    return rows.map((agent) => ({ ...agent, skills: byAgent.get(agent.id) ?? [] }));
 });

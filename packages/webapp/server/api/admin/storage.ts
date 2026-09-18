@@ -68,9 +68,17 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
 }
 
 /** 保证同一时刻只有一个默认存储 */
+/**
+ * 切换默认存储。
+ *
+ * 必须同事务执行两条 update：否则在「已清空旧默认、尚未标记新默认」之间失败，
+ * 系统会处于一个默认存储都没有的状态，附件上传随即失败且管理端看不出原因。
+ */
 async function applyDefault(id: string) {
-    await db.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
-    await db.update(storageConfigs).set({ isDefault: true, updatedAt: new Date() }).where(eq(storageConfigs.id, id));
+    await db.transaction(async (tx) => {
+        await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
+        await tx.update(storageConfigs).set({ isDefault: true, updatedAt: new Date() }).where(eq(storageConfigs.id, id));
+    });
     invalidateStorageConfigCache();
 }
 
