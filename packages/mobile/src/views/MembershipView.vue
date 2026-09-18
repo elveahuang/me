@@ -29,8 +29,12 @@ const payModalOpen = ref(false);
 const activeOrder = ref<CreateOrderResponse | null>(null);
 const qrCodeDataUrl = ref('');
 const pollingTimer = ref<number | null>(null);
+/** 支付成功后延时关闭弹层的定时器：组件卸载时必须清理，否则会在页面销毁后写状态并重复 loadData */
+const closeTimer = ref<number | null>(null);
 const payError = ref('');
 const paySuccess = ref(false);
+/** 模拟支付提交中标记，防止连点重复下单 */
+const mockPaying = ref(false);
 /** 页面级加载错误：与支付弹层内的 payError 分开，避免失败被只在弹层渲染的文案吞掉 */
 const loadError = ref('');
 
@@ -59,13 +63,33 @@ async function handleRefresh(event: CustomEvent) {
 }
 
 onMounted(loadData);
-onUnmounted(stopPolling);
+onUnmounted(() => {
+    stopPolling();
+    clearCloseTimer();
+});
 
 function stopPolling() {
     if (pollingTimer.value) {
         clearInterval(pollingTimer.value);
         pollingTimer.value = null;
     }
+}
+
+function clearCloseTimer() {
+    if (closeTimer.value) {
+        clearTimeout(closeTimer.value);
+        closeTimer.value = null;
+    }
+}
+
+/** 支付成功后延时关闭弹层并刷新；登记到 closeTimer 以便卸载/重开时清理 */
+function scheduleAutoClose() {
+    clearCloseTimer();
+    closeTimer.value = window.setTimeout(async () => {
+        closeTimer.value = null;
+        payModalOpen.value = false;
+        await loadData();
+    }, 1500);
 }
 
 /** 轮询上限：渠道不可达时订单会一直是 pending，没有上限就会永久轮询 */
@@ -87,10 +111,7 @@ function startPolling(orderNo: string) {
             if (data.status === 'paid') {
                 stopPolling();
                 paySuccess.value = true;
-                setTimeout(async () => {
-                    payModalOpen.value = false;
-                    await loadData();
-                }, 1500);
+                scheduleAutoClose();
             } else if (data.status === 'closed') {
                 stopPolling();
                 payError.value = t('billing.payFailed');
@@ -111,8 +132,7 @@ function invokeWeixinJsapi(params: JsapiParams) {
     bridge.invoke('getBrandWCPayRequest', params, (res: { err_msg?: string }) => {
         if (res?.err_msg === 'get_brand_wcpay_request:ok') {
             paySuccess.value = true;
-            loadData();
-            setTimeout(() => (payModalOpen.value = false), 1500);
+            scheduleAutoClose();
         } else if (res?.err_msg !== 'get_brand_wcpay_request:cancel') {
             payError.value = t('billing.payFailed');
         }
@@ -163,16 +183,20 @@ async function handleSubscribe(plan: Plan) {
 }
 
 async function handleMockPay() {
-    if (!activeOrder.value) return;
+    if (!activeOrder.value || mockPaying.value) return;
+    mockPaying.value = true;
     try {
         await api(`/api/billing/orders/${activeOrder.value.orderNo}/mock-pay`, { method: 'POST' });
     } catch (e) {
         payError.value = extractApiError(e, t('common.error'));
+    } finally {
+        mockPaying.value = false;
     }
 }
 
 function closePayModal() {
     stopPolling();
+    clearCloseTimer();
     payModalOpen.value = false;
     activeOrder.value = null;
     qrCodeDataUrl.value = '';
@@ -181,12 +205,6 @@ function closePayModal() {
 }
 
 const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, status.value?.chatQuotaPerDay));
-
-const planTone = (code: string) => {
-    if (code === 'pro') return 'bg-brand text-[color:var(--on-brand)]';
-    if (code === 'max') return 'app-badge app-badge-info';
-    return 'app-badge app-badge-neutral';
-};
 
 const statusTone: Record<string, string> = {
     paid: 'app-badge-success',
@@ -410,7 +428,9 @@ function orderStatusText(s: string): string {
 
                         <div v-if="activeOrder?.mode === 'mock'" class="app-alert app-alert-warning mt-4 text-left">
                             <p class="text-xs font-bold">🛠️ {{ t('billing.mockPay') }}</p>
-                            <button class="app-btn app-btn-soft mt-3 w-full" @click="handleMockPay">确认模拟支付</button>
+                            <button class="app-btn app-btn-soft mt-3 w-full" :disabled="mockPaying" @click="handleMockPay">
+                                {{ mockPaying ? t('common.loading') : '确认模拟支付' }}
+                            </button>
                         </div>
 
                         <p v-if="payError" class="app-alert app-alert-danger mt-3">{{ payError }}</p>

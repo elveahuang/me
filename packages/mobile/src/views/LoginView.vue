@@ -4,7 +4,7 @@ import { IonContent, IonHeader, IonInput, IonTitle, IonToolbar } from '@ionic/vu
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
-import { api, authClient } from '../api/auth';
+import { api, apiUrl, authClient } from '../api/auth';
 import { useTheme } from '@/composables/useTheme';
 import PageShell from './PageShell.vue';
 
@@ -50,7 +50,8 @@ function loginWithWechat() {
         error.value = '微信登录未配置移动端回跳地址';
         return;
     }
-    window.location.href = `/api/auth/wechat?client=mobile&redirect=${encodeURIComponent(wechat.value.redirectUrl)}`;
+    // 原生壳下 VITE_API_BASE 指向远端后端，相对地址会落到 capacitor://localhost 而 404，需用 apiUrl 拼接
+    window.location.href = apiUrl(`/api/auth/wechat?client=mobile&redirect=${encodeURIComponent(wechat.value.redirectUrl)}`);
 }
 </script>
 
