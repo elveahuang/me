@@ -54,6 +54,26 @@ export async function resolveStorageConfig(preferredId?: string | null): Promise
     return value;
 }
 
+/**
+ * 解析「已存在附件」所属的存储配置（读取 / 下载 / 删除历史对象时用）。
+ *
+ * 与 resolveStorageConfig 的关键区别：**不回退到默认配置**。
+ * resolveStorageConfig 面向新上传，传入的 preferredId 缺失或禁用时回退默认是合理的；
+ * 但对一个 objectKey 已落库的附件，若它原来的配置被删/禁用，回退默认会
+ * 用另一个桶去读取或删除同名 key——即读错/删错对象。这里改为按 id 严格解析：
+ * 配置必须存在（不要求 enabled，否则禁用配置会把历史对象永久孤立），否则抛错。
+ */
+export async function resolveStoredStorageConfig(storageConfigId: string | null | undefined): Promise<StorageConfig> {
+    if (!storageConfigId) {
+        throw createError({ statusCode: 503, statusMessage: '该附件缺少存储配置信息，无法访问' });
+    }
+    const [row] = await db.select().from(storageConfigs).where(eq(storageConfigs.id, storageConfigId));
+    if (!row) {
+        throw createError({ statusCode: 503, statusMessage: '附件所属的存储配置已被删除，无法访问' });
+    }
+    return row;
+}
+
 export function createS3Client(config: StorageConfig): S3Client {
     return new S3Client({
         endpoint: config.endpoint,

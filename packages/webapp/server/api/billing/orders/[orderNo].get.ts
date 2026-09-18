@@ -32,8 +32,19 @@ export default defineEventHandler(async (event) => {
         } else if (expired && (remote === 'NOTPAY' || remote === 'CLOSED')) {
             const closed = await provider.closeOrder(order.orderNo);
             if (closed) {
-                await db.update(orders).set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
-                status = 'closed';
+                // closeOrder 是异步网络调用，期间回调可能已把订单置为 paid；用 status='pending' 条件避免覆盖。
+                const updated = await db
+                    .update(orders)
+                    .set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() })
+                    .where(and(eq(orders.id, order.id), eq(orders.status, 'pending')))
+                    .returning({ status: orders.status });
+                if (updated.length) {
+                    status = 'closed';
+                } else {
+                    // 关单条件未命中：状态已被并发流程改变，返回数据库当前值而不是本地假设
+                    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, order.id));
+                    status = current?.status ?? status;
+                }
             }
         }
     }

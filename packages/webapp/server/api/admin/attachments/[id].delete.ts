@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { attachments } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
-import { deleteObject, resolveStorageConfig } from '../../../utils/storage';
+import { deleteObject, resolveStorageConfig, resolveStoredStorageConfig } from '../../../utils/storage';
 
 /**
  * 管理端删除附件。
@@ -20,9 +20,10 @@ export default defineEventHandler(async (event) => {
     let storageError = '';
     try {
         if (row.storageConfigId) {
-            const config = await resolveStorageConfig(row.storageConfigId);
+            const config = await resolveStoredStorageConfig(row.storageConfigId);
             await deleteObject(config, row.objectKey);
         } else {
+            // 早期数据可能没有 storageConfigId，退回默认配置删除；有 id 时绝不回退，避免删错桶
             const config = await resolveStorageConfig(null);
             await deleteObject(config, row.objectKey);
         }

@@ -174,9 +174,9 @@ export async function consumeChatQuota(userId: string, now = new Date()): Promis
     }
 }
 
-/** 生成商户订单号 */
+/** 生成商户订单号；orderNo 是 UNIQUE 列，用随机 UUID 段避免同毫秒+Math.random 撞号导致下单 500 */
 export function generateOrderNo(): string {
-    return `mo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return `mo_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 /** 创建订单（不含支付动作）；金额以套餐快照为准，不信任客户端 */
@@ -348,8 +348,14 @@ export async function closeStalePendingOrders(olderThanMinutes = 30): Promise<nu
         }
         if (!closed) continue;
 
-        await db.update(orders).set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, ord.id));
-        count++;
+        // 带 status='pending' 条件：remote 查询/closeOrder 是异步网络调用，期间支付回调可能已把订单
+        // 置为 paid。无条件覆盖会把已开通会员的订单改回 closed，导致权益与订单状态不一致。
+        const updated = await db
+            .update(orders)
+            .set({ status: 'closed', closedAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(orders.id, ord.id), eq(orders.status, 'pending')))
+            .returning({ id: orders.id });
+        if (updated.length) count++;
     }
     return count;
 }

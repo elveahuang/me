@@ -346,13 +346,24 @@ export default defineEventHandler(async (event) => {
         stopWhen: stepCountIs(maxSteps),
     });
 
+    // onError 与 onFinish 可能都触发，客户端中途断开则一个都不触发；
+    // 用一次性闭包保证 MCP 连接恰好关闭一次，避免重复 close 抛错或连接泄漏。
+    let mcpClosed = false;
+    const closeMcpOnce = () => {
+        if (mcpClosed) return Promise.resolve();
+        mcpClosed = true;
+        return closeMcpConnections(mcpConnections);
+    };
+
     const responseStream = createUIMessageStream({
         execute: ({ writer }) => {
             writer.merge(result.toUIMessageStream({ sendStart: false, sendReasoning: true }));
         },
         onError: (error) => {
-            closeMcpConnections(mcpConnections);
-            return String(error);
+            void closeMcpOnce();
+            // 不把供应商/SQL 的原始错误文本透给终端用户，仅在服务端日志保留细节。
+            console.error('[chat] 生成失败:', error);
+            return '生成回复时出错，请稍后重试';
         },
         onFinish: async ({ messages: responseMessages, isAborted }) => {
             try {
@@ -372,7 +383,7 @@ export default defineEventHandler(async (event) => {
                     }
                 }
             } finally {
-                await closeMcpConnections(mcpConnections);
+                await closeMcpOnce();
             }
         },
     });

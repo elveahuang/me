@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { attachments } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireUser } from '../../../utils/guard';
-import { getObject, resolveStorageConfig } from '../../../utils/storage';
+import { getObject, resolveStoredStorageConfig } from '../../../utils/storage';
 
 /**
  * 附件下载代理。
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: '附件不存在' });
     }
 
-    const config = await resolveStorageConfig(row.storageConfigId);
+    const config = await resolveStoredStorageConfig(row.storageConfigId);
     const object = await getObject(config, row.objectKey);
     const body = object.Body as unknown as NodeJS.ReadableStream | undefined;
     if (!body) {

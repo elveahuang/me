@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { attachments } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireUser } from '../../../utils/guard';
-import { buildPublicUrl, presignDownload, resolveStorageConfig } from '../../../utils/storage';
+import { buildPublicUrl, presignDownload, resolveStoredStorageConfig } from '../../../utils/storage';
 
 /**
  * 重新签发访问地址（私有桶预签名 URL 有有效期，前端过期后可再次获取）。
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: '附件不存在' });
     }
 
-    const config = await resolveStorageConfig(row.storageConfigId);
+    const config = await resolveStoredStorageConfig(row.storageConfigId);
 
     if (download) {
         const publicUrl = buildPublicUrl(config, row.objectKey);

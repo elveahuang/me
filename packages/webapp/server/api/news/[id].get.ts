@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { news } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireUser } from '../../utils/guard';
@@ -51,10 +51,14 @@ export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
     const id = getRouterParam(event, 'id')!;
 
+    // 与列表口径一致：已发布且发布时间已到（publishedAt 为空视为立即可见）。
+    // 只判 status 会让「定时发布、publishedAt 在未来」的文章通过直链提前读到。
+    const published = and(eq(news.status, 'published'), or(isNull(news.publishedAt), lte(news.publishedAt, new Date())));
+
     const [row] = await db
         .select()
         .from(news)
-        .where(and(eq(news.id, id), eq(news.status, 'published')));
+        .where(and(published, eq(news.id, id)));
     if (!row) {
         throw createError({ statusCode: 404, statusMessage: '资讯不存在或已下线' });
     }
@@ -86,7 +90,7 @@ export default defineEventHandler(async (event) => {
                   createdAt: news.createdAt,
               })
               .from(news)
-              .where(and(eq(news.status, 'published'), ne(news.id, id), eq(news.category, row.category)))
+              .where(and(published, ne(news.id, id), eq(news.category, row.category)))
               .orderBy(desc(news.publishedAt))
               .limit(4)
         : [];
@@ -108,7 +112,7 @@ export default defineEventHandler(async (event) => {
                 createdAt: news.createdAt,
             })
             .from(news)
-            .where(and(eq(news.status, 'published'), sql`${news.id} not in ${excludeIds}`))
+            .where(and(published, sql`${news.id} not in ${excludeIds}`))
             .orderBy(desc(news.pinned), desc(news.publishedAt))
             .limit(4 - related.length);
         related = [...related, ...fill];
