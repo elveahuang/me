@@ -2,7 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { attachments } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireUser } from '../../utils/guard';
-import { buildPublicUrl, resolveStorageConfig } from '../../utils/storage';
+import { buildPublicUrl, pickStorageConfig, resolveStorageConfigMap } from '../../utils/storage';
 
 /**
  * 把已上传的附件解析成「可以放进聊天消息」的 file part。
@@ -33,17 +33,15 @@ export default defineEventHandler(async (event) => {
     // 保持调用方传入的顺序，便于前端把 chip 与 part 对应起来
     const byId = new Map(rows.map((row) => [row.id, row]));
 
-    let config: Awaited<ReturnType<typeof resolveStorageConfig>> | null = null;
-    try {
-        config = await resolveStorageConfig(null);
-    } catch {
-        config = null;
-    }
+    // 按各行所属的存储配置判断是否为公开桶：用「当前默认配置」会把分属其他桶的
+    // 附件误判为公开/私有，签出错误地址并写进 messages.parts 成为历史脏数据。
+    const configMap = await resolveStorageConfigMap(rows.map((row) => row.storageConfigId));
 
     const parts = ids
         .map((id) => byId.get(id))
         .filter((row): row is NonNullable<typeof row> => Boolean(row))
         .map((row) => {
+            const config = pickStorageConfig(configMap, row.storageConfigId);
             const publicUrl = config ? buildPublicUrl(config, row.objectKey) : null;
             return {
                 // AI SDK 的 FileUIPart：mediaType + url 是必需字段

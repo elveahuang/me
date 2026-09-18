@@ -33,10 +33,18 @@ export default defineEventHandler(async (event) => {
         if (publicUrl) {
             return { url: `/api/attachments/${row.id}/raw`, expiresIn: null, filename: row.filename };
         }
-        const signed = await presignDownload(config, row.objectKey, { filename: row.filename });
-        return { url: signed, expiresIn: 3600, filename: row.filename };
+        return { url: await presignOr502(config, row.objectKey, row.filename), expiresIn: 3600, filename: row.filename };
     }
 
-    const url = buildPublicUrl(config, row.objectKey) || (await presignDownload(config, row.objectKey));
+    const url = buildPublicUrl(config, row.objectKey) || (await presignOr502(config, row.objectKey));
     return { url, expiresIn: 3600, filename: row.filename };
 });
+
+/** presignDownload 只在本地签名，但缺失密钥的配置会抛 CredentialsProviderError；脱敏成 502，避免把 SDK 细节透给前端 */
+async function presignOr502(config: Awaited<ReturnType<typeof resolveStoredStorageConfig>>, key: string, filename?: string): Promise<string> {
+    try {
+        return await presignDownload(config, key, filename ? { filename } : {});
+    } catch {
+        throw createError({ statusCode: 502, statusMessage: '暂时无法生成访问地址，请稍后重试' });
+    }
+}

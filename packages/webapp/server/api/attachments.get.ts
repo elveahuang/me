@@ -1,8 +1,9 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
+import type { StorageConfig } from '../db/schema';
 import { attachments } from '../db/schema';
 import { db } from '../utils/db';
 import { requireUser } from '../utils/guard';
-import { buildPublicUrl, presignDownload, resolveStorageConfig } from '../utils/storage';
+import { buildPublicUrl, pickStorageConfig, presignDownload, resolveStorageConfigMap } from '../utils/storage';
 
 /**
  * 当前用户的附件列表。
@@ -56,16 +57,13 @@ export default defineEventHandler(async (event) => {
     const totalCount = categoryStats.reduce((sum, row) => sum + row.count, 0);
     const totalBytes = categoryStats.reduce((sum, row) => sum + row.bytes, 0);
 
-    // 同一份存储配置只解析一次
-    let config = null;
-    try {
-        config = await resolveStorageConfig(null);
-    } catch {
-        config = null;
-    }
+    // 每条附件按各自的 storageConfigId 解析存储配置（去重后各查一次），
+    // 避免用「当前默认配置」给分属其他桶的历史附件签出错误地址。
+    const configMap = await resolveStorageConfigMap(rows.map((row) => row.storageConfigId));
 
     const items = await Promise.all(
         rows.map(async (row) => {
+            const config = pickStorageConfig(configMap, row.storageConfigId);
             const publicUrl = config ? buildPublicUrl(config, row.objectKey) : null;
             const url = publicUrl ?? (config ? await safePresign(config, row.objectKey) : null);
             return {
@@ -94,7 +92,7 @@ export default defineEventHandler(async (event) => {
     };
 });
 
-async function safePresign(config: Awaited<ReturnType<typeof resolveStorageConfig>>, key: string): Promise<string | null> {
+async function safePresign(config: StorageConfig, key: string): Promise<string | null> {
     try {
         return await presignDownload(config, key);
     } catch {

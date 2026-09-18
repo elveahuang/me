@@ -89,9 +89,9 @@ async function load() {
     try {
         const [agentRows, skills, tools, kbs, mcps, providers] = await Promise.all([
             $fetch('/api/admin/agents'),
-            $fetch('/api/admin/skills'),
+            $fetch<SkillItem[]>('/api/admin/skills'),
             $fetch<{ id: string; name: string; type: string; enabled: boolean }[]>('/api/admin/tools'),
-            $fetch('/api/admin/knowledge-bases'),
+            $fetch<KbItem[]>('/api/admin/knowledge-bases'),
             $fetch<{ id: string; name: string; enabled: boolean }[]>('/api/admin/mcp-servers'),
             $fetch<ProviderItem[]>('/api/admin/providers'),
         ]);

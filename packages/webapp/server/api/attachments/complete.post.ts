@@ -7,6 +7,7 @@ import {
     deleteObject,
     headObject,
     isMimeAllowed,
+    normalizeAttachmentCategory,
     presignDownload,
     resolveStorageConfig,
     sanitizeFilename,
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
     const size = Number(body.size) || 0;
     const filename = sanitizeFilename(String(body.filename ?? 'file'));
     const mimeType = typeof body.mimeType === 'string' && body.mimeType ? body.mimeType : 'application/octet-stream';
-    const category = typeof body.category === 'string' && body.category ? body.category : 'other';
+    const category = normalizeAttachmentCategory(body.category);
 
     const config = await resolveStorageConfig(null);
     const prefix = (config.prefix || 'uploads').replace(/^\/+|\/+$/g, '');
@@ -111,6 +112,6 @@ export default defineEventHandler(async (event) => {
         category,
         createdAt: new Date().toISOString(),
         url,
-        isImage: mimeType.startsWith('image/'),
+        isImage: actualMime.startsWith('image/'),
     };
 });

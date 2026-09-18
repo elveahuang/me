@@ -1,5 +1,14 @@
 import { requireUser } from '../../utils/guard';
-import { assertFileSize, buildObjectKey, isMimeAllowed, presignUpload, presignUploadPolicy, resolveStorageConfig, sanitizeFilename } from '../../utils/storage';
+import {
+    assertFileSize,
+    buildObjectKey,
+    isMimeAllowed,
+    normalizeAttachmentCategory,
+    presignUpload,
+    presignUploadPolicy,
+    resolveStorageConfig,
+    sanitizeFilename,
+} from '../../utils/storage';
 
 /**
  * 获取对象存储直传凭据（前端直传通道）。
@@ -14,9 +23,9 @@ import { assertFileSize, buildObjectKey, isMimeAllowed, presignUpload, presignUp
 export default defineEventHandler(async (event) => {
     await requireUser(event);
     const body = (await readBody(event)) ?? {};
-    const filename = sanitizeFilename(body?.filename || 'file');
+    const filename = sanitizeFilename(String(body?.filename ?? 'file'));
     const mimeType = typeof body?.mimeType === 'string' && body.mimeType ? body.mimeType : 'application/octet-stream';
-    const category = typeof body?.category === 'string' && body.category ? body.category : 'other';
+    const category = normalizeAttachmentCategory(body?.category);
     const size = Number(body?.size) || 0;
     const mode = body?.mode === 'post' ? 'post' : 'put';
 

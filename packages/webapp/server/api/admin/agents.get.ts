@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
             knowledgeBases: pick(kbIds, kbById),
             mcpIds,
             mcpServers: pick(mcpIds, mcpById),
-            provider: providerById.get(agent.providerId) ?? null,
+            provider: agent.providerId ? (providerById.get(agent.providerId) ?? null) : null,
         };
     });
 });

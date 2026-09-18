@@ -73,7 +73,13 @@ async function executeHttpTool(config: HttpToolConfig, input: Record<string, unk
         if (!headers['content-type']) headers['content-type'] = 'application/json';
     }
 
-    const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(15_000) });
+    // redirect: 'manual'：不自动跟随重定向。否则任一通过校验的公网端点都能 302 到
+    // 内网/云元数据地址（169.254.169.254），绕过上面的 assertSafeOutboundUrl（SSRF）。
+    const res = await fetch(url, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+    if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location') ?? '';
+        return `HTTP ${res.status}: 出于安全策略未跟随重定向${location ? `（Location: ${location.slice(0, 200)}）` : ''}`;
+    }
     const text = (await res.text()).slice(0, 4000);
     if (!res.ok) return `HTTP ${res.status}: ${text}`;
     return text || '(空响应)';

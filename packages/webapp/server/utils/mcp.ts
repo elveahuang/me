@@ -56,9 +56,10 @@ export async function connectEnabledMcpServers(serverIds: string[]) {
         .where(and(inArray(mcpServers.id, [...new Set(serverIds)]), eq(mcpServers.enabled, true)));
     // 并发建连：每个服务器的失败已被单独捕获，互不影响，串行会把连接延迟线性累加到首 token 前。
     const settled = await Promise.allSettled(rows.map((row) => connectMcpServer(row)));
-    for (const [i, r] of settled.entries()) {
-        if (r.status === 'fulfilled') connections.push(r.value);
-        else console.error(`[mcp:${rows[i].name}] 连接失败，跳过该服务器的工具:`, r.reason);
+    for (const [i, row] of rows.entries()) {
+        const result = settled[i]!;
+        if (result.status === 'fulfilled') connections.push(result.value);
+        else console.error(`[mcp:${row.name}] 连接失败，跳过该服务器的工具:`, result.reason);
     }
     return connections;
 }

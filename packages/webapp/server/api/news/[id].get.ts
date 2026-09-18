@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 import { news } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireUser } from '../../utils/guard';
@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) => {
                 createdAt: news.createdAt,
             })
             .from(news)
-            .where(and(published, sql`${news.id} not in ${excludeIds}`))
+            .where(and(published, notInArray(news.id, excludeIds)))
             .orderBy(desc(news.pinned), desc(news.publishedAt))
             .limit(4 - related.length);
         related = [...related, ...fill];

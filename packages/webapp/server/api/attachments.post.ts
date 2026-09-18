@@ -7,6 +7,7 @@ import {
     buildObjectKey,
     buildPublicUrl,
     isMimeAllowed,
+    normalizeAttachmentCategory,
     presignDownload,
     putObject,
     resolveStorageConfig,
@@ -34,7 +35,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: '缺少 file 字段' });
     }
     const categoryPart = parts.find((part) => part.name === 'category');
-    const category = categoryPart ? categoryPart.data.toString('utf-8').trim() || 'other' : 'other';
+    const category = normalizeAttachmentCategory(categoryPart?.data.toString('utf-8'));
 
     const filename = sanitizeFilename(filePart.filename || 'file');
     const mimeType = filePart.type || 'application/octet-stream';

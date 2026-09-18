@@ -74,6 +74,49 @@ export async function resolveStoredStorageConfig(storageConfigId: string | null 
     return row;
 }
 
+/** 内部哨兵 key：表示 storageConfigId 为空（历史数据），映射到默认配置 */
+const DEFAULT_CONFIG_KEY = '';
+
+/**
+ * 为一批对象（按各自的 storageConfigId）解析其存储配置，供列表/批量签发使用。
+ *
+ * 历史附件可能分属不同存储配置，用「当前默认配置」给全部行签名会把非默认桶的对象签成错误
+ * 地址（读错桶）。这里按 id 去重后各解析一次：非空 id 走严格解析（不回退），空 id 回退默认，
+ * 解析失败的项映射为 null——调用方据此把该行 URL 置空，而不是让整批请求失败。
+ */
+export async function resolveStorageConfigMap(ids: Array<string | null | undefined>): Promise<Map<string, StorageConfig | null>> {
+    const keys = [...new Set(ids.map((id) => id ?? DEFAULT_CONFIG_KEY))];
+    const entries = await Promise.all(
+        keys.map(async (key): Promise<[string, StorageConfig | null]> => {
+            try {
+                if (key === DEFAULT_CONFIG_KEY) return [key, await resolveStorageConfig(null)];
+                return [key, await resolveStoredStorageConfig(key)];
+            } catch {
+                return [key, null];
+            }
+        }),
+    );
+    return new Map(entries);
+}
+
+/** 从 resolveStorageConfigMap 的结果里按行的 storageConfigId 取配置 */
+export function pickStorageConfig(map: Map<string, StorageConfig | null>, id: string | null | undefined): StorageConfig | null {
+    return map.get(id ?? DEFAULT_CONFIG_KEY) ?? null;
+}
+
+/**
+ * 归一化附件分类：只保留 `[a-z0-9_-]`，其余丢弃，空则回退 `other`。
+ * category 会作为对象 key 的一个路径段写进桶里，也是列表筛选/统计的分组键，
+ * 因此必须在进入 key 之前去掉 `/`、`\`、`..`、换行等字符，防止污染对象路径。
+ */
+export function normalizeAttachmentCategory(value: unknown): string {
+    const cleaned = (typeof value === 'string' ? value : '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '');
+    return cleaned.slice(0, 32) || 'other';
+}
+
 export function createS3Client(config: StorageConfig): S3Client {
     return new S3Client({
         endpoint: config.endpoint,
@@ -96,8 +139,9 @@ export function buildObjectKey(config: Pick<StorageConfig, 'prefix'>, filename: 
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
     const prefix = (config.prefix || 'uploads').replace(/^\/+|\/+$/g, '');
     const safeName = sanitizeFilename(filename);
+    const safeCategory = normalizeAttachmentCategory(category);
     const day = String(now.getUTCDate()).padStart(2, '0');
-    return `${prefix}/${category}/${year}/${month}/${day}/${crypto.randomUUID()}-${safeName}`;
+    return `${prefix}/${safeCategory}/${year}/${month}/${day}/${crypto.randomUUID()}-${safeName}`;
 }
 
 /**
