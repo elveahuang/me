@@ -85,10 +85,10 @@ html[data-brand='red'] {
     --line: #e2e8f0;
     --line-strong: #cbd5e1;
     --shadow-color: 15 23 42;
-    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.06);
-    --shadow-sm: 0 4px 14px -6px rgb(var(--shadow-color) / 0.18);
-    --shadow-md: 0 18px 40px -22px rgb(var(--shadow-color) / 0.35);
-    --shadow-lg: 0 28px 60px -28px rgb(var(--shadow-color) / 0.45);
+    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.05);
+    --shadow-sm: 0 2px 8px -4px rgb(var(--shadow-color) / 0.12);
+    --shadow-md: 0 12px 32px -18px rgb(var(--shadow-color) / 0.28);
+    --shadow-lg: 0 24px 56px -28px rgb(var(--shadow-color) / 0.4);
 
     /* 圆角阶梯：组件类统一引用，避免各处写死 rem */
     --radius-xs: 0.5rem;
@@ -134,10 +134,10 @@ html[data-brand='yellow'] {
     --line: #1e293b;
     --line-strong: #334155;
     --shadow-color: 0 0 0;
-    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.5);
-    --shadow-sm: 0 4px 16px -8px rgb(var(--shadow-color) / 0.8);
-    --shadow-md: 0 20px 45px -25px rgb(var(--shadow-color) / 0.9);
-    --shadow-lg: 0 32px 70px -32px rgb(var(--shadow-color) / 0.95);
+    --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.4);
+    --shadow-sm: 0 2px 10px -5px rgb(var(--shadow-color) / 0.6);
+    --shadow-md: 0 14px 36px -20px rgb(var(--shadow-color) / 0.75);
+    --shadow-lg: 0 26px 58px -30px rgb(var(--shadow-color) / 0.85);
 
     --success: oklch(79.2% 0.209 151.711);
     --info: oklch(70.7% 0.165 254.624);
@@ -321,7 +321,7 @@ html {
 .app-card {
     background-color: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 1.25rem;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xs);
 }
 
@@ -341,7 +341,7 @@ html {
 .app-panel {
     background-color: var(--surface-2);
     border: 1px solid var(--line);
-    border-radius: 1rem;
+    border-radius: var(--radius-md);
 }
 
 .app-divider {
@@ -677,7 +677,7 @@ select.app-input {
     font-size: 0.85rem;
     line-height: 1.3rem;
     border: 1px solid transparent;
-    border-radius: 0.9rem;
+    border-radius: var(--radius-md);
 }
 
 .app-alert-info {
@@ -708,10 +708,10 @@ select.app-input {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--on-brand);
     background-image: linear-gradient(135deg, var(--brand-500), var(--brand-700));
-    border-radius: 1rem;
+    border-radius: var(--radius-md);
 }
 
 /* 用于展示 emoji / 图标头像（浅色柔和底 + 不强制文字色） */
@@ -721,7 +721,7 @@ select.app-input {
     justify-content: center;
     background-image: linear-gradient(135deg, color-mix(in oklab, var(--brand-100) 80%, transparent), color-mix(in oklab, var(--brand-300) 45%, transparent));
     border: 1px solid var(--brand-soft-border);
-    border-radius: 1rem;
+    border-radius: var(--radius-md);
 }
 
 .dark .app-avatar-icon {
@@ -743,7 +743,7 @@ select.app-input {
     padding: 0.4rem 0.75rem;
     font-weight: 600;
     color: var(--content-soft);
-    border-radius: 0.7rem;
+    border-radius: var(--radius-sm);
     transition:
         background-color 0.18s ease,
         color 0.18s ease;
@@ -1032,7 +1032,7 @@ select.app-input {
 .app-skeleton {
     background-image: linear-gradient(90deg, var(--surface-3), color-mix(in oklab, var(--surface-3) 60%, var(--surface)), var(--surface-3));
     background-size: 200% 100%;
-    border-radius: 0.75rem;
+    border-radius: var(--radius-sm);
     animation: app-skeleton 1.4s ease-in-out infinite;
 }
 
@@ -1143,8 +1143,8 @@ select.app-input {
 
 .app-page-title {
     font-size: 1.25rem;
-    font-weight: 900;
-    letter-spacing: -0.01em;
+    font-weight: 800;
+    letter-spacing: -0.02em;
 }
 
 .app-page-subtitle {
@@ -1192,7 +1192,7 @@ select.app-input {
 .app-stat-value {
     margin-top: 0.35rem;
     font-size: 1.5rem;
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1.1;
     letter-spacing: -0.02em;
 }
@@ -1215,7 +1215,7 @@ select.app-input {
 .app-sidebar-group-title {
     padding: 0 0.75rem 0.35rem;
     font-size: 0.65rem;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--content-dim);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -1400,7 +1400,7 @@ select.app-input {
 .app-dropdown-label {
     padding: 0.4rem 0.6rem 0.25rem;
     font-size: 0.65rem;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--content-dim);
     text-transform: uppercase;
     letter-spacing: 0.06em;
