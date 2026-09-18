@@ -62,6 +62,14 @@ export function formatConversationMarkdown(options: ExportConversationOptions): 
                         lines.push(part.text.trim());
                         lines.push('');
                     }
+                } else if (part.type === 'file' || part.type === 'image') {
+                    // 附件在导出里保留可点击链接，否则导出的记录会丢失用户发过的文件
+                    const filePart = part as { url?: unknown; filename?: unknown };
+                    const url = typeof filePart.url === 'string' ? filePart.url : '';
+                    if (!url) continue;
+                    const name = typeof filePart.filename === 'string' && filePart.filename ? filePart.filename : '附件';
+                    lines.push(`📎 **${name}**：[打开](${url})`);
+                    lines.push('');
                 } else if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
                     const toolName = part.toolName || part.type.replace('tool-', '');
                     lines.push(`> 🛠️ **工具调用** (\`${toolName}\`):`);

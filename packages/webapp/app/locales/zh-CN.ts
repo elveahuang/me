@@ -297,6 +297,9 @@ export default {
         toolInvalidJson: 'Headers / 参数定义不是合法的 JSON',
         toolEmpty: '暂无 Tool',
         toolDeleteConfirm: '确认删除该 Tool？',
+        // 资讯编辑
+        loadingContent: '正在加载正文…',
+        newsContentPlaceholder: '正文（支持 Markdown）',
     },
     billing: {
         title: '会员与订阅方案',

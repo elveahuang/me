@@ -296,6 +296,8 @@ export default {
         toolInvalidJson: 'Headers / parameters are not valid JSON',
         toolEmpty: 'No tools yet',
         toolDeleteConfirm: 'Delete this tool?',
+        loadingContent: 'Loading content…',
+        newsContentPlaceholder: 'Content (Markdown supported)',
     },
     billing: {
         title: 'Membership & Subscriptions',

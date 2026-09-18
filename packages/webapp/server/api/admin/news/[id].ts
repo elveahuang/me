@@ -5,15 +5,26 @@ import { requireAdmin } from '../../../utils/guard';
 
 const EDITABLE = ['title', 'summary', 'content', 'coverImage', 'category', 'status'] as const;
 
-/** 资讯更新 / 删除。发布状态切换时自动维护 publishedAt。 */
+/**
+ * 资讯详情（GET）/ 更新（PATCH）/ 删除（DELETE）。
+ *
+ * 注意：管理端列表接口不返回 content（避免列表页传输大量 Markdown），
+ * 因此编辑正文前必须先 GET 详情，否则回填为空、一保存就覆盖原文。
+ * GET 分支必须显式处理：此前未区分方法，任何请求都会走更新分支并写库。
+ */
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     const id = getRouterParam(event, 'id')!;
+    const method = getMethod(event);
 
     const [existing] = await db.select().from(news).where(eq(news.id, id));
     if (!existing) throw createError({ statusCode: 404, statusMessage: '资讯不存在' });
 
-    if (getMethod(event) === 'DELETE') {
+    if (method === 'GET') {
+        return existing;
+    }
+
+    if (method === 'DELETE') {
         await db.delete(news).where(eq(news.id, id));
         return { ok: true };
     }

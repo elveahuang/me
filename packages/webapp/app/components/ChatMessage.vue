@@ -16,7 +16,11 @@ const copied = ref(false);
 // json-render 插件：把 Markdown 中的 ```json-render 代码块渲染成生成式 UI 组件
 const plugins = [jsonRender()];
 
-type Segment = { kind: 'text'; value: string } | { kind: 'reasoning'; value: string } | { kind: 'tool'; value: string };
+type Segment =
+    | { kind: 'text'; value: string }
+    | { kind: 'reasoning'; value: string }
+    | { kind: 'tool'; value: string }
+    | { kind: 'file'; value: string; url: string; mediaType: string; isImage: boolean };
 
 const segments = computed<Segment[]>(() => {
     const out: Segment[] = [];
@@ -26,6 +30,19 @@ const segments = computed<Segment[]>(() => {
         } else if (part?.type === 'reasoning') {
             const text = part.reasoning ?? part.text ?? '';
             if (text?.trim()) out.push({ kind: 'reasoning', value: text });
+        } else if (part?.type === 'file' || part?.type === 'image') {
+            // 用户发送的附件：历史里存的是稳定地址（公开桶公网地址或站内下载路径）。
+            // 此前不处理 file/image，附件消息会渲染成空白。
+            const url = typeof part.url === 'string' ? part.url : '';
+            if (!url) continue;
+            const mediaType = typeof part.mediaType === 'string' ? part.mediaType : 'application/octet-stream';
+            out.push({
+                kind: 'file',
+                value: typeof part.filename === 'string' && part.filename ? part.filename : t('chat.attachedFile'),
+                url,
+                mediaType,
+                isImage: mediaType.startsWith('image/'),
+            });
         } else if (typeof part?.type === 'string' && part.type.startsWith('tool-')) {
             const name = part.toolName || part.type.slice(5);
             const failed = part.state === 'output-error' || part.state === 'error';
@@ -37,6 +54,10 @@ const segments = computed<Segment[]>(() => {
 
 const toolNames = computed(() => [...new Set(segments.value.filter((s) => s.kind === 'tool').map((s) => s.value))]);
 const hasText = computed(() => segments.value.some((s) => s.kind === 'text'));
+/** 仅有附件、没有文字时也要渲染消息体与操作栏 */
+const fileSegments = computed(() => segments.value.filter((s): s is Extract<Segment, { kind: 'file' }> => s.kind === 'file'));
+
+const imagePreview = ref('');
 
 async function copyMessageText() {
     const texts = segments.value
@@ -108,6 +129,33 @@ async function copyMessageText() {
                         <span class="whitespace-pre-wrap">{{ seg.value }}</span>
                     </template>
                 </Suspense>
+
+                <!-- 用户发送的附件：图片内联可点开大图，其他文件提供下载入口 -->
+                <div v-else-if="seg.kind === 'file'" class="my-1.5 flex flex-wrap gap-2">
+                    <button
+                        v-if="seg.isImage"
+                        type="button"
+                        class="overflow-hidden rounded-xl border"
+                        style="border-color: var(--line); max-width: 16rem"
+                        :title="seg.value"
+                        @click="imagePreview = seg.url"
+                    >
+                        <img :src="seg.url" :alt="seg.value" class="max-h-48 object-cover" />
+                    </button>
+                    <a
+                        v-else
+                        :href="seg.url"
+                        target="_blank"
+                        rel="noopener"
+                        class="app-chip max-w-[16rem] !py-1.5 hover:opacity-90"
+                        :title="seg.value"
+                        download
+                    >
+                        <AppIcon name="file-outline" :size="14" />
+                        <span class="truncate">{{ seg.value }}</span>
+                        <span class="text-faint text-[10px]">{{ t('chat.downloadFile') }}</span>
+                    </a>
+                </div>
             </template>
 
             <!-- 复制操作按钮（在消息上悬停展示） -->
@@ -129,5 +177,15 @@ async function copyMessageText() {
 
             <span v-if="!segments.length" class="text-faint">…</span>
         </div>
+
+        <!-- 附件图片大图预览 -->
+        <Teleport to="body">
+            <div v-if="imagePreview" class="app-modal-backdrop" @click.self="imagePreview = ''">
+                <img :src="imagePreview" alt="preview" class="max-h-[85vh] max-w-[90vw] rounded-xl object-contain" />
+                <button type="button" class="app-btn app-btn-soft absolute top-4 right-4" @click="imagePreview = ''">
+                    <AppIcon name="close" :size="16" />
+                </button>
+            </div>
+        </Teleport>
     </div>
 </template>

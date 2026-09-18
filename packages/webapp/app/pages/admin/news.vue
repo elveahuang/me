@@ -31,6 +31,8 @@ const success = ref('');
 const keyword = ref('');
 const status = ref('all');
 const saving = ref(false);
+/** 编辑时正文按需拉取（列表接口不返回 content） */
+const loadingContent = ref(false);
 
 const emptyForm = () => ({
     title: '',
@@ -91,12 +93,18 @@ function openCreate() {
     error.value = '';
 }
 
+/**
+ * 打开编辑：列表接口不返回正文（避免列表页传输大量 Markdown），
+ * 因此这里按 id 拉一次详情再回填。
+ * 此前直接读 row.content（undefined）会让正文框显示为空，
+ * 管理员一保存就把原文整段覆盖掉——这是会丢数据的缺陷。
+ */
 function openEdit(row: NewsRow) {
     editing.value = row;
     Object.assign(form, {
         title: row.title,
         summary: row.summary,
-        content: row.content,
+        content: '',
         coverImage: row.coverImage,
         category: row.category,
         tagsText: (row.tags ?? []).join(', '),
@@ -105,6 +113,18 @@ function openEdit(row: NewsRow) {
         publishedAt: row.publishedAt ? String(row.publishedAt).slice(0, 10) : '',
     });
     error.value = '';
+    loadingContent.value = true;
+    $fetch<{ content?: string }>(`/api/admin/news/${row.id}`)
+        .then((detail) => {
+            // 仅当用户仍停留在同一条记录时才回填，避免快速切换时串内容
+            if (editing.value?.id === row.id) form.content = detail.content ?? '';
+        })
+        .catch((e) => {
+            error.value = extractApiError(e, t('common.loadFailed'));
+        })
+        .finally(() => {
+            loadingContent.value = false;
+        });
 }
 
 async function save() {
@@ -208,12 +228,16 @@ function goPage(next: number) {
                     placeholder="摘要（列表展示）"
                     class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
                 />
-                <textarea
-                    v-model="form.content"
-                    rows="10"
-                    placeholder="正文（支持 Markdown）"
-                    class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs sm:col-span-2"
-                />
+                <div class="sm:col-span-2">
+                    <textarea
+                        v-model="form.content"
+                        rows="10"
+                        :placeholder="loadingContent ? t('adminForm.loadingContent') : t('adminForm.newsContentPlaceholder')"
+                        :disabled="loadingContent"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs disabled:bg-gray-50 disabled:opacity-60"
+                    />
+                    <p v-if="loadingContent" class="mt-1 text-[11px] text-gray-400">{{ t('adminForm.loadingContent') }}</p>
+                </div>
             </div>
             <div class="flex flex-wrap items-center gap-4">
                 <select v-model="form.status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
