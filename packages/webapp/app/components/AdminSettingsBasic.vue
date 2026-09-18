@@ -15,6 +15,8 @@ const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
+/** 是否成功拉到过真实配置：未拉到时不允许渲染可编辑表单，否则保存会把全局配置写回默认值 */
+const loaded = ref(false);
 
 const locales = [
     { key: 'zh-CN', label: '简体中文' },
@@ -45,6 +47,7 @@ async function load() {
     try {
         const data = await $fetch<BasicSettings>('/api/admin/system-settings');
         Object.assign(form, data);
+        loaded.value = true;
     } catch (e) {
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
@@ -94,7 +97,7 @@ async function save() {
         <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
 
         <div v-if="loading" class="h-64 animate-pulse rounded-2xl bg-white" />
-        <div v-else class="space-y-6 rounded-2xl bg-white p-6 shadow-sm">
+        <div v-else-if="loaded" class="space-y-6 rounded-2xl bg-white p-6 shadow-sm">
             <div class="space-y-1.5">
                 <label class="text-sm font-bold text-gray-700">{{ t('adminForm.basicSiteTitle') }}</label>
                 <input
