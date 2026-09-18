@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
+import { useI18n } from 'vue-i18n';
+
 definePageMeta({ layout: 'admin', middleware: 'admin' });
+
+const { t } = useI18n();
 
 interface ToolItem {
     id: string;
@@ -9,6 +14,10 @@ interface ToolItem {
     config: Record<string, unknown>;
     enabled: boolean;
 }
+
+/** 占位符里的示例属于代码片段，不参与翻译（放进 locale 会被 vue-i18n 当成插值语法报错） */
+const PARAMS_SAMPLE = '[{"name":"city","type":"string","description":"City","required":true}]';
+const HEADERS_SAMPLE = '{"Authorization": "Bearer xxx"}';
 
 const tools = ref<ToolItem[]>([]);
 const editing = ref<Partial<ToolItem> | null>(null);
@@ -40,7 +49,7 @@ function buildConfig(): Record<string, unknown> | null {
         headers = JSON.parse(form.headersText || '{}');
         parameters = JSON.parse(form.parametersText || '[]');
     } catch {
-        formError.value = 'Headers / 参数定义不是合法的 JSON';
+        formError.value = t('adminForm.toolInvalidJson');
         return null;
     }
     return {
@@ -96,7 +105,7 @@ async function save() {
     const config = buildConfig();
     if (config === null) return;
     if (!form.name.trim()) {
-        formError.value = '名称必填';
+        formError.value = t('adminForm.requiredName');
         return;
     }
     const body = {
@@ -112,8 +121,8 @@ async function save() {
         } else {
             await $fetch('/api/admin/tools', { method: 'POST', body });
         }
-    } catch (e: any) {
-        formError.value = e?.data?.statusMessage || e?.message || '保存失败';
+    } catch (e) {
+        formError.value = extractApiError(e, t('adminForm.saveFailed'));
         return;
     }
     editing.value = null;
@@ -126,7 +135,7 @@ async function toggle(tool: ToolItem) {
 }
 
 async function remove(id: string) {
-    if (!confirm('确认删除该 Tool？')) return;
+    if (!confirm(t('adminForm.toolDeleteConfirm'))) return;
     await $fetch(`/api/admin/tools/${id}`, { method: 'DELETE' });
     await load();
 }
@@ -136,23 +145,25 @@ async function remove(id: string) {
     <div>
         <div class="mb-6 flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">Tool 管理</h1>
+                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.toolTitle') }}</h1>
                 <p class="mt-1 text-xs text-gray-400">
-                    Tool 是可执行的 AI SDK 工具，挂载到智能体后进入 ReAct 循环。内置工具开箱即用，HTTP 工具的 URL / 方法 / 参数全部后台可配。
+                    {{ t('adminForm.toolSubtitle') }}
                 </p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">新建 Tool</button>
+            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
+                {{ t('adminForm.toolNew') }}
+            </button>
         </div>
 
         <div v-if="editing !== null" class="mb-6 space-y-3 rounded-2xl bg-white p-6 shadow-sm">
             <div class="grid grid-cols-2 gap-3">
-                <input v-model="form.name" placeholder="名称，如：当前时间" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                <input v-model="form.name" :placeholder="t('adminForm.toolNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                 <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                    <option value="builtin_time">内置：查询当前时间</option>
-                    <option value="http">HTTP 工具（自定义接口）</option>
+                    <option value="builtin_time">{{ t('adminForm.toolTypeBuiltin') }}</option>
+                    <option value="http">{{ t('adminForm.toolTypeHttp') }}</option>
                 </select>
             </div>
-            <input v-model="form.description" placeholder="描述（会作为工具说明传给模型）" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input v-model="form.description" :placeholder="t('adminForm.toolDescPlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
 
             <template v-if="form.type === 'http'">
                 <div class="grid grid-cols-[6rem_1fr] gap-3">
@@ -164,7 +175,7 @@ async function remove(id: string) {
                     </select>
                     <input
                         v-model="form.url"
-                        placeholder="接口 URL，如 https://api.example.com/weather"
+                        :placeholder="t('adminForm.toolUrlPlaceholder')"
                         class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
                     />
                 </div>
@@ -172,28 +183,30 @@ async function remove(id: string) {
                     v-model="form.parametersText"
                     rows="4"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    placeholder='参数定义（数组）：[{"name":"city","type":"string","description":"城市名","required":true}]'
+                    :placeholder="`${t('adminForm.toolParamsLabel')}${PARAMS_SAMPLE}`"
                 />
                 <textarea
                     v-model="form.headersText"
                     rows="2"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    placeholder='固定请求头：{"Authorization": "Bearer xxx"}'
+                    :placeholder="`${t('adminForm.toolHeadersLabel')}${HEADERS_SAMPLE}`"
                 />
                 <textarea
                     v-if="form.method !== 'GET'"
                     v-model="form.bodyTemplate"
                     rows="2"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    placeholder="POST/PUT 请求体模板，可用 {{参数名}} 占位；留空则整体作为 JSON 发送"
+                    :placeholder="t('adminForm.toolBodyPlaceholder')"
                 />
             </template>
 
-            <label class="flex items-center gap-1 text-sm text-gray-600"> <input v-model="form.enabled" type="checkbox" /> 启用 </label>
+            <label class="flex items-center gap-1 text-sm text-gray-600"> <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }} </label>
             <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">保存</button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">取消</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">
+                    {{ t('adminForm.save') }}
+                </button>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
             </div>
         </div>
 
@@ -201,34 +214,35 @@ async function remove(id: string) {
             <thead class="text-left text-gray-400">
                 <tr>
                     <th class="p-4">Tool</th>
-                    <th class="p-4">类型</th>
-                    <th class="p-4">状态</th>
-                    <th class="p-4">操作</th>
+                    <th class="p-4">{{ t('adminForm.colType') }}</th>
+                    <th class="p-4">{{ t('adminForm.status') }}</th>
+                    <th class="p-4">{{ t('adminForm.actions') }}</th>
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="t in tools" :key="t.id" class="border-t border-gray-100">
+                <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
+                <tr v-for="tool in tools" :key="tool.id" class="border-t border-gray-100">
                     <td class="p-4">
-                        <p class="font-medium text-gray-800">{{ t.name }}</p>
-                        <p class="text-xs text-gray-400">{{ t.description }}</p>
+                        <p class="font-medium text-gray-800">{{ tool.name }}</p>
+                        <p class="text-xs text-gray-400">{{ tool.description }}</p>
                     </td>
                     <td class="p-4">
-                        <span :class="t.type === 'http' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'" class="rounded-full px-2 py-0.5 text-xs">
-                            {{ t.type === 'http' ? 'HTTP' : '内置' }}
+                        <span :class="tool.type === 'http' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'" class="rounded-full px-2 py-0.5 text-xs">
+                            {{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}
                         </span>
                     </td>
                     <td class="p-4">
-                        <button :class="t.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(t)">
-                            {{ t.enabled ? '启用' : '停用' }}
+                        <button :class="tool.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(tool)">
+                            {{ tool.enabled ? t('common.enabled') : t('common.disabled') }}
                         </button>
                     </td>
                     <td class="space-x-2 p-4">
-                        <button class="text-green-600 hover:underline" @click="openEdit(t)">编辑</button>
-                        <button class="text-red-500 hover:underline" @click="remove(t.id)">删除</button>
+                        <button class="text-green-600 hover:underline" @click="openEdit(tool)">{{ t('adminForm.edit') }}</button>
+                        <button class="text-red-500 hover:underline" @click="remove(tool.id)">{{ t('adminForm.delete') }}</button>
                     </td>
                 </tr>
                 <tr v-if="!tools.length">
-                    <td colspan="4" class="p-8 text-center text-gray-400">暂无 Tool</td>
+                    <td colspan="4" class="p-8 text-center text-gray-400">{{ t('adminForm.toolEmpty') }}</td>
                 </tr>
             </tbody>
         </table>

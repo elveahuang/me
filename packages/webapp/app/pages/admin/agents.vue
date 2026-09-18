@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { extractApiError } from '@commons/contract';
+import { useI18n } from 'vue-i18n';
+
 definePageMeta({ layout: 'admin', middleware: 'admin' });
+
+const { t } = useI18n();
 
 interface SkillItem {
     id: string;
@@ -135,7 +140,7 @@ function openEdit(agent: AgentItem) {
 
 async function handleAutoConfig() {
     if (!autoConfigPrompt.value.trim() || autoConfigPrompt.value.trim().length < 5) {
-        autoConfigError.value = '请至少输入 5 个字的用途描述';
+        autoConfigError.value = t('adminForm.agentAutoTooShort');
         return;
     }
     autoConfigLoading.value = true;
@@ -180,8 +185,8 @@ async function handleAutoConfig() {
         });
         autoConfigModalOpen.value = false;
         autoConfigPrompt.value = '';
-    } catch (e: any) {
-        autoConfigError.value = e?.data?.statusMessage || e?.message || '自动生成失败，请重试';
+    } catch (e) {
+        autoConfigError.value = extractApiError(e, t('adminForm.agentAutoFailed'));
     } finally {
         autoConfigLoading.value = false;
     }
@@ -199,7 +204,7 @@ async function save() {
 }
 
 async function remove(id: string) {
-    if (!confirm('确认删除该智能体？')) return;
+    if (!confirm(t('adminForm.agentDeleteConfirm'))) return;
     await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' });
     await load();
 }
@@ -208,39 +213,46 @@ async function remove(id: string) {
 <template>
     <div>
         <div class="mb-6 flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-gray-800">智能体管理</h1>
+            <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.agentTitle') }}</h1>
             <div class="flex items-center gap-2">
                 <button
                     class="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-100"
                     @click="autoConfigModalOpen = true"
                 >
-                    <span>✨</span> AI 智能配置
+                    <span>✨</span> {{ t('adminForm.agentAutoTitle') }}
                 </button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">新建智能体</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
+                    {{ t('adminForm.agentNew') }}
+                </button>
             </div>
         </div>
 
         <div v-if="editing !== null" class="mb-6 space-y-3 rounded-2xl bg-white p-6 shadow-sm">
             <div class="grid grid-cols-2 gap-3">
-                <input v-model="form.name" placeholder="名称" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input v-model="form.emoji" placeholder="头像 emoji，如 🤖" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                <input v-model="form.name" :placeholder="t('adminForm.namePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                <input v-model="form.emoji" :placeholder="t('adminForm.agentEmojiPlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
-            <input v-model="form.description" placeholder="描述" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <textarea v-model="form.systemPrompt" placeholder="系统提示词" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <input v-model="form.description" :placeholder="t('adminForm.description')" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <textarea
+                v-model="form.systemPrompt"
+                :placeholder="t('adminForm.systemPrompt')"
+                rows="3"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">供应商</label>
+                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.provider') }}</label>
                     <select v-model="form.providerId" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                        <option value="">默认供应商</option>
+                        <option value="">{{ t('adminForm.defaultProvider') }}</option>
                         <option v-for="p in providerList" :key="p.id" :value="p.id">{{ p.name }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">模型</label>
+                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.model') }}</label>
                     <input
                         v-model="form.model"
                         list="provider-models"
-                        placeholder="模型 id"
+                        :placeholder="t('adminForm.modelIdPlaceholder')"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
                     />
                     <datalist id="provider-models">
@@ -262,17 +274,17 @@ async function remove(id: string) {
                     />
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">Max Tokens (可选)</label>
+                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxTokensOptional') }}</label>
                     <input
                         v-model.number="form.maxTokens"
                         type="number"
                         min="1"
-                        placeholder="不限"
+                        :placeholder="t('adminForm.unlimitedPlaceholder')"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
                     />
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs text-gray-400">Max Steps (工具调用轮数)</label>
+                    <label class="mb-1 block text-xs text-gray-400">{{ t('adminForm.maxStepsLabel') }}</label>
                     <input
                         v-model.number="form.maxSteps"
                         type="number"
@@ -284,14 +296,14 @@ async function remove(id: string) {
                 </div>
             </div>
             <div class="flex items-center gap-4 text-sm text-gray-600">
-                <label class="flex items-center gap-1"><input v-model="form.enabled" type="checkbox" /> 启用</label>
+                <label class="flex items-center gap-1"><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label>
                 <label class="flex items-center gap-1">
                     <input v-model="form.selfConfig" type="checkbox" />
-                    允许智能体自主调整模型 / Skill / Tool / MCP
+                    {{ t('adminForm.agentSelfConfigHint') }}
                 </label>
             </div>
             <div>
-                <p class="mb-1 text-sm text-gray-600">绑定 Skill（指令块，注入系统提示词）</p>
+                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindSkill') }}</p>
                 <div class="flex flex-wrap gap-2">
                     <label v-for="s in skillList" :key="s.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
                         <input v-model="form.skillIds" type="checkbox" :value="s.id" />
@@ -300,52 +312,53 @@ async function remove(id: string) {
                 </div>
             </div>
             <div>
-                <p class="mb-1 text-sm text-gray-600">绑定 Tool（可执行工具，进入 ReAct 循环）</p>
+                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindTool') }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <label v-for="t in toolList" :key="t.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        <input v-model="form.toolIds" type="checkbox" :value="t.id" />
-                        {{ t.name }}
-                        <span class="text-[10px] text-gray-400">{{ t.type === 'http' ? 'HTTP' : '内置' }}</span>
+                    <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
+                    <label v-for="tool in toolList" :key="tool.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                        <input v-model="form.toolIds" type="checkbox" :value="tool.id" />
+                        {{ tool.name }}
+                        <span class="text-[10px] text-gray-400">{{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}</span>
                     </label>
-                    <span v-if="!toolList.length" class="text-xs text-gray-400">暂无 Tool，请先在「Tool 管理」页创建</span>
+                    <span v-if="!toolList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoTools') }}</span>
                 </div>
             </div>
             <div>
-                <p class="mb-1 text-sm text-gray-600">绑定知识库</p>
+                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindKb') }}</p>
                 <div class="flex flex-wrap gap-2">
                     <label v-for="kb in kbList" :key="kb.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
                         <input v-model="form.kbIds" type="checkbox" :value="kb.id" />
                         {{ kb.name }}
                     </label>
-                    <span v-if="!kbList.length" class="text-xs text-gray-400">暂无知识库，请先在「知识库」页创建</span>
+                    <span v-if="!kbList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoKb') }}</span>
                 </div>
             </div>
             <div>
-                <p class="mb-1 text-sm text-gray-600">绑定 MCP 服务器</p>
+                <p class="mb-1 text-sm text-gray-600">{{ t('adminForm.agentBindMcp') }}</p>
                 <div class="flex flex-wrap gap-2">
                     <label v-for="m in mcpList" :key="m.id" class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
                         <input v-model="form.mcpIds" type="checkbox" :value="m.id" />
                         {{ m.name }}
                     </label>
-                    <span v-if="!mcpList.length" class="text-xs text-gray-400">暂无 MCP 服务器，请先在「MCP 服务器」页创建</span>
+                    <span v-if="!mcpList.length" class="text-xs text-gray-400">{{ t('adminForm.agentNoMcp') }}</span>
                 </div>
             </div>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">保存</button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">取消</button>
+                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="save">{{ t('adminForm.save') }}</button>
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('adminForm.cancel') }}</button>
             </div>
         </div>
 
         <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
             <thead class="text-left text-gray-400">
                 <tr>
-                    <th class="p-4">智能体</th>
-                    <th class="p-4">模型</th>
+                    <th class="p-4">{{ t('adminForm.colAgent') }}</th>
+                    <th class="p-4">{{ t('adminForm.colModel') }}</th>
                     <th class="p-4">Skills</th>
                     <th class="p-4">Tools</th>
-                    <th class="p-4">知识库</th>
-                    <th class="p-4">状态</th>
-                    <th class="p-4">操作</th>
+                    <th class="p-4">{{ t('adminForm.colKnowledge') }}</th>
+                    <th class="p-4">{{ t('adminForm.status') }}</th>
+                    <th class="p-4">{{ t('adminForm.actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -353,11 +366,17 @@ async function remove(id: string) {
                     <td class="p-4">
                         <p class="font-medium text-gray-800">
                             {{ a.emoji || a.avatar || '🤖' }} {{ a.name }}
-                            <span v-if="a.selfConfig" class="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600" title="允许自主配置">自配置</span>
+                            <span
+                                v-if="a.selfConfig"
+                                class="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600"
+                                :title="t('adminForm.agentSelfConfigHint')"
+                            >
+                                {{ t('adminForm.agentSelfConfigBadge') }}
+                            </span>
                         </p>
                         <p class="text-xs text-gray-400">{{ a.description }}</p>
                     </td>
-                    <td class="p-4 font-mono text-xs text-gray-500">{{ a.provider?.name ?? '默认' }} / {{ a.model }}</td>
+                    <td class="p-4 font-mono text-xs text-gray-500">{{ a.provider?.name ?? t('adminForm.defaultProvider') }} / {{ a.model }}</td>
                     <td class="p-4">
                         <span v-for="s in a.skills" :key="s.id" class="mr-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
                             {{ s.name }}
@@ -377,15 +396,17 @@ async function remove(id: string) {
                         <span v-if="!a.knowledgeBases?.length" class="text-xs text-gray-300">-</span>
                     </td>
                     <td class="p-4">
-                        <span :class="a.enabled ? 'text-green-600' : 'text-gray-400'">{{ a.enabled ? '启用' : '停用' }}</span>
+                        <span :class="a.enabled ? 'text-green-600' : 'text-gray-400'">
+                            {{ a.enabled ? t('common.enabled') : t('common.disabled') }}
+                        </span>
                     </td>
                     <td class="space-x-2 p-4">
-                        <button class="text-green-600 hover:underline" @click="openEdit(a)">编辑</button>
-                        <button class="text-red-500 hover:underline" @click="remove(a.id)">删除</button>
+                        <button class="text-green-600 hover:underline" @click="openEdit(a)">{{ t('adminForm.edit') }}</button>
+                        <button class="text-red-500 hover:underline" @click="remove(a.id)">{{ t('adminForm.delete') }}</button>
                     </td>
                 </tr>
                 <tr v-if="!agents.length">
-                    <td colspan="7" class="p-8 text-center text-gray-400">暂无智能体</td>
+                    <td colspan="7" class="p-8 text-center text-gray-400">{{ t('adminForm.agentEmpty') }}</td>
                 </tr>
             </tbody>
         </table>
@@ -394,16 +415,16 @@ async function remove(id: string) {
         <div v-if="autoConfigModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
             <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
                 <div class="mb-4 flex items-center justify-between">
-                    <h3 class="flex items-center gap-2 text-lg font-bold text-gray-800"><span>✨</span> AI 自动生成智能体配置</h3>
+                    <h3 class="flex items-center gap-2 text-lg font-bold text-gray-800"><span>✨</span> {{ t('adminForm.agentAutoTitle') }}</h3>
                     <button class="text-gray-400 hover:text-gray-600" @click="autoConfigModalOpen = false">✕</button>
                 </div>
                 <p class="mb-3 text-xs text-gray-500">
-                    描述你想要的智能体角色与职能，AI 将自动分析系统内可用的模型、Skills、知识库与 MCP，并生成最佳配置方案。
+                    {{ t('adminForm.agentAutoDesc') }}
                 </p>
                 <textarea
                     v-model="autoConfigPrompt"
                     rows="4"
-                    placeholder="例如：需要一个资深的 Python 数据分析专家，精通 Pandas 与绘图，能通过代码解决业务统计需求..."
+                    :placeholder="t('adminForm.agentAutoPlaceholder')"
                     class="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-purple-500 focus:outline-none"
                 />
                 <p v-if="autoConfigError" class="mt-2 text-xs text-red-500">{{ autoConfigError }}</p>
@@ -413,7 +434,7 @@ async function remove(id: string) {
                         :disabled="autoConfigLoading"
                         @click="autoConfigModalOpen = false"
                     >
-                        取消
+                        {{ t('adminForm.cancel') }}
                     </button>
                     <button
                         class="flex items-center gap-1.5 rounded-lg bg-purple-600 px-5 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
@@ -421,7 +442,7 @@ async function remove(id: string) {
                         @click="handleAutoConfig"
                     >
                         <span v-if="autoConfigLoading" class="animate-spin">🔄</span>
-                        <span>{{ autoConfigLoading ? '生成中...' : '生成配置' }}</span>
+                        <span>{{ autoConfigLoading ? t('adminForm.agentAutoGenerating') : t('adminForm.agentAutoGenerate') }}</span>
                     </button>
                 </div>
             </div>
