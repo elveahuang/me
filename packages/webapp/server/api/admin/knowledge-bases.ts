@@ -23,22 +23,24 @@ export default defineEventHandler(async (event) => {
         return row;
     }
 
-    const rows = await db.select().from(knowledgeBases).orderBy(asc(knowledgeBases.createdAt));
-
     /**
      * 统计只取聚合结果。
      * 此前把 kb_documents / kb_chunks 的全部行查进内存再 filter 计数：
      * chunk 表随文档增长会到百万级，列表接口会因此变成全表扫描 + 大内存占用。
+     * 四条查询互不依赖，一次并发发出。
      */
-    const docCounts = await db
-        .select({ kbId: kbDocuments.kbId, count: sql<number>`count(*)::int` })
-        .from(kbDocuments)
-        .groupBy(kbDocuments.kbId);
-    const chunkCounts = await db
-        .select({ kbId: kbChunks.kbId, count: sql<number>`count(*)::int` })
-        .from(kbChunks)
-        .groupBy(kbChunks.kbId);
-    const providerRows = await db.select({ id: providers.id, name: providers.name }).from(providers);
+    const [rows, docCounts, chunkCounts, providerRows] = await Promise.all([
+        db.select().from(knowledgeBases).orderBy(asc(knowledgeBases.createdAt)),
+        db
+            .select({ kbId: kbDocuments.kbId, count: sql<number>`count(*)::int` })
+            .from(kbDocuments)
+            .groupBy(kbDocuments.kbId),
+        db
+            .select({ kbId: kbChunks.kbId, count: sql<number>`count(*)::int` })
+            .from(kbChunks)
+            .groupBy(kbChunks.kbId),
+        db.select({ id: providers.id, name: providers.name }).from(providers),
+    ]);
 
     const docMap = new Map(docCounts.map((row) => [row.kbId, row.count]));
     const chunkMap = new Map(chunkCounts.map((row) => [row.kbId, row.count]));

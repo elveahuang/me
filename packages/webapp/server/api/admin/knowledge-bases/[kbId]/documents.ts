@@ -93,7 +93,20 @@ export default defineEventHandler(async (event) => {
 
     // 文档列表限制条数：单个知识库可能有大量文档，全量返回会拖慢管理端。
     // 保持返回数组（管理端直接把响应赋给列表），只做上限截断而不改响应结构。
+    // 不选 content：正文可能有整篇文档大小，列表页只需标题/分块数/状态，避免一次拉回全部正文。
     const query = getQuery(event);
     const limit = Math.min(Math.max(1, Number(query.limit) || 200), 500);
-    return db.select().from(kbDocuments).where(eq(kbDocuments.kbId, kbId)).orderBy(asc(kbDocuments.createdAt)).limit(limit);
+    return db
+        .select({
+            id: kbDocuments.id,
+            kbId: kbDocuments.kbId,
+            title: kbDocuments.title,
+            chunkCount: kbDocuments.chunkCount,
+            status: kbDocuments.status,
+            createdAt: kbDocuments.createdAt,
+        })
+        .from(kbDocuments)
+        .where(eq(kbDocuments.kbId, kbId))
+        .orderBy(asc(kbDocuments.createdAt))
+        .limit(limit);
 });

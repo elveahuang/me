@@ -22,33 +22,34 @@ export default defineEventHandler(async (event) => {
     if (keyword) filters.push(sql`${attachments.filename} ilike ${`%${keyword}%`}`);
     const where = and(...filters);
 
-    const rows = await db
-        .select()
-        .from(attachments)
-        .where(where)
-        .orderBy(desc(attachments.createdAt))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
-    const [totalRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(attachments)
-        .where(where);
+    // 列表、总数、分类统计三者互不依赖，一次并发发出，避免三次串行往返叠加到响应延迟。
+    const [rows, [totalRow], stats] = await Promise.all([
+        db
+            .select()
+            .from(attachments)
+            .where(where)
+            .orderBy(desc(attachments.createdAt))
+            .limit(pageSize)
+            .offset((page - 1) * pageSize),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(attachments)
+            .where(where),
+        db
+            .select({
+                category: attachments.category,
+                count: sql<number>`count(*)::int`,
+                bytes: sql<number>`coalesce(sum(${attachments.size}), 0)::bigint`,
+            })
+            .from(attachments)
+            .where(eq(attachments.userId, session.user.id))
+            .groupBy(attachments.category),
+    ]);
 
     /**
      * 分类占用统计：无论当前筛选如何，都返回该用户的全量分布，
      * 这样切换分类时侧边统计不会跟着筛选结果跳动，用户能稳定看到"空间用在哪"。
      */
-    const stats = await db
-        .select({
-            category: attachments.category,
-            count: sql<number>`count(*)::int`,
-            bytes: sql<number>`coalesce(sum(${attachments.size}), 0)::bigint`,
-        })
-        .from(attachments)
-        .where(eq(attachments.userId, session.user.id))
-        .groupBy(attachments.category);
-
     const categoryStats = stats.map((row) => ({
         category: row.category,
         count: row.count,

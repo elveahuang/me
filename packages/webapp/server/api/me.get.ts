@@ -8,12 +8,14 @@ import { requireUser } from '../utils/guard';
 export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
 
-    const [convStat] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(conversations)
-        .where(eq(conversations.userId, session.user.id));
-
-    const membership = await getMembershipStatus(session.user.id);
+    // 会话计数与会员状态查询互不依赖，并发发出。
+    const [[convStat], membership] = await Promise.all([
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(conversations)
+            .where(eq(conversations.userId, session.user.id)),
+        getMembershipStatus(session.user.id),
+    ]);
 
     return {
         user: session.user,

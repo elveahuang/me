@@ -22,36 +22,37 @@ export default defineEventHandler(async (event) => {
     if (keyword) filters.push(sql`(${news.title} ilike ${`%${keyword}%`} or ${news.summary} ilike ${`%${keyword}%`})`);
     const where = and(...filters);
 
-    const items = await db
-        .select({
-            id: news.id,
-            title: news.title,
-            summary: news.summary,
-            coverImage: news.coverImage,
-            category: news.category,
-            tags: news.tags,
-            pinned: news.pinned,
-            viewCount: news.viewCount,
-            publishedAt: news.publishedAt,
-            createdAt: news.createdAt,
-        })
-        .from(news)
-        .where(where)
-        .orderBy(desc(news.pinned), desc(news.publishedAt), desc(news.createdAt))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
-    const [totalRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(news)
-        .where(where);
-
-    const categories = await db
-        .select({ category: news.category, count: sql<number>`count(*)::int` })
-        .from(news)
-        .where(published)
-        .groupBy(news.category)
-        .orderBy(asc(news.category));
+    // 列表、总数、分类聚合三条查询互不依赖，并发发出。
+    const [items, [totalRow], categories] = await Promise.all([
+        db
+            .select({
+                id: news.id,
+                title: news.title,
+                summary: news.summary,
+                coverImage: news.coverImage,
+                category: news.category,
+                tags: news.tags,
+                pinned: news.pinned,
+                viewCount: news.viewCount,
+                publishedAt: news.publishedAt,
+                createdAt: news.createdAt,
+            })
+            .from(news)
+            .where(where)
+            .orderBy(desc(news.pinned), desc(news.publishedAt), desc(news.createdAt))
+            .limit(pageSize)
+            .offset((page - 1) * pageSize),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(news)
+            .where(where),
+        db
+            .select({ category: news.category, count: sql<number>`count(*)::int` })
+            .from(news)
+            .where(published)
+            .groupBy(news.category)
+            .orderBy(asc(news.category)),
+    ]);
 
     return {
         items,

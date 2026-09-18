@@ -14,8 +14,11 @@ export default defineEventHandler(async (event) => {
     const onlyUnread = query.unread === '1' || query.unread === 'true';
     const type = typeof query.type === 'string' && query.type && query.type !== 'all' ? query.type : undefined;
 
-    const result = await listUserNotifications(session.user.id, { page, pageSize, onlyUnread, type });
-    const unread = await countUnreadNotifications(session.user.id);
+    // 列表与未读计数互不依赖，并发查询；unread 供角标复用同一次响应，省一次前端往返。
+    const [result, unread] = await Promise.all([
+        listUserNotifications(session.user.id, { page, pageSize, onlyUnread, type }),
+        countUnreadNotifications(session.user.id),
+    ]);
 
     return { ...result, unread };
 });
