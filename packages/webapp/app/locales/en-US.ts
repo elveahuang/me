@@ -319,6 +319,7 @@ export default {
         toolEmpty: 'No tools yet',
         toolDeleteConfirm: 'Delete this tool?',
         loadingContent: 'Loading content…',
+        contentLoadFailed: 'Failed to load the article body — saving is disabled to avoid overwriting it. Please retry.',
         newsContentPlaceholder: 'Content (Markdown supported)',
         imageUrlPlaceholder: 'Image URL — pick from attachments or type one',
         coverImagePlaceholder: 'Cover image (pick from attachments)',

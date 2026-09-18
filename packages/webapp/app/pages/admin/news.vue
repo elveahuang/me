@@ -33,6 +33,8 @@ const status = ref('all');
 const saving = ref(false);
 /** 编辑时正文按需拉取（列表接口不返回 content） */
 const loadingContent = ref(false);
+/** 正文拉取失败：此时 form.content 仍是空串，必须禁止保存，否则会把原文整段覆盖丢失 */
+const contentFailed = ref(false);
 
 const emptyForm = () => ({
     title: '',
@@ -90,6 +92,7 @@ watch(status, () => {
 function openCreate() {
     editing.value = {};
     Object.assign(form, emptyForm());
+    contentFailed.value = false;
     error.value = '';
 }
 
@@ -98,6 +101,7 @@ function openCreate() {
  * 因此这里按 id 拉一次详情再回填。
  * 此前直接读 row.content（undefined）会让正文框显示为空，
  * 管理员一保存就把原文整段覆盖掉——这是会丢数据的缺陷。
+ * 拉取失败同样不能保存：见 contentFailed。
  */
 function openEdit(row: NewsRow) {
     editing.value = row;
@@ -113,18 +117,27 @@ function openEdit(row: NewsRow) {
         publishedAt: row.publishedAt ? String(row.publishedAt).slice(0, 10) : '',
     });
     error.value = '';
+    void fetchContent(row);
+}
+
+/** 按 id 拉正文回填；仅当用户仍停留在同一条记录时才写入，避免快速切换时串内容 */
+async function fetchContent(row: NewsRow) {
     loadingContent.value = true;
-    $fetch<{ content?: string }>(`/api/admin/news/${row.id}`)
-        .then((detail) => {
-            // 仅当用户仍停留在同一条记录时才回填，避免快速切换时串内容
-            if (editing.value?.id === row.id) form.content = detail.content ?? '';
-        })
-        .catch((e) => {
-            error.value = extractApiError(e, t('common.loadFailed'));
-        })
-        .finally(() => {
-            loadingContent.value = false;
-        });
+    contentFailed.value = false;
+    try {
+        const detail = await $fetch<{ content?: string }>(`/api/admin/news/${row.id}`);
+        if (editing.value?.id === row.id) form.content = detail.content ?? '';
+    } catch (e) {
+        if (editing.value?.id === row.id) contentFailed.value = true;
+        error.value = extractApiError(e, t('common.loadFailed'));
+    } finally {
+        loadingContent.value = false;
+    }
+}
+
+function retryContent() {
+    const row = editing.value;
+    if (row?.id) void fetchContent(row as NewsRow);
 }
 
 async function save() {
@@ -135,6 +148,10 @@ async function save() {
     // 正文仍在拉取时禁止保存：此时 form.content 还是空串，直接 PATCH 会把原文整段覆盖丢失。
     if (loadingContent.value) {
         error.value = t('adminForm.loadingContent');
+        return;
+    }
+    if (contentFailed.value) {
+        error.value = t('adminForm.contentLoadFailed');
         return;
     }
     saving.value = true;
@@ -242,10 +259,14 @@ function goPage(next: number) {
                             v-model="form.content"
                             rows="10"
                             :placeholder="loadingContent ? t('adminForm.loadingContent') : t('adminForm.newsContentPlaceholder')"
-                            :disabled="loadingContent"
+                            :disabled="loadingContent || contentFailed"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs disabled:bg-gray-50 disabled:opacity-60"
                         />
                         <p v-if="loadingContent" class="mt-1 text-[11px] text-gray-400">{{ t('adminForm.loadingContent') }}</p>
+                        <p v-else-if="contentFailed" class="mt-1 text-[11px] text-red-500">
+                            {{ t('adminForm.contentLoadFailed') }}
+                            <button type="button" class="underline hover:no-underline" @click="retryContent">{{ t('common.retry') }}</button>
+                        </p>
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-4">
@@ -264,7 +285,7 @@ function goPage(next: number) {
                 <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
                 <button
                     class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                    :disabled="saving || loadingContent"
+                    :disabled="saving || loadingContent || contentFailed"
                     @click="save"
                 >
                     {{ t('common.save') }}

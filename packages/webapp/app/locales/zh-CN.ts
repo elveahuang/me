@@ -321,6 +321,7 @@ export default {
         toolDeleteConfirm: '确认删除该 Tool？',
         // 资讯编辑
         loadingContent: '正在加载正文…',
+        contentLoadFailed: '正文加载失败，为避免覆盖原文已禁止保存，请重试',
         newsContentPlaceholder: '正文（支持 Markdown）',
         // 图片选择（封面 / 配图 / 头像）
         imageUrlPlaceholder: '图片地址，可从附件选择或直接填写',
