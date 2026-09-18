@@ -34,7 +34,8 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 - 实际共享契约是 `packages/commons/src/contract/index.ts`，业务代码使用 `@commons/contract`。
 - 共享主题是 `packages/commons/src/styles/theme.css`，通过 `@repo/commons/styles/theme.css` 使用。
-- Web 的 `@commons` 别名在 `packages/webapp/nuxt.config.ts`，指向 `../commons/src`。
+- Web 的 `@commons` 别名只在 `packages/webapp/nuxt.config.ts` 的 Vite/`app` 层配置，指向 `../commons/src`。**Nitro/server 没有 `@commons` 别名**，所以 `server/` 目前无法直接 import 共享契约——这正是 `server/utils/billing.ts` 自行重复声明 `BillingPeriod`/`Plan`/`MembershipStatus`（与 contract 同形）的原因。要在服务端复用契约，先给 Nitro 加 `nitro.alias['@commons']`，或把共享 API 类型移到双端自动导入的 `webapp/shared/types`。
+- `packages/commons/src` 里除 `contract/` 与 `styles/theme.css` 外（`api/ types/ store/ hooks/ utils/ components/ i18n/ router/ services/` 等）均无消费者，是遗留结构；`commons/package.json` 的 exports map 也没有 `./contract` 条目，靠别名访问。修改前先确认实际消费者，不要假定两端已全面接入这些旧目录。
 - Mobile 的 `@commons/*` 在 `packages/mobile/tsconfig.json`，Vite 使用 `resolve.tsconfigPaths: true`。
 - 根依赖列表很大，不代表所有库都已用于核心链路；不要仅凭依赖名推断功能。
 
@@ -42,23 +43,24 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.4.2`；CI 使用 Node 22，但依赖升级后仍需检查各依赖的 engines，不能把 CI 配置视为兼容性证明。
 
-| 命令                                     | 实际作用 / 前提                                                  |
-| ---------------------------------------- | ---------------------------------------------------------------- |
-| `pnpm install`                           | 安装 workspace 依赖；`prepare` 会安装 Husky 钩子，可能修改锁文件 |
-| `pnpm webapp:start`                      | 启动 Nuxt Web/API，默认端口 3000                                 |
-| `pnpm mobile:start`                      | 启动移动端 Vite 开发服务；后端仍需单独启动                       |
-| `pnpm webapp:build`                      | Nuxt 生产构建                                                    |
-| `pnpm mobile:build`                      | 执行移动端包的构建脚本；不等于完成原生平台打包                   |
-| `pnpm typecheck`                         | 先 Web 再 Mobile；前者失败会阻止后者执行                         |
-| `pnpm lint`                              | ESLint；覆盖 Web server/app、Mobile src、Commons src             |
-| `pnpm test`                              | Web 的 `smoke-test`，不是双端端到端测试                          |
-| `pnpm --filter @repo/webapp typecheck`   | 仅 Web 类型检查                                                  |
-| `pnpm --filter @repo/mobile typecheck`   | 仅 Mobile 类型检查                                               |
-| `pnpm --filter @repo/webapp icons:check` | 检查图标生成结果是否同步                                         |
-| `pnpm webapp:db:generate`                | 根据 schema 生成迁移文件，会写文件                               |
-| `pnpm webapp:db:migrate`                 | 向目标数据库应用迁移，会改数据结构                               |
-| `pnpm webapp:db:seed`                    | 执行 `server/db/seed.ts`，会写数据库                             |
-| `pnpm webapp:init`                       | 依次 migrate + seed，不是只读环境检查                            |
+| 命令                                     | 实际作用 / 前提                                                                   |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `pnpm install`                           | 安装 workspace 依赖；`prepare` 会安装 Husky 钩子，可能修改锁文件                  |
+| `pnpm webapp:start`                      | 启动 Nuxt Web/API，默认端口 3000                                                  |
+| `pnpm mobile:start`                      | 启动移动端 Vite 开发服务；后端仍需单独启动                                        |
+| `pnpm webapp:build`                      | Nuxt 生产构建                                                                     |
+| `pnpm mobile:build`                      | 执行移动端包的构建脚本；不等于完成原生平台打包                                    |
+| `pnpm typecheck`                         | 先 Web 再 Mobile；前者失败会阻止后者执行                                          |
+| `pnpm lint`                              | ESLint；覆盖 Web server/app、Mobile src、Commons src                              |
+| `pnpm test`                              | Web 的 `smoke-test`，不是双端端到端测试                                           |
+| `pnpm --filter @repo/webapp typecheck`   | 仅 Web 类型检查                                                                   |
+| `pnpm --filter @repo/mobile typecheck`   | 仅 Mobile 类型检查                                                                |
+| `pnpm --filter @repo/webapp icons:check` | 检查图标生成结果是否同步                                                          |
+| `pnpm webapp:db:generate`                | 根据 schema 生成迁移文件，会写文件                                                |
+| `pnpm webapp:db:migrate`                 | 向目标数据库应用迁移，会改数据结构                                                |
+| `pnpm webapp:db:seed`                    | 执行 `server/db/seed.ts`，会写数据库                                              |
+| `pnpm webapp:init`                       | 依次 migrate + seed，不是只读环境检查                                             |
+| `pnpm webapp:auth:secret`                | 生成 Better Auth 会话密钥（转调 webapp 包同名脚本）；只输出密钥，不写库、不改配置 |
 
 - `webapp:start:pro` 实际仍是 dev；`webapp:build:dev`、`webapp:build:pro` 当前与普通 build 相同，不能据命名假设加载不同环境。
 - `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
@@ -145,10 +147,13 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - `server/utils/tools.ts` 的 HTTP 工具调用 `outbound.ts` 的 URL/DNS 校验，15 秒超时、输出截取 4000 字符；`ALLOW_PRIVATE_OUTBOUND=true` 可绕过校验。这不是覆盖 MCP、embedding 等全部请求的全局出站保护。
 - Redis 未配置时限流降级单进程内存，缓存回源；不要宣称无 Redis 的多实例部署仍有全局一致限流。原样复制 Web example 会配置 Redis URL，并不等同于禁用 Redis。
 - Nitro 自动导入是实际运行约定，不因 handler 缺少显式 `db/createError` import 就判错；独立 tsx 脚本不应假设具备同样环境。
+- `/api/agents` 走 `requireUser`（需登录）。首页 `pages/index.vue` 用 `useFetch('/api/agents')` 渲染 agent 精选区，未登录访客拿到 401、`agents` 为空，该区块会静默隐藏——把它当作"数据问题"排查前，先确认访问者是否已登录，或改用不鉴权的公开列表。
 
 ### 内容运营与附件模块（资讯 / 宣传栏 / 通知 / 附件）
 
-四个模块的表都在 `server/db/schema.ts` 尾部，迁移为 `0002_sweet_madripoor.sql`；共享类型与格式化函数在 `packages/commons/src/contract/index.ts` 的对应小节。
+四个模块的表都在 `server/db/schema.ts` 尾部；共享类型与格式化函数在 `packages/commons/src/contract/index.ts` 的对应小节。
+
+- **迁移现状**：`server/db/migrations/` 目前只有一个已压缩迁移 `0000_smiling_peter_quill.sql`（`_journal.json` 也只有一条 entry），全部 28 张表（含 content-ops/附件/订单/存储配置）都在其中。不要假设存在按模块拆分的 `0002_*` 迁移；核对目标库是否已迁移以 `drizzle.config.ts` 与该目录为准。
 
 - **附件是 S3 协议，不是本地磁盘**。`server/utils/storage.ts` 是唯一适配层，面向 RustFS / MinIO / AWS S3 等；自建存储默认 `forcePathStyle=true`。改存储行为时改这一处，不要在各 handler 里各写一套。
 - **两条上传通道必须都保留**：`POST /api/attachments`（服务端中转，兼容未配 CORS 的桶）与 `POST /api/attachments/presign` + `/complete`（前端直传）。直传的 `complete` 会校验 objectKey 必须落在当前配置 prefix 下且不含 `..`，否则用户可以"认领"任意已存在对象。
@@ -156,7 +161,7 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **私有桶返回预签名 URL**（默认 1 小时），配置 `publicBaseUrl` 时改走公共地址；`presignDownload` 只在本地签名，不产生存储侧请求。存储配置接口一律经 `sanitizeStorageConfig()` 脱敏，`secretAccessKey` 回传掩码 `********` 表示"不修改"。
 - 附件列表的 `stats` 按用户全量统计，**不随 category/keyword 筛选变化**；管理端存储列表用一次聚合查询带出各配置占用（避免 N+1）。
 - **通知的受众语义**：`audience=all` 不预展开收件人（含未来注册用户），`users` 在创建时展开。因此广播的 `targetCount` 用当前用户总数当分母，会随时间增长而下降，这是正确表现。`markNotificationsRead()` 只对当前用户可见的通知写入已读记录，改动时不要绕过该可见性过滤。
-- **宣传栏的时间窗**：结束日期取当天 23:59:59.999（`dateInputToBoundary(value, 'end')`），不是当天 00:00——否则选到当天的活动会在当天上午提前下线。用户端与管理端共用 `isBulletinActive()`。
+- **宣传栏的时间窗**：结束日期取当天 23:59:59.999（`dateInputToBoundary(value, 'end')`），不是当天 00:00——否则选到当天的活动会在当天上午提前下线。`isBulletinActive()` 目前只在管理端 `admin/bulletins.vue` 调用来做"进行中/已结束"标注；两端 `BulletinBanner.vue` 依赖的是服务端 `bulletins.get.ts` 的时间窗过滤，不在前端再判一次。改活动可见性时以服务端过滤为准。
 - **资讯浏览量按 (用户, 文章) 30 分钟去重**：Redis 可用时跨实例生效，否则降级进程内 Map。详情页用 `useAsyncData` 承载首屏，避免 SSR 后客户端二次请求。
 - 用户端 `/news`、`/notifications`、`/attachments` 与移动端同名路由都需要登录；管理端在 `/admin/news`、`/admin/bulletins`、`/admin/notifications`、`/admin/storage`。`/admin/storage` 页面同时承载存储配置与附件总览。
 - 移动端未读角标用 `packages/mobile/src/composables/useUnread.ts` 的共享单例，不要在页面里各自维护未读数，否则读完消息返回后角标不同步。
@@ -168,7 +173,7 @@ EE 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **i18n 消息不能直接写 `{{x}}`**：vue-i18n 把它当插值语法，渲染时抛 `Not allowed nest placeholder` / `Invalid token in placeholder`。字面量大括号要写成 `{'{{'}…{'}}'}`；JSON 示例这类代码片段应放在组件内拼接，不要进 locale。改动 locale 后建议对每条消息做一次编译校验（`zh-CN`/`en-US` 与移动端两份都要查）。
 - **模板里不要用会遮蔽 i18n `t` 的循环变量名**：`v-for="t in list"` 会让同一模板内的 `t('...')` 变成「对象不可调用」。循环变量用具体名词（如 `tool in toolList`）。
 - **管理端页面需同时处理 loading / 错误 / 空态三种状态**：失败时若直接套用空态文案，用户会把「接口挂了」读成「没有数据」。列表页失败应清空数据并渲染错误提示 + 重试按钮。
-- **页面内的 `setTimeout`/`setInterval` 必须在卸载时清理**：搜索防抖与成功提示定时器若不清，SPA 内快速进出页面会在组件销毁后继续发请求或写状态。成功提示统一走 `flashSuccess()` 这类收敛的辅助函数，便于集中清理。
+- **页面内的 `setTimeout`/`setInterval` 必须在卸载时清理**：搜索防抖与成功提示定时器若不清，SPA 内快速进出页面会在组件销毁后继续发请求或写状态。**注意：目前并没有集中的 `flashSuccess()`**——`admin/notifications.vue`、`admin/storage.vue`、`pages/attachments.vue`、`pages/notifications.vue` 与移动端 `AttachmentsView.vue`、`NotificationsView.vue` 各有一份本地 `flashSuccess`/`success` 定时器实现。凡直接 `success.value = …` 绕过本地辅助函数的写法，提示不会自动清理；收敛这类重复或新增 toast 时，把定时器登记到可清理处是优先方向。
 - 修改共享契约后同步两端；`pnpm lint` 覆盖 Web server/app、Mobile src 与 Commons src，`.husky/pre-commit` 只跑 lint-staged（不含 Vue 的 ESLint），提交成功不等于通过检查。
 
 ### 服务端健壮性约定
