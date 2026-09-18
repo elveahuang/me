@@ -45,6 +45,9 @@ const docForm = reactive({ title: '', content: '' });
 const searchQuery = ref('');
 const searchHits = ref<HitItem[]>([]);
 const uploading = ref(false);
+/** 新建/编辑知识库的提交中标记：原本没有 disabled，双击会建出两条同名知识库 */
+const creatingKb = ref(false);
+const savingKb = ref(false);
 const fileRef = ref<HTMLInputElement | null>(null);
 const reindexing = ref(false);
 
@@ -98,11 +101,13 @@ function openCreateKb() {
 }
 
 async function createKb() {
+    if (creatingKb.value) return;
     createError.value = '';
     if (!newKb.name.trim()) {
         createError.value = t('adminForm.requiredName');
         return;
     }
+    creatingKb.value = true;
     try {
         await $fetch('/api/admin/knowledge-bases', { method: 'POST', body: { ...newKb } });
         Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
@@ -110,17 +115,27 @@ async function createKb() {
         await load();
     } catch (e) {
         createError.value = extractApiError(e, t('adminForm.saveFailed'));
+    } finally {
+        creatingKb.value = false;
     }
 }
 
+/** 文档面板请求序号：快速切换知识库时，只允许最新一次的响应写入列表 */
+let docsToken = 0;
+
 async function open(kb: KbItem) {
+    const token = ++docsToken;
     current.value = kb;
     searchHits.value = [];
     message.value = '';
+    // 先清空：否则请求失败或返回慢时，界面上会挂着上一条知识库的文档
+    docs.value = [];
     try {
-        docs.value = await $fetch(`/api/admin/knowledge-bases/${kb.id}/documents`);
+        const rows = await $fetch<DocItem[]>(`/api/admin/knowledge-bases/${kb.id}/documents`);
+        if (token !== docsToken) return;
+        docs.value = rows;
     } catch (e) {
-        docs.value = [];
+        if (token !== docsToken) return;
         message.value = extractApiError(e, t('adminForm.loadFailed'));
     }
 }
@@ -133,12 +148,13 @@ function openEditKb(kb: KbItem) {
 }
 
 async function saveKb() {
-    if (!editingKb.value) return;
+    if (!editingKb.value || savingKb.value) return;
     if (!editForm.name.trim()) {
         editError.value = t('adminForm.requiredName');
         return;
     }
     editError.value = '';
+    savingKb.value = true;
     try {
         const updated = await $fetch<KbItem>(`/api/admin/knowledge-bases/${editingKb.value.id}`, {
             method: 'PATCH',
@@ -150,6 +166,8 @@ async function saveKb() {
         await load();
     } catch (e) {
         editError.value = extractApiError(e, t('adminForm.saveFailed'));
+    } finally {
+        savingKb.value = false;
     }
 }
 
@@ -365,8 +383,14 @@ async function search() {
                 <p v-if="createError" class="text-xs text-red-600">{{ createError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="createOpen = false">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="createKb">
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm disabled:opacity-50" :disabled="creatingKb" @click="createOpen = false">
+                    {{ t('adminForm.cancel') }}
+                </button>
+                <button
+                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                    :disabled="creatingKb"
+                    @click="createKb"
+                >
                     {{ t('adminForm.save') }}
                 </button>
             </template>
@@ -393,8 +417,14 @@ async function search() {
                 <p v-if="editError" class="text-xs text-red-600">{{ editError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="saveKb">
+                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm disabled:opacity-50" :disabled="savingKb" @click="editingKb = null">
+                    {{ t('adminForm.cancel') }}
+                </button>
+                <button
+                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                    :disabled="savingKb"
+                    @click="saveKb"
+                >
                     {{ t('adminForm.save') }}
                 </button>
             </template>
