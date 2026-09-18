@@ -14,6 +14,17 @@ import {
 } from '../../utils/storage';
 
 /**
+ * 判断 HeadObject 的失败是"对象不存在"还是"这个存储不支持 HEAD"。
+ *
+ * 两者必须区分：对象不存在却继续登记，附件列表里就会多出一条指向空对象的记录，
+ * 用户要等到下载时才发现问题。
+ */
+function isMissingObject(error: unknown): boolean {
+    const e = error as { name?: string; __type?: string; $metadata?: { httpStatusCode?: number } };
+    return e?.name === 'NotFound' || e?.__type === 'NotFound' || e?.$metadata?.httpStatusCode === 404;
+}
+
+/**
  * 预签名直传登记（配合 POST /api/attachments/presign 使用）。
  *
  * 前端直传的三步：取预签名地址 → PUT 到对象存储 → 调用本接口登记元数据。
@@ -28,7 +39,10 @@ export default defineEventHandler(async (event) => {
     if (!objectKey) {
         throw createError({ statusCode: 400, statusMessage: 'objectKey 必填' });
     }
-    const size = Number(body.size) || 0;
+    // 申报体积只作兜底：非法值（负数/小数/NaN）一律当作未知，
+    // 否则 Number('-5') 会绕过 `size > 0` 的校验直接写进整型列。
+    const declaredSize = Number(body.size);
+    const size = Number.isInteger(declaredSize) && declaredSize > 0 ? declaredSize : 0;
     const filename = sanitizeFilename(String(body.filename ?? 'file'));
     const mimeType = typeof body.mimeType === 'string' && body.mimeType ? body.mimeType : 'application/octet-stream';
     const category = normalizeAttachmentCategory(body.category);
@@ -64,8 +78,11 @@ export default defineEventHandler(async (event) => {
         const contentLength = Number(head.ContentLength ?? 0);
         if (contentLength > 0) actualSize = contentLength;
         if (typeof head.ContentType === 'string' && head.ContentType) actualMime = head.ContentType;
-    } catch {
-        // 容忍部分兼容存储不支持 HEAD：退回使用申报值，但下面仍按配置上限校验
+    } catch (error) {
+        if (isMissingObject(error)) {
+            throw createError({ statusCode: 400, statusMessage: '对象不存在或尚未上传完成，无法登记' });
+        }
+        // 其余失败按"兼容存储不支持 HEAD"处理：退回申报值，上面已按配置上限校验过
     }
 
     if (actualSize > 0) {
