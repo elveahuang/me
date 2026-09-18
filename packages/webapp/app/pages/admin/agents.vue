@@ -85,16 +85,27 @@ const selectedProviderModels = computed(() => {
 });
 
 async function load() {
-    agents.value = await $fetch('/api/admin/agents');
-    skillList.value = await $fetch('/api/admin/skills');
-    toolList.value = await $fetch<{ id: string; name: string; type: string; enabled: boolean }[]>('/api/admin/tools').then((list) =>
-        list.filter((t) => t.enabled),
-    );
-    kbList.value = await $fetch('/api/admin/knowledge-bases');
-    mcpList.value = (await $fetch<{ id: string; name: string; enabled: boolean }[]>('/api/admin/mcp-servers'))
-        .filter((s) => s.enabled)
-        .map((s) => ({ id: s.id, name: s.name }));
-    providerList.value = (await $fetch<ProviderItem[]>('/api/admin/providers')).filter((p) => p.enabled);
+    listError.value = '';
+    try {
+        const [agentRows, skills, tools, kbs, mcps, providers] = await Promise.all([
+            $fetch('/api/admin/agents'),
+            $fetch('/api/admin/skills'),
+            $fetch<{ id: string; name: string; type: string; enabled: boolean }[]>('/api/admin/tools'),
+            $fetch('/api/admin/knowledge-bases'),
+            $fetch<{ id: string; name: string; enabled: boolean }[]>('/api/admin/mcp-servers'),
+            $fetch<ProviderItem[]>('/api/admin/providers'),
+        ]);
+        agents.value = agentRows;
+        skillList.value = skills;
+        toolList.value = tools.filter((t) => t.enabled);
+        kbList.value = kbs;
+        mcpList.value = mcps.filter((s) => s.enabled).map((s) => ({ id: s.id, name: s.name }));
+        providerList.value = providers.filter((p) => p.enabled);
+    } catch (e) {
+        // 加载失败必须显式报错并清空列表，否则空数组会渲染成「暂无智能体」，把接口故障读成没有数据
+        agents.value = [];
+        listError.value = extractApiError(e, t('common.loadFailed'));
+    }
 }
 
 onMounted(load);
@@ -412,8 +423,8 @@ async function remove(id: string) {
                         <span v-if="!a.skills?.length" class="text-xs text-gray-300">-</span>
                     </td>
                     <td class="p-4">
-                        <span v-for="t in a.tools" :key="t.id" class="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">
-                            {{ t.name }}
+                        <span v-for="tool in a.tools" :key="tool.id" class="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">
+                            {{ tool.name }}
                         </span>
                         <span v-if="!a.tools?.length" class="text-xs text-gray-300">-</span>
                     </td>

@@ -22,20 +22,34 @@ onMounted(async () => {
     }
 });
 
+/** 只接受站内相对路径，拒绝 //host 与 /\host 这类可跳外域的写法 */
+function safeRedirect(target: unknown, fallback = '/chat'): string {
+    if (typeof target !== 'string') return fallback;
+    if (target.startsWith('/') && !target.startsWith('//') && !target.startsWith('/\\')) return target;
+    return fallback;
+}
+
 async function submit() {
     error.value = '';
     loading.value = true;
-    const { error: err } = await authClient.signIn.email({ email: email.value, password: password.value });
-    loading.value = false;
+    let err: unknown;
+    try {
+        ({ error: err } = await authClient.signIn.email({ email: email.value, password: password.value }));
+    } catch (e) {
+        // 网络/运行时异常也要复位 loading，否则提交按钮永久停在加载态
+        err = e;
+    } finally {
+        loading.value = false;
+    }
     if (err) {
         error.value = extractApiError(err, t('common.error'));
         return;
     }
-    await navigateTo((route.query.redirect as string) || '/chat');
+    await navigateTo(safeRedirect(route.query.redirect));
 }
 
 function loginWithWechat() {
-    const redirect = encodeURIComponent((route.query.redirect as string) || '/chat');
+    const redirect = encodeURIComponent(safeRedirect(route.query.redirect));
     window.location.href = `/api/auth/wechat?redirect=${redirect}`;
 }
 </script>

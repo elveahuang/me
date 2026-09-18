@@ -11,8 +11,11 @@ const conversations = ref<ConversationSummary[]>([]);
 const searchKeyword = ref('');
 const favorites = ref<string[]>([]);
 const loading = ref(true);
+const loadError = ref(false);
 
-onMounted(async () => {
+async function load() {
+    loading.value = true;
+    loadError.value = false;
     try {
         favorites.value = JSON.parse(localStorage.getItem('favorite_agents') || '[]');
     } catch {
@@ -22,10 +25,17 @@ onMounted(async () => {
         const [agentRes, convRes] = await Promise.all([$fetch<AgentSummary[]>('/api/agents'), $fetch<ConversationSummary[]>('/api/conversations')]);
         agents.value = agentRes;
         conversations.value = convRes;
+    } catch {
+        // 接口失败必须与「没有数据」区分，否则用户会把报错读成「暂无智能体」
+        agents.value = [];
+        conversations.value = [];
+        loadError.value = true;
     } finally {
         loading.value = false;
     }
-});
+}
+
+onMounted(load);
 
 function toggleFavorite(id: string, event: Event) {
     event.preventDefault();
@@ -60,8 +70,12 @@ const filteredAgents = computed(() => {
 
 async function removeConversation(id: string) {
     if (!confirm(t('chat.deleteConfirm'))) return;
-    await $fetch(`/api/conversations/${id}`, { method: 'DELETE' });
-    conversations.value = conversations.value.filter((c) => c.id !== id);
+    try {
+        await $fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+        conversations.value = conversations.value.filter((c) => c.id !== id);
+    } catch {
+        alert(t('common.error'));
+    }
 }
 </script>
 
@@ -95,8 +109,14 @@ async function removeConversation(id: string) {
                 </div>
             </div>
 
+            <!-- 加载失败：与「没有数据」区分，给出重试入口 -->
+            <div v-if="loadError && !loading" class="app-card app-alert app-alert-danger flex items-center justify-between gap-3 p-6 text-xs">
+                <span>{{ t('common.error') }}</span>
+                <button type="button" class="app-btn app-btn-outline shrink-0 !py-1.5" @click="load">{{ t('common.retry') }}</button>
+            </div>
+
             <!-- 智能体网格卡片 -->
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <NuxtLink
                     v-for="agent in filteredAgents"
                     :key="agent.id"

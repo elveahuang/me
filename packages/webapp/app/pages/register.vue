@@ -15,12 +15,19 @@ const loading = ref(false);
 async function submit() {
     error.value = '';
     loading.value = true;
-    const { error: err } = await authClient.signUp.email({
-        name: name.value,
-        email: email.value,
-        password: password.value,
-    });
-    loading.value = false;
+    let err: unknown;
+    try {
+        ({ error: err } = await authClient.signUp.email({
+            name: name.value,
+            email: email.value,
+            password: password.value,
+        }));
+    } catch (e) {
+        // 抛出的网络异常若不复位，提交按钮会永久停在加载态
+        err = e;
+    } finally {
+        loading.value = false;
+    }
     if (err) {
         error.value = extractApiError(err, t('common.error'));
         return;

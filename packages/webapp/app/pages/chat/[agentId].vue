@@ -155,11 +155,24 @@ function buildChat(conversationId: string, history: UIMessage[] = []) {
     });
 }
 
+/** 会话历史加载失败（区别于「空会话」），以及快速切换会话时的过期响应护栏 */
+const loadError = ref('');
+let loadToken = 0;
+
 async function loadConversation(id: string) {
-    const res = await $fetch<{ messages: UIMessage[] }>(`/api/conversations/${id}`);
-    chat.value = buildChat(id, res.messages as UIMessage[]);
-    currentConversationId.value = id;
-    nextTick(scrollToBottom);
+    const token = ++loadToken;
+    loadError.value = '';
+    try {
+        const res = await $fetch<{ messages: UIMessage[] }>(`/api/conversations/${id}`);
+        // 迟到的响应可能覆盖用户随后点击的会话，只有最新一次切换可以写入状态
+        if (token !== loadToken) return;
+        chat.value = buildChat(id, res.messages as UIMessage[]);
+        currentConversationId.value = id;
+        nextTick(scrollToBottom);
+    } catch (e) {
+        if (token !== loadToken) return;
+        loadError.value = extractApiError(e, t('common.error'));
+    }
 }
 
 async function createConversation(): Promise<string> {
@@ -229,7 +242,12 @@ const errorText = computed(() => extractApiError(chat.value?.error, t('common.er
 const submitError = ref('');
 
 async function refreshConversations() {
-    conversations.value = await $fetch('/api/conversations', { query: { agentId } });
+    try {
+        conversations.value = await $fetch('/api/conversations', { query: { agentId } });
+    } catch (e) {
+        conversations.value = [];
+        loadError.value = extractApiError(e, t('common.error'));
+    }
 }
 
 async function deleteConversation(id: string) {
@@ -510,6 +528,29 @@ const starterPrompts = computed(() => [
                     <span>↓ {{ t('chat.scrollToBottom') }}</span>
                     <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-amber-300" />
                 </button>
+            </div>
+
+            <!-- 发送前本地错误（建会话失败）与会话历史加载失败：不渲染就会被误当成空会话 -->
+            <div
+                v-if="submitError || loadError"
+                class="rounded-2xl border p-3 text-xs"
+                style="
+                    border-color: color-mix(in oklab, var(--danger) 35%, transparent);
+                    background-color: color-mix(in oklab, var(--danger) 10%, transparent);
+                    color: var(--danger);
+                "
+            >
+                <div class="flex items-center justify-between gap-3">
+                    <span>{{ submitError || loadError }}</span>
+                    <button
+                        v-if="loadError && !submitError"
+                        type="button"
+                        class="font-bold underline"
+                        @click="loadConversation(currentConversationId || conversations[0]?.id || '')"
+                    >
+                        {{ t('common.retry') }}
+                    </button>
+                </div>
             </div>
 
             <!-- 输入栏 -->

@@ -132,6 +132,11 @@ async function save() {
         error.value = '标题必填';
         return;
     }
+    // 正文仍在拉取时禁止保存：此时 form.content 还是空串，直接 PATCH 会把原文整段覆盖丢失。
+    if (loadingContent.value) {
+        error.value = t('adminForm.loadingContent');
+        return;
+    }
     saving.value = true;
     error.value = '';
     try {
@@ -254,7 +259,11 @@ function goPage(next: number) {
                 </label>
             </div>
             <div class="flex gap-2">
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                <button
+                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                    :disabled="saving || loadingContent"
+                    @click="save"
+                >
                     {{ t('common.save') }}
                 </button>
                 <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
