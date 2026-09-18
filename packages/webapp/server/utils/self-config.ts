@@ -49,7 +49,8 @@ export function buildSelfConfigTool(agentId: string): Tool {
                     skills: allSkills.map((s) => ({ id: s.id, name: s.name, description: s.description })),
                     tools: allTools.map((t) => ({ id: t.id, name: t.name, type: t.type, description: t.description })),
                     knowledgeBases: allKnowledgeBases.map((k) => ({ id: k.id, name: k.name, description: k.description })),
-                    mcpServers: allMcp.map((m) => ({ id: m.id, name: m.name, url: m.url })),
+                    // 不返回 url：模型只需 id+name 即可 toggle_mcp，暴露 MCP 端点（可能含内网地址/查询串令牌）无必要
+                    mcpServers: allMcp.map((m) => ({ id: m.id, name: m.name })),
                 };
             }
 

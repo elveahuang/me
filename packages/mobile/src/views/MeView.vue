@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDate, formatYuan, type MeResponse, type OrdersResponse } from '@commons/contract';
+import { extractApiError, formatDate, formatYuan, orderStatusLabelKey, orderStatusTone, type MeResponse, type OrdersResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -64,19 +64,6 @@ async function logout() {
     // 清空共享未读状态，避免下一个登录账号看到上一个账号的角标
     resetUnread();
     router.replace('/login');
-}
-
-const statusTone: Record<string, string> = {
-    paid: 'app-badge-success',
-    pending: 'app-badge-warning',
-    closed: 'app-badge-neutral',
-    refunded: 'app-badge-info',
-};
-
-function orderStatusText(s: string): string {
-    if (s === 'paid') return t('billing.statusPaid');
-    if (s === 'pending') return t('billing.statusPending');
-    return t('billing.statusClosed');
 }
 </script>
 
@@ -190,7 +177,7 @@ function orderStatusText(s: string): string {
                             </div>
                             <div class="text-right">
                                 <p class="font-black">¥{{ formatYuan(o.amountCents) }}</p>
-                                <span :class="['app-badge mt-1', statusTone[o.status] ?? 'app-badge-neutral']">{{ orderStatusText(o.status) }}</span>
+                                <span :class="['app-badge mt-1', orderStatusTone(o.status)]">{{ t(orderStatusLabelKey(o.status)) }}</span>
                             </div>
                         </li>
                     </ul>

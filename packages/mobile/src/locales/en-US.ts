@@ -165,6 +165,7 @@ export default {
         statusPaid: 'Paid',
         statusPending: 'Pending',
         statusClosed: 'Closed',
+        statusRefunded: 'Refunded',
         subtitle: 'Daily quota based billing, upgrade anytime',
         faqTitle: 'FAQ',
         faq1Q: 'When does daily quota refresh?',

@@ -3,6 +3,8 @@ import {
     extractApiError,
     formatDate,
     formatYuan,
+    orderStatusLabelKey,
+    orderStatusTone,
     quotaUsedPercent,
     type CreateOrderResponse,
     type JsapiParams,
@@ -205,19 +207,6 @@ function closePayModal() {
 }
 
 const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, status.value?.chatQuotaPerDay));
-
-const statusTone: Record<string, string> = {
-    paid: 'app-badge-success',
-    pending: 'app-badge-warning',
-    closed: 'app-badge-neutral',
-    refunded: 'app-badge-info',
-};
-
-function orderStatusText(s: string): string {
-    if (s === 'paid') return t('billing.statusPaid');
-    if (s === 'pending') return t('billing.statusPending');
-    return t('billing.statusClosed');
-}
 </script>
 
 <template>
@@ -388,7 +377,7 @@ function orderStatusText(s: string): string {
                             </div>
                             <div class="text-right">
                                 <p class="font-black">¥{{ formatYuan(o.amountCents) }}</p>
-                                <span :class="['app-badge mt-1', statusTone[o.status] ?? 'app-badge-neutral']">{{ orderStatusText(o.status) }}</span>
+                                <span :class="['app-badge mt-1', orderStatusTone(o.status)]">{{ t(orderStatusLabelKey(o.status)) }}</span>
                             </div>
                         </li>
                         <li v-if="!orders.length" class="text-faint py-6 text-center text-xs">{{ t('admin.tableEmpty') }}</li>

@@ -120,6 +120,34 @@ export interface ConversationDetail {
 export type BillingPeriod = 'monthly' | 'yearly';
 export type OrderStatus = 'pending' | 'paid' | 'closed' | 'refunded';
 
+/**
+ * 订单状态 → 徽章样式。web/mobile 共用同一套 app-badge-* 语义类名，
+ * 收敛到此处避免四个页面各写一份且对 refunded 处理不一致。
+ */
+export const ORDER_STATUS_TONE: Record<string, string> = {
+    paid: 'app-badge-success',
+    pending: 'app-badge-warning',
+    closed: 'app-badge-neutral',
+    refunded: 'app-badge-info',
+};
+
+/** 订单状态 → i18n 文案键；各端 locales 的 billing 下需提供同名键 */
+export const ORDER_STATUS_LABEL_KEY: Record<string, string> = {
+    paid: 'billing.statusPaid',
+    pending: 'billing.statusPending',
+    closed: 'billing.statusClosed',
+    refunded: 'billing.statusRefunded',
+};
+
+export function orderStatusTone(status: string): string {
+    return ORDER_STATUS_TONE[status] ?? 'app-badge-neutral';
+}
+
+/** 返回文案键而非译文，交给调用方的 t() 渲染，避免契约层持有 i18n 实例 */
+export function orderStatusLabelKey(status: string): string {
+    return ORDER_STATUS_LABEL_KEY[status] ?? 'billing.statusClosed';
+}
+
 export interface Plan {
     id: string;
     code: string;

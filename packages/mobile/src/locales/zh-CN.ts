@@ -165,6 +165,7 @@ export default {
         statusPaid: '已支付',
         statusPending: '待支付',
         statusClosed: '已关闭',
+        statusRefunded: '已退款',
         subtitle: '按日额度计费，随时可升级或续费',
         faqTitle: '常见问题',
         faq1Q: '每日额度什么时候重置？',

@@ -3,6 +3,8 @@ import {
     extractApiError,
     formatDate,
     formatYuan,
+    orderStatusLabelKey,
+    orderStatusTone,
     quotaUsedPercent,
     type CreateOrderResponse,
     type JsapiParams,
@@ -193,19 +195,6 @@ function closePayModal() {
 }
 
 const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday, statusData.value?.chatQuotaPerDay));
-
-const statusTone: Record<string, string> = {
-    paid: 'app-badge-success',
-    pending: 'app-badge-warning',
-    closed: 'app-badge-neutral',
-    refunded: 'app-badge-info',
-};
-
-function orderStatusText(status: string): string {
-    if (status === 'paid') return t('billing.statusPaid');
-    if (status === 'pending') return t('billing.statusPending');
-    return t('billing.statusClosed');
-}
 </script>
 
 <template>
@@ -416,7 +405,7 @@ function orderStatusText(status: string): string {
                             <td class="font-bold">¥{{ formatYuan(o.amountCents) }}</td>
                             <td class="text-soft">{{ o.provider === 'wechat' ? t('billing.wechatPay') : t('billing.mockPay') }}</td>
                             <td>
-                                <span :class="['app-badge', statusTone[o.status] ?? 'app-badge-neutral']">{{ orderStatusText(o.status) }}</span>
+                                <span :class="['app-badge', orderStatusTone(o.status)]">{{ t(orderStatusLabelKey(o.status)) }}</span>
                             </td>
                             <td class="text-faint">{{ formatDate(o.createdAt) }}</td>
                         </tr>

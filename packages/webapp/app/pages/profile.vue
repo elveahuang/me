@@ -5,6 +5,8 @@ import {
     MODE_PRESETS,
     formatDate,
     formatYuan,
+    orderStatusLabelKey,
+    orderStatusTone,
     quotaUsedPercent,
     type MeResponse,
     type OrdersResponse,
@@ -48,19 +50,6 @@ async function logout() {
     if (!confirm(t('profile.logoutConfirm'))) return;
     await authClient.signOut();
     await navigateTo('/login');
-}
-
-const statusTone: Record<string, string> = {
-    paid: 'app-badge-success',
-    pending: 'app-badge-warning',
-    closed: 'app-badge-neutral',
-    refunded: 'app-badge-info',
-};
-
-function orderStatusText(status: string): string {
-    if (status === 'paid') return t('billing.statusPaid');
-    if (status === 'pending') return t('billing.statusPending');
-    return t('billing.statusClosed');
 }
 </script>
 
@@ -260,7 +249,7 @@ function orderStatusText(status: string): string {
                                 <span v-else class="text-muted-2">{{ order.provider }}</span>
                             </td>
                             <td>
-                                <span :class="['app-badge', statusTone[order.status] ?? 'app-badge-neutral']">{{ orderStatusText(order.status) }}</span>
+                                <span :class="['app-badge', orderStatusTone(order.status)]">{{ t(orderStatusLabelKey(order.status)) }}</span>
                             </td>
                             <td class="text-faint">{{ formatDate(order.createdAt) }}</td>
                         </tr>
