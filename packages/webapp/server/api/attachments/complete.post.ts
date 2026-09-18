@@ -1,7 +1,16 @@
 import { attachments } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireUser } from '../../utils/guard';
-import { assertFileSize, buildPublicUrl, isMimeAllowed, presignDownload, resolveStorageConfig, sanitizeFilename } from '../../utils/storage';
+import {
+    assertFileSize,
+    buildPublicUrl,
+    deleteObject,
+    headObject,
+    isMimeAllowed,
+    presignDownload,
+    resolveStorageConfig,
+    sanitizeFilename,
+} from '../../utils/storage';
 
 /**
  * 预签名直传登记（配合 POST /api/attachments/presign 使用）。
@@ -38,6 +47,40 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: `该存储不允许上传 ${mimeType} 类型文件` });
     }
 
+    /**
+     * 直传通道的安全闸门。
+     *
+     * PUT 预签名 URL 无法携带体积条件，客户端申报的 size 也不可信
+     * （自报 1 字节即可绕过 maxFileSizeMb 上传任意大小对象）。
+     * 因此登记前必须回源对象存储读取真实大小：
+     * - 超限：删掉对象并拒绝登记，攻击者既拿不到附件也不占用配额
+     * - 未超限：以真实大小为准写库，避免伪造元数据
+     */
+    let actualSize = size;
+    let actualMime = mimeType;
+    try {
+        const head = await headObject(config, objectKey);
+        const contentLength = Number(head.ContentLength ?? 0);
+        if (contentLength > 0) actualSize = contentLength;
+        if (typeof head.ContentType === 'string' && head.ContentType) actualMime = head.ContentType;
+    } catch {
+        // 容忍部分兼容存储不支持 HEAD：退回使用申报值，但下面仍按配置上限校验
+    }
+
+    if (actualSize > 0) {
+        try {
+            assertFileSize(config, actualSize);
+        } catch (error) {
+            // 真实体积超限：清理已上传对象，不留下"可用"的越权附件
+            try {
+                await deleteObject(config, objectKey);
+            } catch {
+                // 清理失败不改变拒绝结论
+            }
+            throw error;
+        }
+    }
+
     const id = crypto.randomUUID();
     await db.insert(attachments).values({
         id,
@@ -45,8 +88,8 @@ export default defineEventHandler(async (event) => {
         storageConfigId: config.id,
         objectKey,
         filename,
-        mimeType,
-        size,
+        mimeType: actualMime,
+        size: actualSize,
         category,
     });
 
@@ -63,8 +106,8 @@ export default defineEventHandler(async (event) => {
     return {
         id,
         filename,
-        mimeType,
-        size,
+        mimeType: actualMime,
+        size: actualSize,
         category,
         createdAt: new Date().toISOString(),
         url,

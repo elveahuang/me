@@ -167,6 +167,8 @@ export default {
         statusRefunded: 'Refunded',
         sandboxDesc: 'Sandbox simulation mode requires no real payment.',
         scanQrCode: 'Scan QR code via WeChat to pay',
+        mockPayHint: 'Sandbox mode — click the button below to simulate a completed payment:',
+        mockPayConfirm: 'Simulate payment',
         faqTitle: 'Frequently Asked Questions',
         faq1Q: 'When do daily quotas reset?',
         faq1A: 'Daily chat quotas are automatically refreshed every day at 00:00 (UTC+8).',

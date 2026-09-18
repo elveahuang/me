@@ -27,12 +27,35 @@ const MAX_CONTEXT_MESSAGES = 24;
 /** 用户消息里允许落库的 part 类型（assistant 专属的 reasoning / tool-* 不允许由客户端写入） */
 const USER_PART_TYPES = new Set(['text', 'file', 'image', 'data']);
 
+/**
+ * 只保留结构合法的用户 part。
+ *
+ * 除了类型白名单，还要校验各类型的必需字段：
+ * file/image 的 url 必须是绝对地址——AI SDK 在构造模型消息时会对 url 调用 `new URL()`，
+ * 相对路径会抛 TypeError。该 part 一旦落库就会成为历史的一部分，
+ * 此后该会话每次请求都会 500（等于被永久毒化），因此必须在入口拦掉。
+ */
 function sanitizeUserParts(parts: unknown): unknown[] {
     if (!Array.isArray(parts)) return [];
     return parts.filter((part) => {
         if (!part || typeof part !== 'object') return false;
-        const type = (part as { type?: unknown }).type;
-        return typeof type === 'string' && USER_PART_TYPES.has(type);
+        const candidate = part as { type?: unknown; text?: unknown; url?: unknown };
+        if (typeof candidate.type !== 'string' || !USER_PART_TYPES.has(candidate.type)) return false;
+
+        if (candidate.type === 'text') {
+            return typeof candidate.text === 'string';
+        }
+        if (candidate.type === 'file' || candidate.type === 'image') {
+            if (typeof candidate.url !== 'string' || !candidate.url) return false;
+            try {
+                const parsed = new URL(candidate.url);
+                return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'data:';
+            } catch {
+                return false;
+            }
+        }
+        // data part：任意 JSON 结构，保留
+        return true;
     });
 }
 
@@ -128,10 +151,13 @@ export default defineEventHandler(async (event) => {
             if (m.role !== 'user') continue;
             const parts = sanitizeUserParts(m.parts);
             if (!parts.length) continue;
+            // id 是主键且必填：客户端未带 id 时服务端补一个，
+            // 否则 insert 会因 undefined 参数报 500 —— 而额度在此之前已经扣掉了。
+            const messageId = typeof m.id === 'string' && m.id.trim() ? m.id : `cmsg_${crypto.randomUUID()}`;
             await db
                 .insert(messagesTable)
                 .values({
-                    id: m.id,
+                    id: messageId,
                     conversationId: conversation.id,
                     role: 'user',
                     parts,

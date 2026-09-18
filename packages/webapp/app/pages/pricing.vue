@@ -294,8 +294,8 @@ function orderStatusText(status: string): string {
 
                         <div v-if="activeOrder?.mode === 'mock'" class="app-alert app-alert-warning my-4 text-left">
                             <p class="text-xs font-bold">🛠️ {{ t('billing.mockPay') }}</p>
-                            <p class="mt-1 text-[11px] opacity-90">沙箱开发环境，点击下方按钮一键完成模拟开通：</p>
-                            <button class="app-btn app-btn-soft mt-3 w-full" @click="handleMockPay">确认模拟支付</button>
+                            <p class="mt-1 text-[11px] opacity-90">{{ t('billing.mockPayHint') }}</p>
+                            <button class="app-btn app-btn-soft mt-3 w-full" @click="handleMockPay">{{ t('billing.mockPayConfirm') }}</button>
                         </div>
 
                         <p v-if="payError" class="app-alert app-alert-danger mt-3">{{ payError }}</p>

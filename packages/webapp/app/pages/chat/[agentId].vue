@@ -95,15 +95,23 @@ async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
     if (!text) return;
 
-    // 首次发送时自动创建会话
+    // 首次发送时自动创建会话。创建失败必须保留输入内容：
+    // 否则用户输入被清空又没发出去，只能重新敲一遍。
     let current = chat.value;
     if (!current) {
-        const id = await createConversation();
-        current = buildChat(id);
-        chat.value = current;
-        currentConversationId.value = id;
+        try {
+            const id = await createConversation();
+            current = buildChat(id);
+            chat.value = current;
+            currentConversationId.value = id;
+        } catch (e) {
+            submitError.value = extractApiError(e, t('common.error'));
+            return;
+        }
     }
+
     input.value = '';
+    submitError.value = '';
     current.sendMessage({ text });
     nextTick(scrollToBottom);
 }
@@ -123,6 +131,9 @@ const isQuotaExceeded = computed(() => isQuotaError(chat.value?.error));
 
 /** 统一的错误文案（h3 / AI SDK 的错误对象结构差异较大，交给契约层归一化） */
 const errorText = computed(() => extractApiError(chat.value?.error, t('common.error')));
+
+/** 发送前的本地错误（如建会话失败）。独立于 chat.error，避免被 AI SDK 的流状态覆盖。 */
+const submitError = ref('');
 
 async function refreshConversations() {
     conversations.value = await $fetch('/api/conversations', { query: { agentId } });

@@ -32,6 +32,10 @@ export default {
         change: '修改',
         zhCN: '简体中文',
         enUS: 'English',
+        viewDetail: '查看',
+        loadFailed: '加载失败',
+        emptyHint: '暂时没有内容，稍后再试',
+        more: '更多',
     },
     nav: {
         home: '智能体',

@@ -7,8 +7,10 @@ export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
     const query = getQuery(event);
     const agentId = query.agentId as string | undefined;
-    const limit = Math.min(Number(query.limit) || 50, 200);
-    const offset = Number(query.offset) || 0;
+    // 分页参数必须夹在合法区间：负数会让 PostgreSQL 直接报错（2201W/2201X）
+    // 并把 SQL 细节透出到响应体，NaN 也会让 offset 变成 NULL 语义
+    const limit = Math.min(Math.max(1, Number(query.limit) || 50), 200);
+    const offset = Math.max(0, Number(query.offset) || 0);
 
     const rows = await db
         .select({

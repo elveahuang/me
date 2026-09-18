@@ -1,4 +1,12 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadBucketCommand,
+    HeadObjectCommand,
+    ListObjectsV2Command,
+    PutObjectCommand,
+    S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { desc, eq } from 'drizzle-orm';
 import { storageConfigs, type StorageConfig } from '../db/schema';
@@ -93,7 +101,16 @@ export function buildPublicUrl(config: Pick<StorageConfig, 'publicBaseUrl' | 'en
     return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-/** 预签名上传地址（前端直传，避免大文件穿透 Node 进程） */
+/**
+ * 预签名上传地址（PUT 语义，供前端直传大文件）。
+ *
+ * 安全边界：S3 的 PUT 预签名 URL **无法**携带 content-length-range 条件
+ * （那是 POST policy 的能力），所以这里签发的地址本身不限制体积。
+ * 上限由两步兜底保证：
+ *   1. 登记时 `/api/attachments/complete` 会 HeadObject 读真实大小并比对配置上限；
+ *   2. 超限的对象会被立即删除并拒绝登记。
+ * 因此 attacker 即使直传了超大对象，也无法把它变成可用附件或长期占用配额。
+ */
 export async function presignUpload(config: StorageConfig, key: string, mimeType: string, expiresIn = 900): Promise<string> {
     const client = createS3Client(config);
     return getSignedUrl(
@@ -105,6 +122,39 @@ export async function presignUpload(config: StorageConfig, key: string, mimeType
         }),
         { expiresIn },
     );
+}
+
+export interface PresignedPost {
+    url: string;
+    fields: Record<string, string>;
+    maxBytes: number;
+    expiresIn: number;
+}
+
+/**
+ * 生成带体积上限的预签名直传表单（presigned POST）。
+ *
+ * 相比 PUT 预签名 URL，POST policy 可携带 `content-length-range` 条件，
+ * 由对象存储**在写入前**强制拒绝超限上传，适合希望完全避免超大对象落盘的场景。
+ */
+export async function presignUploadPolicy(config: StorageConfig, key: string, mimeType: string, expiresIn = 900): Promise<PresignedPost> {
+    const client = createS3Client(config);
+    const maxBytes = relayLimitBytes(config.maxFileSizeMb);
+    const { createPresignedPost } = await import('@aws-sdk/s3-presigned-post');
+    const post = await createPresignedPost(client, {
+        Bucket: config.bucket,
+        Key: key,
+        Expires: expiresIn,
+        Fields: { 'Content-Type': mimeType || 'application/octet-stream' },
+        Conditions: [['content-length-range', 1, maxBytes], { 'Content-Type': mimeType || 'application/octet-stream' }],
+    });
+    return { url: post.url, fields: post.fields, maxBytes, expiresIn };
+}
+
+/** 读取对象元数据（直传登记时校验真实大小用） */
+export async function headObject(config: StorageConfig, key: string) {
+    const client = createS3Client(config);
+    return client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
 }
 
 /** 预签名下载地址；配置了 publicBaseUrl 时直接返回公共地址 */

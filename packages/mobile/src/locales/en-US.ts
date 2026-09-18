@@ -32,6 +32,10 @@ export default {
         change: 'Change',
         zhCN: '简体中文',
         enUS: 'English',
+        viewDetail: 'View',
+        loadFailed: 'Failed to load',
+        emptyHint: 'Nothing here yet, try again later',
+        more: 'More',
     },
     nav: {
         home: 'Agents',
