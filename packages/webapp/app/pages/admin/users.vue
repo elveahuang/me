@@ -87,54 +87,57 @@ async function removeUser(userId: string) {
 
 <template>
     <div class="space-y-6">
-        <div v-if="loadError" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="loadError" class="app-alert app-alert-danger">
             {{ loadError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="app-page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ t('nav.users') }}</h1>
-                <p class="mt-1 text-xs text-slate-500">管理用户凭据、身份角色授权与账号安全治理</p>
+                <h1 class="app-page-title text-strong">{{ t('nav.users') }}</h1>
+                <p class="app-page-subtitle">管理用户凭据、身份角色授权与账号安全治理</p>
             </div>
-            <button
-                type="button"
-                class="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50"
-                @click="load"
-            >
-                🔄 {{ t('common.refresh') }}
-            </button>
+            <div class="app-page-actions !mb-0">
+                <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="load">🔄 {{ t('common.refresh') }}</button>
+            </div>
         </div>
 
-        <!-- 用户指标概览卡片 -->
+        <!-- 用户指标概览：数值统一深灰，仅「封禁」这一异常项用语义色 -->
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div class="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase">{{ t('admin.usersCount') }}</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">{{ users.length }}</p>
-                <p class="mt-1 text-[11px] text-slate-400">已注册账号总量</p>
+            <div class="app-stat">
+                <div>
+                    <p class="app-stat-label">{{ t('admin.usersCount') }}</p>
+                    <p class="app-stat-value text-strong">{{ users.length }}</p>
+                    <p class="text-faint mt-1 text-[11px]">已注册账号总量</p>
+                </div>
+                <span class="app-stat-icon">👥</span>
             </div>
-            <div class="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase">系统管理员</p>
-                <p class="text-primary-600 mt-2 text-2xl font-black">{{ adminCount }}</p>
-                <p class="text-primary-600 mt-1 text-[11px] font-semibold">具备管理控制台权限</p>
+            <div class="app-stat">
+                <div>
+                    <p class="app-stat-label">系统管理员</p>
+                    <p class="app-stat-value text-strong">{{ adminCount }}</p>
+                    <p class="text-faint mt-1 text-[11px]">具备管理控制台权限</p>
+                </div>
+                <span class="app-stat-icon">🛡️</span>
             </div>
-            <div class="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase">封禁账号</p>
-                <p class="mt-2 text-2xl font-black text-rose-500">{{ bannedCount }}</p>
-                <p class="mt-1 text-[11px] font-semibold text-rose-600">已被系统限制访问</p>
+            <div class="app-stat">
+                <div>
+                    <p class="app-stat-label">封禁账号</p>
+                    <p class="app-stat-value text-[color:var(--danger)]">{{ bannedCount }}</p>
+                    <p class="text-faint mt-1 text-[11px]">已被系统限制访问</p>
+                </div>
+                <span class="app-stat-icon">⛔</span>
             </div>
         </div>
 
         <!-- 角色筛选与搜索栏 -->
-        <div class="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex flex-wrap gap-1">
+        <div class="app-card flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="app-segmented">
                 <button
                     v-for="r in ['all', 'admin', 'editor', 'user']"
                     :key="r"
                     type="button"
-                    :class="[
-                        'rounded-xl px-3 py-1.5 text-xs font-bold transition-all',
-                        roleFilter === r ? 'bg-primary-50 text-primary-700 shadow-2xs' : 'text-slate-500 hover:bg-slate-100',
-                    ]"
+                    class="app-segmented-item"
+                    :aria-pressed="roleFilter === r"
                     @click="roleFilter = r"
                 >
                     {{ r === 'all' ? t('common.all') : r.toUpperCase() }}
@@ -142,103 +145,85 @@ async function removeUser(userId: string) {
             </div>
 
             <div class="relative w-full sm:w-72">
-                <input
-                    v-model="q"
-                    :placeholder="t('admin.searchUsers')"
-                    class="focus:border-primary-500 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 transition-colors focus:bg-white focus:outline-none"
-                />
-                <button v-if="q" type="button" class="absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600" @click="q = ''">
+                <input v-model="q" :placeholder="t('admin.searchUsers')" class="app-input !py-2 pr-8 !text-xs" />
+                <button v-if="q" type="button" class="text-faint absolute top-1/2 right-2.5 -translate-y-1/2 text-xs hover:opacity-70" @click="q = ''">
                     ✕
                 </button>
             </div>
         </div>
 
-        <div class="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
-                        <tr>
-                            <th class="p-4">用户</th>
-                            <th class="p-4">邮箱</th>
-                            <th class="p-4">角色权限</th>
-                            <th class="p-4">状态</th>
-                            <th class="p-4">注册时间</th>
-                            <th class="p-4 text-right">{{ t('common.actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-slate-700">
-                        <tr v-for="u in filteredUsers" :key="u.id" class="transition-colors hover:bg-slate-50/60">
-                            <td class="p-4">
-                                <div class="flex items-center gap-3">
-                                    <div
-                                        class="bg-primary-100 text-primary-800 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                                    >
-                                        {{ u.name?.[0]?.toUpperCase() || 'U' }}
-                                    </div>
-                                    <span class="font-bold text-slate-900">{{ u.name }}</span>
-                                </div>
-                            </td>
-                            <td class="p-4 font-medium text-slate-600">{{ u.email }}</td>
-                            <td class="p-4">
-                                <select
-                                    :value="u.role"
-                                    class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold shadow-2xs outline-none"
-                                    @change="setRole(u.id, $event)"
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>用户</th>
+                        <th>邮箱</th>
+                        <th>角色权限</th>
+                        <th>状态</th>
+                        <th>注册时间</th>
+                        <th class="text-right">{{ t('common.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="u in filteredUsers" :key="u.id">
+                        <td>
+                            <div class="flex items-center gap-3">
+                                <div class="app-avatar h-8 w-8 shrink-0 rounded-full text-xs">{{ u.name?.[0]?.toUpperCase() || 'U' }}</div>
+                                <span class="text-strong font-bold">{{ u.name }}</span>
+                            </div>
+                        </td>
+                        <td class="text-soft font-medium">{{ u.email }}</td>
+                        <td>
+                            <select :value="u.role" class="app-input !w-auto !px-2 !py-1 !text-xs" @change="setRole(u.id, $event)">
+                                <option value="user">User（普通）</option>
+                                <option value="editor">Editor（运营）</option>
+                                <option value="admin">Admin（管理）</option>
+                            </select>
+                        </td>
+                        <td>
+                            <span :class="u.banned ? 'app-badge-danger' : 'app-badge-success'" class="app-badge">
+                                {{ u.banned ? '已封禁' : '正常' }}
+                            </span>
+                        </td>
+                        <td class="text-faint">{{ new Date(u.createdAt).toLocaleDateString() }}</td>
+                        <td>
+                            <div class="app-table-actions">
+                                <button v-if="!u.banned" class="app-btn app-btn-danger app-btn-sm" @click="action(u.id, 'ban')">封禁</button>
+                                <button v-else class="app-btn app-btn-outline app-btn-sm" @click="action(u.id, 'unban')">解封</button>
+                                <button class="app-btn app-btn-ghost app-btn-sm" @click="removeUser(u.id)">{{ t('common.delete') }}</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!filteredUsers.length && !loading">
+                        <td colspan="6" class="!whitespace-normal">
+                            <!-- 区分「加载失败」与「筛选无结果」 -->
+                            <div v-if="loadError" class="app-empty">
+                                <span class="app-empty-icon">⚠️</span>
+                                <p class="app-empty-title !text-[color:var(--danger)]">{{ loadError }}</p>
+                                <button type="button" class="app-link mt-2 text-xs" @click="load">{{ t('common.retry') }}</button>
+                            </div>
+                            <div v-else class="app-empty">
+                                <span class="app-empty-icon">👥</span>
+                                <p class="app-empty-title">{{ t('admin.noData') }}</p>
+                                <p class="app-empty-desc">未找到符合当前搜索或角色过滤条件的用户</p>
+                                <button
+                                    v-if="q || roleFilter !== 'all'"
+                                    type="button"
+                                    class="app-link mt-2 text-xs"
+                                    @click="
+                                        q = '';
+                                        roleFilter = 'all';
+                                    "
                                 >
-                                    <option value="user">User（普通）</option>
-                                    <option value="editor">Editor（运营）</option>
-                                    <option value="admin">Admin（管理）</option>
-                                </select>
-                            </td>
-                            <td class="p-4">
-                                <span
-                                    :class="[
-                                        'rounded-full px-2.5 py-0.5 text-[10px] font-bold',
-                                        u.banned ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700',
-                                    ]"
-                                >
-                                    {{ u.banned ? '已封禁' : '正常' }}
-                                </span>
-                            </td>
-                            <td class="p-4 whitespace-nowrap text-slate-400">{{ new Date(u.createdAt).toLocaleDateString() }}</td>
-                            <td class="space-x-2 p-4 text-right">
-                                <button v-if="!u.banned" class="font-bold text-amber-600 hover:text-amber-700" @click="action(u.id, 'ban')">封禁</button>
-                                <button v-else class="font-bold text-emerald-600 hover:text-emerald-700" @click="action(u.id, 'unban')">解封</button>
-                                <button class="font-medium text-rose-500 hover:text-rose-700" @click="removeUser(u.id)">
-                                    {{ t('common.delete') }}
+                                    {{ t('agents.resetFilter') }}
                                 </button>
-                            </td>
-                        </tr>
-                        <tr v-if="!filteredUsers.length && !loading">
-                            <td colspan="6" class="p-12 text-center">
-                                <!-- 区分「加载失败」与「筛选无结果」 -->
-                                <div v-if="loadError" class="flex flex-col items-center">
-                                    <span class="mb-1.5 text-3xl">⚠️</span>
-                                    <p class="text-sm font-bold text-red-600">{{ loadError }}</p>
-                                    <button type="button" class="text-primary-600 mt-2 text-xs font-bold hover:underline" @click="load">
-                                        {{ t('common.retry') }}
-                                    </button>
-                                </div>
-                                <div v-else class="flex flex-col items-center">
-                                    <span class="mb-1.5 text-3xl">👥</span>
-                                    <p class="text-sm font-bold text-slate-700">{{ t('admin.noData') }}</p>
-                                    <p class="mt-0.5 text-xs text-slate-400">未找到符合当前搜索或角色过滤条件的用户</p>
-                                    <button
-                                        v-if="q || roleFilter !== 'all'"
-                                        type="button"
-                                        class="text-primary-600 mt-2 text-xs font-bold hover:underline"
-                                        @click="
-                                            q = '';
-                                            roleFilter = 'all';
-                                        "
-                                    >
-                                        {{ t('agents.resetFilter') }}
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-if="loading" class="space-y-2 p-4">
+                <div v-for="i in 3" :key="i" class="app-skeleton h-10 rounded-xl" />
             </div>
         </div>
     </div>
