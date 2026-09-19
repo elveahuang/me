@@ -1,5 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { and, asc, eq } from 'drizzle-orm';
+import { createError } from 'h3';
 import type { Provider } from '../db/schema';
 import { providers } from '../db/schema';
 import { db } from './db';
@@ -13,6 +14,23 @@ import { db } from './db';
 function envDeepseekKey(): string {
     const raw = (process.env.NUXT_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || '').trim();
     return raw && !raw.includes('xxxx') ? raw : '';
+}
+
+/**
+ * 校验管理端表单选择的供应商确实存在，返回归一化后的 id（未选择为 null）。
+ *
+ * 下拉列表可能在供应商被删除前就已加载，提交时会带一个不存在的 providerId；
+ * 直接写库会撞外键约束（23503）变成 500，页面只能看到"未知错误"。
+ * 非 uuid 形态同样要挡住：它会在等值查询时抛 22P02，也是 500。
+ */
+export async function assertProviderExists(raw: unknown, label = '模型供应商'): Promise<string | null> {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (typeof raw !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
+        throw createError({ statusCode: 400, statusMessage: `${label} ID 非法` });
+    }
+    const [row] = await db.select({ id: providers.id }).from(providers).where(eq(providers.id, raw));
+    if (!row) throw createError({ statusCode: 400, statusMessage: `${label}不存在，请重新选择` });
+    return raw;
 }
 
 /**

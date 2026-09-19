@@ -2,6 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
+import { assertProviderExists } from '../../utils/providers';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
@@ -11,12 +12,13 @@ export default defineEventHandler(async (event) => {
         if (!body.name) {
             throw createError({ statusCode: 400, statusMessage: 'name 必填' });
         }
+        const embeddingProviderId = await assertProviderExists(body.embeddingProviderId, '向量模型供应商');
         const id = crypto.randomUUID();
         await db.insert(knowledgeBases).values({
             id,
             name: body.name,
             description: body.description ?? '',
-            embeddingProviderId: body.embeddingProviderId ?? null,
+            embeddingProviderId,
             embeddingModel: body.embeddingModel ?? 'text-embedding-3-small',
         });
         const [row] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));

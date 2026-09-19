@@ -3,6 +3,7 @@ import { agents } from '../../db/schema';
 import { replaceAgentKnowledgeBases, replaceAgentMcpServers, replaceAgentSkills, replaceAgentTools } from '../../utils/agent-skills';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
+import { assertProviderExists } from '../../utils/providers';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
@@ -10,6 +11,7 @@ export default defineEventHandler(async (event) => {
     if (!body.name) {
         throw createError({ statusCode: 400, statusMessage: 'name is required' });
     }
+    const providerId = await assertProviderExists(body.providerId);
 
     const id = crypto.randomUUID();
     // 主表插入与四类能力绑定重建放在同一事务：任一绑定写入失败即整体回滚，
@@ -23,7 +25,7 @@ export default defineEventHandler(async (event) => {
             description: body.description ?? '',
             systemPrompt: body.systemPrompt ?? '',
             model: body.model ?? 'deepseek-chat',
-            providerId: body.providerId ?? null,
+            providerId,
             selfConfig: body.selfConfig ?? false,
             enabled: body.enabled ?? true,
             temperature: body.temperature !== undefined ? body.temperature : 0.7,

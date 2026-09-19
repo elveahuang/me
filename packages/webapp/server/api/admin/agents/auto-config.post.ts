@@ -117,9 +117,13 @@ export default defineEventHandler(async (event) => {
     const validToolIds = checked.data.toolIds.filter((id) => options.tools.some((t) => t.id === id));
     const validMcpIds = checked.data.mcpIds.filter((id) => options.mcpServers.some((m) => m.id === id));
     const validKbIds = checked.data.kbIds.filter((id) => options.knowledgeBases.some((k) => k.id === id));
+    // providerId 也在这份白名单内：模型偶尔凭空造一个 id，草案带着它保存会被
+    // 管理端接口按"供应商不存在"拒绝，这里归零让前端自然回退到默认供应商。
+    const validProviderId = checked.data.providerId && options.providers.some((p) => p.id === checked.data.providerId) ? checked.data.providerId : null;
 
     return {
         ...checked.data,
+        providerId: validProviderId,
         skillIds: validSkillIds,
         toolIds: validToolIds,
         mcpIds: validMcpIds,

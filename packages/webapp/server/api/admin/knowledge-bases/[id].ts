@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { knowledgeBases } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
+import { assertProviderExists } from '../../../utils/providers';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
     if (patch.name !== undefined && !String(patch.name).trim()) {
         throw createError({ statusCode: 400, statusMessage: '名称不能为空' });
     }
-    if (body.embeddingProviderId !== undefined) patch.embeddingProviderId = body.embeddingProviderId || null;
+    if (body.embeddingProviderId !== undefined) patch.embeddingProviderId = await assertProviderExists(body.embeddingProviderId, '向量模型供应商');
     await db.update(knowledgeBases).set(patch).where(eq(knowledgeBases.id, id));
     const [row] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
     if (!row) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });

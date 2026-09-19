@@ -3,6 +3,7 @@ import { agents } from '../../../db/schema';
 import { replaceAgentKnowledgeBases, replaceAgentMcpServers, replaceAgentSkills, replaceAgentTools } from '../../../utils/agent-skills';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
+import { assertProviderExists } from '../../../utils/providers';
 
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
         if (body[key] !== undefined) patch[key] = body[key];
     }
     if (body.selfConfig !== undefined) patch.selfConfig = body.selfConfig;
-    if (body.providerId !== undefined) patch.providerId = body.providerId || null;
+    if (body.providerId !== undefined) patch.providerId = await assertProviderExists(body.providerId);
 
     // 主表更新与绑定重建同事务：patch 恒带 updatedAt，故 update 返回 0 行即智能体不存在，
     // 此时必须在写入绑定之前抛错回滚——否则给不存在的 agentId 建绑定会触发外键约束 500。
