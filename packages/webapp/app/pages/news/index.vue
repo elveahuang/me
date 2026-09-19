@@ -18,7 +18,12 @@ const category = ref('all');
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
+/** 筛选/搜索/翻页都会重发 load，而 load 是在调用时读取这些状态的：
+ *  先发后回的旧请求会把上一页的条目和 total 写回来，出现「高亮的分类是新的、列表是旧的」。 */
+let loadSeq = 0;
+
 async function load() {
+    const seq = ++loadSeq;
     loading.value = true;
     error.value = '';
     try {
@@ -30,13 +35,18 @@ async function load() {
                 keyword: keyword.value || undefined,
             },
         });
+        if (seq !== loadSeq) return;
         items.value = res.items;
         total.value = res.total;
         categories.value = res.categories ?? [];
     } catch (e) {
+        if (seq !== loadSeq) return;
+        // 失败时必须清空列表：否则模板里 items.length 仍为真，接口挂了会被读成「筛选后就是这些结果」
+        items.value = [];
+        total.value = 0;
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -75,7 +85,10 @@ function goPage(next: number) {
             <p class="text-faint mt-1 text-xs">{{ t('news.subtitle') }}</p>
         </div>
 
-        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-3">
+            <span>{{ error }}</span>
+            <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load">{{ t('common.retry') }}</button>
+        </div>
 
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative flex-1 sm:max-w-xs">
@@ -132,7 +145,8 @@ function goPage(next: number) {
             </NuxtLink>
         </div>
 
-        <div v-else class="app-card flex flex-col items-center gap-2 p-12 text-center">
+        <!-- 失败时不渲染空态：否则「暂无资讯」会把「接口挂了」读成「真的没有内容」 -->
+        <div v-else-if="!error" class="app-card flex flex-col items-center gap-2 p-12 text-center">
             <AppIcon name="newspaper-variant-outline" :size="34" class="text-faint" />
             <p class="text-sm font-bold">{{ t('news.empty') }}</p>
             <p class="text-faint text-xs">{{ t('news.emptyHint') }}</p>
