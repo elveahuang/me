@@ -36,6 +36,8 @@ export default {
         loadFailed: 'Failed to load',
         emptyHint: 'Nothing here yet, try again later',
         more: 'More',
+        pullToRefresh: 'Pull to refresh',
+        endsAt: 'Until {date}',
     },
     nav: {
         home: 'Agents',
@@ -101,6 +103,7 @@ export default {
         quotaExceeded: 'Daily quota exceeded. Please upgrade.',
         upgradeNow: 'Upgrade Now',
         exportMarkdown: 'Export',
+        toggleTheme: 'Toggle light / dark',
         deleteChat: 'Delete Chat',
         renameChat: 'Rename',
         agentList: 'Agents',

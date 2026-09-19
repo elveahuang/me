@@ -195,7 +195,7 @@ function preview(item: AttachmentRecord) {
         <ion-content>
             <template v-slot:fixed>
                 <ion-refresher @ion-refresh="handleRefresh">
-                    <ion-refresher-content pulling-text="下拉刷新" refreshing-spinner="crescent" />
+                    <ion-refresher-content :pulling-text="t('common.pullToRefresh')" refreshing-spinner="crescent" />
                 </ion-refresher>
             </template>
 

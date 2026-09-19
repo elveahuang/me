@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { formatDate, type BulletinRecord } from '@commons/contract';
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { api } from '../api/auth';
 
 /**
@@ -8,6 +9,8 @@ import { api } from '../api/auth';
  * 关闭状态存 localStorage，避免同一设备反复弹出已读内容。
  */
 const props = withDefaults(defineProps<{ position: 'home' | 'chat' | 'global' }>(), { position: 'home' });
+
+const { t } = useI18n();
 
 const bulletins = ref<BulletinRecord[]>([]);
 const dismissed = ref<string[]>([]);
@@ -58,9 +61,9 @@ function dismiss(id: string) {
                 <p v-if="item.content" class="text-muted-2 mt-0.5 line-clamp-2 text-[10px] leading-relaxed">{{ item.content }}</p>
                 <div class="mt-1.5 flex items-center gap-2">
                     <a v-if="item.linkUrl" :href="item.linkUrl" class="text-primary-600 text-[10px] font-bold underline" target="_blank" rel="noopener">
-                        {{ item.linkText || '查看' }}
+                        {{ item.linkText || t('common.viewDetail') }}
                     </a>
-                    <span v-if="item.endsAt" class="text-faint text-[9px]">截止 {{ formatDate(item.endsAt) }}</span>
+                    <span v-if="item.endsAt" class="text-faint text-[9px]">{{ t('common.endsAt', { date: formatDate(item.endsAt) }) }}</span>
                 </div>
             </div>
             <button type="button" class="text-faint shrink-0 p-0.5 text-xs leading-none" @click="dismiss(item.id)">✕</button>

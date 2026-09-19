@@ -417,8 +417,10 @@ async function copyConversationMarkdown() {
                 </div>
                 <template v-slot:end>
                     <ion-buttons>
-                        <button type="button" class="app-btn app-btn-ghost !px-2" title="切换深浅色" @click="toggleMode">🌓</button>
-                        <button type="button" class="app-btn app-btn-ghost !px-2" title="导出" @click="copyConversationMarkdown">📋</button>
+                        <button type="button" class="app-btn app-btn-ghost !px-2" :title="t('chat.toggleTheme')" @click="toggleMode">🌓</button>
+                        <button type="button" class="app-btn app-btn-ghost !px-2" :title="t('chat.exportMarkdown')" @click="copyConversationMarkdown">
+                            📋
+                        </button>
                         <button type="button" class="app-btn app-btn-soft mr-1 !px-2.5" @click="convModalOpen = true">
                             <span>{{ conversations.length }}</span>
                         </button>

@@ -36,6 +36,8 @@ export default {
         loadFailed: '加载失败',
         emptyHint: '暂时没有内容，稍后再试',
         more: '更多',
+        pullToRefresh: '下拉刷新',
+        endsAt: '截止 {date}',
     },
     nav: {
         home: '智能体',
@@ -101,6 +103,7 @@ export default {
         quotaExceeded: '今日对话配额已用完，升级会员继续使用',
         upgradeNow: '立即升级',
         exportMarkdown: '导出记录',
+        toggleTheme: '切换深浅色',
         deleteChat: '删除会话',
         renameChat: '重命名会话',
         agentList: '智能体',
