@@ -17,6 +17,7 @@ import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, apiUrl, extractApiError as extractError, getToken } from '../api/auth';
+import BulletinBanner from '../components/BulletinBanner.vue';
 import { uiComponents } from '../components/json-ui';
 import { useDialog } from '../composables/useDialog';
 import { useTheme } from '../composables/useTheme';
@@ -479,6 +480,8 @@ async function copyConversationMarkdown() {
 
         <ion-content ref="contentRef" :scroll-events="true" @ionScroll="onScroll">
             <div class="flex h-full flex-col">
+                <!-- 与服务端 position=chat 对齐：管理端选了「对话页」展示位时移动端也要能看到 -->
+                <BulletinBanner position="chat" />
                 <!-- 消息区 -->
                 <div class="flex-1 space-y-3.5 p-3.5">
                     <div v-if="loadError" class="app-alert app-alert-danger">{{ loadError }}</div>
