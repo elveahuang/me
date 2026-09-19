@@ -254,7 +254,7 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
                 </button>
                 <button :class="['app-btn', period === 'yearly' ? 'app-btn-soft' : 'app-btn-ghost']" @click="switchPeriod('yearly')">
                     <span>{{ t('billing.yearly') }}</span>
-                    <span class="app-chip app-chip-brand text-[10px]">-20%</span>
+                    <span class="app-chip app-chip-brand">-20%</span>
                 </button>
             </div>
         </div>

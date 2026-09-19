@@ -100,7 +100,7 @@ function textOf(parts: MessageRow['parts']) {
         <!-- 检索工具条 -->
         <div class="app-card p-3">
             <div class="relative w-full">
-                <input v-model="searchKeyword" :placeholder="t('admin.searchConversations')" class="app-input !py-2 pr-8 !text-xs" />
+                <input v-model="searchKeyword" :placeholder="t('admin.searchConversations')" class="app-input !py-2 !pr-8 !text-xs" />
                 <button
                     v-if="searchKeyword"
                     type="button"
@@ -158,7 +158,7 @@ function textOf(parts: MessageRow['parts']) {
                         </tbody>
                     </table>
                     <div v-if="loading" class="space-y-2 p-4">
-                        <div v-for="i in 4" :key="i" class="app-skeleton h-10 rounded-xl" />
+                        <div v-for="i in 4" :key="i" class="app-skeleton h-10 !rounded-xl" />
                     </div>
                 </div>
             </div>

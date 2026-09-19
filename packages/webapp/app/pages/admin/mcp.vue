@@ -144,7 +144,7 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="listError" class="app-alert app-alert-danger">
+        <div v-if="listError" class="app-alert app-alert-danger mb-4">
             {{ listError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
@@ -165,8 +165,8 @@ async function remove(id: string) {
                         <option value="sse">SSE</option>
                     </select>
                 </div>
-                <input v-model="form.url" :placeholder="t('adminForm.mcpUrlPlaceholder')" class="app-input font-mono text-xs" />
-                <textarea v-model="form.headersText" rows="2" class="app-input font-mono text-xs" :placeholder="t('adminForm.mcpHeadersPlaceholder')" />
+                <input v-model="form.url" :placeholder="t('adminForm.mcpUrlPlaceholder')" class="app-input !font-mono !text-xs" />
+                <textarea v-model="form.headersText" rows="2" class="app-input !font-mono !text-xs" :placeholder="t('adminForm.mcpHeadersPlaceholder')" />
                 <label class="text-soft flex items-center gap-1.5 text-sm"
                     ><input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}</label
                 >

@@ -142,7 +142,7 @@ const filteredAgents = computed(() => {
                     type="button"
                     :class="[
                         'shrink-0 rounded-full px-3 py-1 font-bold transition-all active:scale-95',
-                        activeCategory === cat.key ? 'bg-primary-600 text-white shadow-xs' : 'bg-surface-2 text-muted hover:bg-surface-3',
+                        activeCategory === cat.key ? 'bg-primary-600 text-white shadow-xs' : 'bg-surface-2 text-muted hover:bg-[color:var(--surface-3)]',
                     ]"
                     @click="activeCategory = cat.key"
                 >
@@ -162,7 +162,7 @@ const filteredAgents = computed(() => {
                 <BulletinBanner position="home" />
                 <p class="text-faint mb-3 text-[11px]">{{ t('agents.subtitle') }}</p>
 
-                <div v-if="error" class="app-alert app-alert-danger mb-3 flex items-center justify-between gap-2 text-[11px]">
+                <div v-if="error" class="app-alert app-alert-danger mb-3 flex items-center justify-between gap-2 !text-[11px]">
                     <span>{{ error }}</span>
                     <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="loadAgents()">
                         {{ t('common.retry') }}

@@ -134,7 +134,7 @@ onMounted(load);
             </div>
 
             <div class="relative w-full sm:w-72">
-                <input v-model="searchKeyword" :placeholder="t('admin.searchOrders')" class="app-input !py-2 pr-8 !text-xs" />
+                <input v-model="searchKeyword" :placeholder="t('admin.searchOrders')" class="app-input !py-2 !pr-8 !text-xs" />
                 <button
                     v-if="searchKeyword"
                     type="button"
@@ -211,7 +211,7 @@ onMounted(load);
                 </tbody>
             </table>
             <div v-if="loading" class="space-y-2 p-4">
-                <div v-for="i in 3" :key="i" class="app-skeleton h-10 rounded-xl" />
+                <div v-for="i in 3" :key="i" class="app-skeleton h-10 !rounded-xl" />
             </div>
         </div>
     </div>

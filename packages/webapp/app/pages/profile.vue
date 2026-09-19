@@ -58,7 +58,7 @@ async function logout() {
         <!-- 接口失败提示：不显示的话用户会把「加载失败」读成「没有数据/免费会员」 -->
         <div v-if="profileError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
             <span>{{ profileError }}</span>
-            <button type="button" class="app-btn app-btn-outline shrink-0 !py-1 text-xs" @click="retryProfile">{{ t('common.retry') }}</button>
+            <button type="button" class="app-btn app-btn-outline shrink-0 !py-1" @click="retryProfile">{{ t('common.retry') }}</button>
         </div>
 
         <!-- 头部个人名片 -->
@@ -171,7 +171,7 @@ async function logout() {
                                     :key="option.value"
                                     type="button"
                                     class="rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
-                                    :class="mode === option.value ? 'bg-brand' : 'text-muted-2 hover:text-strong'"
+                                    :class="mode === option.value ? 'bg-brand' : 'text-muted-2 text-hover-strong'"
                                     :title="option.label"
                                     @click="setMode(option.value)"
                                 >

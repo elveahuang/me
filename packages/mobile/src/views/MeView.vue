@@ -199,7 +199,7 @@ async function logout() {
                 <template v-else>
                     <p class="text-3xl">⚠️</p>
                     <p class="text-faint mt-3 text-xs">{{ error || t('common.error') }}</p>
-                    <button type="button" class="app-btn app-btn-outline mt-4 !px-4 !py-1.5 text-xs" @click="loadData">{{ t('common.retry') }}</button>
+                    <button type="button" class="app-btn app-btn-outline mt-4 !px-4 !py-1.5" @click="loadData">{{ t('common.retry') }}</button>
                 </template>
             </div>
         </ion-content>

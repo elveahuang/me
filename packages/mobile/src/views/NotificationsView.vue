@@ -148,13 +148,13 @@ const iconFor = (value: string) => (value === 'billing' ? '💳' : value === 'ac
             </template>
 
             <div class="space-y-2 p-4">
-                <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 !text-[11px]">
                     <span>{{ error }}</span>
                     <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load(true)">
                         {{ t('common.retry') }}
                     </button>
                 </div>
-                <div v-if="success" class="app-alert app-alert-success text-[11px]">{{ success }}</div>
+                <div v-if="success" class="app-alert app-alert-success !text-[11px]">{{ success }}</div>
 
                 <div v-if="loading && !items.length" class="space-y-2">
                     <div v-for="i in 5" :key="i" class="app-skeleton h-20" />

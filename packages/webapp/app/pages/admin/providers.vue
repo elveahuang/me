@@ -143,11 +143,11 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="error" class="app-alert app-alert-danger">
+        <div v-if="error" class="app-alert app-alert-danger mb-4">
             {{ error }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
+        <div v-if="success" class="app-alert app-alert-success mb-4">{{ success }}</div>
         <div class="app-page-header">
             <div>
                 <h1 class="app-page-title text-strong">{{ t('adminForm.providerTitle') }}</h1>
@@ -171,9 +171,9 @@ async function remove(id: string) {
                             ? t('adminForm.providerApiKeyKeep', { mask: form.apiKey || t('adminForm.providerApiKeyUnset') })
                             : t('adminForm.providerApiKey')
                     "
-                    class="app-input w-full"
+                    class="app-input"
                 />
-                <textarea v-model="modelsText" rows="3" :placeholder="t('adminForm.providerModelsPlaceholder')" class="app-input font-mono text-xs" />
+                <textarea v-model="modelsText" rows="3" :placeholder="t('adminForm.providerModelsPlaceholder')" class="app-input !font-mono !text-xs" />
                 <div class="text-soft flex items-center gap-4 text-sm">
                     <label class="flex items-center gap-1"
                         ><input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}</label

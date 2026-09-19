@@ -145,7 +145,7 @@ async function removeUser(userId: string) {
             </div>
 
             <div class="relative w-full sm:w-72">
-                <input v-model="q" :placeholder="t('admin.searchUsers')" class="app-input !py-2 pr-8 !text-xs" />
+                <input v-model="q" :placeholder="t('admin.searchUsers')" class="app-input !py-2 !pr-8 !text-xs" />
                 <button v-if="q" type="button" class="text-faint absolute top-1/2 right-2.5 -translate-y-1/2 text-xs hover:opacity-70" @click="q = ''">
                     ✕
                 </button>
@@ -168,7 +168,7 @@ async function removeUser(userId: string) {
                     <tr v-for="u in filteredUsers" :key="u.id">
                         <td>
                             <div class="flex items-center gap-3">
-                                <div class="app-avatar h-8 w-8 shrink-0 rounded-full text-xs">{{ u.name?.[0]?.toUpperCase() || 'U' }}</div>
+                                <div class="app-avatar h-8 w-8 shrink-0 !rounded-full text-xs">{{ u.name?.[0]?.toUpperCase() || 'U' }}</div>
                                 <span class="text-strong font-bold">{{ u.name }}</span>
                             </div>
                         </td>
@@ -223,7 +223,7 @@ async function removeUser(userId: string) {
                 </tbody>
             </table>
             <div v-if="loading" class="space-y-2 p-4">
-                <div v-for="i in 3" :key="i" class="app-skeleton h-10 rounded-xl" />
+                <div v-for="i in 3" :key="i" class="app-skeleton h-10 !rounded-xl" />
             </div>
         </div>
     </div>

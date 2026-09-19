@@ -227,13 +227,13 @@ function readPercent(row: AdminNotificationRow): number {
         </div>
 
         <!-- 用主题令牌而不是 bg-red-50 / bg-emerald-50：浅色专用色块在深色模式下几乎读不出来 -->
-        <div v-if="error" class="app-alert app-alert-danger text-sm">{{ error }}</div>
-        <div v-if="success" class="app-alert app-alert-success text-sm">{{ success }}</div>
+        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <!-- 推送表单（右侧抽屉） -->
         <AdminDrawer :open="sendOpen" :title="t('notifications.send')" width-class="sm:max-w-2xl" @close="sendOpen = false">
             <div class="space-y-3">
-                <p v-if="formError" class="app-alert app-alert-danger text-sm">{{ formError }}</p>
+                <p v-if="formError" class="app-alert app-alert-danger">{{ formError }}</p>
                 <div class="grid gap-3 sm:grid-cols-2">
                     <input
                         v-model="form.title"

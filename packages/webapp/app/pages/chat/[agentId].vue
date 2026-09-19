@@ -352,7 +352,7 @@ const starterPrompts = computed(() => [
         <!-- 侧边栏：历史会话 -->
         <aside class="app-card hidden w-64 shrink-0 flex-col overflow-hidden md:flex">
             <div class="app-divider border-t-0 p-3">
-                <NuxtLink to="/chat" class="text-muted-2 hover:text-brand flex items-center gap-1.5 text-xs font-semibold transition-colors">
+                <NuxtLink to="/chat" class="text-muted-2 text-hover-brand flex items-center gap-1.5 text-xs font-semibold transition-colors">
                     <span>←</span>
                     <span>{{ t('chat.agentList') }}</span>
                 </NuxtLink>
@@ -361,7 +361,7 @@ const starterPrompts = computed(() => [
                 <button class="app-btn app-btn-primary w-full" :disabled="creatingConversation" @click="newConversation">+ {{ t('chat.newChat') }}</button>
             </div>
             <div class="px-2.5 pb-2">
-                <input v-model="searchQuery" :placeholder="t('chat.searchChat')" class="app-input w-full !px-2.5 !py-1 !text-xs" />
+                <input v-model="searchQuery" :placeholder="t('chat.searchChat')" class="app-input !px-2.5 !py-1 !text-xs" />
             </div>
             <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-3">
                 <li v-for="c in filteredConversations" :key="c.id" class="group relative flex items-center">
@@ -387,7 +387,7 @@ const starterPrompts = computed(() => [
                         <div class="absolute right-2 hidden items-center gap-1 group-hover:flex">
                             <button
                                 type="button"
-                                class="text-faint hover:text-brand rounded p-1 transition-colors"
+                                class="text-faint text-hover-brand rounded p-1 transition-colors"
                                 :title="t('chat.renameChat')"
                                 @click.stop="startRename(c)"
                             >
@@ -421,16 +421,16 @@ const starterPrompts = computed(() => [
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
                             <h2 class="truncate text-sm font-bold">{{ agent?.name || t('chat.welcomeTitle') }}</h2>
-                            <span class="app-chip font-mono text-[10px]">{{ agent?.model || 'deepseek-chat' }}</span>
-                            <span v-if="agent?.temperature !== null && agent?.temperature !== undefined" class="app-chip app-chip-brand text-[9px]">
+                            <span class="app-chip font-mono">{{ agent?.model || 'deepseek-chat' }}</span>
+                            <span v-if="agent?.temperature !== null && agent?.temperature !== undefined" class="app-chip app-chip-brand">
                                 Temp {{ agent.temperature }}
                             </span>
-                            <span v-if="agent?.tools?.length" class="app-chip text-[9px]"> 🛠️ {{ agent.tools.length }} </span>
-                            <span v-if="agent?.skills?.length" class="app-chip text-[9px]"> 🧩 {{ agent.skills.length }} </span>
-                            <span v-if="agent?.knowledgeBases?.length" class="app-chip text-[9px]" :title="agent.knowledgeBases.map((k) => k.name).join('、')">
+                            <span v-if="agent?.tools?.length" class="app-chip"> 🛠️ {{ agent.tools.length }} </span>
+                            <span v-if="agent?.skills?.length" class="app-chip"> 🧩 {{ agent.skills.length }} </span>
+                            <span v-if="agent?.knowledgeBases?.length" class="app-chip" :title="agent.knowledgeBases.map((k) => k.name).join('、')">
                                 📚 {{ agent.knowledgeBases.length }}
                             </span>
-                            <span v-if="agent?.mcpServers?.length" class="app-chip text-[9px]" :title="agent.mcpServers.map((m) => m.name).join('、')">
+                            <span v-if="agent?.mcpServers?.length" class="app-chip" :title="agent.mcpServers.map((m) => m.name).join('、')">
                                 🔌 {{ agent.mcpServers.length }}
                             </span>
                         </div>
@@ -534,7 +534,7 @@ const starterPrompts = computed(() => [
                             </button>
                             <button
                                 type="button"
-                                class="text-faint hover:text-brand ml-2 hidden shrink-0 rounded p-1 text-xs group-hover:block"
+                                class="text-faint text-hover-brand ml-2 hidden shrink-0 rounded p-1 text-xs group-hover:block"
                                 :title="t('chat.usePrompt')"
                                 @click="fillPrompt(prompt)"
                             >
@@ -588,10 +588,10 @@ const starterPrompts = computed(() => [
                         <AppIcon :name="a.isImage ? 'file-image-outline' : 'file-outline'" :size="13" />
                         <span class="truncate">{{ a.filename }}</span>
                         <span class="text-faint text-[10px]">{{ formatBytes(a.size) }}</span>
-                        <button type="button" class="text-faint hover:text-default" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
+                        <button type="button" class="text-faint text-hover-strong" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
                     </span>
                 </div>
-                <div v-if="attachError" class="app-alert app-alert-danger mb-2 text-[11px]">{{ attachError }}</div>
+                <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]">{{ attachError }}</div>
 
                 <div class="relative flex items-center gap-2.5">
                     <!-- 附件入口：选择已有附件或直接上传 -->
@@ -607,11 +607,11 @@ const starterPrompts = computed(() => [
                     <input ref="chatFileInput" type="file" class="hidden" @change="onChatFileChange" />
 
                     <div class="relative flex-1">
-                        <input v-model="input" :placeholder="t('chat.inputPlaceholder')" class="app-input w-full !pr-8" />
+                        <input v-model="input" :placeholder="t('chat.inputPlaceholder')" class="app-input !pr-8" />
                         <button
                             v-if="input"
                             type="button"
-                            class="text-faint hover:text-default absolute top-1/2 right-2.5 -translate-y-1/2 text-xs"
+                            class="text-faint text-hover-strong absolute top-1/2 right-2.5 -translate-y-1/2 text-xs"
                             :title="t('chat.clearInput')"
                             @click="input = ''"
                         >
@@ -643,15 +643,15 @@ const starterPrompts = computed(() => [
                 <div class="app-card w-full max-w-lg p-5">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-black">{{ t('chat.attach') }}</h3>
-                        <button type="button" class="text-faint hover:text-default" @click="attachPickerOpen = false">✕</button>
+                        <button type="button" class="text-faint text-hover-strong" @click="attachPickerOpen = false">✕</button>
                     </div>
 
                     <div class="mt-3 flex gap-2">
-                        <button type="button" class="app-btn app-btn-outline !py-1.5 text-xs" :disabled="uploadingInChat" @click="chatFileInput?.click()">
+                        <button type="button" class="app-btn app-btn-outline !py-1.5" :disabled="uploadingInChat" @click="chatFileInput?.click()">
                             <AppIcon name="tray-arrow-up" :size="14" />
                             <span>{{ uploadingInChat ? t('attachments.uploading') : t('chat.uploadAndAttach') }}</span>
                         </button>
-                        <NuxtLink to="/attachments" class="app-btn app-btn-ghost !py-1.5 text-xs">{{ t('attachments.title') }} →</NuxtLink>
+                        <NuxtLink to="/attachments" class="app-btn app-btn-ghost !py-1.5">{{ t('attachments.title') }} →</NuxtLink>
                     </div>
 
                     <div v-if="attachLoading" class="mt-3 space-y-2">

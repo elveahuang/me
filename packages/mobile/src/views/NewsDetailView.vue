@@ -73,7 +73,7 @@ async function handleRefresh(event: CustomEvent) {
                     <div class="app-skeleton h-28 w-full" />
                 </div>
 
-                <div v-else-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                <div v-else-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 !text-[11px]">
                     <span>{{ error }}</span>
                     <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load(String(route.params.id))">
                         {{ t('common.retry') }}

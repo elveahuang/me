@@ -230,7 +230,7 @@ async function remove(item: StorageConfigItem) {
         <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <div v-if="loading" class="space-y-3">
-            <div v-for="i in 2" :key="i" class="app-skeleton h-20 rounded-2xl" />
+            <div v-for="i in 2" :key="i" class="app-skeleton h-20 !rounded-2xl" />
         </div>
 
         <div v-else-if="configs.length" class="space-y-3">
@@ -284,12 +284,12 @@ async function remove(item: StorageConfigItem) {
                 <div class="grid gap-3 sm:grid-cols-2">
                     <input v-model="form.name" :placeholder="t('storage.namePlaceholder')" class="app-input" />
                     <input v-model="form.bucket" :placeholder="t('storage.bucket')" class="app-input" />
-                    <input v-model="form.endpoint" :placeholder="t('storage.endpointPlaceholder')" class="app-input font-mono text-xs sm:col-span-2" />
+                    <input v-model="form.endpoint" :placeholder="t('storage.endpointPlaceholder')" class="app-input !font-mono !text-xs sm:col-span-2" />
                     <input v-model="form.region" :placeholder="t('storage.region')" class="app-input" />
                     <input v-model="form.prefix" :placeholder="t('storage.prefix')" class="app-input" />
-                    <input v-model="form.accessKeyId" :placeholder="t('storage.accessKeyId')" class="app-input font-mono text-xs" />
-                    <input v-model="form.secretAccessKey" type="password" :placeholder="t('storage.secretKeepHint')" class="app-input font-mono text-xs" />
-                    <input v-model="form.publicBaseUrl" :placeholder="t('storage.publicBaseUrlHint')" class="app-input font-mono text-xs sm:col-span-2" />
+                    <input v-model="form.accessKeyId" :placeholder="t('storage.accessKeyId')" class="app-input !font-mono !text-xs" />
+                    <input v-model="form.secretAccessKey" type="password" :placeholder="t('storage.secretKeepHint')" class="app-input !font-mono !text-xs" />
+                    <input v-model="form.publicBaseUrl" :placeholder="t('storage.publicBaseUrlHint')" class="app-input !font-mono !text-xs sm:col-span-2" />
                     <label class="text-soft flex items-center gap-2 text-sm">
                         <input v-model="form.forcePathStyle" type="checkbox" class="app-checkbox" />
                         <span>{{ t('storage.forcePathStyle') }}</span>
@@ -313,12 +313,12 @@ async function remove(item: StorageConfigItem) {
                         v-model="form.allowedMimeTypesText"
                         rows="2"
                         :placeholder="t('storage.allowedMimeTypesHint')"
-                        class="app-input font-mono text-xs"
+                        class="app-input !font-mono !text-xs"
                     />
                     <p class="app-help">{{ t('storage.allowedMimeTypesHint') }}</p>
                 </div>
 
-                <div v-if="testResult" :class="testResult.ok ? 'app-alert-success' : 'app-alert-danger'" class="app-alert text-xs">
+                <div v-if="testResult" :class="testResult.ok ? 'app-alert-success' : 'app-alert-danger'" class="app-alert !text-xs">
                     {{ testResult.ok ? '✓' : '✗' }} {{ testResult.message }}
                 </div>
                 <p v-if="error" class="app-help-error text-xs">{{ error }}</p>

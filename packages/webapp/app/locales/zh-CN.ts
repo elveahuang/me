@@ -199,6 +199,7 @@ export default {
         // 智能体页
         agentTitle: '智能体管理',
         agentNew: '新建智能体',
+        agentSubtitle: '配置智能体的人设、模型与能力绑定（Skills / Tools / 知识库 / MCP）',
         agentEmojiPlaceholder: '头像 emoji，如 🤖',
         agentBindSkill: '绑定 Skill（指令块，注入系统提示词）',
         agentBindTool: '绑定 Tool（可执行工具，进入 ReAct 循环）',

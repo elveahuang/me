@@ -58,7 +58,7 @@ const features = computed(() => {
         <section class="app-card relative overflow-hidden p-8 text-center sm:p-14">
             <div class="bg-brand-soft-gradient pointer-events-none absolute inset-0 opacity-70" />
             <div class="relative">
-                <div class="app-chip app-chip-brand mx-auto px-4 py-1.5 text-[11px] font-bold">
+                <div class="app-chip app-chip-brand mx-auto !px-4 !py-1.5 !text-[11px] !font-bold">
                     <span>🚀</span>
                     <span>Next-Gen Enterprise Multi-Agent Platform</span>
                 </div>
@@ -121,7 +121,7 @@ const features = computed(() => {
                 <div v-for="f in features" :key="f.tag" class="app-card app-card-hover p-6 sm:p-7">
                     <div class="flex items-center justify-between">
                         <span class="text-3xl">{{ f.icon }}</span>
-                        <span class="app-chip font-mono text-[10px] font-bold">{{ f.tag }}</span>
+                        <span class="app-chip font-mono">{{ f.tag }}</span>
                     </div>
                     <h3 class="mt-4 text-base font-black">{{ f.title }}</h3>
                     <p class="text-muted-2 mt-2 text-xs leading-relaxed">{{ f.desc }}</p>
@@ -146,14 +146,14 @@ const features = computed(() => {
                             {{ agent.emoji || agent.avatar || '🤖' }}
                         </div>
                         <div class="min-w-0 flex-1">
-                            <h4 class="group-hover:text-brand truncate text-sm font-black transition-colors">
+                            <h4 class="group-text-hover-brand truncate text-sm font-black transition-colors">
                                 {{ agent.name }}
                             </h4>
                             <p class="text-faint truncate text-[11px]">{{ agent.description || t('common.none') }}</p>
                         </div>
                     </div>
                     <div v-if="agent.skills?.length" class="app-divider mt-4 flex flex-wrap gap-1.5 pt-2">
-                        <span v-for="s in agent.skills.slice(0, 3)" :key="s.id" class="app-chip text-[10px]">
+                        <span v-for="s in agent.skills.slice(0, 3)" :key="s.id" class="app-chip">
                             {{ s.name }}
                         </span>
                     </div>

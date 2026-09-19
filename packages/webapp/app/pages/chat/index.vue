@@ -87,16 +87,16 @@ async function removeConversation(id: string) {
             <div class="app-panel flex flex-col overflow-hidden lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]">
                 <h2 class="flex shrink-0 items-center justify-between px-4 py-3.5 text-sm font-black">
                     <span>{{ t('nav.conversations') }}</span>
-                    <span class="app-chip text-[10px] font-bold">{{ conversations.length }}</span>
+                    <span class="app-chip">{{ conversations.length }}</span>
                 </h2>
 
                 <ul class="border-line max-h-[22rem] space-y-1.5 overflow-y-auto border-t px-2 pb-2 lg:max-h-none">
                     <li v-if="loading" class="space-y-1.5 py-1.5">
-                        <div v-for="n in 4" :key="n" class="app-skeleton h-11 rounded-xl" />
+                        <div v-for="n in 4" :key="n" class="app-skeleton h-11 !rounded-xl" />
                     </li>
                     <li v-for="c in conversations" :key="c.id" class="group relative rounded-xl transition-colors hover:bg-[color:var(--surface-2)]">
                         <NuxtLink :to="`/chat/${c.agentId}?c=${c.id}`" class="block min-w-0 py-2.5 pr-8 pl-2.5 text-xs">
-                            <p class="group-hover:text-brand truncate font-semibold transition-colors">{{ c.title }}</p>
+                            <p class="group-text-hover-brand truncate font-semibold transition-colors">{{ c.title }}</p>
                             <p class="text-faint mt-1 flex items-center gap-1.5 text-[10px]">
                                 <span class="truncate">{{ c.agentName }}</span>
                                 <span>·</span>
@@ -129,7 +129,7 @@ async function removeConversation(id: string) {
                 <div>
                     <h1 class="flex items-center gap-2 text-xl font-black">
                         <span>{{ t('agents.title') }}</span>
-                        <span class="app-chip app-chip-brand text-[11px] font-bold">
+                        <span class="app-chip app-chip-brand">
                             {{ filteredAgents.length }}
                         </span>
                     </h1>
@@ -143,7 +143,7 @@ async function removeConversation(id: string) {
                     <button
                         v-if="searchKeyword"
                         type="button"
-                        class="text-faint hover:text-strong absolute top-2 right-2.5 text-xs"
+                        class="text-faint text-hover-strong absolute top-2 right-2.5 text-xs"
                         @click="searchKeyword = ''"
                     >
                         ✕
@@ -152,7 +152,7 @@ async function removeConversation(id: string) {
             </div>
 
             <!-- 加载失败：与「没有数据」区分，给出重试入口 -->
-            <div v-if="loadError && !loading" class="app-card app-alert app-alert-danger flex items-center justify-between gap-3 p-6 text-xs">
+            <div v-if="loadError && !loading" class="app-card app-alert app-alert-danger flex items-center justify-between gap-3 !p-6 !text-xs">
                 <span>{{ t('common.error') }}</span>
                 <button type="button" class="app-btn app-btn-outline shrink-0 !py-1.5" @click="load">{{ t('common.retry') }}</button>
             </div>
@@ -177,7 +177,7 @@ async function removeConversation(id: string) {
                         :class="
                             favorites.includes(agent.id)
                                 ? 'bg-[color:var(--surface-3)] text-[color:var(--warning)]'
-                                : 'text-faint hover:text-muted-2 hover:bg-[color:var(--surface-3)]'
+                                : 'text-faint text-hover-muted hover:bg-[color:var(--surface-3)]'
                         "
                         :aria-pressed="favorites.includes(agent.id)"
                         :title="favorites.includes(agent.id) ? t('common.cancel') : t('agents.topPin')"
@@ -190,7 +190,7 @@ async function removeConversation(id: string) {
                         <div class="app-avatar-icon h-11 w-11 shrink-0 text-2xl transition-transform group-hover:scale-105">
                             {{ agent.emoji || agent.avatar || '🤖' }}
                         </div>
-                        <p class="group-hover:text-brand min-w-0 truncate text-sm font-bold transition-colors">{{ agent.name }}</p>
+                        <p class="group-text-hover-brand min-w-0 truncate text-sm font-bold transition-colors">{{ agent.name }}</p>
                     </div>
 
                     <p class="text-muted-2 mt-3 line-clamp-2 min-h-10 flex-1 text-xs leading-relaxed">{{ agent.description || t('common.none') }}</p>

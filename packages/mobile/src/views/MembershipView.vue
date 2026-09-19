@@ -245,7 +245,7 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
 
             <div class="space-y-5 p-4">
                 <!-- 加载失败提示：否则首屏请求失败时页面只剩默认值，看起来像"没有套餐" -->
-                <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-2 !text-[11px]">
                     <span>{{ loadError }}</span>
                     <button type="button" class="app-btn app-btn-soft shrink-0 !px-2.5 !py-1 !text-[10px]" @click="loadData">
                         {{ t('common.retry') }}

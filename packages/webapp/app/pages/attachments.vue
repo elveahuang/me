@@ -236,7 +236,7 @@ function iconFor(mime: string): string {
                 <p class="text-faint mt-1 text-xs">{{ t('attachments.subtitle') }}</p>
             </div>
             <div class="flex items-center gap-2">
-                <select v-model="uploadCategory" class="app-input !w-auto text-xs">
+                <select v-model="uploadCategory" class="app-input !w-auto !text-xs">
                     <option v-for="c in ATTACHMENT_CATEGORIES" :key="c.value" :value="c.value">{{ c.label }}</option>
                 </select>
                 <button type="button" class="app-btn app-btn-primary" :disabled="!canUpload" @click="pickFile">
@@ -261,7 +261,7 @@ function iconFor(mime: string): string {
 
         <!-- 拖拽上传区 -->
         <div
-            class="app-card flex flex-col items-center justify-center gap-2 border-2 border-dashed p-8 text-center transition-colors"
+            class="app-card flex flex-col items-center justify-center gap-2 !border-2 !border-dashed p-8 text-center transition-colors"
             :class="dragActive ? 'border-[color:var(--brand-500)] bg-[color:var(--brand-50)]' : ''"
             @dragover.prevent="dragActive = true"
             @dragleave.prevent="dragActive = false"
@@ -275,7 +275,7 @@ function iconFor(mime: string): string {
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative flex-1 sm:max-w-xs">
                 <AppIcon name="magnify" :size="15" class="text-faint pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
-                <input v-model="keyword" class="app-input pl-8 text-xs" :placeholder="t('attachments.searchPlaceholder')" />
+                <input v-model="keyword" class="app-input !pl-8 !text-xs" :placeholder="t('attachments.searchPlaceholder')" />
             </div>
             <button
                 v-for="c in [{ value: 'all', label: t('common.all') }, ...ATTACHMENT_CATEGORIES]"

@@ -201,6 +201,7 @@ export default {
         basicThemeHint: 'Default theme for new visitors; users who already picked an appearance in the theme switcher keep theirs',
         agentTitle: 'Agents',
         agentNew: 'New Agent',
+        agentSubtitle: 'Configure the persona, model and capability bindings (Skills / Tools / Knowledge / MCP) for each agent',
         agentEmojiPlaceholder: 'Avatar emoji, e.g. 🤖',
         agentBindSkill: 'Bound Skills (instruction blocks injected into the system prompt)',
         agentBindTool: 'Bound Tools (executable, used in the ReAct loop)',

@@ -93,7 +93,7 @@ function goPage(next: number) {
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative flex-1 sm:max-w-xs">
                 <AppIcon name="magnify" :size="15" class="text-faint pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
-                <input v-model="keyword" class="app-input pl-8 text-xs" :placeholder="t('common.search')" />
+                <input v-model="keyword" class="app-input !pl-8 !text-xs" :placeholder="t('common.search')" />
             </div>
             <button type="button" class="app-chip transition-colors" :class="category === 'all' ? 'app-chip-brand' : ''" @click="category = 'all'">
                 {{ t('common.all') }}
@@ -132,7 +132,7 @@ function goPage(next: number) {
                     </span>
                 </div>
                 <div class="flex flex-1 flex-col p-4">
-                    <h2 class="group-hover:text-brand line-clamp-2 text-sm font-black transition-colors">{{ item.title }}</h2>
+                    <h2 class="group-text-hover-brand line-clamp-2 text-sm font-black transition-colors">{{ item.title }}</h2>
                     <p class="text-muted-2 mt-2 line-clamp-3 flex-1 text-[11px] leading-relaxed">{{ item.summary || t('common.none') }}</p>
                     <div class="app-divider mt-3 flex items-center justify-between pt-2 text-[10px]">
                         <span class="text-faint">{{ formatDate(item.publishedAt || item.createdAt) }}</span>

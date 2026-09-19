@@ -58,7 +58,7 @@ onBeforeUnmount(() => {
                         <h2 class="text-strong text-base font-bold">{{ title }}</h2>
                         <button
                             type="button"
-                            class="text-faint hover:text-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-3)]"
+                            class="text-faint text-hover-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-3)]"
                             :title="t('common.close')"
                             :aria-label="t('common.close')"
                             @click="emit('close')"

@@ -96,7 +96,7 @@ async function save() {
         </div>
         <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
-        <div v-if="loading" class="app-skeleton h-64 rounded-2xl" />
+        <div v-if="loading" class="app-skeleton h-64 !rounded-2xl" />
         <div v-else-if="loaded" class="app-card space-y-6 p-6">
             <div class="space-y-1.5">
                 <label class="text-strong text-sm font-bold">{{ t('adminForm.basicSiteTitle') }}</label>

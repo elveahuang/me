@@ -301,6 +301,22 @@ html {
     accent-color: var(--brand);
 }
 
+/* 交互态文字颜色只能在主题内定义：本文件未分层，.text-* 的优先级高于 Tailwind utilities 层，
+   因此 `text-faint hover:text-strong` 之类的工具类写法不会生效（hover 变体同理）。 */
+.text-hover-strong:hover,
+.group:hover .group-hover-strong {
+    color: var(--content);
+}
+
+.text-hover-muted:hover {
+    color: var(--content-muted);
+}
+
+.text-hover-brand:hover,
+.group:hover .group-hover-brand {
+    color: var(--brand);
+}
+
 /* 品牌渐变（Hero / 头像底色） */
 .bg-brand-gradient {
     color: var(--on-brand);

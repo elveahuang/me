@@ -84,7 +84,7 @@ onUnmounted(() => {
             <BulletinBanner position="global" />
 
             <div class="space-y-3 p-4">
-                <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 !text-[11px]">
                     <span>{{ error }}</span>
                     <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load(true)">
                         {{ t('common.retry') }}

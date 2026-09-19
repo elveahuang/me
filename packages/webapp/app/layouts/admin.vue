@@ -152,7 +152,7 @@ const currentRouteName = computed(() => {
             <div class="flex items-center gap-3 sm:gap-4">
                 <button
                     type="button"
-                    class="border-line text-soft hover:text-strong flex h-9 w-9 items-center justify-center rounded-lg border transition-colors hover:bg-[color:var(--surface-3)] lg:hidden"
+                    class="border-line text-soft text-hover-strong flex h-9 w-9 items-center justify-center rounded-lg border transition-colors hover:bg-[color:var(--surface-3)] lg:hidden"
                     :aria-label="t('nav.menu')"
                     @click="mobileMenuOpen = !mobileMenuOpen"
                 >
@@ -160,7 +160,7 @@ const currentRouteName = computed(() => {
                 </button>
                 <button
                     type="button"
-                    class="border-line text-soft hover:text-strong hidden h-9 w-9 items-center justify-center rounded-lg border transition-colors hover:bg-[color:var(--surface-3)] lg:flex"
+                    class="border-line text-soft text-hover-strong hidden h-9 w-9 items-center justify-center rounded-lg border transition-colors hover:bg-[color:var(--surface-3)] lg:flex"
                     :title="t('nav.toggleSidebar')"
                     @click="toggleSidebar"
                 >
@@ -231,7 +231,7 @@ const currentRouteName = computed(() => {
                         <button
                             v-if="!sidebarCollapsed"
                             type="button"
-                            class="text-faint hover:text-muted-2 flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors hover:bg-[color:var(--surface-3)]"
+                            class="text-faint text-hover-muted flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors hover:bg-[color:var(--surface-3)]"
                             :aria-expanded="isGroupOpen(group.key)"
                             @click="toggleGroup(group.key)"
                         >
@@ -265,7 +265,7 @@ const currentRouteName = computed(() => {
                 <div class="app-drawer app-drawer-left lg:hidden">
                     <div class="app-divider flex items-center justify-between px-4 py-3.5">
                         <span class="text-strong text-sm font-bold">{{ t('common.adminAppName') }}</span>
-                        <button type="button" class="text-faint hover:text-strong p-1" :aria-label="t('common.close')" @click="mobileMenuOpen = false">
+                        <button type="button" class="text-faint text-hover-strong p-1" :aria-label="t('common.close')" @click="mobileMenuOpen = false">
                             ✕
                         </button>
                     </div>

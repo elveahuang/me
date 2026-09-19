@@ -166,7 +166,7 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="listError" class="app-alert app-alert-danger">
+        <div v-if="listError" class="app-alert app-alert-danger mb-4">
             {{ listError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
@@ -206,25 +206,25 @@ async function remove(id: string) {
                             <option>PUT</option>
                             <option>DELETE</option>
                         </select>
-                        <input v-model="form.url" :placeholder="t('adminForm.toolUrlPlaceholder')" class="app-input font-mono text-xs" />
+                        <input v-model="form.url" :placeholder="t('adminForm.toolUrlPlaceholder')" class="app-input !font-mono !text-xs" />
                     </div>
                     <textarea
                         v-model="form.parametersText"
                         rows="4"
-                        class="app-input font-mono text-xs"
+                        class="app-input !font-mono !text-xs"
                         :placeholder="`${t('adminForm.toolParamsLabel')}${PARAMS_SAMPLE}`"
                     />
                     <textarea
                         v-model="form.headersText"
                         rows="2"
-                        class="app-input font-mono text-xs"
+                        class="app-input !font-mono !text-xs"
                         :placeholder="`${t('adminForm.toolHeadersLabel')}${HEADERS_SAMPLE}`"
                     />
                     <textarea
                         v-if="form.method !== 'GET'"
                         v-model="form.bodyTemplate"
                         rows="2"
-                        class="app-input font-mono text-xs"
+                        class="app-input !font-mono !text-xs"
                         :placeholder="t('adminForm.toolBodyPlaceholder')"
                     />
                 </template>

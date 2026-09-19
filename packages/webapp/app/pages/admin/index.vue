@@ -105,7 +105,7 @@ const assetCards = computed<StatCard[]>(() => {
 <template>
     <div class="space-y-8">
         <!-- 加载失败提示：否则所有 KPI 显示 0，会被误读为「平台无数据」 -->
-        <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-3 text-sm">
+        <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
             <span>{{ loadError }}</span>
             <button type="button" class="app-btn app-btn-outline app-btn-sm shrink-0" @click="load">{{ t('common.retry') }}</button>
         </div>
@@ -126,10 +126,10 @@ const assetCards = computed<StatCard[]>(() => {
         <!-- 首次加载骨架：接口未回来前不渲染 KPI/明细，避免全 0 被误读为「平台没有数据」 -->
         <div v-if="loading && !stats" class="space-y-4">
             <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
-                <div v-for="n in 4" :key="n" class="app-skeleton h-24 rounded-2xl" />
+                <div v-for="n in 4" :key="n" class="app-skeleton h-24 !rounded-2xl" />
             </div>
             <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <div v-for="n in 4" :key="n" class="app-skeleton h-14 rounded-xl" />
+                <div v-for="n in 4" :key="n" class="app-skeleton h-14 !rounded-xl" />
             </div>
         </div>
 
@@ -163,7 +163,7 @@ const assetCards = computed<StatCard[]>(() => {
                         <span>⚡</span>
                         <span>{{ t('admin.modelUsage') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/providers" class="app-link text-xs font-bold"> {{ t('nav.providers') }} › </NuxtLink>
+                    <NuxtLink to="/admin/providers" class="app-link text-xs"> {{ t('nav.providers') }} › </NuxtLink>
                 </div>
 
                 <div v-if="stats?.modelUsage?.length" class="space-y-3.5">
@@ -196,7 +196,7 @@ const assetCards = computed<StatCard[]>(() => {
                         <span>💬</span>
                         <span>{{ t('admin.recentConversations') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/conversations" class="app-link text-xs font-bold"> {{ t('common.all') }} › </NuxtLink>
+                    <NuxtLink to="/admin/conversations" class="app-link text-xs"> {{ t('common.all') }} › </NuxtLink>
                 </div>
 
                 <div v-if="stats?.recentConversations?.length" class="divide-line divide-y">
@@ -215,7 +215,7 @@ const assetCards = computed<StatCard[]>(() => {
                 </div>
                 <div v-else class="divide-line space-y-3 divide-y opacity-60">
                     <div v-for="n in 4" :key="n" class="flex items-center gap-2.5 pt-3">
-                        <div class="app-skeleton h-6 w-6 shrink-0 rounded-full" />
+                        <div class="app-skeleton h-6 w-6 shrink-0 !rounded-full" />
                         <div class="min-w-0 flex-1 space-y-1.5">
                             <div class="app-skeleton app-skeleton-text !w-2/3" />
                             <div class="app-skeleton app-skeleton-text !w-1/3" />
@@ -232,7 +232,7 @@ const assetCards = computed<StatCard[]>(() => {
                         <span>👥</span>
                         <span>{{ t('admin.recentUsers') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/users" class="app-link text-xs font-bold"> {{ t('nav.users') }} › </NuxtLink>
+                    <NuxtLink to="/admin/users" class="app-link text-xs"> {{ t('nav.users') }} › </NuxtLink>
                 </div>
 
                 <div v-if="stats?.recentUsers?.length" class="divide-line divide-y">
@@ -246,12 +246,12 @@ const assetCards = computed<StatCard[]>(() => {
                                 <p class="text-faint truncate text-[10px]">{{ u.email }}</p>
                             </div>
                         </div>
-                        <span class="app-chip shrink-0 text-[10px] font-bold">{{ u.role === 'admin' ? 'Admin' : 'User' }}</span>
+                        <span class="app-chip shrink-0">{{ u.role === 'admin' ? 'Admin' : 'User' }}</span>
                     </div>
                 </div>
                 <div v-else class="divide-line space-y-3 divide-y opacity-60">
                     <div v-for="n in 4" :key="n" class="flex items-center gap-2.5 pt-3">
-                        <div class="app-skeleton h-7 w-7 shrink-0 rounded-full" />
+                        <div class="app-skeleton h-7 w-7 shrink-0 !rounded-full" />
                         <div class="min-w-0 flex-1 space-y-1.5">
                             <div class="app-skeleton app-skeleton-text !w-1/2" />
                             <div class="app-skeleton app-skeleton-text !w-3/4" />

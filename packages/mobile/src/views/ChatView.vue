@@ -586,7 +586,7 @@ async function copyConversationMarkdown() {
                                 </button>
                                 <button
                                     type="button"
-                                    class="text-faint hover:text-brand ml-2 shrink-0 p-1 text-xs"
+                                    class="text-faint text-hover-brand ml-2 shrink-0 p-1 text-xs"
                                     :title="t('chat.usePrompt')"
                                     @click="fillPrompt(prompt)"
                                 >
@@ -619,7 +619,7 @@ async function copyConversationMarkdown() {
                             <button type="button" class="text-faint" @click="removePendingAttachment(a.id)">✕</button>
                         </span>
                     </div>
-                    <div v-if="attachError" class="app-alert app-alert-danger mb-2 text-[10px]">{{ attachError }}</div>
+                    <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[10px]">{{ attachError }}</div>
 
                     <div class="flex items-center gap-2">
                         <!-- 附件入口 -->
@@ -637,7 +637,7 @@ async function copyConversationMarkdown() {
                             <button
                                 v-if="input"
                                 type="button"
-                                class="text-faint hover:text-default absolute top-1/2 right-2 -translate-y-1/2 text-xs"
+                                class="text-faint text-hover-strong absolute top-1/2 right-2 -translate-y-1/2 text-xs"
                                 :title="t('chat.clearInput')"
                                 @click="input = ''"
                             >
@@ -677,13 +677,13 @@ async function copyConversationMarkdown() {
                     <button
                         v-if="nativeShell"
                         type="button"
-                        class="app-btn app-btn-outline flex-1 !py-2 text-xs"
+                        class="app-btn app-btn-outline flex-1 !py-2"
                         :disabled="attachUploading"
                         @click="attachFromDevice('photo')"
                     >
                         📷 {{ t('attachments.takePhoto') }}
                     </button>
-                    <button type="button" class="app-btn app-btn-outline flex-1 !py-2 text-xs" :disabled="attachUploading" @click="attachFromDevice('file')">
+                    <button type="button" class="app-btn app-btn-outline flex-1 !py-2" :disabled="attachUploading" @click="attachFromDevice('file')">
                         {{ attachUploading ? t('attachments.uploading') : t('chat.uploadAndAttach') }}
                     </button>
                 </div>
