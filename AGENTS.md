@@ -159,9 +159,9 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 四个模块的表都在 `server/db/schema.ts` 尾部；共享类型与格式化函数在 `packages/commons/src/contract/index.ts` 的对应小节。
 
-- **迁移现状**：`server/db/migrations/` 目前只有一个已压缩迁移 `0000_smiling_peter_quill.sql`（`_journal.json` 也只有一条 entry），全部 28 张表（含 content-ops/附件/订单/存储配置）都在其中。不要假设存在按模块拆分的 `0002_*` 迁移；核对目标库是否已迁移以 `drizzle.config.ts` 与该目录为准。
+- **迁移现状**：`server/db/migrations/` 有压缩后的 `0000_smiling_peter_quill.sql`（含 28 张表：content-ops/附件/订单/存储配置等）与其后的 `0001_same_marvel_zombies.sql`（新增 `system_settings` 单行表，供基础设置分区使用）。迁移文件已在仓库里，但是否已应用到目标库要自己核对（`drizzle.config.ts` + 该目录 + 库里 `__drizzle_migrations`）；`0001` 需要人工执行 `pnpm webapp:db:migrate` 才生效，代理不要代为应用。不要假设还有按模块拆分的其它迁移。
 
-- **链接/时间归一集中在 `server/utils/content-ops.ts`**：`normalizeLink()` 拒绝协议相对(`//`)、只放行 http/https 绝对地址或以 `/` 开头的站内路径（管理员通知 `linkUrl`、宣传栏链接都走它，避免存下 `javascript:`/协议相对 XSS）；`parseDateInput()` 统一解析活动/通知时间并抛 400。消费者是 `admin/bulletins*` 与 `admin/notifications`。`news`/`storage` 未用。改这类校验改这一处，不要在各 handler 里各写一份。
+- **链接/时间归一集中在 `server/utils/content-ops.ts`**：`normalizeLink()` 拒绝协议相对(`//`)、只放行 http/https 绝对地址或以 `/` 开头的站内路径（管理员通知 `linkUrl`、宣传栏链接都走它，避免存下 `javascript:`/协议相对 XSS）；`parseDateInput()` 统一解析活动/通知时间并抛 400；`normalizeSortOrder()` 把宣传栏的 `sortOrder` 取整并夹到 int4 安全区间（非法值回退 0），因此 `?sortOrder=1.5` / 天文数字不再变成 500。消费者是 `admin/bulletins*` 与 `admin/notifications`。`news`/`storage` 未用。改这类校验改这一处，不要在各 handler 里各写一份。
 
 - **附件是 S3 协议，不是本地磁盘**。`server/utils/storage.ts` 是唯一适配层，面向 RustFS / MinIO / AWS S3 等；自建存储默认 `forcePathStyle=true`。改存储行为时改这一处，不要在各 handler 里各写一套。
 - **两类上传通道都要保留**：服务端中转 `POST /api/attachments`（兼容未配 CORS 的桶）与前端直传 `POST /api/attachments/presign` + `/complete`。直传又分 PUT 预签名与 `mode=post` 预签名 POST policy 两种。直传的 `complete` 会校验 objectKey 必须落在当前配置 prefix 下且不含 `..`，否则用户可以"认领"任意已存在对象。
@@ -189,10 +189,10 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 ### 服务端健壮性约定
 
 - **无鉴权接口不得有副作用**：`/api/health` 是公开探针，模型检查必须走只读的 `peekModelAvailability()`，不要调 `resolveModel()`——后者会触发 `ensureDefaultProvider()` 写库。探针也不应回传供应商地址、数据库错误原文或运行环境信息。
-- **分页参数一律夹到合法区间**：`limit`/`offset` 的负数会被 PostgreSQL 拒绝（2201W/2201X）并把 SQL 细节透出到响应体，`page=Infinity` 会让 offset 溢出。统一用 `Math.min(Math.max(1, ...), 上限)` 与 `Math.max(0, ...)`。
+- **分页参数一律夹到合法区间并取整**：`limit`/`offset` 的负数会被 PostgreSQL 拒绝（2201W/2201X）并把 SQL 细节透出到响应体，`page=Infinity` 会让 offset 溢出。统一用 `Math.min(Math.max(1, Math.floor(Number(x)) || 缺省), 上限)` 与 `Math.max(0, Math.floor(Number(x)) || 0)`：`Math.floor` 不可省，小数的 `pageSize`/`limit` 会作为 int8/int4 参数被拒为 22P02（同样是 500 + SQL 细节外泄）。`page` 的上界用 `1e6` 夹逼。
 - **入参要防御 `undefined`**：`readBody` 对空请求体返回 undefined（解构即 500）；聊天请求的 `messages[].id` 缺失会让 drizzle 传 undefined 参数（同样 500，且额度已扣）。服务端应为缺失的主键补值，而不是依赖客户端。
 - **落库前校验 part 结构**：相对路径的 `file`/`image` part 会因 AI SDK 的 `new URL()` 抛错而让该会话**永久** 500（历史来自数据库，每轮都会重放）。`sanitizeUserParts()` 现在会校验 url 必须是绝对 http(s)/data 地址。
-- **多行写入要考虑事务**：文档行与分块行、默认存储切换的两条 update，失败时会留下不一致状态，需同事务执行。
+- **多行写入要考虑事务**：文档行与分块行、默认存储切换（`admin/storage.ts` 的 POST 新建并设为默认，同样是「清掉旧默认 + 插入新行」单事务，不再先 insert 后调独立事务）、默认供应商/能力绑定，失败时会留下不一致状态（如双默认），需同事务执行。
 - **统计避免全表拉取**：计数用 `count(*) GROUP BY`，不要在应用层把整表查进内存再 filter；列表里的关联数据用一次 IN 查询后分组，避免 N+1。
 
 ### 前端配套与代码风格

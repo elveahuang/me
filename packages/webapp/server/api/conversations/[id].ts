@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     // 只回最近 N 条（取最新再反转，保持时间正序）。
     // 超长会话一次性拉全量会让响应体与内存随历史线性增长；
     // 会话页只需要近期上下文，更早的内容不影响阅读与续聊。
-    const limit = Math.min(Math.max(1, Number(getQuery(event).limit) || 500), 1000);
+    const limit = Math.min(Math.max(1, Math.floor(Number(getQuery(event).limit)) || 500), 1000);
     const recent = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(desc(messages.seq)).limit(limit);
     const rows = recent.reverse();
     return { conversation, messages: rows.map((m) => ({ id: m.id, role: m.role, parts: m.parts })) };

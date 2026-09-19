@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
     const query = getQuery(event);
     const page = Math.min(Math.max(1, Math.floor(Number(query.page)) || 1), 1e6); // 上界夹逼并取整：?page=Infinity/小数/超大值会让 offset 溢出或非整数而被 PG 拒绝
-    const pageSize = Math.min(Math.max(1, Number(query.pageSize) || 20), 100);
+    const pageSize = Math.min(Math.max(1, Math.floor(Number(query.pageSize)) || 20), 100);
     const onlyUnread = query.unread === '1' || query.unread === 'true';
     const type = typeof query.type === 'string' && query.type && query.type !== 'all' ? query.type : undefined;
 

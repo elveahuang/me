@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { bulletins } from '../../../db/schema';
-import { normalizeLink, parseDateInput } from '../../../utils/content-ops';
+import { normalizeLink, normalizeSortOrder, parseDateInput } from '../../../utils/content-ops';
 import { db } from '../../../utils/db';
 import { requireAdmin } from '../../../utils/guard';
 
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     }
     if (body.linkUrl !== undefined) patch.linkUrl = normalizeLink(body.linkUrl);
     if (body.enabled !== undefined) patch.enabled = Boolean(body.enabled);
-    if (body.sortOrder !== undefined) patch.sortOrder = Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0;
+    if (body.sortOrder !== undefined) patch.sortOrder = normalizeSortOrder(body.sortOrder);
     if (body.startsAt !== undefined) patch.startsAt = parseDateInput(body.startsAt);
     if (body.endsAt !== undefined) patch.endsAt = parseDateInput(body.endsAt);
 

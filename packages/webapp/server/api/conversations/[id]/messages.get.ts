@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
     const session = await requireUser(event);
     const id = getRouterParam(event, 'id')!;
     // 负数 LIMIT 会被 PostgreSQL 拒绝（2201W）并透出 SQL 细节，这里夹到合法区间
-    const limit = Math.min(Math.max(1, Number(getQuery(event).limit) || 200), 500);
+    const limit = Math.min(Math.max(1, Math.floor(Number(getQuery(event).limit)) || 200), 500);
 
     const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
     if (!conversation || conversation.userId !== session.user.id) {

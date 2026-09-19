@@ -42,3 +42,13 @@ export function parseDateInput(raw: unknown): Date | null {
     }
     return date;
 }
+
+/**
+ * 排序值规范化：整数列收到小数会被 PostgreSQL 拒为 22P02、超界拒为 22003，
+ * 两者都会把 SQL 细节透出到响应体。缺省回退到 fallback，其余取整并夹到安全区间。
+ */
+export function normalizeSortOrder(raw: unknown, fallback = 0): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return Math.min(Math.max(Math.round(value), -1_000_000_000), 1_000_000_000);
+}

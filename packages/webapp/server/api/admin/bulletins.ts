@@ -1,6 +1,6 @@
 import { asc, desc, eq } from 'drizzle-orm';
 import { bulletins } from '../../db/schema';
-import { normalizeLink, parseDateInput } from '../../utils/content-ops';
+import { normalizeLink, normalizeSortOrder, parseDateInput } from '../../utils/content-ops';
 import { db } from '../../utils/db';
 import { requireAdmin } from '../../utils/guard';
 
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
             position: String(patch.position),
             level: String(patch.level),
             enabled: body.enabled === undefined ? true : Boolean(body.enabled),
-            sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
+            sortOrder: normalizeSortOrder(body.sortOrder),
             startsAt,
             endsAt,
         });

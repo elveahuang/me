@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     const query = getQuery(event);
     const keyword = typeof query.keyword === 'string' ? query.keyword.trim() : '';
-    const limit = Math.min(Math.max(1, Number(query.limit) || 30), 100);
+    const limit = Math.min(Math.max(1, Math.floor(Number(query.limit)) || 30), 100);
 
     const where = keyword ? sql`${user.name} ilike ${`%${keyword}%`} or ${user.email} ilike ${`%${keyword}%`}` : undefined;
 

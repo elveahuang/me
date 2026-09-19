@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
     // 保持返回数组（管理端直接把响应赋给列表），只做上限截断而不改响应结构。
     // 不选 content：正文可能有整篇文档大小，列表页只需标题/分块数/状态，避免一次拉回全部正文。
     const query = getQuery(event);
-    const limit = Math.min(Math.max(1, Number(query.limit) || 200), 500);
+    const limit = Math.min(Math.max(1, Math.floor(Number(query.limit)) || 200), 500);
     return db
         .select({
             id: kbDocuments.id,
