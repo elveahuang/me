@@ -80,12 +80,12 @@ onMounted(load);
             {{ loadError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div class="app-page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="app-page-header !mb-0">
             <div>
                 <h1 class="app-page-title text-strong">{{ t('nav.orders') }}</h1>
                 <p class="app-page-subtitle">全站充值与订阅订单流水，支持快捷多维检索、状态筛选与实时对账</p>
             </div>
-            <div class="app-page-actions !mb-0">
+            <div class="app-page-actions">
                 <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="load">🔄 {{ t('common.refresh') }}</button>
             </div>
         </div>

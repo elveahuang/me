@@ -91,12 +91,12 @@ async function removeUser(userId: string) {
             {{ loadError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div class="app-page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="app-page-header !mb-0">
             <div>
                 <h1 class="app-page-title text-strong">{{ t('nav.users') }}</h1>
                 <p class="app-page-subtitle">管理用户凭据、身份角色授权与账号安全治理</p>
             </div>
-            <div class="app-page-actions !mb-0">
+            <div class="app-page-actions">
                 <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="load">🔄 {{ t('common.refresh') }}</button>
             </div>
         </div>
