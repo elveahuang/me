@@ -13,9 +13,21 @@ import {
     type Plan,
     type PlansResponse,
 } from '@commons/contract';
-import { IonBackButton, IonButtons, IonContent, IonHeader, IonModal, IonPage, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
+import {
+    IonBackButton,
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonModal,
+    IonPage,
+    IonRefresher,
+    IonRefresherContent,
+    IonTitle,
+    IonToolbar,
+    onIonViewWillEnter,
+} from '@ionic/vue';
 import QRCode from 'qrcode';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError as extractError } from '../api/auth';
 
@@ -64,7 +76,9 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(loadData);
+// 标签页组件会随切换保活，onMounted 只在首次触发；每次进入本页时刷新会员状态与订单，
+// 否则在支付页外部完成支付后切回标签仍显示旧状态。
+onIonViewWillEnter(loadData);
 onUnmounted(() => {
     stopPolling();
     clearCloseTimer();

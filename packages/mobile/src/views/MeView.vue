@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { extractApiError, formatDate, formatYuan, orderStatusLabelKey, orderStatusTone, type MeResponse, type OrdersResponse } from '@commons/contract';
-import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, ref } from 'vue';
+import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, fetchSession, signOut, type SessionPayload } from '../api/auth';
@@ -56,7 +56,9 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(loadData);
+// 标签页组件会随切换保活，onMounted 只在首次触发；每次进入本页时刷新资料、订单与未读角标，
+// 避免在会员页购买后切回「我的」仍显示旧套餐。
+onIonViewWillEnter(loadData);
 
 async function logout() {
     if (!(await confirmDialog(t('profile.logoutConfirm')))) return;
