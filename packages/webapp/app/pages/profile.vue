@@ -26,12 +26,15 @@ async function retryProfile() {
 
 const membership = computed(() => meData.value?.membership ?? null);
 
+// 与外壳头部铃铛共享的未读数：菜单徽标与标记已读实时同步
+const unreadCount = useState('shell-unread', () => 0);
+
 // 左侧功能菜单：每个分区是独立子路由，URL 可深链、刷新保持当前分区
 const menuItems = computed(() => [
-    { to: '/profile', label: t('profile.tabOverview'), icon: 'view-dashboard-outline', exact: true },
-    { to: '/profile/preferences', label: t('profile.tabPreferences'), icon: 'cog-outline', exact: false },
-    { to: '/profile/orders', label: t('profile.tabOrders'), icon: 'receipt-text-outline', exact: false },
-    { to: '/profile/notifications', label: t('notifications.title'), icon: 'bell-outline', exact: false },
+    { to: '/profile', label: t('profile.tabOverview'), icon: 'view-dashboard-outline', exact: true, showUnread: false },
+    { to: '/profile/preferences', label: t('profile.tabPreferences'), icon: 'cog-outline', exact: false, showUnread: false },
+    { to: '/profile/orders', label: t('profile.tabOrders'), icon: 'receipt-text-outline', exact: false, showUnread: false },
+    { to: '/profile/notifications', label: t('notifications.title'), icon: 'bell-outline', exact: false, showUnread: true },
 ]);
 
 function isActive(item: { to: string; exact: boolean }) {
@@ -98,6 +101,9 @@ async function logout() {
                         >
                             <AppIcon :name="item.icon" :size="17" />
                             <span>{{ item.label }}</span>
+                            <span v-if="item.showUnread && unreadCount > 0" class="app-badge app-badge-danger ml-auto !px-1.5 !text-[10px] max-md:ml-1">
+                                {{ unreadCount > 99 ? '99+' : unreadCount }}
+                            </span>
                         </NuxtLink>
                     </div>
                 </nav>
