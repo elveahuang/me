@@ -91,6 +91,9 @@ async function removeConversation(id: string) {
                 </h2>
 
                 <ul class="border-line max-h-[22rem] space-y-1.5 overflow-y-auto border-t px-2 pb-2 lg:max-h-none">
+                    <li v-if="loading" class="space-y-1.5 py-1.5">
+                        <div v-for="n in 4" :key="n" class="app-skeleton h-11 rounded-xl" />
+                    </li>
                     <li v-for="c in conversations" :key="c.id" class="group relative rounded-xl transition-colors hover:bg-[color:var(--surface-2)]">
                         <NuxtLink :to="`/chat/${c.agentId}?c=${c.id}`" class="block min-w-0 py-2.5 pr-8 pl-2.5 text-xs">
                             <p class="group-hover:text-brand truncate font-semibold transition-colors">{{ c.title }}</p>
@@ -109,8 +112,12 @@ async function removeConversation(id: string) {
                             ✕
                         </button>
                     </li>
-                    <li v-if="!conversations.length && !loading" class="text-faint px-3 py-10 text-center text-xs">
-                        {{ t('chat.noMessages') }}
+                    <li v-if="!conversations.length && !loading">
+                        <div class="app-empty !px-2 !py-9">
+                            <div class="app-empty-icon !h-11 !w-11 !text-lg">💬</div>
+                            <p class="app-empty-title !text-xs">{{ t('chat.sidebarEmptyTitle') }}</p>
+                            <p class="app-empty-desc">{{ t('chat.sidebarEmptyDesc') }}</p>
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -150,54 +157,68 @@ async function removeConversation(id: string) {
                 <button type="button" class="app-btn app-btn-outline shrink-0 !py-1.5" @click="load">{{ t('common.retry') }}</button>
             </div>
 
+            <!-- 首屏骨架：避免加载期间只剩一片空白 -->
+            <div v-else-if="loading && !filteredAgents.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div v-for="n in 6" :key="n" class="app-skeleton app-skeleton-card" />
+            </div>
+
             <!-- 智能体网格卡片：主体宽度足够，三列铺开 -->
             <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <NuxtLink
                     v-for="agent in filteredAgents"
                     :key="agent.id"
                     :to="`/chat/${agent.id}`"
-                    class="app-card app-card-hover group relative flex flex-col justify-between p-5"
+                    class="app-card app-card-hover group relative flex flex-col p-5"
                 >
-                    <!-- 收藏置顶按钮 -->
+                    <!-- 收藏：整块热区，已收藏时常亮高亮（不再另加文字标签） -->
                     <button
                         type="button"
-                        class="absolute top-4 right-4 rounded-full p-1 text-base transition-transform active:scale-90"
-                        :class="favorites.includes(agent.id) ? 'text-[color:var(--warning)]' : 'text-faint hover:text-muted-2'"
+                        class="absolute top-3.5 right-3.5 flex h-8 w-8 items-center justify-center rounded-full text-base transition-all active:scale-90"
+                        :class="
+                            favorites.includes(agent.id)
+                                ? 'bg-[color:var(--surface-3)] text-[color:var(--warning)]'
+                                : 'text-faint hover:text-muted-2 hover:bg-[color:var(--surface-3)]'
+                        "
+                        :aria-pressed="favorites.includes(agent.id)"
                         :title="favorites.includes(agent.id) ? t('common.cancel') : t('agents.topPin')"
                         @click="(e) => toggleFavorite(agent.id, e)"
                     >
                         ★
                     </button>
 
-                    <div>
-                        <div class="flex items-center gap-3 pr-8">
-                            <div class="app-avatar-icon h-11 w-11 shrink-0 text-2xl transition-transform group-hover:scale-105">
-                                {{ agent.emoji || agent.avatar || '🤖' }}
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="group-hover:text-brand truncate text-sm font-bold transition-colors">
-                                    {{ agent.name }}
-                                </p>
-                                <span v-if="favorites.includes(agent.id)" class="inline-block text-[10px] font-semibold text-[color:var(--warning)]">
-                                    ⭐ {{ t('agents.topPin') }}
-                                </span>
-                            </div>
+                    <div class="flex items-center gap-3 pr-8">
+                        <div class="app-avatar-icon h-11 w-11 shrink-0 text-2xl transition-transform group-hover:scale-105">
+                            {{ agent.emoji || agent.avatar || '🤖' }}
                         </div>
-
-                        <p class="text-muted-2 mt-3 line-clamp-2 text-xs leading-relaxed">{{ agent.description || t('common.none') }}</p>
+                        <p class="group-hover:text-brand min-w-0 truncate text-sm font-bold transition-colors">{{ agent.name }}</p>
                     </div>
 
-                    <div v-if="agent.skills?.length" class="app-divider mt-4 flex flex-wrap gap-1.5 pt-2">
-                        <span v-for="s in agent.skills" :key="s.id" class="app-chip text-[10px]">
+                    <p class="text-muted-2 mt-3 line-clamp-2 min-h-10 flex-1 text-xs leading-relaxed">{{ agent.description || t('common.none') }}</p>
+
+                    <!-- 技能标签收敛成一行并弱化，主行动点交给下方按钮 -->
+                    <div v-if="agent.skills?.length" class="mt-3 flex gap-1.5 overflow-hidden">
+                        <span v-for="s in agent.skills.slice(0, 2)" :key="s.id" class="app-chip shrink-0 !px-2 !text-[9px]">
                             {{ s.name }}
                         </span>
+                        <span v-if="agent.skills.length > 2" class="app-chip shrink-0 !px-2 !text-[9px]">+{{ agent.skills.length - 2 }}</span>
                     </div>
+
+                    <span class="app-btn app-btn-sm app-btn-block app-card-cta mt-4">
+                        {{ t('agents.startChat') }}
+                        <span aria-hidden="true">→</span>
+                    </span>
                 </NuxtLink>
 
-                <!-- 空状态 -->
-                <div v-if="!filteredAgents.length && !loading" class="app-card text-faint col-span-full p-12 text-center text-xs">
-                    <p class="mb-2 text-3xl">🔍</p>
-                    <p>{{ t('agents.noAgents') }}</p>
+                <!-- 空态：区分「搜索无结果」与「平台暂无智能体」，各自给出下一步 -->
+                <div v-if="!filteredAgents.length && !loading" class="app-card col-span-full">
+                    <div class="app-empty">
+                        <div class="app-empty-icon">{{ searchKeyword ? '🔍' : '🤖' }}</div>
+                        <p class="app-empty-title">{{ searchKeyword ? t('agents.noAgents') : t('agents.emptyPlaza') }}</p>
+                        <p class="app-empty-desc">{{ searchKeyword ? t('agents.tryOtherKeyword') : t('agents.emptyPlazaDesc') }}</p>
+                        <button v-if="searchKeyword" type="button" class="app-btn app-btn-outline app-btn-sm mt-2" @click="searchKeyword = ''">
+                            {{ t('agents.clearSearch') }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </section>

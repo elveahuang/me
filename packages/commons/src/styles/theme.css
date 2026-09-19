@@ -338,6 +338,21 @@ html {
     transform: translateY(-2px);
 }
 
+/* 卡片内的主操作：默认品牌浅底，卡片悬停/键盘聚焦时提升为实色。
+   写成主题类而不是 group-hover: 工具类，是因为本文件的规则不在 @layer 内，Tailwind 工具类覆盖不了它。 */
+.app-card-cta {
+    color: var(--brand-soft-text);
+    background-color: var(--brand-soft);
+    border-color: var(--brand-soft-border);
+}
+
+.app-card-hover:hover .app-card-cta,
+.app-card-hover:focus-within .app-card-cta {
+    color: var(--on-brand);
+    background-color: var(--brand);
+    border-color: transparent;
+}
+
 .app-panel {
     background-color: var(--surface-2);
     border: 1px solid var(--line);

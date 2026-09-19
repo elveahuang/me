@@ -378,7 +378,7 @@ const starterPrompts = computed(() => [
                         <button
                             :class="[
                                 'w-full truncate rounded-xl px-3 py-2 pr-14 text-left text-xs transition-colors',
-                                c.id === currentConversationId ? 'bg-brand-soft font-semibold' : 'text-soft hover:bg-surface-3',
+                                c.id === currentConversationId ? 'bg-brand-soft font-semibold' : 'text-soft hover:bg-[color:var(--surface-3)]',
                             ]"
                             @click="selectConversation(c.id)"
                         >
