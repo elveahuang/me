@@ -26,6 +26,8 @@ async function loadAgents() {
     try {
         agents.value = await api<AgentSummary[]>('/api/agents');
     } catch (e) {
+        // 失败时清空列表：否则只剩空态文案，"接口挂了"会被读成"还没有智能体"
+        agents.value = [];
         error.value = extractApiError(e, t('common.error'));
     } finally {
         loading.value = false;
@@ -160,7 +162,12 @@ const filteredAgents = computed(() => {
                 <BulletinBanner position="home" />
                 <p class="text-faint mb-3 text-[11px]">{{ t('agents.subtitle') }}</p>
 
-                <div v-if="error" class="app-alert app-alert-danger mb-3">{{ error }}</div>
+                <div v-if="error" class="app-alert app-alert-danger mb-3 flex items-center justify-between gap-2 text-[11px]">
+                    <span>{{ error }}</span>
+                    <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="loadAgents()">
+                        {{ t('common.retry') }}
+                    </button>
+                </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <router-link
@@ -203,7 +210,8 @@ const filteredAgents = computed(() => {
                     <div v-for="i in 4" :key="i" class="app-skeleton h-32" />
                 </div>
 
-                <div v-if="!filteredAgents.length && !loading" class="text-faint py-16 text-center text-xs">
+                <!-- 失败时不渲染空态：否则「还没有智能体」会把「接口挂了」读成「真的没有数据」 -->
+                <div v-if="!filteredAgents.length && !loading && !error" class="text-faint py-16 text-center text-xs">
                     <p class="mb-2 text-3xl">🔍</p>
                     <p class="font-bold text-slate-700 dark:text-slate-300">{{ t('agents.noAgents') }}</p>
                     <button

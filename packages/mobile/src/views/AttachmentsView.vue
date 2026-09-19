@@ -48,6 +48,8 @@ async function load(reset = false) {
         items.value = data.attachments;
         total.value = data.total;
     } catch (e) {
+        // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"还没有附件"
+        items.value = [];
         error.value = extractApiError(e, t('common.error'));
     } finally {
         loading.value = false;
@@ -198,7 +200,12 @@ function preview(item: AttachmentRecord) {
             </template>
 
             <div class="space-y-3 p-4">
-                <div v-if="error" class="app-alert app-alert-danger text-[11px]">{{ error }}</div>
+                <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                    <span>{{ error }}</span>
+                    <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load(true)">
+                        {{ t('common.retry') }}
+                    </button>
+                </div>
                 <div v-if="success" class="app-alert app-alert-success text-[11px]">{{ success }}</div>
 
                 <!-- 上传进度 -->
@@ -241,7 +248,7 @@ function preview(item: AttachmentRecord) {
                     </div>
                 </div>
 
-                <div v-else class="text-faint py-16 text-center text-xs">
+                <div v-else-if="!error" class="text-faint py-16 text-center text-xs">
                     <p class="mb-2 text-3xl">📎</p>
                     <p class="font-bold">{{ t('attachments.empty') }}</p>
                     <p class="mt-1">{{ t('attachments.emptyHint') }}</p>
