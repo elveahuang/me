@@ -118,81 +118,82 @@ async function remove(id: string) {
 </script>
 
 <template>
-    <div>
-        <div v-if="error" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+    <div class="space-y-6">
+        <div v-if="error" class="app-alert app-alert-danger">
             {{ error }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div v-if="success" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
-        <div class="mb-6 flex items-center justify-between">
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.skillTitle') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.skillSubtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('adminForm.skillTitle') }}</h1>
+                <p class="app-page-subtitle">{{ t('adminForm.skillSubtitle') }}</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">{{ t('adminForm.skillNew') }}</button>
+            <div class="app-page-actions">
+                <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">{{ t('adminForm.skillNew') }}</button>
+            </div>
         </div>
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.skillNew')" @close="editing = null">
             <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <input v-model="form.name" :placeholder="t('adminForm.skillNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input
-                        v-model="form.description"
-                        :placeholder="t('adminForm.skillDescriptionPlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
+                    <input v-model="form.name" :placeholder="t('adminForm.skillNamePlaceholder')" class="app-input" />
+                    <input v-model="form.description" :placeholder="t('adminForm.skillDescriptionPlaceholder')" class="app-input" />
                 </div>
-                <textarea
-                    v-model="form.instructions"
-                    rows="8"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    :placeholder="t('adminForm.skillInstructionsPlaceholder')"
-                />
-                <label class="flex items-center gap-1 text-sm text-gray-600">
-                    <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}
+                <textarea v-model="form.instructions" rows="8" class="app-input" :placeholder="t('adminForm.skillInstructionsPlaceholder')" />
+                <label class="text-soft flex items-center gap-1.5 text-sm">
+                    <input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}
                 </label>
-                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
+                <p v-if="formError" class="app-help-error">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
-                    {{ t('adminForm.save') }}
-                </button>
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="saving" @click="save">{{ t('adminForm.save') }}</button>
             </template>
         </AdminDrawer>
 
-        <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
-            <thead class="text-left text-gray-400">
-                <tr>
-                    <th class="p-4">Skill</th>
-                    <th class="p-4">{{ t('adminForm.skillColInstructions') }}</th>
-                    <th class="p-4">{{ t('adminForm.status') }}</th>
-                    <th class="p-4">{{ t('adminForm.actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="s in skills" :key="s.id" class="border-t border-gray-100">
-                    <td class="p-4">
-                        <p class="font-medium text-gray-800">{{ s.name }}</p>
-                        <p class="text-xs text-gray-400">{{ s.description }}</p>
-                    </td>
-                    <td class="max-w-md p-4">
-                        <p class="truncate text-xs text-gray-500">{{ s.instructions || t('adminForm.skillInstructionsEmpty') }}</p>
-                    </td>
-                    <td class="p-4">
-                        <button :class="s.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(s)">
-                            {{ s.enabled ? t('common.enabled') : t('common.disabled') }}
-                        </button>
-                    </td>
-                    <td class="space-x-2 p-4">
-                        <button class="text-green-600 hover:underline" @click="openEdit(s)">{{ t('adminForm.edit') }}</button>
-                        <button class="text-red-500 hover:underline" @click="remove(s.id)">{{ t('adminForm.delete') }}</button>
-                    </td>
-                </tr>
-                <tr v-if="!skills.length">
-                    <td colspan="4" class="p-8 text-center text-gray-400">{{ t('adminForm.skillEmpty') }}</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Skill</th>
+                        <th>{{ t('adminForm.skillColInstructions') }}</th>
+                        <th>{{ t('adminForm.status') }}</th>
+                        <th class="text-right">{{ t('adminForm.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="s in skills" :key="s.id">
+                        <td>
+                            <p class="text-strong font-medium">{{ s.name }}</p>
+                            <p class="text-faint text-xs">{{ s.description }}</p>
+                        </td>
+                        <td class="app-table-cell-wrap">
+                            <p class="text-muted-2 text-xs">{{ s.instructions || t('adminForm.skillInstructionsEmpty') }}</p>
+                        </td>
+                        <td>
+                            <button :class="s.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(s)">
+                                {{ s.enabled ? t('common.enabled') : t('common.disabled') }}
+                            </button>
+                        </td>
+                        <td>
+                            <div class="app-table-actions">
+                                <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(s)">{{ t('adminForm.edit') }}</button>
+                                <button class="app-btn app-btn-danger app-btn-sm" @click="remove(s.id)">{{ t('adminForm.delete') }}</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!skills.length">
+                        <td colspan="4" class="!whitespace-normal">
+                            <div class="app-empty">
+                                <span class="app-empty-icon">🧩</span>
+                                <p class="app-empty-title">{{ t('adminForm.skillEmpty') }}</p>
+                                <p class="app-empty-desc">{{ t('adminForm.skillSubtitle') }}</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </template>

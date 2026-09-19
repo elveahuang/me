@@ -166,18 +166,18 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="listError" class="app-alert app-alert-danger">
             {{ listError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div class="mb-6 flex items-center justify-between">
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.toolTitle') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">
+                <h1 class="app-page-title text-strong">{{ t('adminForm.toolTitle') }}</h1>
+                <p class="app-page-subtitle">
                     {{ t('adminForm.toolSubtitle') }}
                 </p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
+            <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">
                 {{ t('adminForm.toolNew') }}
             </button>
         </div>
@@ -190,101 +190,103 @@ async function remove(id: string) {
         >
             <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <input v-model="form.name" :placeholder="t('adminForm.toolNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <input v-model="form.name" :placeholder="t('adminForm.toolNamePlaceholder')" class="app-input" />
+                    <select v-model="form.type" class="app-input">
                         <option value="builtin_time">{{ t('adminForm.toolTypeBuiltin') }}</option>
                         <option value="http">{{ t('adminForm.toolTypeHttp') }}</option>
                     </select>
                 </div>
-                <input
-                    v-model="form.description"
-                    :placeholder="t('adminForm.toolDescPlaceholder')"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
+                <input v-model="form.description" :placeholder="t('adminForm.toolDescPlaceholder')" class="app-input" />
 
                 <template v-if="form.type === 'http'">
                     <div class="grid grid-cols-[6rem_1fr] gap-3">
-                        <select v-model="form.method" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        <select v-model="form.method" class="app-input">
                             <option>GET</option>
                             <option>POST</option>
                             <option>PUT</option>
                             <option>DELETE</option>
                         </select>
-                        <input
-                            v-model="form.url"
-                            :placeholder="t('adminForm.toolUrlPlaceholder')"
-                            class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                        />
+                        <input v-model="form.url" :placeholder="t('adminForm.toolUrlPlaceholder')" class="app-input font-mono text-xs" />
                     </div>
                     <textarea
                         v-model="form.parametersText"
                         rows="4"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        class="app-input font-mono text-xs"
                         :placeholder="`${t('adminForm.toolParamsLabel')}${PARAMS_SAMPLE}`"
                     />
                     <textarea
                         v-model="form.headersText"
                         rows="2"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        class="app-input font-mono text-xs"
                         :placeholder="`${t('adminForm.toolHeadersLabel')}${HEADERS_SAMPLE}`"
                     />
                     <textarea
                         v-if="form.method !== 'GET'"
                         v-model="form.bodyTemplate"
                         rows="2"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        class="app-input font-mono text-xs"
                         :placeholder="t('adminForm.toolBodyPlaceholder')"
                     />
                 </template>
 
-                <label class="flex items-center gap-1 text-sm text-gray-600">
-                    <input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}
+                <label class="text-soft flex items-center gap-1.5 text-sm">
+                    <input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}
                 </label>
-                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
+                <p v-if="formError" class="app-help-error">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary app-btn-sm" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
             </template>
         </AdminDrawer>
 
-        <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
-            <thead class="text-left text-gray-400">
-                <tr>
-                    <th class="p-4">Tool</th>
-                    <th class="p-4">{{ t('adminForm.colType') }}</th>
-                    <th class="p-4">{{ t('adminForm.status') }}</th>
-                    <th class="p-4">{{ t('adminForm.actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
-                <tr v-for="tool in tools" :key="tool.id" class="border-t border-gray-100">
-                    <td class="p-4">
-                        <p class="font-medium text-gray-800">{{ tool.name }}</p>
-                        <p class="text-xs text-gray-400">{{ tool.description }}</p>
-                    </td>
-                    <td class="p-4">
-                        <span :class="tool.type === 'http' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'" class="rounded-full px-2 py-0.5 text-xs">
-                            {{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}
-                        </span>
-                    </td>
-                    <td class="p-4">
-                        <button :class="tool.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(tool)">
-                            {{ tool.enabled ? t('common.enabled') : t('common.disabled') }}
-                        </button>
-                    </td>
-                    <td class="space-x-2 p-4">
-                        <button class="text-green-600 hover:underline" @click="openEdit(tool)">{{ t('adminForm.edit') }}</button>
-                        <button class="text-red-500 hover:underline" @click="remove(tool.id)">{{ t('adminForm.delete') }}</button>
-                    </td>
-                </tr>
-                <tr v-if="!tools.length">
-                    <td colspan="4" class="p-8 text-center text-gray-400">{{ t('adminForm.toolEmpty') }}</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Tool</th>
+                        <th>{{ t('adminForm.colType') }}</th>
+                        <th>{{ t('adminForm.status') }}</th>
+                        <th class="text-right">{{ t('adminForm.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 循环变量命名为 tool 而非 t：避免遮蔽 i18n 的 t() 函数 -->
+                    <tr v-for="tool in tools" :key="tool.id">
+                        <td class="app-table-cell-wrap">
+                            <p class="text-strong font-medium">{{ tool.name }}</p>
+                            <p class="text-faint text-xs">{{ tool.description }}</p>
+                        </td>
+                        <td>
+                            <span :class="tool.type === 'http' ? 'app-badge-info' : 'app-badge-neutral'" class="app-badge">
+                                {{ tool.type === 'http' ? 'HTTP' : t('adminForm.builtinTag') }}
+                            </span>
+                        </td>
+                        <td>
+                            <button :class="tool.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(tool)">
+                                {{ tool.enabled ? t('common.enabled') : t('common.disabled') }}
+                            </button>
+                        </td>
+                        <td>
+                            <div class="app-table-actions">
+                                <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(tool)">{{ t('adminForm.edit') }}</button>
+                                <button class="app-btn app-btn-danger app-btn-sm" @click="remove(tool.id)">{{ t('adminForm.delete') }}</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!tools.length">
+                        <td colspan="4" class="!whitespace-normal">
+                            <div class="app-empty">
+                                <span class="app-empty-icon">🛠️</span>
+                                <p class="app-empty-title">{{ t('adminForm.toolEmpty') }}</p>
+                                <p class="app-empty-desc">{{ t('adminForm.toolSubtitle') }}</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </template>

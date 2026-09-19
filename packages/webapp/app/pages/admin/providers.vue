@@ -143,17 +143,17 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="error" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="error" class="app-alert app-alert-danger">
             {{ error }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div v-if="success" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
-        <div class="mb-6 flex items-center justify-between">
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.providerTitle') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.providerSubtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('adminForm.providerTitle') }}</h1>
+                <p class="app-page-subtitle">{{ t('adminForm.providerSubtitle') }}</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
+            <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">
                 {{ t('adminForm.providerNew') }}
             </button>
         </div>
@@ -161,16 +161,8 @@ async function remove(id: string) {
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.providerNew')" @close="editing = null">
             <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <input
-                        v-model="form.name"
-                        :placeholder="t('adminForm.providerNamePlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <input
-                        v-model="form.baseUrl"
-                        :placeholder="t('adminForm.providerBaseUrlPlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
+                    <input v-model="form.name" :placeholder="t('adminForm.providerNamePlaceholder')" class="app-input" />
+                    <input v-model="form.baseUrl" :placeholder="t('adminForm.providerBaseUrlPlaceholder')" class="app-input" />
                 </div>
                 <input
                     v-model="form.apiKey"
@@ -179,67 +171,74 @@ async function remove(id: string) {
                             ? t('adminForm.providerApiKeyKeep', { mask: form.apiKey || t('adminForm.providerApiKeyUnset') })
                             : t('adminForm.providerApiKey')
                     "
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    class="app-input w-full"
                 />
-                <textarea
-                    v-model="modelsText"
-                    rows="3"
-                    :placeholder="t('adminForm.providerModelsPlaceholder')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                />
-                <div class="flex items-center gap-4 text-sm text-gray-600">
-                    <label class="flex items-center gap-1"><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label>
-                    <label class="flex items-center gap-1"><input v-model="form.isDefault" type="checkbox" /> {{ t('adminForm.providerIsDefault') }}</label>
+                <textarea v-model="modelsText" rows="3" :placeholder="t('adminForm.providerModelsPlaceholder')" class="app-input font-mono text-xs" />
+                <div class="text-soft flex items-center gap-4 text-sm">
+                    <label class="flex items-center gap-1"
+                        ><input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}</label
+                    >
+                    <label class="flex items-center gap-1"
+                        ><input v-model="form.isDefault" type="checkbox" class="app-checkbox" /> {{ t('adminForm.providerIsDefault') }}</label
+                    >
                 </div>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary app-btn-sm" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
             </template>
         </AdminDrawer>
 
-        <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
-            <thead class="text-left text-gray-400">
-                <tr>
-                    <th class="p-4">{{ t('adminForm.provider') }}</th>
-                    <th class="p-4">Base URL</th>
-                    <th class="p-4">API Key</th>
-                    <th class="p-4">{{ t('adminForm.providerModelCount') }}</th>
-                    <th class="p-4">{{ t('adminForm.status') }}</th>
-                    <th class="p-4">{{ t('adminForm.actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="p in providers" :key="p.id" class="border-t border-gray-100">
-                    <td class="p-4">
-                        <p class="font-medium text-gray-800">
-                            {{ p.name }}
-                            <span v-if="p.isDefault" class="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-600">
-                                {{ t('adminForm.providerDefaultBadge') }}
-                            </span>
-                        </p>
-                        <p class="mt-1 text-xs text-gray-400">{{ testResult[p.id] }}</p>
-                    </td>
-                    <td class="p-4 font-mono text-xs text-gray-500">{{ p.baseUrl }}</td>
-                    <td class="p-4 font-mono text-xs text-gray-500">{{ p.apiKey || t('adminForm.providerApiKeyUnset') }}</td>
-                    <td class="p-4 text-gray-500">{{ p.models?.length ?? 0 }}</td>
-                    <td class="p-4">
-                        <button :class="p.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(p)">
-                            {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
-                        </button>
-                    </td>
-                    <td class="space-x-2 p-4">
-                        <button class="text-blue-500 hover:underline" @click="test(p)">{{ t('adminForm.providerTest') }}</button>
-                        <button class="text-green-600 hover:underline" @click="openEdit(p)">{{ t('adminForm.edit') }}</button>
-                        <button class="text-red-500 hover:underline" @click="remove(p.id)">{{ t('adminForm.delete') }}</button>
-                    </td>
-                </tr>
-                <tr v-if="!providers.length">
-                    <td colspan="6" class="p-8 text-center text-gray-400">{{ t('adminForm.providerEmpty') }}</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>{{ t('adminForm.provider') }}</th>
+                        <th>Base URL</th>
+                        <th>API Key</th>
+                        <th>{{ t('adminForm.providerModelCount') }}</th>
+                        <th>{{ t('adminForm.status') }}</th>
+                        <th class="text-right">{{ t('adminForm.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="p in providers" :key="p.id">
+                        <td>
+                            <p class="text-strong font-medium">
+                                {{ p.name }}
+                                <span v-if="p.isDefault" class="app-badge app-badge-success ml-1">{{ t('adminForm.providerDefaultBadge') }}</span>
+                            </p>
+                            <p v-if="testResult[p.id]" class="text-faint mt-0.5 text-xs">{{ testResult[p.id] }}</p>
+                        </td>
+                        <td class="app-table-cell-wrap text-muted-2 font-mono text-xs">{{ p.baseUrl }}</td>
+                        <td class="app-table-cell-wrap text-muted-2 font-mono text-xs">{{ p.apiKey || t('adminForm.providerApiKeyUnset') }}</td>
+                        <td class="text-muted-2 tabular-nums">{{ p.models?.length ?? 0 }}</td>
+                        <td>
+                            <button :class="p.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(p)">
+                                {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
+                            </button>
+                        </td>
+                        <td>
+                            <div class="app-table-actions">
+                                <button class="app-btn app-btn-ghost app-btn-sm" @click="test(p)">{{ t('adminForm.providerTest') }}</button>
+                                <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(p)">{{ t('adminForm.edit') }}</button>
+                                <button class="app-btn app-btn-danger app-btn-sm" @click="remove(p.id)">{{ t('adminForm.delete') }}</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!providers.length">
+                        <td colspan="6" class="!whitespace-normal">
+                            <div class="app-empty">
+                                <span class="app-empty-icon">🛰️</span>
+                                <p class="app-empty-title">{{ t('adminForm.providerEmpty') }}</p>
+                                <p class="app-empty-desc">{{ t('adminForm.providerSubtitle') }}</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </template>

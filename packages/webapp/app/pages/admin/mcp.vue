@@ -144,103 +144,101 @@ async function remove(id: string) {
 
 <template>
     <div>
-        <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="listError" class="app-alert app-alert-danger">
             {{ listError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div class="mb-6 flex items-center justify-between">
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.mcpTitle') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.mcpSubtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('adminForm.mcpTitle') }}</h1>
+                <p class="app-page-subtitle">{{ t('adminForm.mcpSubtitle') }}</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">{{ t('adminForm.mcpNew') }}</button>
+            <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">{{ t('adminForm.mcpNew') }}</button>
         </div>
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.mcpNew')" @close="editing = null">
             <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <input v-model="form.name" :placeholder="t('adminForm.mcpNamePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <select v-model="form.transport" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <input v-model="form.name" :placeholder="t('adminForm.mcpNamePlaceholder')" class="app-input" />
+                    <select v-model="form.transport" class="app-input">
                         <option value="http">Streamable HTTP</option>
                         <option value="sse">SSE</option>
                     </select>
                 </div>
-                <input
-                    v-model="form.url"
-                    :placeholder="t('adminForm.mcpUrlPlaceholder')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                />
-                <textarea
-                    v-model="form.headersText"
-                    rows="2"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    :placeholder="t('adminForm.mcpHeadersPlaceholder')"
-                />
-                <label class="flex items-center gap-1 text-sm text-gray-600"
-                    ><input v-model="form.enabled" type="checkbox" /> {{ t('adminForm.enable') }}</label
+                <input v-model="form.url" :placeholder="t('adminForm.mcpUrlPlaceholder')" class="app-input font-mono text-xs" />
+                <textarea v-model="form.headersText" rows="2" class="app-input font-mono text-xs" :placeholder="t('adminForm.mcpHeadersPlaceholder')" />
+                <label class="text-soft flex items-center gap-1.5 text-sm"
+                    ><input v-model="form.enabled" type="checkbox" class="app-checkbox" /> {{ t('adminForm.enable') }}</label
                 >
-                <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
+                <p v-if="formError" class="app-help-error">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary app-btn-sm" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
             </template>
         </AdminDrawer>
 
-        <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
-            <thead class="text-left text-gray-400">
-                <tr>
-                    <th class="p-4">MCP Server</th>
-                    <th class="p-4">{{ t('adminForm.mcpTransport') }}</th>
-                    <th class="p-4">{{ t('adminForm.status') }}</th>
-                    <th class="p-4">{{ t('adminForm.actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <template v-for="s in servers" :key="s.id">
-                    <tr class="border-t border-gray-100">
-                        <td class="p-4">
-                            <p class="font-medium text-gray-800">{{ s.name }}</p>
-                            <p class="font-mono text-xs text-gray-400">{{ s.url }}</p>
-                            <p v-if="toolInfo(s).message" class="mt-1 text-xs" :class="toolInfo(s).ok ? 'text-green-600' : 'text-red-500'">
-                                {{ toolInfo(s).message }}
-                            </p>
-                        </td>
-                        <td class="p-4">
-                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 uppercase">{{ s.transport }}</span>
-                        </td>
-                        <td class="p-4">
-                            <button :class="s.enabled ? 'text-green-600' : 'text-gray-400'" @click="toggle(s)">
-                                {{ s.enabled ? t('common.enabled') : t('common.disabled') }}
-                            </button>
-                        </td>
-                        <td class="space-x-2 p-4">
-                            <button class="text-blue-500 hover:underline" @click="listTools(s)">{{ t('adminForm.mcpListTools') }}</button>
-                            <button class="text-green-600 hover:underline" @click="openEdit(s)">{{ t('adminForm.edit') }}</button>
-                            <button class="text-red-500 hover:underline" @click="remove(s.id)">{{ t('adminForm.delete') }}</button>
-                        </td>
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>MCP Server</th>
+                        <th>{{ t('adminForm.mcpTransport') }}</th>
+                        <th>{{ t('adminForm.status') }}</th>
+                        <th class="text-right">{{ t('adminForm.actions') }}</th>
                     </tr>
-                    <tr v-if="toolInfo(s).tools?.length">
-                        <td colspan="4" class="bg-gray-50 px-4 py-3">
-                            <div class="flex flex-wrap gap-2">
-                                <span
-                                    v-for="tool in toolInfo(s).tools"
-                                    :key="tool.name"
-                                    :title="tool.description"
-                                    class="rounded-full bg-white px-3 py-1 font-mono text-xs text-gray-600 shadow-sm"
-                                >
-                                    {{ tool.name }}
-                                </span>
+                </thead>
+                <tbody>
+                    <template v-for="s in servers" :key="s.id">
+                        <tr>
+                            <td class="app-table-cell-wrap">
+                                <p class="text-strong font-medium">{{ s.name }}</p>
+                                <p class="text-faint font-mono text-xs">{{ s.url }}</p>
+                                <p v-if="toolInfo(s).message" class="mt-1 text-xs" :class="toolInfo(s).ok ? 'text-muted-2' : 'text-[color:var(--danger)]'">
+                                    {{ toolInfo(s).message }}
+                                </p>
+                            </td>
+                            <td>
+                                <span class="app-chip uppercase">{{ s.transport }}</span>
+                            </td>
+                            <td>
+                                <button :class="s.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(s)">
+                                    {{ s.enabled ? t('common.enabled') : t('common.disabled') }}
+                                </button>
+                            </td>
+                            <td>
+                                <div class="app-table-actions">
+                                    <button class="app-btn app-btn-ghost app-btn-sm" @click="listTools(s)">
+                                        {{ t('adminForm.mcpListTools') }}
+                                    </button>
+                                    <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(s)">{{ t('adminForm.edit') }}</button>
+                                    <button class="app-btn app-btn-danger app-btn-sm" @click="remove(s.id)">{{ t('adminForm.delete') }}</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="toolInfo(s).tools?.length">
+                            <td colspan="4" class="bg-surface-2 !whitespace-normal">
+                                <div class="flex flex-wrap gap-2">
+                                    <span v-for="tool in toolInfo(s).tools" :key="tool.name" :title="tool.description" class="app-chip font-mono">
+                                        {{ tool.name }}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr v-if="!servers.length">
+                        <td colspan="4" class="!whitespace-normal">
+                            <div class="app-empty">
+                                <span class="app-empty-icon">🔌</span>
+                                <p class="app-empty-title">{{ t('adminForm.mcpEmpty') }}</p>
+                                <p class="app-empty-desc">{{ t('adminForm.mcpSubtitle') }}</p>
                             </div>
                         </td>
                     </tr>
-                </template>
-                <tr v-if="!servers.length">
-                    <td colspan="4" class="p-8 text-center text-gray-400">{{ t('adminForm.mcpEmpty') }}</td>
-                </tr>
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 </template>
