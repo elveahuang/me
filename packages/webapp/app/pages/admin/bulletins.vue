@@ -145,95 +145,94 @@ function levelLabel(value: string) {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="app-page-header !mb-0">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('nav.bulletins') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">配置首页 / 对话页 / 全站的宣传横幅与公告位</p>
+                <h1 class="app-page-title text-strong">{{ t('nav.bulletins') }}</h1>
+                <p class="app-page-subtitle">配置首页 / 对话页 / 全站的宣传横幅与公告位</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
-                {{ t('admin.addRecord') }}
-            </button>
+            <div class="app-page-actions">
+                <button class="app-btn app-btn-primary" @click="openCreate">{{ t('admin.addRecord') }}</button>
+            </div>
         </div>
 
-        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
-        <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
+        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
             <div class="grid gap-3 sm:grid-cols-2">
-                <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
-                <textarea v-model="form.content" rows="2" placeholder="内容描述" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
+                <input v-model="form.title" placeholder="标题" class="app-input sm:col-span-2" />
+                <textarea v-model="form.content" rows="2" placeholder="内容描述" class="app-input sm:col-span-2" />
                 <!-- 配图：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
                 <div class="sm:col-span-2">
                     <ImagePicker v-model="form.imageUrl" :placeholder="t('adminForm.bulletinImagePlaceholder')" />
                 </div>
-                <input v-model="form.linkUrl" placeholder="跳转链接，如 /pricing 或 https://…" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <input v-model="form.linkText" placeholder="按钮文案，如「了解详情」" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                <select v-model="form.position" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <input v-model="form.linkUrl" placeholder="跳转链接，如 /pricing 或 https://…" class="app-input" />
+                <input v-model="form.linkText" placeholder="按钮文案，如「了解详情」" class="app-input" />
+                <select v-model="form.position" class="app-input">
                     <option v-for="p in BULLETIN_POSITIONS" :key="p.value" :value="p.value">{{ p.label }}</option>
                 </select>
-                <select v-model="form.level" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <select v-model="form.level" class="app-input">
                     <option v-for="l in BULLETIN_LEVELS" :key="l.value" :value="l.value">{{ l.label }}</option>
                 </select>
                 <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-500">排序</span>
-                    <input v-model.number="form.sortOrder" type="number" class="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <span class="text-muted-2 shrink-0 text-xs">排序</span>
+                    <input v-model.number="form.sortOrder" type="number" class="app-input !w-20" />
                 </div>
-                <label class="flex items-center gap-2 text-sm text-gray-600">
-                    <input v-model="form.enabled" type="checkbox" />
+                <label class="text-soft flex items-center gap-2 text-sm">
+                    <input v-model="form.enabled" type="checkbox" class="app-checkbox" />
                     <span>{{ t('common.enabled') }}</span>
                 </label>
                 <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-500">开始</span>
-                    <input v-model="form.startsAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <span class="text-muted-2 shrink-0 text-xs">开始</span>
+                    <input v-model="form.startsAt" type="date" class="app-input !w-auto" />
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-500">结束</span>
-                    <input v-model="form.endsAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <span class="text-muted-2 shrink-0 text-xs">结束</span>
+                    <input v-model="form.endsAt" type="date" class="app-input !w-auto" />
                 </div>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
-                    {{ t('common.save') }}
-                </button>
+                <button class="app-btn app-btn-ghost" @click="editing = null">{{ t('common.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="saving" @click="save">{{ t('common.save') }}</button>
             </template>
         </AdminDrawer>
 
         <div v-if="loading" class="space-y-3">
-            <div v-for="i in 3" :key="i" class="h-20 animate-pulse rounded-2xl bg-white" />
+            <div v-for="i in 3" :key="i" class="app-skeleton h-20 !rounded-2xl" />
         </div>
 
         <div v-else-if="items.length" class="grid gap-3 sm:grid-cols-2">
-            <div v-for="row in items" :key="row.id" class="rounded-2xl bg-white p-5 shadow-sm">
+            <div v-for="row in items" :key="row.id" class="app-card p-5">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="truncate text-sm font-bold text-gray-800">{{ row.title }}</h3>
-                            <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">{{ positionLabel(row.position) }}</span>
-                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{{ levelLabel(row.level) }}</span>
-                            <span
-                                :class="isBulletinActive(row) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'"
-                                class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                            >
+                            <h3 class="text-strong truncate text-sm font-bold">{{ row.title }}</h3>
+                            <span class="app-badge app-badge-info">{{ positionLabel(row.position) }}</span>
+                            <span class="app-badge app-badge-neutral">{{ levelLabel(row.level) }}</span>
+                            <span :class="isBulletinActive(row) ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge">
                                 {{ isBulletinActive(row) ? t('storage.activeRunning') : t('storage.activePending') }}
                             </span>
                         </div>
-                        <p class="mt-1.5 line-clamp-2 text-xs text-gray-500">{{ row.content || '—' }}</p>
-                        <p class="mt-1.5 text-[11px] text-gray-400">
+                        <p class="text-muted-2 mt-1.5 line-clamp-2 text-xs">{{ row.content || '—' }}</p>
+                        <p class="text-faint mt-1.5 text-[11px] tabular-nums">
                             {{ t('storage.sortOrder') }} {{ row.sortOrder }} · {{ bulletinWindowText(row.startsAt, row.endsAt) }}
                         </p>
                     </div>
-                    <div class="flex shrink-0 flex-col items-end gap-1 text-xs">
-                        <button class="text-emerald-600 hover:underline" @click="openEdit(row)">{{ t('common.edit') }}</button>
-                        <button class="text-gray-500 hover:underline" @click="toggleEnabled(row)">{{ row.enabled ? '停用' : '启用' }}</button>
-                        <button class="text-red-500 hover:underline" @click="remove(row)">{{ t('common.delete') }}</button>
+                    <div class="flex shrink-0 flex-col items-end gap-1">
+                        <button class="app-btn app-btn-ghost app-btn-sm" @click="openEdit(row)">{{ t('common.edit') }}</button>
+                        <button class="app-btn app-btn-ghost app-btn-sm" @click="toggleEnabled(row)">{{ row.enabled ? '停用' : '启用' }}</button>
+                        <button class="app-btn app-btn-danger app-btn-sm" @click="remove(row)">{{ t('common.delete') }}</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div v-else class="rounded-2xl bg-white p-12 text-center shadow-sm">
-            <p class="text-sm font-bold text-gray-600">{{ t('admin.tableEmpty') }}</p>
+        <div v-else class="app-card p-12">
+            <div class="app-empty">
+                <span class="app-empty-icon">📣</span>
+                <p class="app-empty-title">{{ t('admin.tableEmpty') }}</p>
+                <p class="app-empty-desc">{{ t('admin.addRecord') }}</p>
+            </div>
         </div>
     </div>
 </template>
