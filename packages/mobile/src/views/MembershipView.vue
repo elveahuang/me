@@ -308,11 +308,7 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
 
                 <!-- 套餐列表 -->
                 <div class="space-y-3.5">
-                    <div
-                        v-for="plan in plans"
-                        :key="plan.id"
-                        :class="['app-card relative p-5', plan.code === status?.plan?.code ? 'border-brand ring-brand' : '']"
-                    >
+                    <div v-for="plan in plans" :key="plan.id" :class="['app-card relative p-5', plan.code === status?.plan?.code ? 'app-card-brand' : '']">
                         <div
                             v-if="plan.code === 'pro'"
                             class="bg-brand-gradient absolute -top-2.5 right-4 rounded-full px-2.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase"

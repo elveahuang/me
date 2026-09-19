@@ -269,7 +269,7 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
             <div
                 v-for="p in plans"
                 :key="p.id"
-                :class="['app-card relative flex flex-col justify-between p-6 sm:p-8', p.code === statusData?.plan?.code ? 'border-brand ring-brand' : '']"
+                :class="['app-card relative flex flex-col justify-between p-6 sm:p-8', p.code === statusData?.plan?.code ? 'app-card-brand' : '']"
             >
                 <div
                     v-if="p.code === 'pro'"

@@ -345,6 +345,13 @@ html {
     box-shadow: var(--shadow-xs);
 }
 
+/* 选中/当前项卡片高亮。必须排在 .app-card 之后：本文件未分层，同特异性下先写的
+   .border-brand / .ring-brand 会被 .app-card 的 border / box-shadow 简写覆盖掉。 */
+.app-card-brand {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-ring);
+}
+
 .app-card-hover {
     transition:
         transform 0.18s ease,
