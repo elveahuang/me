@@ -2,9 +2,11 @@
 import { extractApiError } from '@commons/contract';
 import { IonContent, IonPage, IonSpinner } from '@ionic/vue';
 import { onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { fetchSession, setToken } from '../api/auth';
 
+const { t } = useI18n();
 const router = useRouter();
 const errorMessage = ref('');
 const syncing = ref(false);
@@ -37,10 +39,10 @@ async function sync() {
         if (session?.user) {
             router.replace('/home');
         } else {
-            errorMessage.value = '登录状态同步失败，请重试或重新登录';
+            errorMessage.value = t('auth.wechatSyncFailed');
         }
     } catch (e) {
-        errorMessage.value = extractApiError(e, '微信登录失败');
+        errorMessage.value = extractApiError(e, t('auth.wechatFailed'));
     } finally {
         syncing.value = false;
     }
@@ -58,14 +60,14 @@ onMounted(() => {
             <div class="flex h-full flex-col items-center justify-center p-8 text-center">
                 <template v-if="syncing">
                     <ion-spinner name="crescent" class="mb-4" />
-                    <p class="text-soft text-sm font-medium">正在同步微信登录状态…</p>
+                    <p class="text-soft text-sm font-medium">{{ t('auth.wechatSyncing') }}</p>
                 </template>
                 <template v-else-if="errorMessage">
                     <div class="app-alert app-alert-danger max-w-xs">
                         <span class="text-3xl">⚠️</span>
                         <p class="mt-3 text-sm font-semibold">{{ errorMessage }}</p>
-                        <button type="button" class="app-btn app-btn-primary mt-4 w-full" @click="sync">重试</button>
-                        <router-link to="/login" class="app-btn app-btn-outline mt-2 w-full">返回登录</router-link>
+                        <button type="button" class="app-btn app-btn-primary mt-4 w-full" @click="sync">{{ t('common.retry') }}</button>
+                        <router-link to="/login" class="app-btn app-btn-outline mt-2 w-full">{{ t('auth.backToLogin') }}</router-link>
                     </div>
                 </template>
             </div>

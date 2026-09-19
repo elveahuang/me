@@ -59,15 +59,31 @@ async function submit() {
                     <div class="bg-brand-gradient px-6 py-6 text-center">
                         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-lg font-black">ME</div>
                         <h1 class="mt-3 text-lg font-black">{{ t('nav.register') }}</h1>
-                        <p class="mt-1 text-[11px] opacity-85">创建账号，开启智能体之旅</p>
+                        <p class="mt-1 text-[11px] opacity-85">{{ t('auth.registerHint') }}</p>
                     </div>
 
                     <form class="space-y-3.5 p-6" @submit.prevent="submit">
-                        <ion-input v-model="name" label="昵称" label-placement="floating" type="text" required autocomplete="nickname" class="app-input" />
-                        <ion-input v-model="email" label="邮箱" label-placement="floating" type="email" required autocomplete="email" class="app-input" />
+                        <ion-input
+                            v-model="name"
+                            :label="t('auth.name')"
+                            label-placement="floating"
+                            type="text"
+                            required
+                            autocomplete="nickname"
+                            class="app-input"
+                        />
+                        <ion-input
+                            v-model="email"
+                            :label="t('auth.email')"
+                            label-placement="floating"
+                            type="email"
+                            required
+                            autocomplete="email"
+                            class="app-input"
+                        />
                         <ion-input
                             v-model="password"
-                            label="密码（至少 8 位）"
+                            :label="t('auth.passwordMin')"
                             label-placement="floating"
                             type="password"
                             required
@@ -85,8 +101,8 @@ async function submit() {
                 </div>
 
                 <p class="text-muted-2 mt-5 text-center text-xs">
-                    已有账号？
-                    <router-link to="/login" class="app-link">登录</router-link>
+                    {{ t('auth.hasAccount') }}
+                    <router-link to="/login" class="app-link">{{ t('nav.login') }}</router-link>
                 </p>
             </div>
         </ion-content>

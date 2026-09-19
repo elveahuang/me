@@ -47,7 +47,7 @@ async function submit() {
 
 function loginWithWechat() {
     if (!wechat.value.redirectUrl) {
-        error.value = '微信登录未配置移动端回跳地址';
+        error.value = t('auth.wechatNoRedirect');
         return;
     }
     // 原生壳下 VITE_API_BASE 指向远端后端，相对地址会落到 capacitor://localhost 而 404，需用 apiUrl 拼接
@@ -63,14 +63,22 @@ function loginWithWechat() {
                     <div class="bg-brand-gradient px-6 py-6 text-center">
                         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-lg font-black">ME</div>
                         <h1 class="mt-3 text-lg font-black">{{ t('nav.login') }}</h1>
-                        <p class="mt-1 text-[11px] opacity-85">欢迎回来 · {{ t('common.appName') }}</p>
+                        <p class="mt-1 text-[11px] opacity-85">{{ t('auth.welcomeBack', { app: t('common.appName') }) }}</p>
                     </div>
 
                     <form class="space-y-3.5 p-6" @submit.prevent="submit">
-                        <ion-input v-model="email" label="邮箱" label-placement="floating" type="email" required autocomplete="email" class="app-input" />
+                        <ion-input
+                            v-model="email"
+                            :label="t('auth.email')"
+                            label-placement="floating"
+                            type="email"
+                            required
+                            autocomplete="email"
+                            class="app-input"
+                        />
                         <ion-input
                             v-model="password"
-                            label="密码"
+                            :label="t('auth.password')"
                             label-placement="floating"
                             type="password"
                             required
@@ -88,12 +96,12 @@ function loginWithWechat() {
 
                 <button v-if="wechat.enabled" type="button" class="app-btn app-btn-outline mt-4 w-full py-3!" @click="loginWithWechat">
                     <span>💬</span>
-                    <span>微信快捷登录</span>
+                    <span>{{ t('auth.wechatLogin') }}</span>
                 </button>
 
                 <p class="text-muted-2 mt-5 text-center text-xs">
-                    还没有账号？
-                    <router-link to="/register" class="app-link">注册</router-link>
+                    {{ t('auth.noAccount') }}
+                    <router-link to="/register" class="app-link">{{ t('nav.register') }}</router-link>
                 </p>
             </div>
         </ion-content>
