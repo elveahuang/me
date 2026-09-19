@@ -1,12 +1,12 @@
 import { requireAdmin } from '../../utils/guard';
-import { readSystemSettings, writeSystemSettings, type SystemSettings } from '../../utils/system-settings';
+import { readSystemSettings, setCurrentSystemSettings, writeSystemSettings, type SystemSettings } from '../../utils/system-settings';
 
 /**
  * 系统基础设置（管理端单例行）。
  *
  * 生效链路：
  * - GET 直接读库，返回权威值给表单回填。
- * - PATCH 校验后写库，并刷新本进程的 public runtimeConfig，令 SSR 首屏（标题/默认语言/默认主题）立即拿到新值。
+ * - PATCH 校验后写库，并刷新进程内当前设置，令 SSR 首屏（标题/默认语言/默认主题）立即拿到新值。
  * - 多实例部署时其他进程要到下次重启或各自被 PATCH 才刷新，属于可接受的最终一致（详见 AGENTS.md）。
  */
 
@@ -56,9 +56,7 @@ export default defineEventHandler(async (event) => {
         const body = ((await readBody(event)) ?? {}) as Record<string, unknown>;
         const patch = buildPatch(body);
         const next = await writeSystemSettings(patch);
-
-        const config = useRuntimeConfig(event);
-        Object.assign(config.public.siteSettings, next);
+        setCurrentSystemSettings(next);
 
         return next;
     }

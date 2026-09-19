@@ -17,6 +17,22 @@ export const SYSTEM_SETTINGS_DEFAULTS: SystemSettings = {
     themeBrand: 'green',
 };
 
+/**
+ * 进程内当前设置：启动插件从数据库载入，管理端 PATCH 后同步刷新。
+ * Nitro 对共享 runtimeConfig 做了 deepFreeze，无法原地改写，SSR 侧由
+ * server/plugins/site-settings.ts 的 request 钩子把这里的值注入每个请求的
+ * event 级配置克隆；本进程的接口直接读这里。
+ */
+let currentSettings: SystemSettings = { ...SYSTEM_SETTINGS_DEFAULTS };
+
+export function getCurrentSystemSettings(): SystemSettings {
+    return { ...currentSettings };
+}
+
+export function setCurrentSystemSettings(next: SystemSettings): void {
+    currentSettings = { ...next };
+}
+
 const SINGLETON_ID = 'default';
 
 export function readSystemSettings(): Promise<SystemSettings> {
