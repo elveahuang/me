@@ -49,6 +49,7 @@ export default {
     nav: {
         home: 'Home',
         chat: 'Agent Chat',
+        menu: 'Menu',
         agents: 'Agents Square',
         pricing: 'Pricing & Plans',
         profile: 'Profile',

@@ -50,6 +50,7 @@ export default {
     nav: {
         home: '首页',
         chat: '智能体对话',
+        menu: '菜单',
         agents: '智能体广场',
         pricing: '会员方案',
         profile: '个人中心',
