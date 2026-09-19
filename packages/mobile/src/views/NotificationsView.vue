@@ -41,7 +41,11 @@ const levelBorder: Record<string, string> = {
     danger: 'border-l-2 border-l-red-400',
 };
 
+/** 未读/类型筛选、搜索与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来 */
+let loadSeq = 0;
+
 async function load(reset = false) {
+    const seq = ++loadSeq;
     if (reset) page.value = 1;
     loading.value = true;
     error.value = '';
@@ -50,6 +54,7 @@ async function load(reset = false) {
         if (filterUnread.value) query.set('unread', '1');
         if (type.value !== 'all') query.set('type', type.value);
         const res = await api<NotificationsResponse>(`/api/notifications?${query.toString()}`);
+        if (seq !== loadSeq) return;
         items.value = res.items;
         total.value = res.total;
         unread.value = res.unread;
@@ -59,7 +64,7 @@ async function load(reset = false) {
         items.value = [];
         error.value = extractApiError(e, t('common.error'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 

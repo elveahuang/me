@@ -36,7 +36,11 @@ const categoryActions = [
     { text: t('common.cancel'), role: 'cancel' },
 ];
 
+/** 分类切换、搜索防抖与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来 */
+let loadSeq = 0;
+
 async function load(reset = false) {
+    const seq = ++loadSeq;
     if (reset) page.value = 1;
     loading.value = true;
     error.value = '';
@@ -45,6 +49,7 @@ async function load(reset = false) {
         if (category.value !== 'all') query.set('category', category.value);
         if (keyword.value.trim()) query.set('keyword', keyword.value.trim());
         const data = await api<AttachmentsResponse>(`/api/attachments?${query.toString()}`);
+        if (seq !== loadSeq) return;
         items.value = data.attachments;
         total.value = data.total;
     } catch (e) {
@@ -52,7 +57,7 @@ async function load(reset = false) {
         items.value = [];
         error.value = extractApiError(e, t('common.error'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
