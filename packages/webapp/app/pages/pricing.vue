@@ -320,18 +320,14 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
         </div>
 
         <!-- 支付弹窗 Modal -->
-        <div
-            v-if="showPayModal"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style="background-color: rgb(15 23 42 / 0.5); backdrop-filter: blur(4px)"
-        >
-            <div class="app-card w-full max-w-md p-6 sm:p-8">
-                <div class="app-divider flex items-center justify-between border-t-0 pb-3">
-                    <h3 class="text-base font-bold">{{ t('billing.payMethod') }}</h3>
-                    <button class="app-btn app-btn-ghost !px-2" @click="closePayModal">✕</button>
+        <div v-if="showPayModal" class="app-modal-backdrop">
+            <div class="app-modal">
+                <div class="app-modal-header">
+                    <h3 class="text-sm font-bold">{{ t('billing.payMethod') }}</h3>
+                    <button class="app-btn app-btn-ghost app-btn-icon" @click="closePayModal">✕</button>
                 </div>
 
-                <div class="py-6 text-center">
+                <div class="app-modal-body text-center">
                     <template v-if="paySuccess">
                         <div class="text-brand mb-2 text-5xl">✓</div>
                         <h4 class="text-lg font-bold">{{ t('billing.paySuccess') }}</h4>
@@ -344,7 +340,7 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
                         <p class="mt-2 text-2xl font-black">¥{{ formatYuan(activeOrder?.amountCents) }}</p>
 
                         <div v-if="activeOrder?.mode === 'qrcode' && qrDataUrl" class="my-4 flex flex-col items-center">
-                            <img :src="qrDataUrl" alt="WeChat Pay QR" class="h-48 w-48 rounded-2xl border p-2" style="border-color: var(--line)" />
+                            <img :src="qrDataUrl" alt="WeChat Pay QR" class="border-line h-48 w-48 rounded-2xl border p-2" />
                             <p class="text-faint mt-2 text-xs">{{ t('billing.scanToPay') }}</p>
                         </div>
 
@@ -363,7 +359,7 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
                     </template>
                 </div>
 
-                <div class="app-divider flex justify-end pt-3">
+                <div class="app-modal-footer">
                     <button class="app-btn app-btn-outline" @click="closePayModal">{{ t('common.close') }}</button>
                 </div>
             </div>
