@@ -134,6 +134,12 @@ function invokeWeixinJsapi(params: JsapiParams) {
     });
 }
 
+/** 切换计费周期：同时清掉上一条购买提示，否则"暂无年付价格"会在切回月付后继续挂着 */
+function switchPeriod(next: 'monthly' | 'yearly') {
+    period.value = next;
+    payError.value = '';
+}
+
 async function handleBuy(plan: Plan) {
     // 免费套餐无需下单：直接给出说明，避免按钮点了没有任何反应
     if (plan.code === 'free') {
@@ -243,14 +249,19 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
         <!-- 月付 / 年付 切换 -->
         <div class="flex justify-center">
             <div class="app-panel inline-flex gap-1 p-1.5">
-                <button :class="['app-btn', period === 'monthly' ? 'app-btn-soft' : 'app-btn-ghost']" @click="period = 'monthly'">
+                <button :class="['app-btn', period === 'monthly' ? 'app-btn-soft' : 'app-btn-ghost']" @click="switchPeriod('monthly')">
                     {{ t('billing.monthly') }}
                 </button>
-                <button :class="['app-btn', period === 'yearly' ? 'app-btn-soft' : 'app-btn-ghost']" @click="period = 'yearly'">
+                <button :class="['app-btn', period === 'yearly' ? 'app-btn-soft' : 'app-btn-ghost']" @click="switchPeriod('yearly')">
                     <span>{{ t('billing.yearly') }}</span>
                     <span class="app-chip app-chip-brand text-[10px]">-20%</span>
                 </button>
             </div>
+        </div>
+
+        <!-- 未打开支付弹窗时的购买提示：payError 平时只在弹窗内渲染，弹窗没开就没人看到，点了按钮等于静默失败 -->
+        <div v-if="payError && !showPayModal" class="app-alert app-alert-warning mx-auto max-w-2xl">
+            <span class="text-xs">{{ payError }}</span>
         </div>
 
         <!-- 套餐卡片网格 -->
