@@ -78,6 +78,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **禁止自动执行** `scripts/update.mjs`：它会清理锁文件/依赖、批量升级、重装并全局格式化。
 - **禁止作为常规初始化执行** `tools/db/init.sql`：含 `DROP DATABASE me`。
 - README 中旧 schema 升级的 `DROP SCHEMA ... CASCADE` 是破坏性操作，不是解决迁移错误的默认方案。必须先核对目标库、现有迁移与数据保留要求。
+- **`deploy/` 是容器部署套件**（Podman/Docker Compose，见 deploy.md）：`deploy/Dockerfile` 两阶段构建（builder 整仓 `pnpm install` + `nuxt build`，runner 只带 `.output` 与迁移文件，非 root 运行）；`docker-entrypoint.sh` **每次容器启动都会先自动应用数据库迁移**（幂等，可用 `MIGRATE_ON_START=false` 关闭）——改迁移或启动逻辑时不要破坏该顺序；`healthcheck.mjs` 只认「数据库 up」，未配置模型供应商时 degraded 属正常。`deploy/.env` 含真实密钥且已 gitignore，由 `node deploy/init-env.mjs` 生成（`--force` 会更换数据库口令与签名密钥）；`create-admin.mjs` 用于创建管理员。镜像内构建用 CI 同款无库环境即可通过；compose 里 postgres/redis 是外部实例地址，不随 compose 启动。
 
 ## 5. Web / Mobile / 共享代码的修改入口
 
