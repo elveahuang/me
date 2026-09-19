@@ -89,6 +89,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 移动端普通接口与认证实现集中在 `packages/mobile/src/api/client.ts`：`credentials: include`，存在 token 时附带 Bearer；token 键为 `ee_mobile_token`，并捕获 `set-auth-token` 响应头。`api/auth.ts` 只是它的 5 行再导出 shim，改实现看 `client.ts`。`api()` 自带 30s 超时（调用方传了 `signal` 就不接管），超时与网络失败都抛 `status: 0` 的中文文案，以便列表页能渲染错误而不是永久骨架屏。
 - `fetchSession()` 带 `AbortController` 超时（约 10s）、并发去重（`inflightSession` 单飞）与模块级 `cachedSession`：网络失败/超时/5xx 等瞬时故障降级返回缓存，**仅 401/403 判定为登出并清缓存返回 null**。因此 `router/index.ts` 的守卫不会因为一次抖动就把已登录用户踢回登录页；冷启动无缓存时仍返回 null。缓存是内部的，未导出 `getCachedSession/setCachedSession`，`signOut()` 会同步清空。改鉴权降级语义时以这段为准。
 - 移动端聊天 transport 另行显式设置 Bearer，不直接复用普通 JSON `api()`。更改认证逻辑时两处都要核对。
+- 移动端聊天不直接吃 part 里的站内地址：`ChatView` 会按 `attachmentId` 调 `/api/attachments/{id}/url` 换成预签名地址再渲染（原生壳的 `<img>`/`<a>` 带不上 Bearer，相对路径还会解析到 capacitor://localhost），换不到才退回绝对化的站内路径。改这条链路时保留该兜底。
 - 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
 - **Web 端会话探测在 `app/utils/auth-client.ts`**：`resolveSession()` 返回 `signed-in | anonymous | error`，只有 401/403 算 anonymous；`fetchSession()` 是把它折叠成 null 的展示用包装。`middleware/auth.ts`、`middleware/admin.ts` 用 `resolveSession()`，抖动/5xx 时放行而不是跳登录页（服务端才是鉴权权威）；`useSession().load()` 在 error 时保留上次会话。`app/layouts/admin.vue` 仍有一份自己的本地 session（未走 useSession），改这类降级时别只改一处。
 - 修改接口字段、错误归一化、金额/日期/额度格式化时，先读共享契约，再同步服务端响应与两端消费者，避免另造同名类型。

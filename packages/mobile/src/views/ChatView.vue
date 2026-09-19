@@ -57,7 +57,39 @@ const starterPrompts = computed(() => [
 ]);
 
 type ChatSegment =
-    { kind: 'text'; value: string } | { kind: 'reasoning'; value: string } | { kind: 'file'; value: string; url: string; mediaType: string; isImage: boolean };
+    | { kind: 'text'; value: string }
+    | { kind: 'reasoning'; value: string }
+    | { kind: 'file'; value: string; url: string; mediaType: string; isImage: boolean; attachmentId?: string };
+
+/**
+ * 私有桶的历史消息里存的是站内相对地址 `/api/attachments/{id}/raw`，原生壳两处都不成立：
+ * 相对路径会解析到 capacitor://localhost，而 `<img>`/`<a>` 也带不上 Bearer。
+ * 这里按附件 id 换取服务端预签名地址；换不到就退回绝对化的站内地址（浏览器带 cookie 仍可读）。
+ */
+const mediaUrls = ref(new Map<string, string>());
+const mediaPending = new Set<string>();
+
+function attachmentIdOf(url: string): string | null {
+    return /^\/api\/attachments\/([^/]+)\/raw$/.exec(url)?.[1] ?? null;
+}
+
+async function resolveMedia(id: string) {
+    if (mediaUrls.value.has(id) || mediaPending.has(id)) return;
+    mediaPending.add(id);
+    try {
+        const res = await api<{ url?: string }>(`/api/attachments/${id}/url`);
+        if (res.url) mediaUrls.value.set(id, res.url);
+    } catch {
+        // 换不到预签名地址时维持站内路径，不额外打扰用户
+    } finally {
+        mediaPending.delete(id);
+    }
+}
+
+function mediaUrl(seg: Extract<ChatSegment, { kind: 'file' }>): string {
+    const id = seg.attachmentId ?? attachmentIdOf(seg.url);
+    return (id ? mediaUrls.value.get(id) : undefined) ?? apiUrl(seg.url);
+}
 
 const segmentsOf = (message: UIMessage): ChatSegment[] => {
     const out: ChatSegment[] = [];
@@ -72,7 +104,7 @@ const segmentsOf = (message: UIMessage): ChatSegment[] => {
         } else if (part.type === 'file') {
             // AI SDK 7 里图片也走 file part（靠 mediaType 区分），没有独立的 image 类型。
             // 此前不处理 file，只发附件的消息会渲染成空白。
-            const filePart = part as { url?: unknown; filename?: unknown; mediaType?: unknown };
+            const filePart = part as { url?: unknown; filename?: unknown; mediaType?: unknown; attachmentId?: unknown };
             const url = typeof filePart.url === 'string' ? filePart.url : '';
             if (!url) continue;
             const mediaType = typeof filePart.mediaType === 'string' ? filePart.mediaType : 'application/octet-stream';
@@ -82,6 +114,7 @@ const segmentsOf = (message: UIMessage): ChatSegment[] => {
                 url,
                 mediaType,
                 isImage: mediaType.startsWith('image/'),
+                attachmentId: typeof filePart.attachmentId === 'string' ? filePart.attachmentId : undefined,
             });
         }
     }
@@ -99,6 +132,21 @@ const plugins = [jsonRender()];
 
 const segments = computed(() =>
     chat.value ? chat.value.messages.map((m: UIMessage) => ({ m, segs: segmentsOf(m), tools: toolNamesOf(m), isUser: m.role === 'user' })) : [],
+);
+
+// 不在渲染函数里发请求：消息列表变化后统一把站内附件地址换成预签名地址
+watch(
+    segments,
+    (list) => {
+        for (const item of list) {
+            for (const seg of item.segs) {
+                if (seg.kind !== 'file') continue;
+                const id = seg.attachmentId ?? attachmentIdOf(seg.url);
+                if (id) void resolveMedia(id);
+            }
+        }
+    },
+    { immediate: true },
 );
 
 const isQuotaExceeded = computed(() => isQuotaError(chat.value?.error));
@@ -461,11 +509,18 @@ async function copyConversationMarkdown() {
                                             type="button"
                                             class="overflow-hidden rounded-xl border"
                                             style="border-color: var(--line)"
-                                            @click="previewImage = seg.url"
+                                            @click="previewImage = mediaUrl(seg)"
                                         >
-                                            <img :src="seg.url" :alt="seg.value" class="max-h-44 object-cover" />
+                                            <img :src="mediaUrl(seg)" :alt="seg.value" class="max-h-44 object-cover" />
                                         </button>
-                                        <a v-else :href="seg.url" target="_blank" rel="noopener" class="app-chip max-w-[14rem] !py-1.5" :title="seg.value">
+                                        <a
+                                            v-else
+                                            :href="mediaUrl(seg)"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="app-chip max-w-[14rem] !py-1.5"
+                                            :title="seg.value"
+                                        >
                                             <span class="truncate">{{ seg.value }}</span>
                                             <span class="text-faint text-[9px]">{{ t('chat.downloadFile') }}</span>
                                         </a>
