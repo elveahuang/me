@@ -176,6 +176,8 @@ export default {
         payMethod: '选择支付方式',
         wechatPay: '微信支付',
         mockPay: '测试沙箱支付',
+        mockPayConfirm: '确认模拟支付',
+        wechatOnlyInApp: '请在微信内打开以完成支付',
         scanToPay: '微信扫码完成支付',
         paying: '支付处理中…',
         paySuccess: '开通成功，权益即刻生效！',

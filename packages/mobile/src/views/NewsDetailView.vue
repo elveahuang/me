@@ -83,7 +83,9 @@ async function handleRefresh(event: CustomEvent) {
                 <article v-else-if="article" class="space-y-4">
                     <div class="space-y-2">
                         <div class="flex flex-wrap items-center gap-1.5">
-                            <span v-if="article.pinned" class="rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-bold text-white">置顶</span>
+                            <span v-if="article.pinned" class="rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-bold text-white">{{
+                                t('agents.topPin')
+                            }}</span>
                             <span class="app-chip !text-[9px]">{{ article.category }}</span>
                             <span v-for="tag in article.tags" :key="tag" class="app-chip !text-[9px]">{{ tag }}</span>
                         </div>

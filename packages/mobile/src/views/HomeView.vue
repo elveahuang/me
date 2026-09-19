@@ -122,7 +122,7 @@ const filteredAgents = computed(() => {
                             {{ unread > 99 ? '99+' : unread }}
                         </span>
                     </router-link>
-                    <button type="button" class="app-btn app-btn-ghost mr-1 !px-2.5" title="切换深浅色" @click="toggleMode">🌓</button>
+                    <button type="button" class="app-btn app-btn-ghost mr-1 !px-2.5" :title="t('chat.toggleTheme')" @click="toggleMode">🌓</button>
                 </template>
             </ion-toolbar>
             <ion-toolbar class="px-2">

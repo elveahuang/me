@@ -176,6 +176,8 @@ export default {
         payMethod: 'Payment Method',
         wechatPay: 'WeChat Pay',
         mockPay: 'Mock Sandbox Pay',
+        mockPayConfirm: 'Simulate payment',
+        wechatOnlyInApp: 'Open this page inside WeChat to complete the payment',
         scanToPay: 'Scan QR code to pay',
         paying: 'Processing…',
         paySuccess: 'Payment successful! Membership active.',

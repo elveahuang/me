@@ -142,7 +142,7 @@ function startPolling(orderNo: string) {
 function invokeWeixinJsapi(params: JsapiParams) {
     const bridge = (window as any).WeixinJSBridge;
     if (!bridge) {
-        payError.value = '请在微信内打开以完成支付';
+        payError.value = t('billing.wechatOnlyInApp');
         return;
     }
     bridge.invoke('getBrandWCPayRequest', params, (res: { err_msg?: string }) => {
@@ -432,7 +432,7 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
                         <div v-if="activeOrder?.mode === 'mock'" class="app-alert app-alert-warning mt-4 text-left">
                             <p class="text-xs font-bold">🛠️ {{ t('billing.mockPay') }}</p>
                             <button class="app-btn app-btn-soft mt-3 w-full" :disabled="mockPaying" @click="handleMockPay">
-                                {{ mockPaying ? t('common.loading') : '确认模拟支付' }}
+                                {{ mockPaying ? t('common.loading') : t('billing.mockPayConfirm') }}
                             </button>
                         </div>
 
