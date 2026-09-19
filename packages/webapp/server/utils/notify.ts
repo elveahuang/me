@@ -13,6 +13,10 @@ import { db } from './db';
  * 用户可见集合 = audience='all' 的通知 ∪ 收件人包含自己的通知。
  */
 
+/** 「全部已读」的分批大小与最大批次：单批写入有界，整体仍会清完未读集合 */
+const MARK_ALL_READ_BATCH = 500;
+const MARK_ALL_READ_MAX_BATCHES = 20;
+
 export interface CreateNotificationInput {
     title: string;
     content?: string;
@@ -117,7 +121,7 @@ export async function countUnreadNotifications(userId: string): Promise<number> 
 /**
  * 标记已读。
  * - 传入 ids：只标记这些通知
- * - 不传：标记当前用户全部未读（上限 500 条，避免一次写入过多）
+ * - 不传：标记当前用户全部未读（分批写入，每批 500 条）
  * 广播通知按 (notificationId, userId) upsert，定向通知复用已有收件人行。
  *
  * 安全约束：传入的 ids 必须先在「当前用户可见」的集合内过滤。
@@ -147,25 +151,32 @@ export async function markNotificationsRead(userId: string, ids?: string[]): Pro
         return targets.length;
     }
 
-    const all = await db
-        .select({ id: notifications.id })
-        .from(notifications)
-        .leftJoin(notificationRecipients, and(eq(notificationRecipients.notificationId, notifications.id), eq(notificationRecipients.userId, userId)))
-        .where(and(visible, isNull(notificationRecipients.readAt)))
-        .orderBy(desc(notifications.createdAt))
-        .limit(500);
-    const targets = all.map((row) => row.id);
-    if (!targets.length) return 0;
-
+    // 「全部已读」必须清完整个未读集合。此前固定 limit(500)：未读超过 500 条时只把最新
+    // 500 条标记为已读，角标仍然亮着，与按钮语义相反。改为分批推进，直到取不到未读为止。
     const now = new Date();
-    await db
-        .insert(notificationRecipients)
-        .values(targets.map((notificationId) => ({ id: crypto.randomUUID(), notificationId, userId, readAt: now })))
-        .onConflictDoUpdate({
-            target: [notificationRecipients.notificationId, notificationRecipients.userId],
-            set: { readAt: now },
-        });
-    return targets.length;
+    let marked = 0;
+    for (let batch = 0; batch < MARK_ALL_READ_MAX_BATCHES; batch++) {
+        const rows = await db
+            .select({ id: notifications.id })
+            .from(notifications)
+            .leftJoin(notificationRecipients, and(eq(notificationRecipients.notificationId, notifications.id), eq(notificationRecipients.userId, userId)))
+            .where(and(visible, isNull(notificationRecipients.readAt)))
+            .orderBy(desc(notifications.createdAt))
+            .limit(MARK_ALL_READ_BATCH);
+        const targets = rows.map((row) => row.id);
+        if (!targets.length) break;
+
+        await db
+            .insert(notificationRecipients)
+            .values(targets.map((notificationId) => ({ id: crypto.randomUUID(), notificationId, userId, readAt: now })))
+            .onConflictDoUpdate({
+                target: [notificationRecipients.notificationId, notificationRecipients.userId],
+                set: { readAt: now },
+            });
+        marked += targets.length;
+        if (targets.length < MARK_ALL_READ_BATCH) break;
+    }
+    return marked;
 }
 
 /** 管理端统计：已读 / 未读人数（广播通知按已读记录数统计） */
