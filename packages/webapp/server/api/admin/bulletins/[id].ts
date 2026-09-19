@@ -40,8 +40,10 @@ export default defineEventHandler(async (event) => {
     if (body.startsAt !== undefined) patch.startsAt = parseDateInput(body.startsAt);
     if (body.endsAt !== undefined) patch.endsAt = parseDateInput(body.endsAt);
 
-    const startsAt = (patch.startsAt as Date | null | undefined) ?? existing.startsAt;
-    const endsAt = (patch.endsAt as Date | null | undefined) ?? existing.endsAt;
+    // "没传"和"传了空值清空"必须区分：parseDateInput('') 得到 null，?? 会把它当缺省，
+    // 于是管理员清掉开始时间后，时间窗校验仍拿旧值比较，正常的编辑被误判成 400。
+    const startsAt = body.startsAt === undefined ? existing.startsAt : (patch.startsAt as Date | null);
+    const endsAt = body.endsAt === undefined ? existing.endsAt : (patch.endsAt as Date | null);
     if (startsAt && endsAt && startsAt > endsAt) {
         throw createError({ statusCode: 400, statusMessage: '结束时间不能早于开始时间' });
     }
