@@ -58,6 +58,7 @@ export default {
         register: '注册',
         logout: '退出登录',
         backToApp: '返回用户端',
+        toggleSidebar: '展开/收起侧边栏',
         dashboard: '仪表大盘',
         users: '用户管理',
         skills: 'Skill 技能',

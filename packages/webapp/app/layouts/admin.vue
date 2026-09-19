@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { authClient, fetchSession } from '~/utils/auth-client';
 
@@ -11,9 +11,72 @@ const session = ref<{ user: { id: string; name: string; email: string; role: str
 const sidebarCollapsed = ref(false);
 const mobileMenuOpen = ref(false);
 
+const COLLAPSE_KEY = 'admin_sidebar_collapsed';
+const OPEN_GROUPS_KEY = 'admin_sidebar_groups';
+
+/** 展开的分组：默认只展开当前路由所属分组，其余收起以缩短首屏导航 */
+const openGroups = ref<string[]>([]);
+
+function groupKeyOfPath(path: string) {
+    return navGroups.value.find((g) => g.items.some((it) => it.path === path))?.key ?? '';
+}
+
+function isGroupOpen(key: string) {
+    return openGroups.value.includes(key);
+}
+
+function toggleGroup(key: string) {
+    openGroups.value = isGroupOpen(key) ? openGroups.value.filter((g) => g !== key) : [...openGroups.value, key];
+    persistGroups();
+}
+
+function persistGroups() {
+    try {
+        localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(openGroups.value));
+    } catch {
+        // 隐私模式或配额已满时只是丢失偏好，不影响导航
+    }
+}
+
+function readStoredGroups(): string[] {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.filter((g): g is string => typeof g === 'string') : [];
+    } catch {
+        return [];
+    }
+}
+
 onMounted(async () => {
     session.value = (await fetchSession()) as any;
+    try {
+        sidebarCollapsed.value = localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch {
+        // ignore
+    }
+    const active = groupKeyOfPath(route.path);
+    openGroups.value = active ? [...new Set([...readStoredGroups(), active])] : readStoredGroups();
 });
+
+watch(
+    () => route.path,
+    (path) => {
+        const active = groupKeyOfPath(path);
+        if (active && !isGroupOpen(active)) {
+            openGroups.value = [...openGroups.value, active];
+            persistGroups();
+        }
+    },
+);
+
+function toggleSidebar() {
+    sidebarCollapsed.value = !sidebarCollapsed.value;
+    try {
+        localStorage.setItem(COLLAPSE_KEY, sidebarCollapsed.value ? '1' : '0');
+    } catch {
+        // ignore
+    }
+}
 
 function toggleLanguage() {
     const next = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN';
@@ -28,10 +91,12 @@ async function handleLogout() {
 // 导航菜单分组定义
 const navGroups = computed(() => [
     {
+        key: 'overview',
         title: t('nav.overview'),
         items: [{ path: '/admin', label: t('nav.dashboard'), icon: '📊' }],
     },
     {
+        key: 'aiAssets',
         title: t('nav.aiAssets'),
         items: [
             { path: '/admin/agents', label: t('nav.agents'), icon: '🤖' },
@@ -43,6 +108,7 @@ const navGroups = computed(() => [
         ],
     },
     {
+        key: 'content',
         title: t('nav.content'),
         items: [
             { path: '/admin/news', label: t('nav.news'), icon: '📰' },
@@ -51,6 +117,7 @@ const navGroups = computed(() => [
         ],
     },
     {
+        key: 'operations',
         title: t('nav.operations'),
         items: [
             { path: '/admin/conversations', label: t('nav.conversations'), icon: '💬' },
@@ -61,6 +128,7 @@ const navGroups = computed(() => [
         ],
     },
     {
+        key: 'system',
         title: t('nav.systemSettings'),
         items: [{ path: '/admin/settings', label: t('nav.systemSettings'), icon: '⚙️' }],
     },
@@ -92,8 +160,8 @@ const currentRouteName = computed(() => {
                 <button
                     type="button"
                     class="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:flex"
-                    title="展开/收起侧边栏"
-                    @click="sidebarCollapsed = !sidebarCollapsed"
+                    :title="t('nav.toggleSidebar')"
+                    @click="toggleSidebar"
                 >
                     <span class="text-sm">⇄</span>
                 </button>
@@ -173,15 +241,23 @@ const currentRouteName = computed(() => {
                     sidebarCollapsed ? 'w-16' : 'w-60',
                 ]"
             >
-                <div class="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-                    <div v-for="(group, gIdx) in navGroups" :key="gIdx" class="space-y-1">
-                        <p v-if="!sidebarCollapsed" class="px-3 pb-1 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
-                            {{ group.title }}
-                        </p>
-                        <div v-else class="mx-2 my-2 h-px bg-slate-100"></div>
+                <div class="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+                    <div v-for="group in navGroups" :key="group.key" class="space-y-1">
+                        <!-- 展开态下分组标题即折叠开关；图标模式空间足够，全量平铺不再折叠 -->
+                        <button
+                            v-if="!sidebarCollapsed"
+                            type="button"
+                            class="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold tracking-wider text-slate-400 uppercase transition-colors hover:bg-slate-50 hover:text-slate-600"
+                            :aria-expanded="isGroupOpen(group.key)"
+                            @click="toggleGroup(group.key)"
+                        >
+                            <span>{{ group.title }}</span>
+                            <span class="text-[9px] transition-transform duration-200" :class="isGroupOpen(group.key) ? 'rotate-90' : ''">▸</span>
+                        </button>
+                        <p v-else class="mx-2 my-2 h-px bg-slate-100"></p>
 
                         <NuxtLink
-                            v-for="item in group.items"
+                            v-for="item in sidebarCollapsed || isGroupOpen(group.key) ? group.items : []"
                             :key="item.path"
                             :to="item.path"
                             exact-active-class="bg-emerald-50 text-emerald-700 font-semibold shadow-2xs border-r-2 border-emerald-600"

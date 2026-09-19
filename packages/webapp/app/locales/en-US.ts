@@ -57,6 +57,7 @@ export default {
         register: 'Sign Up',
         logout: 'Sign Out',
         backToApp: 'Back to App',
+        toggleSidebar: 'Expand / collapse sidebar',
         dashboard: 'Dashboard',
         users: 'Users',
         skills: 'Skills',
