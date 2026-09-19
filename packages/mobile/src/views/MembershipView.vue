@@ -357,14 +357,14 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
                         <span>{{ t('billing.faqTitle') }}</span>
                     </h3>
                     <div class="space-y-2 text-xs">
-                        <details class="group bg-surface-2 text-soft open:bg-surface-3 rounded-xl p-3 transition-colors">
+                        <details class="group bg-surface-2 text-soft rounded-xl p-3 transition-colors open:!bg-[color:var(--surface-3)]">
                             <summary class="flex cursor-pointer list-none items-center justify-between font-bold select-none">
                                 <span>{{ t('billing.faq1Q') }}</span>
                                 <span class="text-[10px] transition-transform group-open:rotate-180">▼</span>
                             </summary>
                             <p class="text-faint mt-2 text-[11px] leading-relaxed">{{ t('billing.faq1A') }}</p>
                         </details>
-                        <details class="group bg-surface-2 text-soft open:bg-surface-3 rounded-xl p-3 transition-colors">
+                        <details class="group bg-surface-2 text-soft rounded-xl p-3 transition-colors open:!bg-[color:var(--surface-3)]">
                             <summary class="flex cursor-pointer list-none items-center justify-between font-bold select-none">
                                 <span>{{ t('billing.faq2Q') }}</span>
                                 <span class="text-[10px] transition-transform group-open:rotate-180">▼</span>
