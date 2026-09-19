@@ -250,114 +250,106 @@ async function search() {
 </script>
 
 <template>
-    <div class="flex gap-6">
-        <div class="w-1/2">
-            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div class="flex flex-col gap-6 lg:flex-row">
+        <div class="w-full lg:w-1/2">
+            <div class="app-page-header">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-800">{{ t('adminForm.kbTitle') }}</h1>
-                    <p class="mt-1 text-xs text-gray-400">{{ t('adminForm.kbSubtitle') }}</p>
+                    <h1 class="app-page-title text-strong">{{ t('adminForm.kbTitle') }}</h1>
+                    <p class="app-page-subtitle">{{ t('adminForm.kbSubtitle') }}</p>
                 </div>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreateKb">
-                    {{ t('adminForm.kbCreate') }}
-                </button>
+                <div class="app-page-actions">
+                    <button class="app-btn app-btn-primary" @click="openCreateKb">{{ t('adminForm.kbCreate') }}</button>
+                </div>
             </div>
 
-            <div v-if="listError" class="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            <div v-if="listError" class="app-alert app-alert-danger mb-4">
                 {{ listError }}
                 <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
             </div>
 
-            <table class="w-full rounded-2xl bg-white text-sm shadow-sm">
-                <thead class="text-left text-gray-400">
-                    <tr>
-                        <th class="p-4">{{ t('adminForm.kbColName') }}</th>
-                        <th class="p-4">{{ t('adminForm.kbColCounts') }}</th>
-                        <th class="p-4">{{ t('adminForm.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="kb in kbs" :key="kb.id" class="border-t border-gray-100">
-                        <td class="p-4">
-                            <p class="font-medium text-gray-800">{{ kb.name }}</p>
-                            <p class="text-xs text-gray-400">
-                                {{ kb.description }} · {{ kb.providerName || t('adminForm.defaultProvider') }} / {{ kb.embeddingModel }}
-                            </p>
-                        </td>
-                        <td class="p-4 text-gray-500">{{ kb.documentCount }} / {{ kb.chunkCount }}</td>
-                        <td class="space-x-2 p-4">
-                            <button class="text-green-600 hover:underline" @click="open(kb)">{{ t('adminForm.kbManage') }}</button>
-                            <button class="text-blue-600 hover:underline" @click="openEditKb(kb)">{{ t('adminForm.edit') }}</button>
-                            <button class="text-blue-600 hover:underline disabled:opacity-50" :disabled="reindexing" @click="reindex(kb)">
-                                {{ t('adminForm.kbReindex') }}
-                            </button>
-                            <button class="text-red-500 hover:underline" @click="removeKb(kb.id)">{{ t('adminForm.delete') }}</button>
-                        </td>
-                    </tr>
-                    <tr v-if="!kbs.length">
-                        <td colspan="3" class="p-8 text-center text-gray-400">{{ t('adminForm.kbEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="app-table-wrap">
+                <table class="app-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t('adminForm.kbColName') }}</th>
+                            <th>{{ t('adminForm.kbColCounts') }}</th>
+                            <th class="text-right">{{ t('adminForm.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="kb in kbs" :key="kb.id">
+                            <td class="app-table-cell-wrap">
+                                <p class="text-strong font-medium">{{ kb.name }}</p>
+                                <p class="text-faint mt-0.5 text-xs">
+                                    {{ kb.description }} · {{ kb.providerName || t('adminForm.defaultProvider') }} /
+                                    <span class="font-mono">{{ kb.embeddingModel }}</span>
+                                </p>
+                            </td>
+                            <td class="text-muted-2 tabular-nums">{{ kb.documentCount }} / {{ kb.chunkCount }}</td>
+                            <td>
+                                <div class="app-table-actions">
+                                    <button class="app-btn app-btn-outline app-btn-sm" @click="open(kb)">{{ t('adminForm.kbManage') }}</button>
+                                    <button class="app-btn app-btn-ghost app-btn-sm" @click="openEditKb(kb)">{{ t('adminForm.edit') }}</button>
+                                    <button class="app-btn app-btn-ghost app-btn-sm" :disabled="reindexing" @click="reindex(kb)">
+                                        {{ t('adminForm.kbReindex') }}
+                                    </button>
+                                    <button class="app-btn app-btn-danger app-btn-sm" @click="removeKb(kb.id)">{{ t('adminForm.delete') }}</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!kbs.length">
+                            <td colspan="3" class="!whitespace-normal">
+                                <div class="app-empty">
+                                    <span class="app-empty-icon">📚</span>
+                                    <p class="app-empty-title">{{ t('adminForm.kbEmpty') }}</p>
+                                    <p class="app-empty-desc">{{ t('adminForm.kbCreate') }}</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div v-if="current" class="w-1/2 space-y-4">
-            <div class="rounded-2xl bg-white p-6 shadow-sm">
-                <div class="mb-3 flex items-center justify-between">
-                    <h2 class="font-bold text-gray-800">{{ current.name }} · {{ t('adminForm.kbDocs') }}</h2>
-                    <button class="text-sm text-gray-400 hover:text-gray-600" @click="current = null">{{ t('adminForm.kbClose') }}</button>
+        <div v-if="current" class="w-full space-y-4 lg:w-1/2">
+            <div class="app-card p-6">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h2 class="text-strong truncate font-bold">{{ current.name }} · {{ t('adminForm.kbDocs') }}</h2>
+                    <button type="button" class="text-hover-strong text-faint text-sm" @click="current = null">{{ t('adminForm.kbClose') }}</button>
                 </div>
                 <div class="space-y-2">
-                    <input
-                        v-model="docForm.title"
-                        :placeholder="t('adminForm.kbDocTitlePlaceholder')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <input ref="fileRef" type="file" accept=".txt,.md,.markdown,.csv,.json" class="block w-full text-xs text-gray-500" />
-                    <textarea
-                        v-model="docForm.content"
-                        rows="4"
-                        :placeholder="t('adminForm.kbDocContentPlaceholder')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                    <button
-                        :disabled="uploading"
-                        class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                        @click="addDoc"
-                    >
+                    <input v-model="docForm.title" :placeholder="t('adminForm.kbDocTitlePlaceholder')" class="app-input" />
+                    <input ref="fileRef" type="file" accept=".txt,.md,.markdown,.csv,.json" class="text-muted-2 block w-full text-xs" />
+                    <textarea v-model="docForm.content" rows="4" :placeholder="t('adminForm.kbDocContentPlaceholder')" class="app-input" />
+                    <button class="app-btn app-btn-primary" :disabled="uploading" @click="addDoc">
                         {{ uploading ? t('adminForm.kbDocImporting') : t('adminForm.kbDocImport') }}
                     </button>
-                    <p v-if="message" class="text-xs text-gray-500">{{ message }}</p>
+                    <p v-if="message" class="text-muted-2 text-xs">{{ message }}</p>
                 </div>
                 <ul class="mt-4 space-y-1">
-                    <li v-for="d in docs" :key="d.id" class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                        <span class="truncate text-gray-700"
-                            >{{ d.title }} <span class="text-xs text-gray-400">{{ t('adminForm.kbDocChunks', { n: d.chunkCount }) }}</span></span
-                        >
-                        <button class="text-xs text-red-400 hover:text-red-500" @click="removeDoc(d.id)">{{ t('adminForm.delete') }}</button>
+                    <li v-for="d in docs" :key="d.id" class="app-list-row">
+                        <span class="text-strong min-w-0 truncate">{{ d.title }}</span>
+                        <span class="app-chip shrink-0 tabular-nums">{{ t('adminForm.kbDocChunks', { n: d.chunkCount }) }}</span>
+                        <button class="app-btn app-btn-danger app-btn-sm shrink-0" @click="removeDoc(d.id)">{{ t('adminForm.delete') }}</button>
                     </li>
-                    <li v-if="!docs.length" class="py-4 text-center text-sm text-gray-400">{{ t('adminForm.kbDocEmpty') }}</li>
+                    <li v-if="!docs.length" class="text-faint py-4 text-center text-sm">{{ t('adminForm.kbDocEmpty') }}</li>
                 </ul>
             </div>
 
-            <div class="rounded-2xl bg-white p-6 shadow-sm">
-                <h3 class="mb-2 text-sm font-bold text-gray-800">{{ t('adminForm.kbSearchTitle') }}</h3>
+            <div class="app-card p-6">
+                <h3 class="text-strong mb-2 text-sm font-bold">{{ t('adminForm.kbSearchTitle') }}</h3>
                 <div class="flex gap-2">
-                    <input
-                        v-model="searchQuery"
-                        :placeholder="t('adminForm.kbSearchPlaceholder')"
-                        class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                        @keyup.enter="search"
-                    />
-                    <button class="rounded-lg bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" @click="search">
-                        {{ t('adminForm.kbSearchRun') }}
-                    </button>
+                    <input v-model="searchQuery" :placeholder="t('adminForm.kbSearchPlaceholder')" class="app-input flex-1" @keyup.enter="search" />
+                    <button class="app-btn app-btn-outline shrink-0" @click="search">{{ t('adminForm.kbSearchRun') }}</button>
                 </div>
                 <div class="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                    <div v-for="(hit, i) in searchHits" :key="i" class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-                        <p class="mb-1 font-semibold text-gray-500">{{ t('adminForm.kbSearchScore', { score: hit.score.toFixed(3) }) }}</p>
-                        <p class="whitespace-pre-wrap">{{ hit.content }}</p>
+                    <div v-for="(hit, i) in searchHits" :key="i" class="app-panel p-3">
+                        <p class="text-muted-2 mb-1 text-xs font-semibold tabular-nums">
+                            {{ t('adminForm.kbSearchScore', { score: hit.score.toFixed(3) }) }}
+                        </p>
+                        <p class="text-soft text-xs whitespace-pre-wrap">{{ hit.content }}</p>
                     </div>
-                    <p v-if="searchQuery && !searchHits.length" class="text-center text-sm text-gray-400">{{ t('adminForm.kbSearchEmpty') }}</p>
+                    <p v-if="searchQuery && !searchHits.length" class="text-faint text-center text-sm">{{ t('adminForm.kbSearchEmpty') }}</p>
                 </div>
             </div>
         </div>
@@ -365,68 +357,28 @@ async function search() {
         <!-- 新建知识库：名称/描述/embedding 模型 -->
         <AdminDrawer :open="createOpen" :title="t('adminForm.kbCreate')" @close="createOpen = false">
             <div class="space-y-3">
-                <input
-                    v-model="newKb.name"
-                    :placeholder="t('adminForm.kbNamePlaceholder')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="newKb.description"
-                    :placeholder="t('adminForm.description')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="newKb.embeddingModel"
-                    :placeholder="t('adminForm.kbEmbeddingModel')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                />
-                <p v-if="createError" class="text-xs text-red-600">{{ createError }}</p>
+                <input v-model="newKb.name" :placeholder="t('adminForm.kbNamePlaceholder')" class="app-input" />
+                <input v-model="newKb.description" :placeholder="t('adminForm.description')" class="app-input" />
+                <input v-model="newKb.embeddingModel" :placeholder="t('adminForm.kbEmbeddingModel')" class="app-input !font-mono !text-xs" />
+                <p v-if="createError" class="app-help-error">{{ createError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm disabled:opacity-50" :disabled="creatingKb" @click="createOpen = false">
-                    {{ t('adminForm.cancel') }}
-                </button>
-                <button
-                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                    :disabled="creatingKb"
-                    @click="createKb"
-                >
-                    {{ t('adminForm.save') }}
-                </button>
+                <button class="app-btn app-btn-ghost" :disabled="creatingKb" @click="createOpen = false">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="creatingKb" @click="createKb">{{ t('adminForm.save') }}</button>
             </template>
         </AdminDrawer>
 
         <!-- 编辑知识库：改名/描述/embedding 模型（此前只能删库重建） -->
         <AdminDrawer :open="Boolean(editingKb)" :title="t('adminForm.kbEditTitle')" @close="editingKb = null">
             <div class="space-y-3">
-                <input
-                    v-model="editForm.name"
-                    :placeholder="t('adminForm.kbNamePlaceholder')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="editForm.description"
-                    :placeholder="t('adminForm.description')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="editForm.embeddingModel"
-                    :placeholder="t('adminForm.kbEmbeddingModel')"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                />
-                <p v-if="editError" class="text-xs text-red-600">{{ editError }}</p>
+                <input v-model="editForm.name" :placeholder="t('adminForm.kbNamePlaceholder')" class="app-input" />
+                <input v-model="editForm.description" :placeholder="t('adminForm.description')" class="app-input" />
+                <input v-model="editForm.embeddingModel" :placeholder="t('adminForm.kbEmbeddingModel')" class="app-input !font-mono !text-xs" />
+                <p v-if="editError" class="app-help-error">{{ editError }}</p>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm disabled:opacity-50" :disabled="savingKb" @click="editingKb = null">
-                    {{ t('adminForm.cancel') }}
-                </button>
-                <button
-                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                    :disabled="savingKb"
-                    @click="saveKb"
-                >
-                    {{ t('adminForm.save') }}
-                </button>
+                <button class="app-btn app-btn-ghost" :disabled="savingKb" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="savingKb" @click="saveKb">{{ t('adminForm.save') }}</button>
             </template>
         </AdminDrawer>
     </div>
