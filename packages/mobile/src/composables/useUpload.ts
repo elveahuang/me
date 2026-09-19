@@ -12,6 +12,9 @@ import { apiUrl, getToken } from '../api/client';
  * 用 XHR 而不是 fetch：fetch 上传时没有进度事件，而附件页需要显示百分比。
  */
 
+/** 上传超时上限：XHR 不设 timeout 会在弱网下永久停在同一进度，但也要给大文件留足时间 */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export interface UploadFile {
     name: string;
     size: number;
@@ -141,6 +144,7 @@ export function uploadAttachment(fileItem: UploadFile, category = 'other', onPro
         const xhr = new XMLHttpRequest();
         xhr.open('POST', apiUrl('/api/attachments'));
         xhr.withCredentials = true;
+        xhr.timeout = UPLOAD_TIMEOUT_MS;
 
         const token = getToken();
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -172,6 +176,7 @@ export function uploadAttachment(fileItem: UploadFile, category = 'other', onPro
 
         xhr.addEventListener('error', () => reject(new Error('网络错误，上传失败')));
         xhr.addEventListener('abort', () => reject(new Error('上传已取消')));
+        xhr.addEventListener('timeout', () => reject(new Error(`上传超时（${Math.round(UPLOAD_TIMEOUT_MS / 1000)} 秒），请检查网络后重试`)));
 
         xhr.send(form);
     });
