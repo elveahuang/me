@@ -3,7 +3,7 @@ import { defineNuxtConfig } from 'nuxt/config';
 import { resolve } from 'path';
 
 export default defineNuxtConfig({
-    compatibilityDate: '2026-04-01',
+    compatibilityDate: '2026-06-30',
     modules: ['@nuxt/content', '@nuxt/icon', '@nuxt/image', '@nuxt/ui', '@comark/nuxt'],
     devtools: { enabled: false },
     css: [resolve(__dirname, 'app/assets/css/main.css')],

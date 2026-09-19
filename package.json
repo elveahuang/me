@@ -5,6 +5,8 @@
     "scripts": {
         "mobile:start": "pnpm run --filter @repo/mobile dev",
         "mobile:build": "pnpm run --filter @repo/mobile build",
+        "mobile:build:dev": "pnpm run --filter @repo/mobile build",
+        "mobile:build:pro": "pnpm run --filter @repo/mobile build",
         "webapp:start": "pnpm run --filter @repo/webapp dev",
         "webapp:start:pro": "pnpm run --filter @repo/webapp dev",
         "webapp:db:generate": "pnpm run --filter @repo/webapp db:generate",

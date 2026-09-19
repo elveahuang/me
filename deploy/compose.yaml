@@ -1,95 +1,24 @@
-# ============================================================================
-# ME 智能体平台 —— Docker / Podman Compose 部署
-#
-# 快速开始（在仓库根目录执行）：
-#   node deploy/init-env.mjs                       # 生成 deploy/.env（随机强密钥）
-#   docker compose -f deploy/compose.yaml up -d --build
-#
-# 含对象存储（附件功能需要，RustFS 为例）：
-#   docker compose -f deploy/compose.yaml --profile storage up -d --build
-#
-# Podman 用户把上面的 docker 换成 podman 即可（Podman 兼容 compose.yaml 与
-# docker compose 语法，通过 podman-compose 或 `podman compose` 调用）。
-# ============================================================================
-
 name: ee
 
 services:
     # ------------------------------------------------------------------
-    # PostgreSQL：业务库（认证、智能体、会话、计费、附件元数据等全部表）
+    # webapp
     # ------------------------------------------------------------------
-    postgres:
-        image: postgres:17-alpine
-        restart: unless-stopped
-        environment:
-            POSTGRES_USER: ${POSTGRES_USER:-ee}
-            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env 中设置 POSTGRES_PASSWORD（可运行 node deploy/init-env.mjs 生成）}
-            POSTGRES_DB: ${POSTGRES_DB:-ee}
-        volumes:
-            - postgres-data:/var/lib/postgresql/data
-        healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ee} -d ${POSTGRES_DB:-ee}']
-            interval: 10s
-            timeout: 5s
-            retries: 10
-            start_period: 20s
-        # 默认不对宿主机暴露端口；需要本地连接时取消注释
-        # ports:
-        #   - '127.0.0.1:5432:5432'
-
-    # ------------------------------------------------------------------
-    # Redis：分布式限流与缓存。未配置时应用会降级为单进程内存模式，
-    # 多实例部署必须启用，否则限流只在单个容器内生效。
-    # ------------------------------------------------------------------
-    redis:
-        image: redis:7-alpine
-        restart: unless-stopped
-        command: ['redis-server', '--requirepass', '${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}', '--appendonly', 'yes']
-        volumes:
-            - redis-data:/data
-        healthcheck:
-            test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
-            interval: 10s
-            timeout: 5s
-            retries: 10
-            start_period: 10s
-        environment:
-            REDIS_PASSWORD: ${REDIS_PASSWORD}
-        # ports:
-        #   - '127.0.0.1:6379:6379'
-
-    # ------------------------------------------------------------------
-    # Web / API 应用（Nuxt 4 + Nitro，同时提供页面与 /api/*）
-    # 启动时自动应用数据库迁移，迁移幂等，可安全重启。
-    # ------------------------------------------------------------------
-    app:
+    webapp:
         build:
             context: ..
             dockerfile: deploy/Dockerfile
-        image: ee-webapp:${EE_IMAGE_TAG:-latest}
+        image: me:26.4.0
         restart: unless-stopped
-        depends_on:
-            postgres:
-                condition: service_healthy
-            redis:
-                condition: service_healthy
         environment:
-            # ---- 必填：数据库与认证 ----
             POSTGRES_URL: postgresql://${POSTGRES_USER:-ee}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ee}
-            # 会话签名密钥。生产环境使用占位符会被 server/plugins/env-guard.ts 拒绝启动
             BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?请设置 BETTER_AUTH_SECRET}
-            # 对外访问地址，必须与实际访问域名/端口一致，否则登录会话与回调会失效
             BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
-            # 管理员初始口令（seed 使用；容器内不自动 seed，见 deploy.md）
             ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?请设置 ADMIN_INITIAL_PASSWORD}
-            # ---- 可选：限流与缓存 ----
             REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-            # ---- 可选：模型供应商（也可完全在管理后台「模型供应商」中配置） ----
             NUXT_DEEPSEEK_API_KEY: ${NUXT_DEEPSEEK_API_KEY:-}
-            # ---- 可选：跨域与出站策略 ----
             CORS_ORIGINS: ${CORS_ORIGINS:-}
             ALLOW_PRIVATE_OUTBOUND: ${ALLOW_PRIVATE_OUTBOUND:-false}
-            # ---- 可选：微信登录与支付 ----
             WECHAT_OAUTH_APP_ID: ${WECHAT_OAUTH_APP_ID:-}
             WECHAT_OAUTH_APP_SECRET: ${WECHAT_OAUTH_APP_SECRET:-}
             WECHAT_OAUTH_REDIRECT_URL: ${WECHAT_OAUTH_REDIRECT_URL:-}
@@ -102,66 +31,4 @@ services:
             MOCK_PAY_ENABLED: ${MOCK_PAY_ENABLED:-false}
             MOBILE_APP_URL: ${MOBILE_APP_URL:-}
         ports:
-            - '${APP_PORT:-3000}:3000'
-        healthcheck:
-            test: ['CMD', 'node', '/app/healthcheck.mjs']
-            interval: 30s
-            timeout: 5s
-            retries: 3
-            start_period: 30s
-
-    # ------------------------------------------------------------------
-    # RustFS：S3 协议对象存储（附件模块使用）。
-    # 仅在 storage profile 下启动：docker compose --profile storage up -d
-    # 控制台 http://localhost:9001 可用浏览器登录并查看对象。
-    # ------------------------------------------------------------------
-    rustfs:
-        image: rustfs/rustfs:latest
-        profiles: ['storage']
-        restart: unless-stopped
-        environment:
-            RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-eeadmin}
-            RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?请设置 RUSTFS_SECRET_KEY}
-            RUSTFS_VOLUMES: /data
-            # 控制台默认仅监听容器内部，这里显式放开以便从宿主机访问
-            RUSTFS_CONSOLE_ENABLE: 'true'
-            RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
-        volumes:
-            - rustfs-data:/data
-        ports:
-            - '${RUSTFS_PORT:-9000}:9000'
-            - '${RUSTFS_CONSOLE_PORT:-9001}:9001'
-        healthcheck:
-            test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:9000/health || exit 1']
-            interval: 10s
-            timeout: 5s
-            retries: 10
-            start_period: 15s
-
-    # ------------------------------------------------------------------
-    # 一次性任务：创建附件用的存储桶（默认保持私有，附件通过预签名 URL 访问）。
-    # 桶已存在时幂等跳过。
-    # ------------------------------------------------------------------
-    rustfs-init:
-        image: minio/mc:latest
-        profiles: ['storage']
-        depends_on:
-            rustfs:
-                condition: service_healthy
-        environment:
-            RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-eeadmin}
-            RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?请设置 RUSTFS_SECRET_KEY}
-            RUSTFS_BUCKET: ${RUSTFS_BUCKET:-ee-uploads}
-        entrypoint: ['/bin/sh', '-c']
-        command:
-            - |
-                set -e
-                mc alias set ee http://rustfs:9000 "$$RUSTFS_ACCESS_KEY" "$$RUSTFS_SECRET_KEY"
-                mc mb --ignore-existing "ee/$$RUSTFS_BUCKET"
-                echo "存储桶 $$RUSTFS_BUCKET 就绪"
-        restart: 'no'
-
-volumes:
-    postgres-data:
-    redis-data:
-    rustfs-data:
+            - '3000:3000'
