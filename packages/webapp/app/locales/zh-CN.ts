@@ -47,6 +47,9 @@ export default {
         more: '更多',
         viewDetail: '查看详情',
     },
+    home: {
+        seoDescription: 'ME 智能体平台：多模型流式对话、知识库问答与工具增强，网页与移动端同一账号通行，多阶会员按需选择。',
+    },
     nav: {
         home: '首页',
         chat: '对话',

@@ -6,6 +6,15 @@ import { fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
 const { t, locale } = useI18n();
 const session = await fetchSession(ssrCookieHeaders());
 
+// 首页是主要落地页：补齐搜索摘要与分享卡片元信息；标题复用系统站点标题（管理端可改）
+const siteTitle = useRuntimeConfig().public.siteSettings.siteTitle;
+const seoDescription = computed(() => t('home.seoDescription'));
+useSeoMeta({
+    description: seoDescription,
+    ogTitle: siteTitle,
+    ogDescription: seoDescription,
+});
+
 const { data: agents } = await useFetch<AgentSummary[]>('/api/agents');
 
 const featureDefs = [

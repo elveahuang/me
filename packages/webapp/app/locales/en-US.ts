@@ -46,6 +46,9 @@ export default {
         more: 'More',
         viewDetail: 'View details',
     },
+    home: {
+        seoDescription: 'ME Agent Platform: multi-model streaming chat, knowledge-base Q&A and tool-augmented agents, with tiered plans across web and mobile.',
+    },
     nav: {
         home: 'Home',
         chat: 'Chat',
