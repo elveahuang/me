@@ -147,9 +147,11 @@ async function switchConversation(conv: ConversationSummary) {
         const res = await api<{ messages: ChatMessage[] }>(`/api/conversations/${conv.id}`);
         if (token !== chatToken) return;
         chat.value = buildChat(conv.id, (res.messages ?? []) as unknown as UIMessage[]);
-    } catch {
+    } catch (e) {
         if (token !== chatToken) return;
         chat.value = buildChat(conv.id);
+        // 历史拉不到也要说明：否则界面只剩一个空会话，会被读成「这个会话没有消息」
+        loadError.value = extractError(e, t('chat.historyLoadFailed'));
     }
     convModalOpen.value = false;
 }
@@ -259,34 +261,39 @@ watch(
 async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
     // 允许只发附件（无文字）
-    if ((!text && !pendingAttachments.value.length) || sending.value) return;
-    if (!conversationId.value || !chat.value) {
-        await startNewConversation();
-    }
-
-    // 附件必须经服务端解析：私有桶的预签名地址会过期，不能写进消息历史
-    let files: { type: 'file'; mediaType: string; filename: string; url: string }[] = [];
-    if (pendingAttachments.value.length) {
-        try {
-            const res = await api<{ parts: typeof files }>('/api/attachments/chat-parts', {
-                method: 'POST',
-                body: JSON.stringify({ ids: pendingAttachments.value.map((a) => a.id) }),
-            });
-            files = res.parts ?? [];
-        } catch (e) {
-            loadError.value = extractError(e, t('common.error'));
-            return;
-        }
-    }
-
-    input.value = '';
-    pendingAttachments.value = [];
+    if (!text && !pendingAttachments.value.length) return;
+    // 建会话与附件解析都要 await：在途标记必须先置，否则期间连点会建出两个会话
+    if (sending.value) return;
     sending.value = true;
+    loadError.value = '';
     try {
+        if (!conversationId.value || !chat.value) {
+            await startNewConversation();
+            // 建会话失败：保留输入与附件直接返回，否则用户白敲一遍且什么都没发出去
+            if (!chat.value) return;
+        }
+
+        // 附件必须经服务端解析：私有桶的预签名地址会过期，不能写进消息历史
+        let files: { type: 'file'; mediaType: string; filename: string; url: string }[] = [];
+        if (pendingAttachments.value.length) {
+            try {
+                const res = await api<{ parts: typeof files }>('/api/attachments/chat-parts', {
+                    method: 'POST',
+                    body: JSON.stringify({ ids: pendingAttachments.value.map((a) => a.id) }),
+                });
+                files = res.parts ?? [];
+            } catch (e) {
+                loadError.value = extractError(e, t('common.error'));
+                return;
+            }
+        }
+
+        input.value = '';
+        pendingAttachments.value = [];
         if (files.length) {
-            await chat.value?.sendMessage({ text, files });
+            await chat.value.sendMessage({ text, files });
         } else {
-            await chat.value?.sendMessage({ text });
+            await chat.value.sendMessage({ text });
         }
         await loadConversations();
         nextTick(() => scrollToBottom());

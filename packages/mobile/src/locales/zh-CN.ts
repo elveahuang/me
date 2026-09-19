@@ -93,6 +93,7 @@ export default {
         newChat: '新建会话',
         inputPlaceholder: '向智能体提问…',
         send: '发送',
+        historyLoadFailed: '历史消息加载失败，界面为空不代表没有消息',
         stop: '停止生成',
         reasoning: '深度思考',
         thinking: '正在思考…',

@@ -93,6 +93,7 @@ export default {
         newChat: 'New Chat',
         inputPlaceholder: 'Ask anything…',
         send: 'Send',
+        historyLoadFailed: 'Failed to load message history; an empty view does not mean there are no messages',
         stop: 'Stop',
         reasoning: 'Reasoning',
         thinking: 'Thinking…',
