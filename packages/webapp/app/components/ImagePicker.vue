@@ -82,61 +82,53 @@ watch(open, (value) => {
             <input
                 :value="modelValue"
                 :placeholder="placeholder || t('adminForm.imageUrlPlaceholder')"
-                class="flex-1 rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                class="app-input flex-1 !font-mono !text-xs"
                 @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
             />
-            <button type="button" class="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50" @click="open = true">
+            <button type="button" class="app-btn app-btn-outline app-btn-sm shrink-0" @click="open = true">
                 {{ t('adminForm.pickFromAttachments') }}
             </button>
-            <button
-                v-if="modelValue"
-                type="button"
-                class="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
-                @click="emit('update:modelValue', '')"
-            >
+            <button v-if="modelValue" type="button" class="app-btn app-btn-ghost app-btn-sm shrink-0" @click="emit('update:modelValue', '')">
                 {{ t('common.clear') }}
             </button>
         </div>
-        <img v-if="previewUrl" :src="previewUrl" :alt="modelValue" class="max-h-32 rounded-lg border border-gray-200 object-cover" />
+        <img v-if="previewUrl" :src="previewUrl" :alt="modelValue" class="border-line max-h-32 rounded-lg border object-cover" />
 
         <Teleport to="body">
-            <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="open = false">
-                <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-gray-800">{{ t('adminForm.pickFromAttachments') }}</h3>
-                        <button type="button" class="text-gray-400 hover:text-gray-600" @click="open = false">✕</button>
+            <div v-if="open" class="app-modal-backdrop" @click.self="open = false">
+                <div class="app-modal">
+                    <div class="app-modal-header">
+                        <h3 class="text-strong text-sm font-bold">{{ t('adminForm.pickFromAttachments') }}</h3>
+                        <button type="button" class="text-hover-strong text-faint" @click="open = false">✕</button>
                     </div>
 
-                    <div class="mt-3">
-                        <button
-                            type="button"
-                            class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                            :disabled="uploading"
-                            @click="fileInput?.click()"
-                        >
-                            {{ uploading ? t('attachments.uploading') : t('adminForm.uploadImage') }}
-                        </button>
-                        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="uploadAndChoose" />
-                    </div>
+                    <div class="app-modal-body space-y-3">
+                        <div>
+                            <button type="button" class="app-btn app-btn-outline app-btn-sm" :disabled="uploading" @click="fileInput?.click()">
+                                {{ uploading ? t('attachments.uploading') : t('adminForm.uploadImage') }}
+                            </button>
+                            <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="uploadAndChoose" />
+                        </div>
 
-                    <p v-if="error" class="mt-2 text-xs text-red-500">{{ error }}</p>
+                        <p v-if="error" class="app-help-error">{{ error }}</p>
 
-                    <div v-if="loading" class="mt-3 grid grid-cols-3 gap-2">
-                        <div v-for="i in 6" :key="i" class="h-24 animate-pulse rounded-lg bg-gray-100" />
+                        <div v-if="loading" class="grid grid-cols-3 gap-2">
+                            <div v-for="i in 6" :key="i" class="app-skeleton h-24 !rounded-lg" />
+                        </div>
+                        <div v-else-if="items.length" class="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto">
+                            <button
+                                v-for="item in items"
+                                :key="item.id"
+                                type="button"
+                                class="border-line border-hover-brand overflow-hidden rounded-lg border transition-colors"
+                                :title="`${item.filename} · ${formatBytes(item.size)}`"
+                                @click="choose(item)"
+                            >
+                                <img :src="item.url || `/api/attachments/${item.id}/raw`" :alt="item.filename" class="h-24 w-full object-cover" />
+                            </button>
+                        </div>
+                        <p v-else class="text-faint py-8 text-center text-xs">{{ t('attachments.emptyHint') }}</p>
                     </div>
-                    <div v-else-if="items.length" class="mt-3 grid max-h-80 grid-cols-3 gap-2 overflow-y-auto">
-                        <button
-                            v-for="item in items"
-                            :key="item.id"
-                            type="button"
-                            class="group overflow-hidden rounded-lg border border-gray-200 hover:border-emerald-400"
-                            :title="`${item.filename} · ${formatBytes(item.size)}`"
-                            @click="choose(item)"
-                        >
-                            <img :src="item.url || `/api/attachments/${item.id}/raw`" :alt="item.filename" class="h-24 w-full object-cover" />
-                        </button>
-                    </div>
-                    <p v-else class="mt-3 py-8 text-center text-xs text-gray-400">{{ t('attachments.emptyHint') }}</p>
                 </div>
             </div>
         </Teleport>
