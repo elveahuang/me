@@ -90,6 +90,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - `fetchSession()` 带 `AbortController` 超时（约 10s）、并发去重（`inflightSession` 单飞）与模块级 `cachedSession`：网络失败/超时/5xx 等瞬时故障降级返回缓存，**仅 401/403 判定为登出并清缓存返回 null**。因此 `router/index.ts` 的守卫不会因为一次抖动就把已登录用户踢回登录页；冷启动无缓存时仍返回 null。缓存是内部的，未导出 `getCachedSession/setCachedSession`，`signOut()` 会同步清空。改鉴权降级语义时以这段为准。
 - 移动端聊天 transport 另行显式设置 Bearer，不直接复用普通 JSON `api()`。更改认证逻辑时两处都要核对。
 - 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
+- **Web 端会话探测在 `app/utils/auth-client.ts`**：`resolveSession()` 返回 `signed-in | anonymous | error`，只有 401/403 算 anonymous；`fetchSession()` 是把它折叠成 null 的展示用包装。`middleware/auth.ts`、`middleware/admin.ts` 用 `resolveSession()`，抖动/5xx 时放行而不是跳登录页（服务端才是鉴权权威）；`useSession().load()` 在 error 时保留上次会话。`app/layouts/admin.vue` 仍有一份自己的本地 session（未走 useSession），改这类降级时别只改一处。
 - 修改接口字段、错误归一化、金额/日期/额度格式化时，先读共享契约，再同步服务端响应与两端消费者，避免另造同名类型。
 - 主题先改共享语义变量，再查 Web 样式和 Mobile 的 Ionic 映射；不要为单页硬编码一套颜色绕过浅色/深色/品牌色。
 - 用户端内容页入口：Web 在 `app/pages/` 下的 `news/`、`notifications.vue`、`attachments.vue`；移动端对应 `src/views/NewsView.vue`、`NewsDetailView.vue`、`NotificationsView.vue`、`AttachmentsView.vue`，导航入口分别在 `TabsView.vue`（底部）与 `HomeView.vue`/`MeView.vue`（顶部与列表）。

@@ -1,5 +1,5 @@
 import type { SessionUser } from '~/utils/auth-client';
-import { fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
+import { resolveSession, ssrCookieHeaders } from '~/utils/auth-client';
 
 /**
  * 全局会话状态。
@@ -18,7 +18,10 @@ export function useSession() {
         if (pending.value) return session.value;
         pending.value = true;
         try {
-            session.value = (await fetchSession(ssrCookieHeaders())) as { user: SessionUser } | null;
+            const outcome = await resolveSession(ssrCookieHeaders());
+            // 探测失败（网络抖动/5xx）时保留上一次的会话，否则导航栏会在一次抖动后闪成未登录
+            if (outcome.status === 'error') return session.value;
+            session.value = outcome.status === 'signed-in' ? outcome.session : null;
         } finally {
             pending.value = false;
         }

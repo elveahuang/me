@@ -1,11 +1,12 @@
-import { fetchSession, ssrCookieHeaders } from '~/utils/auth-client';
+import { resolveSession, ssrCookieHeaders } from '~/utils/auth-client';
 
 export default defineNuxtRouteMiddleware(async (to) => {
-    const session = await fetchSession(ssrCookieHeaders());
-    if (!session) {
+    const outcome = await resolveSession(ssrCookieHeaders());
+    if (outcome.status === 'error') return;
+    if (outcome.status === 'anonymous') {
         return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`);
     }
-    if (session.user.role !== 'admin') {
+    if (outcome.session.user.role !== 'admin') {
         return navigateTo('/chat');
     }
 });
