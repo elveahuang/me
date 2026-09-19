@@ -27,13 +27,17 @@ const page = ref(1);
 const pageSize = 10;
 const loading = ref(false);
 const error = ref('');
+/** 抽屉内表单（发送/用户搜索）的错误独立于列表级 error：两者共用一个变量的话，
+ *  列表刷新失败会在抽屉里重复出现，抽屉里的校验失败也会被页级横幅抢走。 */
+const formError = ref('');
 const success = ref('');
 const sending = ref(false);
 const filterAudience = ref('all');
 const sendOpen = ref(false);
 
 function openSend() {
-    error.value = '';
+    // 只清表单自己的错误：顺手清掉 error 会把列表加载失败的提示藏起来
+    formError.value = '';
     sendOpen.value = true;
 }
 
@@ -110,7 +114,7 @@ async function searchUsers() {
         // 已选中的用户不重复出现在候选列表
         userOptions.value = res.users.filter((u) => !selectedUsers.value.some((s) => s.id === u.id));
     } catch (e) {
-        error.value = extractApiError(e, t('common.error'));
+        formError.value = extractApiError(e, t('common.error'));
     } finally {
         searchingUsers.value = false;
     }
@@ -136,14 +140,14 @@ function removeUser(id: string) {
 }
 
 async function send() {
-    error.value = '';
+    formError.value = '';
     success.value = '';
     if (!form.title.trim()) {
-        error.value = '标题必填';
+        formError.value = t('notifications.titleRequired');
         return;
     }
     if (form.audience === 'users' && !selectedUsers.value.length) {
-        error.value = t('notifications.noTargetSelected');
+        formError.value = t('notifications.noTargetSelected');
         return;
     }
     if (!confirm(t('notifications.sendConfirm'))) return;
@@ -162,23 +166,23 @@ async function send() {
                 targetUsers: selectedUsers.value.map((u) => u.id),
             },
         });
-        success.value = t('notifications.sent');
+        flashSuccess(t('notifications.sent'));
         Object.assign(form, { title: '', content: '', linkUrl: '', audience: 'all' as const, type: 'system', level: 'info' });
         selectedUsers.value = [];
         sendOpen.value = false;
         await load();
     } catch (e) {
-        error.value = extractApiError(e, t('common.error'));
+        formError.value = extractApiError(e, t('common.error'));
     } finally {
         sending.value = false;
     }
 }
 
 async function remove(row: AdminNotificationRow) {
-    if (!confirm(`确定删除「${row.title}」？`)) return;
+    if (!confirm(t('notifications.deleteConfirm', { title: row.title }))) return;
     try {
         await $fetch(`/api/admin/notifications/${row.id}`, { method: 'DELETE' });
-        success.value = t('common.deleted');
+        flashSuccess(t('common.deleted'));
         await load();
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
@@ -222,13 +226,14 @@ function readPercent(row: AdminNotificationRow): number {
             <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openSend">{{ t('notifications.send') }}</button>
         </div>
 
-        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
-        <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
+        <!-- 用主题令牌而不是 bg-red-50 / bg-emerald-50：浅色专用色块在深色模式下几乎读不出来 -->
+        <div v-if="error" class="app-alert app-alert-danger text-sm">{{ error }}</div>
+        <div v-if="success" class="app-alert app-alert-success text-sm">{{ success }}</div>
 
         <!-- 推送表单（右侧抽屉） -->
         <AdminDrawer :open="sendOpen" :title="t('notifications.send')" width-class="sm:max-w-2xl" @close="sendOpen = false">
             <div class="space-y-3">
-                <p v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</p>
+                <p v-if="formError" class="app-alert app-alert-danger text-sm">{{ formError }}</p>
                 <div class="grid gap-3 sm:grid-cols-2">
                     <input
                         v-model="form.title"
@@ -252,7 +257,7 @@ function readPercent(row: AdminNotificationRow): number {
                     </select>
                     <input
                         v-model="form.linkUrl"
-                        placeholder="跳转链接（可选），如 /pricing"
+                        :placeholder="t('notifications.linkPlaceholder')"
                         class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
                     />
                 </div>
