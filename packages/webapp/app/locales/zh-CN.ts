@@ -40,6 +40,7 @@ export default {
         // 外壳与通用交互（导航抽屉 / 无障碍 / 状态提示）
         navigation: '导航',
         openMenu: '打开导航菜单',
+        switchToLocale: '切换到 {locale}',
         skipToContent: '跳到主要内容',
         systemStatus: '服务状态',
         loadFailed: '加载失败',

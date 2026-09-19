@@ -183,7 +183,7 @@ async function logout() {
                         type="button"
                         class="app-btn app-btn-ghost app-btn-icon"
                         :title="t('profile.languageSelect')"
-                        :aria-label="`切换到 ${otherLocaleLabel}`"
+                        :aria-label="t('common.switchToLocale', { locale: otherLocaleLabel })"
                         @click="switchLocale()"
                     >
                         <AppIcon name="translate" :size="18" />

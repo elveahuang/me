@@ -39,6 +39,7 @@ export default {
         themeAuto: 'System',
         navigation: 'Navigation',
         openMenu: 'Open navigation menu',
+        switchToLocale: 'Switch to {locale}',
         skipToContent: 'Skip to main content',
         systemStatus: 'Service status',
         loadFailed: 'Failed to load',
