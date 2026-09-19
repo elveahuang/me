@@ -146,7 +146,7 @@ const features = computed(() => {
                             {{ agent.emoji || agent.avatar || '🤖' }}
                         </div>
                         <div class="min-w-0 flex-1">
-                            <h4 class="group-text-hover-brand truncate text-sm font-black transition-colors">
+                            <h4 class="group-hover-brand truncate text-sm font-black transition-colors">
                                 {{ agent.name }}
                             </h4>
                             <p class="text-faint truncate text-[11px]">{{ agent.description || t('common.none') }}</p>

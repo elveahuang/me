@@ -13,7 +13,7 @@ const handleSubmit = (e: Event) => {
 </script>
 
 <template>
-    <div class="stretch mx-auto flex w-full max-w-md flex-col py-24">
+    <div class="mx-auto flex w-full max-w-md flex-col py-24">
         <div v-for="m in chat.messages" :key="m.id" class="whitespace-pre-wrap">
             {{ m.role === 'user' ? 'User: ' : 'AI: ' }}
             {{ m.parts.map((part) => (part.type === 'text' ? part.text : '')).join('') }}

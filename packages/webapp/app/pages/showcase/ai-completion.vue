@@ -5,7 +5,7 @@ const { completion, input, handleSubmit } = useCompletion();
 </script>
 
 <template>
-    <div class="stretch mx-auto flex w-full max-w-md flex-col py-24">
+    <div class="mx-auto flex w-full max-w-md flex-col py-24">
         <h4 class="text-strong pb-4 text-xl font-bold md:text-xl">useCompletion Example</h4>
         {{ completion }}
         <form @submit="handleSubmit">

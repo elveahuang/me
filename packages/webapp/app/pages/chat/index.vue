@@ -96,7 +96,7 @@ async function removeConversation(id: string) {
                     </li>
                     <li v-for="c in conversations" :key="c.id" class="group relative rounded-xl transition-colors hover:bg-[color:var(--surface-2)]">
                         <NuxtLink :to="`/chat/${c.agentId}?c=${c.id}`" class="block min-w-0 py-2.5 pr-8 pl-2.5 text-xs">
-                            <p class="group-text-hover-brand truncate font-semibold transition-colors">{{ c.title }}</p>
+                            <p class="group-hover-brand truncate font-semibold transition-colors">{{ c.title }}</p>
                             <p class="text-faint mt-1 flex items-center gap-1.5 text-[10px]">
                                 <span class="truncate">{{ c.agentName }}</span>
                                 <span>·</span>
@@ -190,7 +190,7 @@ async function removeConversation(id: string) {
                         <div class="app-avatar-icon h-11 w-11 shrink-0 text-2xl transition-transform group-hover:scale-105">
                             {{ agent.emoji || agent.avatar || '🤖' }}
                         </div>
-                        <p class="group-text-hover-brand min-w-0 truncate text-sm font-bold transition-colors">{{ agent.name }}</p>
+                        <p class="group-hover-brand min-w-0 truncate text-sm font-bold transition-colors">{{ agent.name }}</p>
                     </div>
 
                     <p class="text-muted-2 mt-3 line-clamp-2 min-h-10 flex-1 text-xs leading-relaxed">{{ agent.description || t('common.none') }}</p>

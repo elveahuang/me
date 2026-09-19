@@ -132,7 +132,7 @@ function goPage(next: number) {
                     </span>
                 </div>
                 <div class="flex flex-1 flex-col p-4">
-                    <h2 class="group-text-hover-brand line-clamp-2 text-sm font-black transition-colors">{{ item.title }}</h2>
+                    <h2 class="group-hover-brand line-clamp-2 text-sm font-black transition-colors">{{ item.title }}</h2>
                     <p class="text-muted-2 mt-2 line-clamp-3 flex-1 text-[11px] leading-relaxed">{{ item.summary || t('common.none') }}</p>
                     <div class="app-divider mt-3 flex items-center justify-between pt-2 text-[10px]">
                         <span class="text-faint">{{ formatDate(item.publishedAt || item.createdAt) }}</span>

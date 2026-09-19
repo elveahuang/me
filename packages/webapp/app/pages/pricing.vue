@@ -375,11 +375,11 @@ const usedPercent = computed(() => quotaUsedPercent(statusData.value?.usedToday,
                 <p class="text-faint mt-1 text-xs">关于会员方案、每日额度重置与权益退订的常见疑问</p>
             </div>
             <div class="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2">
-                <div class="border-line bg-surface-2/60 rounded-2xl border p-4">
+                <div class="app-panel p-4">
                     <p class="text-default text-sm font-bold">💡 {{ t('billing.faq1Q') }}</p>
                     <p class="text-muted-2 mt-2 text-xs leading-relaxed">{{ t('billing.faq1A') }}</p>
                 </div>
-                <div class="border-line bg-surface-2/60 rounded-2xl border p-4">
+                <div class="app-panel p-4">
                     <p class="text-default text-sm font-bold">💳 {{ t('billing.faq2Q') }}</p>
                     <p class="text-muted-2 mt-2 text-xs leading-relaxed">{{ t('billing.faq2A') }}</p>
                 </div>
