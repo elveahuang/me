@@ -3,7 +3,7 @@ import { ATTACHMENT_CATEGORIES, formatBytes, formatDate, type AttachmentRecord, 
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, apiUrl, extractApiError, getToken } from '../api/auth';
+import { api, apiUrl, extractApiError } from '../api/auth';
 import { useDialog } from '../composables/useDialog';
 import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
@@ -148,12 +148,14 @@ async function openAttachment(item: AttachmentRecord) {
     }
 }
 
-/** 图片缩略图：私有桶的预签名 URL 已由列表接口签发；令牌失效时回退到带鉴权的下载代理 */
+/**
+ * 图片缩略图：列表接口已经签发可访问地址，优先使用。
+ * 地址缺失时只有浏览器能回退到下载代理（同源 cookie 鉴权）；原生壳的 <img> 带不上 Bearer，
+ * 服务端也只读 Authorization 而不认 ?t= 查询参数，硬拼 token 只会得到 401 裂图。
+ */
 function thumbUrl(item: AttachmentRecord): string {
     if (item.url) return item.url;
-    const token = getToken();
-    const base = `${apiUrl(`/api/attachments/${item.id}/raw`)}`;
-    return token ? `${base}?t=${encodeURIComponent(token)}` : base;
+    return nativeShell ? '' : apiUrl(`/api/attachments/${item.id}/raw`);
 }
 
 const previewUrl = ref('');
@@ -230,8 +232,8 @@ function preview(item: AttachmentRecord) {
                             class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--surface-3)]"
                             @click="preview(item)"
                         >
-                            <img v-if="item.isImage" :src="thumbUrl(item)" :alt="item.filename" class="h-full w-full object-cover" />
-                            <span v-else class="text-lg">📄</span>
+                            <img v-if="item.isImage && thumbUrl(item)" :src="thumbUrl(item)" :alt="item.filename" class="h-full w-full object-cover" />
+                            <span v-else class="text-lg">{{ item.isImage ? '🖼️' : '📄' }}</span>
                         </button>
                         <div class="min-w-0 flex-1" @click="preview(item)">
                             <p class="truncate text-xs font-bold">{{ item.filename }}</p>
