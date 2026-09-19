@@ -1,20 +1,20 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1789702002190,
-      "tag": "0000_smiling_peter_quill",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1789746812591,
-      "tag": "0001_same_marvel_zombies",
-      "breakpoints": true
-    }
-  ]
+    "version": "7",
+    "dialect": "postgresql",
+    "entries": [
+        {
+            "idx": 0,
+            "version": "7",
+            "when": 1789702002190,
+            "tag": "0000_smiling_peter_quill",
+            "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "7",
+            "when": 1789746812591,
+            "tag": "0001_same_marvel_zombies",
+            "breakpoints": true
+        }
+    ]
 }
