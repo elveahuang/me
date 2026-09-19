@@ -6,11 +6,10 @@ import { useI18n } from 'vue-i18n';
  * 用户端外壳。
  *
  * 响应式策略：
- * - < lg：主导航收进左侧抽屉（此前 /chat、/pricing 用 `hidden sm:inline-flex` 直接隐藏，
- *   移动端用户根本没有入口），头部只保留汉堡菜单 + 外观 + 用户菜单。
- * - ≥ lg：导航平铺在头部，外观设置收进下拉，避免头部塞满 7 个主题按钮。
- * - SVG 图标来自本地内联图标表（AppIcon），不再使用 emoji（emoji 在不同系统上
- *   字形、大小、基线差异很大，是页面显得不专业的主要原因）。
+ * - < lg：主导航收进右侧抽屉，头部保留 消息/语言/用户菜单，汉堡按钮固定在最右端。
+ * - ≥ lg：导航平铺在头部（纯文字），外观设置收进下拉，抽屉按钮隐藏。
+ * - 汉堡按钮外层包 lg:hidden 容器而非在 .app-btn 上加变体：主题 CSS 未分层，
+ *   .app-btn 的 display 会压掉 utilities 层的 lg:hidden（详见 AGENTS.md）。
  */
 const { t, locale } = useI18n();
 const { $setLocale } = useNuxtApp();
@@ -23,9 +22,10 @@ const drawerRef = ref<HTMLElement | null>(null);
 
 /**
  * 未读消息角标。登录态就绪后取一次，客户端每 60 秒刷新。
+ * shell-unread 是共享状态：个人中心的消息通知分区标记已读后同步更新此值。
  * 未登录或接口不可用时静默保持 0，不影响外壳可用性。
  */
-const unreadCount = ref(0);
+const unreadCount = useState('shell-unread', () => 0);
 
 async function refreshUnread() {
     if (!session.value) {
@@ -52,12 +52,10 @@ const navLinks = computed(() => [
     { to: '/', label: t('nav.home'), icon: 'dots-grid' },
     { to: '/chat', label: t('nav.chat'), icon: 'chat-outline' },
     { to: '/news', label: t('nav.news'), icon: 'newspaper-variant-outline' },
-    { to: '/notifications', label: t('nav.notifications'), icon: 'bell-outline' },
-    { to: '/attachments', label: t('nav.attachments'), icon: 'folder-multiple-outline' },
     { to: '/pricing', label: t('nav.pricing'), icon: 'crown-outline' },
 ]);
 
-/** 头部主导航：首页在外壳里用 Logo 表达，这里只放功能性入口 */
+/** 头部主导航：首页在外壳里用 Logo 表达，这里只放功能性入口（纯文字，无图标） */
 const primaryLinks = computed(() => navLinks.value.filter((link) => link.to !== '/'));
 
 const otherLocale = computed(() => (locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'));
@@ -89,11 +87,11 @@ watch(
     () => (drawerOpen.value = false),
 );
 
-// 进入通知页即视为已查看，刷新角标避免停留在旧数值
+// 进入个人中心即刷新角标（消息通知分区在其中，标记已读后由共享状态同步）
 watch(
     () => route.path,
     (path) => {
-        if (path === '/notifications') void refreshUnread();
+        if (path === '/profile') void refreshUnread();
     },
 );
 
@@ -130,52 +128,29 @@ async function logout() {
             style="border-color: var(--line); background-color: color-mix(in oklab, var(--surface) 85%, transparent)"
         >
             <div class="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6">
-                <!-- 移动端汉堡菜单 -->
-                <button
-                    id="shell-drawer-trigger"
-                    type="button"
-                    class="app-btn app-btn-ghost app-btn-icon lg:hidden"
-                    :aria-label="t('common.openMenu')"
-                    aria-controls="shell-drawer"
-                    :aria-expanded="drawerOpen"
-                    @click="drawerOpen = true"
-                >
-                    <AppIcon name="menu" :size="20" />
-                </button>
-
                 <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5">
                     <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">ME</span>
                     <span class="text-brand hidden text-lg font-black tracking-tight sm:inline">{{ siteTitle }}</span>
                 </NuxtLink>
 
-                <!-- 桌面端主导航 -->
+                <!-- 桌面端主导航（纯文字） -->
                 <nav class="ml-4 hidden items-center gap-1 lg:flex">
                     <NuxtLink
                         v-for="link in primaryLinks"
                         :key="link.to"
                         :to="link.to"
-                        class="app-nav-link inline-flex items-center gap-1.5"
+                        class="app-nav-link inline-flex items-center"
                         active-class="app-nav-link-active"
                     >
-                        <AppIcon :name="link.icon" :size="16" />
                         <span>{{ link.label }}</span>
-                    </NuxtLink>
-                    <NuxtLink
-                        v-if="session?.user.role === 'admin'"
-                        to="/admin"
-                        class="app-nav-link inline-flex items-center gap-1.5"
-                        active-class="app-nav-link-active"
-                    >
-                        <AppIcon name="shield-account-outline" :size="16" />
-                        <span>{{ t('nav.admin') }}</span>
                     </NuxtLink>
                 </nav>
 
                 <div class="ml-auto flex items-center gap-1.5">
-                    <!-- 消息入口（带未读角标） -->
+                    <!-- 消息入口（带未读角标），直达个人中心的消息通知分区 -->
                     <NuxtLink
                         v-if="session"
-                        to="/notifications"
+                        to="/profile/notifications"
                         class="app-btn app-btn-ghost app-btn-icon relative"
                         :title="t('notifications.title')"
                         :aria-label="t('notifications.title')"
@@ -220,6 +195,21 @@ async function logout() {
                         <NuxtLink to="/login" class="app-nav-link hidden sm:inline-flex">{{ t('nav.login') }}</NuxtLink>
                         <NuxtLink to="/register" class="app-btn app-btn-primary">{{ t('nav.register') }}</NuxtLink>
                     </template>
+
+                    <!-- 移动端汉堡菜单：固定在头部最右端；外层 lg:hidden 容器负责桌面端隐藏 -->
+                    <div class="lg:hidden">
+                        <button
+                            id="shell-drawer-trigger"
+                            type="button"
+                            class="app-btn app-btn-ghost app-btn-icon"
+                            :aria-label="t('common.openMenu')"
+                            aria-controls="shell-drawer"
+                            :aria-expanded="drawerOpen"
+                            @click="drawerOpen = true"
+                        >
+                            <AppIcon name="menu" :size="20" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>
@@ -262,7 +252,7 @@ async function logout() {
                 <aside
                     id="shell-drawer"
                     ref="drawerRef"
-                    class="app-drawer app-drawer-left safe-top safe-bottom"
+                    class="app-drawer app-drawer-right safe-top safe-bottom"
                     role="dialog"
                     aria-modal="true"
                     :aria-label="t('common.navigation')"
@@ -298,10 +288,6 @@ async function logout() {
                             <NuxtLink v-for="link in navLinks" :key="link.to" :to="link.to" class="app-sidebar-link" active-class="app-sidebar-link-active">
                                 <AppIcon :name="link.icon" :size="17" />
                                 <span>{{ link.label }}</span>
-                            </NuxtLink>
-                            <NuxtLink v-if="session?.user.role === 'admin'" to="/admin" class="app-sidebar-link" active-class="app-sidebar-link-active">
-                                <AppIcon name="shield-account-outline" :size="17" />
-                                <span>{{ t('nav.admin') }}</span>
                             </NuxtLink>
                             <NuxtLink v-if="session" to="/profile" class="app-sidebar-link" active-class="app-sidebar-link-active">
                                 <AppIcon name="account-outline" :size="17" />

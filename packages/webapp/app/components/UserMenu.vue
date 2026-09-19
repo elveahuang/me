@@ -2,8 +2,8 @@
 import { useI18n } from 'vue-i18n';
 
 /**
- * 用户菜单：桌面端头部的头像下拉。
- * 登录态在此统一渲染「个人中心 / 会员方案 / 管理后台 / 退出」，
+ * 用户菜单：头部右侧的纯头像下拉。
+ * 登录态在此统一渲染「个人中心 / 管理后台 / 退出」（管理后台仅管理员可见），
  * 未登录时由外层直接展示登录、注册按钮。
  */
 const { t } = useI18n();
@@ -21,13 +21,12 @@ async function logout() {
             <button
                 v-bind="attrs"
                 type="button"
-                class="flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] py-1 pr-2.5 pl-1 transition-colors hover:border-[color:var(--brand)]"
+                class="rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-0.5 transition-colors hover:border-[color:var(--brand)]"
                 :title="session.user.name"
+                :aria-label="session.user.name"
                 @click="toggle"
             >
                 <span class="app-avatar h-7 w-7 text-[11px]">{{ session.user.name?.[0]?.toUpperCase() || 'U' }}</span>
-                <span class="hidden max-w-[7rem] truncate text-xs font-semibold sm:inline">{{ session.user.name }}</span>
-                <AppIcon name="chevron-down" :size="15" class="text-faint" />
             </button>
         </template>
 
@@ -44,10 +43,6 @@ async function logout() {
             <NuxtLink to="/profile" class="app-dropdown-item" @click="close">
                 <AppIcon name="account-outline" :size="16" />
                 <span>{{ t('nav.profile') }}</span>
-            </NuxtLink>
-            <NuxtLink to="/pricing" class="app-dropdown-item" @click="close">
-                <AppIcon name="crown-outline" :size="16" />
-                <span>{{ t('nav.pricing') }}</span>
             </NuxtLink>
             <NuxtLink v-if="session.user.role === 'admin'" to="/admin" class="app-dropdown-item" @click="close">
                 <AppIcon name="shield-account-outline" :size="16" />

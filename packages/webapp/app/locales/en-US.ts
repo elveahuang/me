@@ -48,10 +48,10 @@ export default {
     },
     nav: {
         home: 'Home',
-        chat: 'Agent Chat',
+        chat: 'Chat',
         menu: 'Menu',
         agents: 'Agents Square',
-        pricing: 'Pricing & Plans',
+        pricing: 'Pricing',
         profile: 'Profile',
         admin: 'Admin Console',
         login: 'Sign In',
@@ -398,6 +398,9 @@ export default {
         appearanceHint: 'Light / Dark / System',
         themeColorHint: 'Blue / Green / Yellow / Red',
         logoutConfirm: 'Are you sure you want to sign out?',
+        tabOverview: 'Overview',
+        tabPreferences: 'Preferences',
+        tabOrders: 'Order History',
     },
     attachments: {
         title: 'Attachments',
