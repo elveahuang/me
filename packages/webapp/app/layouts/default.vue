@@ -87,11 +87,40 @@ function switchLocale(next: 'zh-CN' | 'en-US' = otherLocale.value) {
     $setLocale(next);
 }
 
+/** 抽屉打开时把 Tab 焦点圈闭在抽屉内，避免焦点落到遮罩背后的页面内容 */
+function trapDrawerFocus(event: KeyboardEvent) {
+    const root = drawerRef.value;
+    if (!root) return;
+    const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select, input, textarea, [tabindex]:not([tabindex="-1"])'),
+    ).filter((el) => el.offsetParent !== null);
+    const current = document.activeElement;
+    if (focusables.length === 0 || !(current instanceof Node) || !root.contains(current)) {
+        event.preventDefault();
+        focusables[0]?.focus();
+        return;
+    }
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    if (event.shiftKey && current === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
 /** 抽屉打开时锁定页面滚动，并把焦点移入抽屉（Esc 关闭，关闭后焦点回到汉堡按钮） */
 function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && drawerOpen.value) {
+    if (!drawerOpen.value) return;
+    if (event.key === 'Escape') {
         drawerOpen.value = false;
         (document.getElementById('shell-drawer-trigger') as HTMLElement | null)?.focus();
+        return;
+    }
+    if (event.key === 'Tab') {
+        trapDrawerFocus(event);
     }
 }
 
