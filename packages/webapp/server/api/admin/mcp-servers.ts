@@ -10,10 +10,10 @@ export default defineEventHandler(async (event) => {
 
     if (getMethod(event) === 'POST') {
         const body = (await readBody(event)) ?? {};
-        if (!body.name || !body.url) {
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        if (!name || !body.url) {
             throw createError({ statusCode: 400, statusMessage: 'name 和 url 必填' });
         }
-        const name = String(body.name);
         const url = assertAbsoluteHttpUrl('url', body.url);
         const id = crypto.randomUUID();
         // name 会被用作运行时工具前缀（mcp_<name>_<tool>），重名会静默覆盖彼此的工具。

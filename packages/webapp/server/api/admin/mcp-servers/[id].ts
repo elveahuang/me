@@ -22,14 +22,18 @@ export default defineEventHandler(async (event) => {
     }
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    for (const key of ['name', 'transport', 'enabled'] as const) {
-        if (body[key] !== undefined) patch[key] = body[key];
+    // PATCH 必须和 POST 走同一套归一化：此前 name 可以是空串（会拼出 `mcp__tool` 这种工具前缀），
+    // transport 是 text 列、脏值只会静默按 http 连接，enabled 传非布尔则直接 500。
+    const renamed = body.name !== undefined;
+    const newName = renamed ? (typeof body.name === 'string' ? body.name.trim() : '') : '';
+    if (renamed && !newName) {
+        throw createError({ statusCode: 400, statusMessage: 'name 不能为空' });
     }
+    if (renamed) patch.name = newName;
+    if (body.transport !== undefined) patch.transport = body.transport === 'sse' ? 'sse' : 'http';
+    if (body.enabled !== undefined) patch.enabled = Boolean(body.enabled);
     if (body.url !== undefined) patch.url = assertAbsoluteHttpUrl('url', body.url);
     if (body.headers !== undefined) patch.headers = mergeHeaders(existing.headers, body.headers);
-
-    const renamed = body.name !== undefined;
-    const newName = renamed ? String(body.name) : null;
 
     if (renamed) {
         // server 名用作运行时工具前缀（mcp_<name>_<tool>），重名会导致工具集合并时静默覆盖。
@@ -39,7 +43,7 @@ export default defineEventHandler(async (event) => {
             const conflict = await tx
                 .select({ id: mcpServers.id })
                 .from(mcpServers)
-                .where(and(eq(mcpServers.name, newName!), ne(mcpServers.id, id)));
+                .where(and(eq(mcpServers.name, newName), ne(mcpServers.id, id)));
             if (conflict.length) {
                 throw createError({ statusCode: 409, statusMessage: `同名 MCP Server「${newName}」已存在` });
             }
