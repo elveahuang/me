@@ -816,6 +816,17 @@ select.app-input {
     transition: width 0.4s ease;
 }
 
+/* 品牌实底（会员卡 hero）上的进度条：默认填充本身就是品牌渐变，叠在品牌底上读不出来，
+   因此整条换成 on-brand 反色。写在 .app-progress* 之后，未分层同特异性靠顺序取胜。 */
+.bg-brand-gradient .app-progress {
+    background-color: color-mix(in oklab, var(--on-brand) 25%, transparent);
+}
+
+.bg-brand-gradient .app-progress-bar {
+    background-color: var(--on-brand);
+    background-image: none;
+}
+
 /* ============================================================
  * 数据表格
  * 用法：<div class="app-table-wrap"><table class="app-table">…</table></div>

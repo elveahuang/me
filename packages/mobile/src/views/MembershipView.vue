@@ -286,8 +286,8 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
                                 <span>{{ t('billing.expiresAt') }}</span>
                                 <span class="font-bold">{{ formatDate(status.expiresAt) }}</span>
                             </div>
-                            <div v-if="status?.chatQuotaPerDay" class="app-progress !bg-white/25">
-                                <div class="app-progress-bar" :style="{ width: `${usedPercent}%`, backgroundColor: '#fff' }" />
+                            <div v-if="status?.chatQuotaPerDay" class="app-progress">
+                                <div class="app-progress-bar" :style="{ width: `${usedPercent}%` }" />
                             </div>
                         </div>
                     </div>
