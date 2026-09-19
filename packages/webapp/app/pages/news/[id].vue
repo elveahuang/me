@@ -12,15 +12,24 @@ const article = ref<NewsDetailResponse | null>(null);
 const loading = ref(true);
 const error = ref('');
 
+/** 详情请求按 id 发序：A→B 途中回退到 A 时，B 的迟到响应必须丢弃，否则会把 B 的正文渲染在 A 的地址下 */
+let loadSeq = 0;
+
 async function load(id: string) {
+    const seq = ++loadSeq;
     loading.value = true;
     error.value = '';
     try {
-        article.value = await $fetch<NewsDetailResponse>(`/api/news/${id}`);
+        const res = await $fetch<NewsDetailResponse>(`/api/news/${id}`);
+        if (seq !== loadSeq) return;
+        article.value = res;
     } catch (e) {
+        if (seq !== loadSeq) return;
+        // 清掉上一篇：否则失败时 article 仍是别篇文章，容易在错误提示之外残留错内容
+        article.value = null;
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -35,8 +44,10 @@ if (initial.value) {
 
 async function reload() {
     const id = String(route.params.id);
-    // 首屏已由 useAsyncData 填充，仅在切换文章时重新请求
-    if (article.value?.id === id) return;
+    // 首屏已由 useAsyncData 填充，仅在切换文章时重新请求。
+    // 必须同时要求「当前没有在途请求」：A→B 未完成就退回 A 时，article 仍是 A，
+    // 只看 id 会直接 return，让 B 的响应落在 A 的地址上。
+    if (article.value?.id === id && !loading.value) return;
     await load(id);
 }
 
