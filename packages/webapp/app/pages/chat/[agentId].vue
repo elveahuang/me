@@ -549,11 +549,11 @@ const starterPrompts = computed(() => [
             <div v-if="showScrollBottom" class="absolute right-6 bottom-24 z-20 transition-all duration-200">
                 <button
                     type="button"
-                    class="bg-primary-600 hover:bg-primary-700 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-md transition-transform active:scale-95"
+                    class="bg-primary-600 hover:bg-primary-700 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-[color:var(--on-brand)] shadow-md transition-transform active:scale-95"
                     @click="scrollToBottom"
                 >
                     <span>↓ {{ t('chat.scrollToBottom') }}</span>
-                    <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-amber-300" />
+                    <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-[color:var(--warning)]" />
                 </button>
             </div>
 

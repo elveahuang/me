@@ -172,9 +172,12 @@ onBeforeUnmount(() => {
                 :class="[
                     'absolute -bottom-3 hidden items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all group-hover:flex',
                     isUser ? 'left-2' : 'right-2',
-                    copied ? '!border-emerald-500 !bg-emerald-50 text-emerald-700 dark:!bg-emerald-950/80 dark:text-emerald-300' : '',
                 ]"
-                style="border-color: var(--line); background-color: var(--surface); color: var(--content-muted)"
+                :style="
+                    copied
+                        ? { borderColor: 'var(--success)', backgroundColor: 'var(--surface)', color: 'var(--success)' }
+                        : { borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }
+                "
                 :title="t('common.copy')"
                 @click="copyMessageText"
             >
