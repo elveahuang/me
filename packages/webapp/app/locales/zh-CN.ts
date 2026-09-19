@@ -42,7 +42,6 @@ export default {
         openMenu: '打开导航菜单',
         switchToLocale: '切换到 {locale}',
         skipToContent: '跳到主要内容',
-        systemStatus: '服务状态',
         loadFailed: '加载失败',
         emptyHint: '暂时没有数据，稍后再试',
         more: '更多',

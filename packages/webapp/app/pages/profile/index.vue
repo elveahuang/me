@@ -14,7 +14,7 @@ const quotaPercent = computed(() => quotaUsedPercent(membership.value?.usedToday
 
 <template>
     <div class="space-y-6">
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div class="app-card p-5">
                 <div class="text-faint flex items-center justify-between text-xs font-medium">
                     <span>{{ t('nav.conversations') }}</span>
@@ -35,13 +35,6 @@ const quotaPercent = computed(() => quotaUsedPercent(membership.value?.usedToday
                     <span class="text-base">👑</span>
                 </div>
                 <div class="mt-2 truncate text-base font-black">{{ membership?.plan?.name || t('billing.freePlan') }}</div>
-            </div>
-            <div class="app-card p-5">
-                <div class="text-faint flex items-center justify-between text-xs font-medium">
-                    <span>System Probe</span>
-                    <span class="text-base">🩺</span>
-                </div>
-                <a href="/api/health" target="_blank" class="app-link mt-2 inline-flex items-center gap-1 text-xs">/api/health ›</a>
             </div>
         </div>
 

@@ -224,19 +224,10 @@ async function logout() {
 
         <footer class="app-divider" style="border-color: var(--line)">
             <div class="text-faint mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-xs sm:flex-row sm:px-6">
-                <span>© {{ new Date().getFullYear() }} {{ t('common.appName') }}</span>
+                <span>© {{ new Date().getFullYear() }} {{ siteTitle }}</span>
                 <nav class="flex items-center gap-4">
                     <NuxtLink to="/pricing" class="transition-colors hover:text-[color:var(--content-soft)]">{{ t('nav.pricing') }}</NuxtLink>
                     <NuxtLink to="/chat" class="transition-colors hover:text-[color:var(--content-soft)]">{{ t('nav.chat') }}</NuxtLink>
-                    <a
-                        href="/api/health"
-                        target="_blank"
-                        rel="noopener"
-                        class="inline-flex items-center gap-1 transition-colors hover:text-[color:var(--content-soft)]"
-                    >
-                        <span>{{ t('common.systemStatus') }}</span>
-                        <AppIcon name="external-link" :size="13" />
-                    </a>
                 </nav>
             </div>
         </footer>

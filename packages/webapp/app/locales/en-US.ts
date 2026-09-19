@@ -41,7 +41,6 @@ export default {
         openMenu: 'Open navigation menu',
         switchToLocale: 'Switch to {locale}',
         skipToContent: 'Skip to main content',
-        systemStatus: 'Service status',
         loadFailed: 'Failed to load',
         emptyHint: 'Nothing here yet, please try again later',
         more: 'More',
