@@ -59,7 +59,7 @@ function loginWithWechat() {
         <div class="app-card overflow-hidden">
             <!-- 顶部品牌区 -->
             <div class="bg-brand-gradient px-8 py-7 text-center">
-                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-xl font-black backdrop-blur-sm">ME</div>
+                <div class="on-brand-tile mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-xl font-black backdrop-blur-sm">ME</div>
                 <h1 class="mt-3 text-xl font-black">{{ t('nav.login') }}</h1>
                 <p class="mt-1 text-xs opacity-85">欢迎回到 {{ t('common.appName') }}</p>
             </div>

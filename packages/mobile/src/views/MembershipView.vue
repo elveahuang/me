@@ -263,7 +263,7 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
                     <div class="bg-brand-gradient p-5">
                         <div class="flex items-center justify-between">
                             <div>
-                                <span class="app-chip !border-white/30 !bg-white/15 !text-white">
+                                <span class="app-chip">
                                     {{ status?.expiresAt ? t('common.enabled') : t('billing.freePlan') }}
                                 </span>
                                 <h2 class="mt-2 text-xl font-black">{{ status?.plan?.name || t('billing.freePlan') }}</h2>
@@ -271,7 +271,7 @@ const usedPercent = computed(() => quotaUsedPercent(status.value?.usedToday, sta
                             <div class="text-3xl">👑</div>
                         </div>
 
-                        <div class="mt-4 space-y-2 border-t border-white/20 pt-3 text-xs opacity-95">
+                        <div class="on-brand-line mt-4 space-y-2 border-t pt-3 text-xs opacity-95">
                             <div class="flex justify-between">
                                 <span>{{ t('billing.dailyQuota') }}</span>
                                 <span class="font-bold">

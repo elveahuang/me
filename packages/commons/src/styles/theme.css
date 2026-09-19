@@ -827,6 +827,22 @@ select.app-input {
     background-image: none;
 }
 
+/* 品牌实底上的半透明覆盖层（登录页徽标块、chip、分隔线）。
+   写死 white 在黄色品牌下会整片糊掉：on-brand 才是该品牌色的对比色。 */
+.on-brand-tile {
+    background-color: color-mix(in oklab, var(--on-brand) 15%, transparent);
+}
+
+.on-brand-line {
+    border-color: color-mix(in oklab, var(--on-brand) 22%, transparent);
+}
+
+.bg-brand-gradient .app-chip {
+    color: var(--on-brand);
+    background-color: color-mix(in oklab, var(--on-brand) 15%, transparent);
+    border-color: color-mix(in oklab, var(--on-brand) 30%, transparent);
+}
+
 /* ============================================================
  * 数据表格
  * 用法：<div class="app-table-wrap"><table class="app-table">…</table></div>

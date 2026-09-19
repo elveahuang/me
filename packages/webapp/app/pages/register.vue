@@ -40,7 +40,7 @@ async function submit() {
     <div class="mx-auto mt-10 w-full max-w-md">
         <div class="app-card overflow-hidden">
             <div class="bg-brand-gradient px-8 py-7 text-center">
-                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-xl font-black backdrop-blur-sm">ME</div>
+                <div class="on-brand-tile mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-xl font-black backdrop-blur-sm">ME</div>
                 <h1 class="mt-3 text-xl font-black">{{ t('nav.register') }}</h1>
                 <p class="mt-1 text-xs opacity-85">开启你的智能体数字化身旅程</p>
             </div>
