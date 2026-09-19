@@ -80,9 +80,44 @@ async function removeConversation(id: string) {
 </script>
 
 <template>
-    <div class="grid grid-cols-1 gap-7 lg:grid-cols-3">
+    <!-- 紧凑左右栏：会话历史固定 272px 侧栏，智能体广场作为主体居中铺开 -->
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[272px_minmax(0,1fr)] lg:gap-6">
+        <!-- 最近会话历史列表 -->
+        <aside class="order-2 min-w-0 lg:order-1">
+            <div class="app-panel flex flex-col overflow-hidden lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]">
+                <h2 class="flex shrink-0 items-center justify-between px-4 py-3.5 text-sm font-black">
+                    <span>{{ t('nav.conversations') }}</span>
+                    <span class="app-chip text-[10px] font-bold">{{ conversations.length }}</span>
+                </h2>
+
+                <ul class="border-line max-h-[22rem] space-y-1.5 overflow-y-auto border-t px-2 pb-2 lg:max-h-none">
+                    <li v-for="c in conversations" :key="c.id" class="group relative rounded-xl transition-colors hover:bg-[color:var(--surface-2)]">
+                        <NuxtLink :to="`/chat/${c.agentId}?c=${c.id}`" class="block min-w-0 py-2.5 pr-8 pl-2.5 text-xs">
+                            <p class="group-hover:text-brand truncate font-semibold transition-colors">{{ c.title }}</p>
+                            <p class="text-faint mt-1 flex items-center gap-1.5 text-[10px]">
+                                <span class="truncate">{{ c.agentName }}</span>
+                                <span>·</span>
+                                <span class="whitespace-nowrap">{{ new Date(c.updatedAt).toLocaleDateString() }}</span>
+                            </p>
+                        </NuxtLink>
+                        <button
+                            type="button"
+                            class="text-faint absolute top-1/2 right-2 hidden -translate-y-1/2 rounded-md p-1 transition-colors group-hover:block hover:text-[color:var(--danger)]"
+                            :title="t('chat.deleteChat')"
+                            @click="removeConversation(c.id)"
+                        >
+                            ✕
+                        </button>
+                    </li>
+                    <li v-if="!conversations.length && !loading" class="text-faint px-3 py-10 text-center text-xs">
+                        {{ t('chat.noMessages') }}
+                    </li>
+                </ul>
+            </div>
+        </aside>
+
         <!-- 智能体广场列表 -->
-        <section class="space-y-5 lg:col-span-2">
+        <section class="order-1 min-w-0 space-y-4 lg:order-2">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 class="flex items-center gap-2 text-xl font-black">
@@ -94,8 +129,8 @@ async function removeConversation(id: string) {
                     <p class="text-muted-2 mt-1 text-xs">{{ t('agents.subtitle') }}</p>
                 </div>
 
-                <!-- 搜索栏 -->
-                <div class="relative w-full sm:w-72">
+                <!-- 搜索栏与标题同级，收窄后贴在操作行右侧 -->
+                <div class="relative w-full shrink-0 sm:w-64">
                     <input v-model="searchKeyword" :placeholder="t('agents.searchPlaceholder')" class="app-input !pl-9 !text-xs" />
                     <span class="text-faint absolute top-2.5 left-3 text-xs">🔍</span>
                     <button
@@ -115,8 +150,8 @@ async function removeConversation(id: string) {
                 <button type="button" class="app-btn app-btn-outline shrink-0 !py-1.5" @click="load">{{ t('common.retry') }}</button>
             </div>
 
-            <!-- 智能体网格卡片 -->
-            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <!-- 智能体网格卡片：主体宽度足够，三列铺开 -->
+            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <NuxtLink
                     v-for="agent in filteredAgents"
                     :key="agent.id"
@@ -160,43 +195,11 @@ async function removeConversation(id: string) {
                 </NuxtLink>
 
                 <!-- 空状态 -->
-                <div v-if="!filteredAgents.length && !loading" class="app-card text-faint col-span-2 p-12 text-center text-xs">
+                <div v-if="!filteredAgents.length && !loading" class="app-card text-faint col-span-full p-12 text-center text-xs">
                     <p class="mb-2 text-3xl">🔍</p>
                     <p>{{ t('agents.noAgents') }}</p>
                 </div>
             </div>
         </section>
-
-        <!-- 最近会话历史列表 -->
-        <aside class="space-y-5">
-            <h2 class="flex items-center justify-between text-xl font-black">
-                <span>{{ t('nav.conversations') }}</span>
-                <span class="text-faint text-xs font-normal">({{ conversations.length }})</span>
-            </h2>
-
-            <ul class="space-y-2.5">
-                <li v-for="c in conversations" :key="c.id" class="app-card app-card-hover group flex items-center justify-between p-3.5 text-xs">
-                    <NuxtLink :to="`/chat/${c.agentId}?c=${c.id}`" class="min-w-0 flex-1 pr-2">
-                        <p class="group-hover:text-brand truncate font-semibold transition-colors">{{ c.title }}</p>
-                        <p class="text-faint mt-1 flex items-center gap-1.5 text-[10px]">
-                            <span>{{ c.agentName }}</span>
-                            <span>·</span>
-                            <span>{{ new Date(c.updatedAt).toLocaleDateString() }}</span>
-                        </p>
-                    </NuxtLink>
-                    <button
-                        type="button"
-                        class="text-faint hidden p-1 transition-colors group-hover:block hover:text-[color:var(--danger)]"
-                        :title="t('chat.deleteChat')"
-                        @click="removeConversation(c.id)"
-                    >
-                        ✕
-                    </button>
-                </li>
-                <li v-if="!conversations.length" class="app-card text-faint p-8 text-center text-xs" style="border-style: dashed">
-                    {{ t('chat.noMessages') }}
-                </li>
-            </ul>
-        </aside>
     </div>
 </template>
