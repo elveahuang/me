@@ -24,19 +24,12 @@ function setTab(key: TabKey) {
 <template>
     <div class="space-y-6">
         <div>
-            <h1 class="text-2xl font-bold text-gray-800">{{ t('settings.title') }}</h1>
-            <p class="mt-1 text-xs text-gray-400">{{ t('settings.subtitle') }}</p>
+            <h1 class="app-page-title text-strong">{{ t('settings.title') }}</h1>
+            <p class="app-page-subtitle">{{ t('settings.subtitle') }}</p>
         </div>
 
-        <div class="flex gap-1 border-b border-gray-200">
-            <button
-                v-for="tab in tabs"
-                :key="tab.key"
-                type="button"
-                class="-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors"
-                :class="active === tab.key ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700'"
-                @click="setTab(tab.key)"
-            >
+        <div class="app-segmented">
+            <button v-for="tab in tabs" :key="tab.key" type="button" class="app-segmented-item" :aria-pressed="active === tab.key" @click="setTab(tab.key)">
                 {{ tab.label }}
             </button>
         </div>

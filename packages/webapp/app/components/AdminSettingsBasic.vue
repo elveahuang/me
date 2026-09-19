@@ -114,13 +114,13 @@ async function save() {
 
             <div class="space-y-1.5">
                 <label class="text-strong text-sm font-bold">{{ t('adminForm.basicThemeMode') }}</label>
-                <div class="flex gap-2">
+                <div class="app-segmented">
                     <button
                         v-for="item in modes"
                         :key="item.key"
                         type="button"
-                        class="border-line text-soft flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors hover:bg-[color:var(--surface-3)]"
-                        :class="form.themeMode === item.key ? 'border-brand bg-brand-soft text-brand' : ''"
+                        class="app-segmented-item"
+                        :aria-pressed="form.themeMode === item.key"
                         @click="form.themeMode = item.key"
                     >
                         <span>{{ t(item.label) }}</span>

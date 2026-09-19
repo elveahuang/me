@@ -217,39 +217,36 @@ async function remove(item: StorageConfigItem) {
 <template>
     <div class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <p class="text-xs text-gray-400">{{ t('settings.storageHint') }}</p>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
+            <p class="text-faint text-xs">{{ t('settings.storageHint') }}</p>
+            <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">
                 {{ t('storage.addConfig') }}
             </button>
         </div>
 
-        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="error" class="app-alert app-alert-danger">
             {{ error }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
-        <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <div v-if="loading" class="space-y-3">
-            <div v-for="i in 2" :key="i" class="h-20 animate-pulse rounded-2xl bg-white" />
+            <div v-for="i in 2" :key="i" class="app-skeleton h-20 rounded-2xl" />
         </div>
 
         <div v-else-if="configs.length" class="space-y-3">
-            <div v-for="c in configs" :key="c.id" class="rounded-2xl bg-white p-5 shadow-sm">
+            <div v-for="c in configs" :key="c.id" class="app-card p-5">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="text-sm font-bold text-gray-800">{{ c.name }}</h3>
-                            <span v-if="c.isDefault" class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">默认</span>
-                            <span
-                                :class="c.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'"
-                                class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                            >
+                            <h3 class="text-strong text-sm font-bold">{{ c.name }}</h3>
+                            <span v-if="c.isDefault" class="app-chip app-chip-brand">默认</span>
+                            <span :class="c.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge">
                                 {{ c.enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
-                            <span v-if="c.forcePathStyle" class="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">path-style</span>
+                            <span v-if="c.forcePathStyle" class="app-badge app-badge-info">path-style</span>
                         </div>
-                        <p class="mt-1.5 font-mono text-xs text-gray-500">{{ c.endpoint }} / {{ c.bucket }} · {{ c.region }}</p>
-                        <p class="mt-1 text-[11px] text-gray-400">
+                        <p class="text-muted-2 mt-1.5 font-mono text-xs">{{ c.endpoint }} / {{ c.bucket }} · {{ c.region }}</p>
+                        <p class="text-faint mt-1 text-[11px]">
                             {{ c.hasCredentials ? c.accessKeyIdPreview : '⚠ 未配置密钥' }} · {{ c.prefix }}/ · ≤{{ c.maxFileSizeMb }}MB
                             <template v-if="c.attachmentCount">
                                 · {{ c.attachmentCount }} {{ t('storage.attFilesUnit') }} / {{ formatBytes(c.attachmentBytes) }}
@@ -257,18 +254,19 @@ async function remove(item: StorageConfigItem) {
                         </p>
                     </div>
                     <div class="flex shrink-0 items-center gap-2 text-xs">
-                        <button v-if="!c.isDefault" class="text-emerald-600 hover:underline" @click="toggleDefault(c)">设为默认</button>
-                        <button class="text-emerald-600 hover:underline" @click="openEdit(c)">{{ t('common.edit') }}</button>
-                        <button class="text-red-500 hover:underline" @click="remove(c)">{{ t('common.delete') }}</button>
+                        <button v-if="!c.isDefault" class="app-link" @click="toggleDefault(c)">设为默认</button>
+                        <button class="app-link" @click="openEdit(c)">{{ t('common.edit') }}</button>
+                        <button class="text-[color:var(--danger)] hover:underline" @click="remove(c)">{{ t('common.delete') }}</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div v-else class="rounded-2xl bg-white p-12 text-center shadow-sm">
-            <p class="text-sm font-bold text-gray-600">{{ t('storage.noConfig') }}</p>
-            <p class="mt-1 text-xs text-gray-400">{{ t('storage.noConfigHint') }}</p>
-            <p class="mt-3 font-mono text-[11px] text-gray-400">{{ t('storage.rustfsHint') }}</p>
+        <div v-else class="app-card app-empty">
+            <span class="app-empty-icon">🗄️</span>
+            <p class="app-empty-title">{{ t('storage.noConfig') }}</p>
+            <p class="app-empty-desc">{{ t('storage.noConfigHint') }}</p>
+            <p class="text-faint mt-3 font-mono text-[11px]">{{ t('storage.rustfsHint') }}</p>
         </div>
 
         <!-- 存储配置新增/编辑抽屉 -->
@@ -280,55 +278,32 @@ async function remove(item: StorageConfigItem) {
         >
             <div class="space-y-3">
                 <div class="flex justify-end">
-                    <button class="text-xs text-emerald-600 hover:underline" type="button" @click="fillRustFsPreset">RustFS 预设</button>
+                    <button class="app-link text-xs" type="button" @click="fillRustFsPreset">RustFS 预设</button>
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-2">
-                    <input v-model="form.name" :placeholder="t('storage.namePlaceholder')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input v-model="form.bucket" :placeholder="t('storage.bucket')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input
-                        v-model="form.endpoint"
-                        :placeholder="t('storage.endpointPlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs sm:col-span-2"
-                    />
-                    <input v-model="form.region" :placeholder="t('storage.region')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input v-model="form.prefix" :placeholder="t('storage.prefix')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input
-                        v-model="form.accessKeyId"
-                        :placeholder="t('storage.accessKeyId')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    />
-                    <input
-                        v-model="form.secretAccessKey"
-                        type="password"
-                        :placeholder="t('storage.secretKeepHint')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
-                    />
-                    <input
-                        v-model="form.publicBaseUrl"
-                        :placeholder="t('storage.publicBaseUrlHint')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs sm:col-span-2"
-                    />
-                    <label class="flex items-center gap-2 text-sm text-gray-600">
-                        <input v-model="form.forcePathStyle" type="checkbox" />
+                    <input v-model="form.name" :placeholder="t('storage.namePlaceholder')" class="app-input" />
+                    <input v-model="form.bucket" :placeholder="t('storage.bucket')" class="app-input" />
+                    <input v-model="form.endpoint" :placeholder="t('storage.endpointPlaceholder')" class="app-input font-mono text-xs sm:col-span-2" />
+                    <input v-model="form.region" :placeholder="t('storage.region')" class="app-input" />
+                    <input v-model="form.prefix" :placeholder="t('storage.prefix')" class="app-input" />
+                    <input v-model="form.accessKeyId" :placeholder="t('storage.accessKeyId')" class="app-input font-mono text-xs" />
+                    <input v-model="form.secretAccessKey" type="password" :placeholder="t('storage.secretKeepHint')" class="app-input font-mono text-xs" />
+                    <input v-model="form.publicBaseUrl" :placeholder="t('storage.publicBaseUrlHint')" class="app-input font-mono text-xs sm:col-span-2" />
+                    <label class="text-soft flex items-center gap-2 text-sm">
+                        <input v-model="form.forcePathStyle" type="checkbox" class="app-checkbox" />
                         <span>{{ t('storage.forcePathStyle') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 text-sm text-gray-600">
-                        <input v-model="form.isDefault" type="checkbox" />
+                    <label class="text-soft flex items-center gap-2 text-sm">
+                        <input v-model="form.isDefault" type="checkbox" class="app-checkbox" />
                         <span>{{ t('storage.isDefault') }}</span>
                     </label>
                     <div class="flex items-center gap-2">
-                        <input
-                            v-model.number="form.maxFileSizeMb"
-                            type="number"
-                            min="1"
-                            max="2048"
-                            class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                        />
-                        <span class="text-xs text-gray-500">{{ t('storage.maxFileSizeMb') }}</span>
+                        <input v-model.number="form.maxFileSizeMb" type="number" min="1" max="2048" class="app-input !w-24" />
+                        <span class="text-muted-2 text-xs">{{ t('storage.maxFileSizeMb') }}</span>
                     </div>
-                    <label class="flex items-center gap-2 text-sm text-gray-600">
-                        <input v-model="form.enabled" type="checkbox" />
+                    <label class="text-soft flex items-center gap-2 text-sm">
+                        <input v-model="form.enabled" type="checkbox" class="app-checkbox" />
                         <span>{{ t('common.enabled') }}</span>
                     </label>
                 </div>
@@ -338,28 +313,23 @@ async function remove(item: StorageConfigItem) {
                         v-model="form.allowedMimeTypesText"
                         rows="2"
                         :placeholder="t('storage.allowedMimeTypesHint')"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs"
+                        class="app-input font-mono text-xs"
                     />
-                    <p class="mt-1 text-[11px] text-gray-400">{{ t('storage.allowedMimeTypesHint') }}</p>
+                    <p class="app-help">{{ t('storage.allowedMimeTypesHint') }}</p>
                 </div>
 
-                <div v-if="testResult" :class="testResult.ok ? 'text-emerald-600' : 'text-red-500'" class="rounded-lg bg-gray-50 p-2 text-xs">
+                <div v-if="testResult" :class="testResult.ok ? 'app-alert-success' : 'app-alert-danger'" class="app-alert text-xs">
                     {{ testResult.ok ? '✓' : '✗' }} {{ testResult.message }}
                 </div>
-                <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+                <p v-if="error" class="app-help-error text-xs">{{ error }}</p>
             </div>
 
             <template #footer>
-                <button
-                    class="rounded-lg border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                    type="button"
-                    :disabled="testing"
-                    @click="testConnection"
-                >
+                <button class="app-btn app-btn-outline" type="button" :disabled="testing" @click="testConnection">
                     {{ testing ? t('storage.testing') : t('storage.testConnection') }}
                 </button>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" type="button" @click="editing = null">{{ t('common.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="saving" @click="save">
+                <button class="app-btn app-btn-ghost" type="button" @click="editing = null">{{ t('common.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="saving" @click="save">
                     {{ saving ? t('common.loading') : t('common.save') }}
                 </button>
             </template>
