@@ -395,6 +395,7 @@ export default {
         upload: 'Upload',
         uploading: 'Uploading…',
         uploadedCount: 'Uploaded {n} file(s)',
+        uploadBusy: 'The previous upload is still running; please wait before uploading again',
         dropHint: 'Drop files here to upload',
         dropHintSub: 'Or click the "Upload" button at the top right',
         searchPlaceholder: 'Search filename…',

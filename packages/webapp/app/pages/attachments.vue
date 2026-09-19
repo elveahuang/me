@@ -135,6 +135,12 @@ async function onFileChange(event: Event) {
 
 async function uploadFiles(files: File[]) {
     if (!files.length) return;
+    /** 拖拽/再次选文件绕过了工具栏按钮的 disabled：两条上传循环并发时，先结束的一条会过早复位 uploading，
+     *  后结束的一条又覆盖前一条的成功/失败提示。这里明确拒绝而不是静默丢弃这一批文件。 */
+    if (uploading.value) {
+        error.value = t('attachments.uploadBusy');
+        return;
+    }
     uploading.value = true;
     error.value = '';
     success.value = '';
@@ -153,7 +159,7 @@ async function uploadFiles(files: File[]) {
     }
     uploading.value = false;
     if (done) {
-        success.value = t('attachments.uploadedCount', { n: done });
+        flashSuccess(t('attachments.uploadedCount', { n: done }));
         page.value = 1;
         await load();
     }
@@ -170,7 +176,7 @@ async function remove(item: AttachmentRecord) {
     if (!confirm(t('attachments.deleteConfirm', { name: item.filename }))) return;
     try {
         await $fetch(`/api/attachments/${item.id}`, { method: 'DELETE' });
-        success.value = t('common.deleted');
+        flashSuccess(t('common.deleted'));
         if (attachments.value.length === 1 && page.value > 1) page.value -= 1;
         await load();
     } catch (e) {

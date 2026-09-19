@@ -398,6 +398,7 @@ export default {
         upload: '上传附件',
         uploading: '上传中…',
         uploadedCount: '已上传 {n} 个文件',
+        uploadBusy: '上一批文件仍在上传，请等待完成后再上传',
         dropHint: '拖拽文件到此处上传',
         dropHintSub: '也可以点击右上角「上传附件」按钮选择文件',
         searchPlaceholder: '搜索文件名…',
