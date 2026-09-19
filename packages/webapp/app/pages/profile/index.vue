@@ -18,21 +18,21 @@ const quotaPercent = computed(() => quotaUsedPercent(membership.value?.usedToday
             <div class="app-card p-5">
                 <div class="text-faint flex items-center justify-between text-xs font-medium">
                     <span>{{ t('nav.conversations') }}</span>
-                    <span class="text-base">💬</span>
+                    <AppIcon name="chat-outline" :size="16" />
                 </div>
                 <div class="mt-2 text-2xl font-black">{{ stats?.totalConversations ?? 0 }}</div>
             </div>
             <div class="app-card p-5">
                 <div class="text-faint flex items-center justify-between text-xs font-medium">
                     <span>{{ t('billing.usedToday') }}</span>
-                    <span class="text-base">⚡</span>
+                    <AppIcon name="lightning-bolt-outline" :size="16" />
                 </div>
                 <div class="mt-2 text-2xl font-black">{{ membership?.usedToday ?? 0 }}</div>
             </div>
             <div class="app-card p-5">
                 <div class="text-faint flex items-center justify-between text-xs font-medium">
                     <span>{{ t('profile.memberLevel') }}</span>
-                    <span class="text-base">👑</span>
+                    <AppIcon name="crown-outline" :size="16" />
                 </div>
                 <div class="mt-2 truncate text-base font-black">{{ membership?.plan?.name || t('billing.freePlan') }}</div>
             </div>
