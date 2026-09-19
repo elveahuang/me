@@ -16,15 +16,24 @@ const article = ref<NewsDetailResponse | null>(null);
 const loading = ref(true);
 const error = ref('');
 
+/** 切换文章与下拉刷新共用 load()：先发后回的旧响应会把上一篇的正文写回当前地址下 */
+let loadSeq = 0;
+
 async function load(id: string) {
+    const seq = ++loadSeq;
     loading.value = true;
     error.value = '';
     try {
-        article.value = await api<NewsDetailResponse>(`/api/news/${id}`);
+        const res = await api<NewsDetailResponse>(`/api/news/${id}`);
+        if (seq !== loadSeq) return;
+        article.value = res;
     } catch (e) {
+        if (seq !== loadSeq) return;
+        // 清掉旧正文：失败时 article 仍属于另一篇文章，会和当前 URL 对不上
+        article.value = null;
         error.value = extractApiError(e, t('common.error'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -64,7 +73,12 @@ async function handleRefresh(event: CustomEvent) {
                     <div class="app-skeleton h-28 w-full" />
                 </div>
 
-                <div v-else-if="error" class="app-alert app-alert-danger text-[11px]">{{ error }}</div>
+                <div v-else-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-2 text-[11px]">
+                    <span>{{ error }}</span>
+                    <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load(String(route.params.id))">
+                        {{ t('common.retry') }}
+                    </button>
+                </div>
 
                 <article v-else-if="article" class="space-y-4">
                     <div class="space-y-2">
