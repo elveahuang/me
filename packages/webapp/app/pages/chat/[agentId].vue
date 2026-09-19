@@ -184,6 +184,23 @@ async function createConversation(): Promise<string> {
     return conv.id;
 }
 
+/** 建会话接口会 401/404/500，而按钮原本直接 `createConversation().then(loadConversation)`，失败既不写错误位也不复位：
+ *  用户看到的是「按钮没反应」，于是连点——每次点击都会真的插一条新会话。 */
+const creatingConversation = ref(false);
+
+async function newConversation() {
+    if (creatingConversation.value) return;
+    creatingConversation.value = true;
+    try {
+        // loadConversation 自己消化错误，这里只需承接建会话本身的失败
+        await loadConversation(await createConversation());
+    } catch (e) {
+        submitError.value = extractApiError(e, t('common.error'));
+    } finally {
+        creatingConversation.value = false;
+    }
+}
+
 onMounted(async () => {
     await refreshConversations();
     if (currentConversationId.value) {
@@ -341,7 +358,7 @@ const starterPrompts = computed(() => [
                 </NuxtLink>
             </div>
             <div class="p-3">
-                <button class="app-btn app-btn-primary w-full" @click="() => createConversation().then(loadConversation)">+ {{ t('chat.newChat') }}</button>
+                <button class="app-btn app-btn-primary w-full" :disabled="creatingConversation" @click="newConversation">+ {{ t('chat.newChat') }}</button>
             </div>
             <div class="px-2.5 pb-2">
                 <input v-model="searchQuery" :placeholder="t('chat.searchChat')" class="app-input w-full !px-2.5 !py-1 !text-xs" />
@@ -436,7 +453,8 @@ const starterPrompts = computed(() => [
                         type="button"
                         class="app-btn app-btn-ghost !px-2.5 !py-1.5"
                         :title="t('chat.newChat')"
-                        @click="() => createConversation().then(loadConversation)"
+                        :disabled="creatingConversation"
+                        @click="newConversation"
                     >
                         ＋
                     </button>
