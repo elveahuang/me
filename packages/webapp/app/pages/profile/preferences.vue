@@ -17,7 +17,7 @@ function handleLocaleChange(e: Event) {
 <template>
     <div class="app-card p-6">
         <h2 class="text-base font-black">{{ t('profile.preferences') }}</h2>
-        <p class="text-faint mt-0.5 text-xs">界面主题、多语言与系统设置</p>
+        <p class="text-faint mt-0.5 text-xs">{{ t('profile.preferencesHint') }}</p>
 
         <div class="mt-5 space-y-4">
             <!-- 深浅色 -->
@@ -65,7 +65,7 @@ function handleLocaleChange(e: Event) {
             <div class="app-panel flex items-center justify-between p-4">
                 <div>
                     <p class="text-xs font-bold">{{ t('profile.languageSelect') }}</p>
-                    <p class="text-faint mt-0.5 text-[11px]">English / 简体中文</p>
+                    <p class="text-faint mt-0.5 text-[11px]">{{ t('profile.languageOptions') }}</p>
                 </div>
                 <select :value="locale" class="app-input !w-auto !py-1.5 !text-xs font-bold" @change="handleLocaleChange">
                     <option value="zh-CN">简体中文</option>

@@ -13,18 +13,18 @@ const orderList = computed(() => props.orders?.orders ?? []);
 <template>
     <div class="app-card p-6 sm:p-8">
         <h2 class="text-base font-black">{{ t('nav.orders') }}</h2>
-        <p class="text-faint mt-0.5 text-xs">最近订单明细记录</p>
+        <p class="text-faint mt-0.5 text-xs">{{ t('profile.ordersHint') }}</p>
 
         <div class="mt-4 overflow-x-auto">
             <table v-if="orderList.length" class="app-table">
                 <thead>
                     <tr>
                         <th>{{ t('billing.orderNo') }}</th>
-                        <th>周期</th>
+                        <th>{{ t('profile.orderPeriod') }}</th>
                         <th>{{ t('billing.amount') }}</th>
-                        <th>渠道</th>
+                        <th>{{ t('profile.orderChannel') }}</th>
                         <th>{{ t('common.status') }}</th>
-                        <th>创建时间</th>
+                        <th>{{ t('profile.orderCreatedAt') }}</th>
                     </tr>
                 </thead>
                 <tbody>
