@@ -48,9 +48,16 @@ function usageWidth(bytes: number): string {
     return `${Math.max(2, Math.round((bytes / stats.value.totalBytes) * 100))}%`;
 }
 
+/** 分类/搜索/翻页共用 load()：旧的慢请求后回会把新筛选的结果和 total 覆盖回来 */
+let loadSeq = 0;
+/** 只有列表加载失败才提供「重试」；上传失败的提示点重试只会把消息清掉，掩盖真实原因 */
+const loadFailed = ref(false);
+
 async function load() {
+    const seq = ++loadSeq;
     loading.value = true;
     error.value = '';
+    loadFailed.value = false;
     try {
         const res = await $fetch<AttachmentsResponse>('/api/attachments', {
             query: {
@@ -60,13 +67,19 @@ async function load() {
                 keyword: keyword.value || undefined,
             },
         });
+        if (seq !== loadSeq) return;
         attachments.value = res.attachments;
         total.value = res.total;
         if (res.stats) stats.value = res.stats;
     } catch (e) {
+        if (seq !== loadSeq) return;
+        // 失败时清空列表：保留上一次结果会让「接口挂了」读成「筛选后就是这些文件」
+        attachments.value = [];
+        total.value = 0;
+        loadFailed.value = true;
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -228,9 +241,12 @@ function iconFor(mime: string): string {
             </div>
         </div>
 
-        <div v-if="error" class="app-alert app-alert-danger">
-            <AppIcon name="alert-outline" :size="16" />
-            <span>{{ error }}</span>
+        <div v-if="error" class="app-alert app-alert-danger flex items-center gap-2">
+            <AppIcon name="alert-outline" :size="16" class="shrink-0" />
+            <span class="min-w-0 flex-1">{{ error }}</span>
+            <button v-if="loadFailed" type="button" class="app-btn app-btn-soft ml-auto shrink-0 !px-3 !py-1 !text-[10px]" @click="load">
+                {{ t('common.retry') }}
+            </button>
         </div>
         <div v-if="success" class="app-alert app-alert-success">
             <AppIcon name="check-circle-outline" :size="16" />
@@ -313,7 +329,8 @@ function iconFor(mime: string): string {
             </div>
         </div>
 
-        <div v-else class="app-card flex flex-col items-center gap-2 p-12 text-center">
+        <!-- 列表加载失败时不渲染空态：「还没有文件」会把接口故障读成「确实没上传过东西」 -->
+        <div v-else-if="!loadFailed" class="app-card flex flex-col items-center gap-2 p-12 text-center">
             <AppIcon name="folder-multiple-outline" :size="34" class="text-faint" />
             <p class="text-sm font-bold">{{ t('attachments.empty') }}</p>
             <p class="text-faint text-xs">{{ t('attachments.emptyHint') }}</p>
