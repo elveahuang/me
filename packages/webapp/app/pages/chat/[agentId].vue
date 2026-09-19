@@ -193,33 +193,42 @@ onMounted(async () => {
     }
 });
 
+/** 建会话与附件解析都要 await，期间按钮仍是「发送」；连点会建出两个会话并各扣一次额度 */
+const submitting = ref(false);
+
 async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
     // 允许只发附件（无文字）
     if (!text && !pendingAttachments.value.length) return;
+    if (submitting.value) return;
+    submitting.value = true;
 
-    // 首次发送时自动创建会话。创建失败必须保留输入内容：
-    // 否则用户输入被清空又没发出去，只能重新敲一遍。
-    let current = chat.value;
-    if (!current) {
-        try {
-            const id = await createConversation();
-            current = buildChat(id);
-            chat.value = current;
-            currentConversationId.value = id;
-        } catch (e) {
-            submitError.value = extractApiError(e, t('common.error'));
-            return;
+    try {
+        // 首次发送时自动创建会话。创建失败必须保留输入内容：
+        // 否则用户输入被清空又没发出去，只能重新敲一遍。
+        let current = chat.value;
+        if (!current) {
+            try {
+                const id = await createConversation();
+                current = buildChat(id);
+                chat.value = current;
+                currentConversationId.value = id;
+            } catch (e) {
+                submitError.value = extractApiError(e, t('common.error'));
+                return;
+            }
         }
-    }
 
-    const files = await resolveChatParts(pendingAttachments.value);
-    input.value = '';
-    pendingAttachments.value = [];
-    submitError.value = '';
-    // AI SDK 的 sendMessage 支持 { text, files }：files 会作为 file part 进入消息
-    current.sendMessage(files.length ? { text, files } : { text });
-    nextTick(scrollToBottom);
+        const files = await resolveChatParts(pendingAttachments.value);
+        input.value = '';
+        pendingAttachments.value = [];
+        submitError.value = '';
+        // AI SDK 的 sendMessage 支持 { text, files }：files 会作为 file part 进入消息
+        current.sendMessage(files.length ? { text, files } : { text });
+        nextTick(scrollToBottom);
+    } finally {
+        submitting.value = false;
+    }
 }
 
 watch(
@@ -599,7 +608,7 @@ const starterPrompts = computed(() => [
                     >
                         {{ t('chat.stop') }}
                     </button>
-                    <button v-else type="submit" class="app-btn app-btn-primary !px-6">
+                    <button v-else type="submit" class="app-btn app-btn-primary !px-6" :disabled="submitting">
                         {{ t('chat.send') }}
                     </button>
                 </div>
