@@ -67,21 +67,6 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
     return patch;
 }
 
-/** 保证同一时刻只有一个默认存储 */
-/**
- * 切换默认存储。
- *
- * 必须同事务执行两条 update：否则在「已清空旧默认、尚未标记新默认」之间失败，
- * 系统会处于一个默认存储都没有的状态，附件上传随即失败且管理端看不出原因。
- */
-async function applyDefault(id: string) {
-    await db.transaction(async (tx) => {
-        await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
-        await tx.update(storageConfigs).set({ isDefault: true, updatedAt: new Date() }).where(eq(storageConfigs.id, id));
-    });
-    invalidateStorageConfigCache();
-}
-
 export default defineEventHandler(async (event) => {
     await requireAdmin(event);
 
@@ -95,7 +80,8 @@ export default defineEventHandler(async (event) => {
         if (!patch.endpoint) throw createError({ statusCode: 400, statusMessage: 'endpoint 必填' });
 
         const id = crypto.randomUUID();
-        await db.insert(storageConfigs).values({
+        const isDefault = Boolean(patch.isDefault);
+        const values = {
             id,
             name,
             provider: String(patch.provider ?? 's3') || 's3',
@@ -110,9 +96,14 @@ export default defineEventHandler(async (event) => {
             maxFileSizeMb: Number(patch.maxFileSizeMb ?? 20),
             allowedMimeTypes: (patch.allowedMimeTypes as string[]) ?? [],
             enabled: patch.enabled === undefined ? true : Boolean(patch.enabled),
-            isDefault: Boolean(patch.isDefault),
+            isDefault,
+        };
+
+        // 清空旧默认与插入新默认必须同事务：分两步写时若在中间失败，库里会同时存在两份默认配置
+        await db.transaction(async (tx) => {
+            if (isDefault) await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
+            await tx.insert(storageConfigs).values(values);
         });
-        if (patch.isDefault) await applyDefault(id);
         invalidateStorageConfigCache();
         const [row] = await db.select().from(storageConfigs).where(eq(storageConfigs.id, id));
         if (!row) throw createError({ statusCode: 500, statusMessage: '存储配置创建失败' });
