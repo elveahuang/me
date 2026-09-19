@@ -45,15 +45,20 @@ onBeforeUnmount(() => {
         <Transition name="admin-drawer">
             <div v-if="open" class="fixed inset-0 z-50 flex justify-end">
                 <!-- 遮罩：点击关闭 -->
-                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" @click="emit('close')"></div>
+                <div class="absolute inset-0 bg-[color:var(--overlay)] backdrop-blur-xs" @click="emit('close')"></div>
 
                 <!-- 右侧滑出面板 -->
-                <div class="drawer-panel relative flex h-full w-full flex-col bg-white shadow-2xl" :class="widthClass" role="dialog" aria-modal="true">
-                    <div class="flex shrink-0 items-center justify-between border-b border-slate-200/80 px-6 py-4">
-                        <h2 class="text-base font-bold text-slate-800">{{ title }}</h2>
+                <div
+                    class="drawer-panel border-line bg-surface relative flex h-full w-full flex-col border-l shadow-2xl"
+                    :class="widthClass"
+                    role="dialog"
+                    aria-modal="true"
+                >
+                    <div class="border-line flex shrink-0 items-center justify-between border-b px-6 py-4">
+                        <h2 class="text-strong text-base font-bold">{{ title }}</h2>
                         <button
                             type="button"
-                            class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                            class="text-faint hover:text-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-3)]"
                             :title="t('common.close')"
                             :aria-label="t('common.close')"
                             @click="emit('close')"
@@ -66,7 +71,7 @@ onBeforeUnmount(() => {
                         <slot />
                     </div>
 
-                    <div v-if="$slots.footer" class="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200/80 px-6 py-4">
+                    <div v-if="$slots.footer" class="border-line flex shrink-0 items-center justify-end gap-2 border-t px-6 py-4">
                         <slot name="footer" />
                     </div>
                 </div>
