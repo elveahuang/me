@@ -27,7 +27,11 @@ const levelClass: Record<string, string> = {
     danger: 'app-badge-danger',
 };
 
+/** 筛选（全部/未读、类型）与翻页共用 load()，旧请求后回会把上一个筛选的结果写回来 */
+let loadSeq = 0;
+
 async function load() {
+    const seq = ++loadSeq;
     loading.value = true;
     error.value = '';
     try {
@@ -39,13 +43,18 @@ async function load() {
                 type: type.value === 'all' ? undefined : type.value,
             },
         });
+        if (seq !== loadSeq) return;
         items.value = res.items;
         total.value = res.total;
         unread.value = res.unread;
     } catch (e) {
+        if (seq !== loadSeq) return;
+        // 失败时清空列表：保留上次结果会让「接口挂了」看起来像筛选后只剩这些
+        items.value = [];
+        total.value = 0;
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -85,7 +94,12 @@ async function markRead(item: NotificationRecord) {
     }
 }
 
+/** 全部已读是 POST，请求期间按钮仍可点：连点会重复发同一批已读写入 */
+const markingAll = ref(false);
+
 async function markAllRead() {
+    if (markingAll.value) return;
+    markingAll.value = true;
     try {
         const res = await $fetch<{ updated: number; unread: number }>('/api/notifications/read', { method: 'POST', body: {} });
         items.value = items.value.map((item) => ({ ...item, read: true, readAt: item.readAt ?? new Date().toISOString() }));
@@ -94,6 +108,8 @@ async function markAllRead() {
         if (filter.value === 'unread') await load();
     } catch (e) {
         error.value = extractApiError(e, t('common.error'));
+    } finally {
+        markingAll.value = false;
     }
 }
 
@@ -113,13 +129,16 @@ const typeLabel = (value: string) => {
                 </h1>
                 <p class="text-faint mt-1 text-xs">{{ t('notifications.subtitle') }}</p>
             </div>
-            <button type="button" class="app-btn app-btn-outline" :disabled="!unread" @click="markAllRead">
+            <button type="button" class="app-btn app-btn-outline" :disabled="!unread || markingAll" @click="markAllRead">
                 <AppIcon name="check-all" :size="16" />
                 <span>{{ t('notifications.markAllRead') }}</span>
             </button>
         </div>
 
-        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="error" class="app-alert app-alert-danger flex items-center justify-between gap-3">
+            <span>{{ error }}</span>
+            <button type="button" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[10px]" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -182,7 +201,8 @@ const typeLabel = (value: string) => {
             </div>
         </div>
 
-        <div v-else class="app-card flex flex-col items-center gap-2 p-12 text-center">
+        <!-- 失败时不渲染空态：「暂无消息」会把接口故障读成「确实没有通知」 -->
+        <div v-else-if="!error" class="app-card flex flex-col items-center gap-2 p-12 text-center">
             <AppIcon name="bell-outline" :size="34" class="text-faint" />
             <p class="text-sm font-bold">{{ t('notifications.empty') }}</p>
             <p class="text-faint text-xs">{{ t('notifications.emptyHint') }}</p>
