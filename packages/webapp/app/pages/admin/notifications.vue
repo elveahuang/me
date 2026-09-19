@@ -218,16 +218,21 @@ function readPercent(row: AdminNotificationRow): number {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="app-page-header !mb-0">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('nav.notifications') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">向全体用户或指定用户推送系统消息、平台公告、活动与账单提醒</p>
+                <h1 class="app-page-title text-strong">{{ t('nav.notifications') }}</h1>
+                <p class="app-page-subtitle">向全体用户或指定用户推送系统消息、平台公告、活动与账单提醒</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openSend">{{ t('notifications.send') }}</button>
+            <div class="app-page-actions">
+                <button class="app-btn app-btn-primary" @click="openSend">{{ t('notifications.send') }}</button>
+            </div>
         </div>
 
         <!-- 用主题令牌而不是 bg-red-50 / bg-emerald-50：浅色专用色块在深色模式下几乎读不出来 -->
-        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="error" class="app-alert app-alert-danger">
+            {{ error }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
+        </div>
         <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <!-- 推送表单（右侧抽屉） -->
@@ -235,79 +240,58 @@ function readPercent(row: AdminNotificationRow): number {
             <div class="space-y-3">
                 <p v-if="formError" class="app-alert app-alert-danger">{{ formError }}</p>
                 <div class="grid gap-3 sm:grid-cols-2">
-                    <input
-                        v-model="form.title"
-                        :placeholder="t('notifications.pushTitle')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                    />
-                    <textarea
-                        v-model="form.content"
-                        rows="3"
-                        :placeholder="t('notifications.pushContent')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                    />
-                    <select v-model="form.type" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <input v-model="form.title" :placeholder="t('notifications.pushTitle')" class="app-input sm:col-span-2" />
+                    <textarea v-model="form.content" rows="3" :placeholder="t('notifications.pushContent')" class="app-input sm:col-span-2" />
+                    <select v-model="form.type" class="app-input">
                         <option v-for="tp in NOTIFICATION_TYPES" :key="tp.value" :value="tp.value">{{ tp.label }}</option>
                     </select>
-                    <select v-model="form.level" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <select v-model="form.level" class="app-input">
                         <option value="info">信息</option>
                         <option value="success">推荐</option>
                         <option value="warning">提醒</option>
                         <option value="danger">重要</option>
                     </select>
-                    <input
-                        v-model="form.linkUrl"
-                        :placeholder="t('notifications.linkPlaceholder')"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                    />
+                    <input v-model="form.linkUrl" :placeholder="t('notifications.linkPlaceholder')" class="app-input sm:col-span-2" />
                 </div>
 
                 <!-- 受众选择 -->
-                <div class="rounded-xl bg-gray-50 p-3">
+                <div class="app-panel p-3">
                     <div class="flex items-center gap-3">
-                        <label class="flex items-center gap-2 text-sm text-gray-700">
-                            <input v-model="form.audience" type="radio" value="all" />
+                        <label class="text-soft flex items-center gap-2 text-sm">
+                            <input v-model="form.audience" type="radio" value="all" class="app-checkbox" />
                             <span>{{ t('notifications.sendToAll') }}</span>
                         </label>
-                        <label class="flex items-center gap-2 text-sm text-gray-700">
-                            <input v-model="form.audience" type="radio" value="users" />
+                        <label class="text-soft flex items-center gap-2 text-sm">
+                            <input v-model="form.audience" type="radio" value="users" class="app-checkbox" />
                             <span>{{ t('notifications.sendToUsers') }}</span>
                         </label>
                     </div>
 
                     <div v-if="form.audience === 'users'" class="mt-3 space-y-2">
-                        <input
-                            v-model="userKeyword"
-                            :placeholder="t('notifications.selectUsers')"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                        />
+                        <input v-model="userKeyword" :placeholder="t('notifications.selectUsers')" class="app-input" />
 
                         <div v-if="selectedUsers.length" class="flex flex-wrap gap-2">
-                            <span
-                                v-for="user in selectedUsers"
-                                :key="user.id"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700"
-                            >
+                            <span v-for="user in selectedUsers" :key="user.id" class="app-chip app-chip-brand">
                                 <span>{{ user.name }}（{{ user.email }}）</span>
-                                <button type="button" class="text-emerald-500 hover:text-emerald-800" @click="removeUser(user.id)">✕</button>
+                                <button type="button" class="text-hover-strong" @click="removeUser(user.id)">✕</button>
                             </span>
                         </div>
 
-                        <div class="max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                        <div class="border-line bg-surface max-h-52 overflow-y-auto rounded-lg border">
                             <button
                                 v-for="user in userOptions"
                                 :key="user.id"
                                 type="button"
-                                class="flex w-full items-center justify-between border-b border-gray-50 px-3 py-2 text-left text-xs hover:bg-gray-50"
+                                class="border-line flex w-full items-center justify-between border-b px-3 py-2 text-left text-xs hover:bg-[color:var(--surface-3)]"
                                 @click="addUser(user)"
                             >
                                 <span>
-                                    <b class="text-gray-700">{{ user.name }}</b>
-                                    <span class="ml-2 text-gray-400">{{ user.email }}</span>
+                                    <b class="text-strong">{{ user.name }}</b>
+                                    <span class="text-faint ml-2">{{ user.email }}</span>
                                 </span>
-                                <span class="text-[10px] text-gray-400">{{ user.role }}</span>
+                                <span class="text-faint text-[10px]">{{ user.role }}</span>
                             </button>
-                            <p v-if="!userOptions.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                            <p v-if="!userOptions.length" class="text-faint px-3 py-4 text-center text-xs">
                                 {{ searchingUsers ? t('common.loading') : t('admin.noData') }}
                             </p>
                         </div>
@@ -315,80 +299,86 @@ function readPercent(row: AdminNotificationRow): number {
                 </div>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="sendOpen = false">{{ t('common.cancel') }}</button>
-                <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50" :disabled="sending" @click="send">
+                <button class="app-btn app-btn-ghost" @click="sendOpen = false">{{ t('common.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="sending" @click="send">
                     {{ sending ? t('common.loading') : t('notifications.send') }}
                 </button>
             </template>
         </AdminDrawer>
 
         <!-- 历史记录 -->
-        <div class="rounded-2xl bg-white p-6 shadow-sm">
+        <div class="app-card p-6">
             <div class="mb-4 flex flex-wrap items-center gap-3">
-                <h2 class="text-sm font-bold text-gray-700">推送记录</h2>
-                <select v-model="filterAudience" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs">
+                <h2 class="text-strong text-sm font-bold">推送记录</h2>
+                <select v-model="filterAudience" class="app-input !w-auto !py-1.5 !text-xs">
                     <option value="all">{{ t('common.all') }}</option>
                     <option value="broadcast">{{ t('notifications.sendToAll') }}</option>
                     <option value="targeted">{{ t('notifications.sendToUsers') }}</option>
                 </select>
-                <span class="text-xs text-gray-400">{{ t('common.total') }} {{ total }}</span>
+                <span class="text-faint text-xs">{{ t('common.total') }} {{ total }}</span>
             </div>
 
             <div v-if="loading" class="space-y-2">
-                <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-gray-50" />
+                <div v-for="i in 3" :key="i" class="app-skeleton h-14 !rounded-xl" />
             </div>
 
             <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="text-left text-xs text-gray-400">
+                <table class="app-table">
+                    <thead>
                         <tr>
-                            <th class="py-2 pr-4">消息</th>
-                            <th class="py-2 pr-4">{{ t('notifications.typeLabel') }}</th>
-                            <th class="py-2 pr-4">{{ t('notifications.targetUsers') }}</th>
-                            <th class="py-2 pr-4">已读</th>
-                            <th class="py-2 pr-4">时间</th>
-                            <th class="py-2">{{ t('common.actions') }}</th>
+                            <th>消息</th>
+                            <th>{{ t('notifications.typeLabel') }}</th>
+                            <th>{{ t('notifications.targetUsers') }}</th>
+                            <th>已读</th>
+                            <th>时间</th>
+                            <th class="text-right">{{ t('common.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in items" :key="row.id" class="border-t border-gray-100">
-                            <td class="py-3 pr-4">
-                                <p class="max-w-[20rem] truncate font-medium text-gray-800">{{ row.title }}</p>
-                                <p class="max-w-[20rem] truncate text-[11px] text-gray-400">{{ row.content }}</p>
+                        <tr v-for="row in items" :key="row.id">
+                            <td class="app-table-cell-wrap">
+                                <p class="text-strong font-medium">{{ row.title }}</p>
+                                <p class="text-faint text-[11px]">{{ row.content }}</p>
                             </td>
-                            <td class="py-3 pr-4">
-                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{{ typeLabel(row.type) }}</span>
+                            <td>
+                                <span class="app-chip">{{ typeLabel(row.type) }}</span>
                             </td>
-                            <td class="py-3 pr-4 text-xs text-gray-500">
+                            <td class="text-muted-2 text-xs">
                                 {{ row.audience === 'all' ? t('notifications.sendToAll') : `${row.targetCount} ${t('notifications.peopleUnit')}` }}
                             </td>
-                            <td class="py-3 pr-4">
+                            <td>
                                 <div class="flex items-center gap-2">
-                                    <div class="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
-                                        <div class="h-full rounded-full bg-emerald-500" :style="{ width: `${readPercent(row)}%` }" />
+                                    <div class="h-1.5 w-16 overflow-hidden rounded-full bg-[color:var(--surface-3)]">
+                                        <div class="bg-brand h-full rounded-full" :style="{ width: `${readPercent(row)}%` }" />
                                     </div>
-                                    <span class="text-xs text-gray-500">{{ readRate(row) }}</span>
-                                    <span class="text-[10px] text-gray-400">{{ readPercent(row) }}%</span>
+                                    <span class="text-muted-2 text-xs">{{ readRate(row) }}</span>
+                                    <span class="text-faint text-[10px] tabular-nums">{{ readPercent(row) }}%</span>
                                 </div>
                             </td>
-                            <td class="py-3 pr-4 text-xs text-gray-400">{{ formatDate(row.createdAt) }}</td>
-                            <td class="py-3 text-xs">
-                                <button class="text-red-500 hover:underline" @click="remove(row)">{{ t('common.delete') }}</button>
+                            <td class="text-faint text-xs">{{ formatDate(row.createdAt) }}</td>
+                            <td>
+                                <div class="app-table-actions">
+                                    <button class="app-btn app-btn-danger app-btn-sm" @click="remove(row)">{{ t('common.delete') }}</button>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="!items.length">
-                            <td colspan="6" class="py-8 text-center text-xs text-gray-400">{{ t('admin.tableEmpty') }}</td>
+                            <td colspan="6" class="!whitespace-normal">
+                                <div class="app-empty">
+                                    <span class="app-empty-icon">📣</span>
+                                    <p class="app-empty-title">{{ t('admin.tableEmpty') }}</p>
+                                    <p class="app-empty-desc">{{ t('notifications.send') }}</p>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
             <div v-if="totalPages > 1" class="mt-4 flex items-center justify-end gap-2 text-xs">
-                <button class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-                <span>{{ page }} / {{ totalPages }}</span>
-                <button class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40" :disabled="page >= totalPages" @click="goPage(page + 1)">
-                    下一页
-                </button>
+                <button class="app-btn app-btn-outline app-btn-sm" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+                <span class="text-muted-2 tabular-nums">{{ page }} / {{ totalPages }}</span>
+                <button class="app-btn app-btn-outline app-btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
             </div>
         </div>
     </div>

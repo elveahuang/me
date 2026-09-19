@@ -224,145 +224,142 @@ function goPage(next: number) {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="app-page-header !mb-0">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">{{ t('nav.news') }}</h1>
-                <p class="mt-1 text-xs text-gray-400">{{ t('news.subtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('nav.news') }}</h1>
+                <p class="app-page-subtitle">{{ t('news.subtitle') }}</p>
             </div>
-            <button class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700" @click="openCreate">
-                {{ t('admin.addRecord') }}
-            </button>
+            <div class="app-page-actions">
+                <button class="app-btn app-btn-primary" @click="openCreate">{{ t('admin.addRecord') }}</button>
+            </div>
         </div>
 
-        <div v-if="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-600">{{ error }}</div>
-        <div v-if="success" class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{{ success }}</div>
+        <div v-if="error" class="app-alert app-alert-danger">{{ error }}</div>
+        <div v-if="success" class="app-alert app-alert-success">{{ success }}</div>
 
         <!-- 编辑表单（右侧抽屉） -->
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
             <div class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-2">
-                    <input v-model="form.title" placeholder="标题" class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
-                    <input v-model="form.category" placeholder="分类，如 product / guide" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <input v-model="form.tagsText" placeholder="标签，逗号分隔" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <input v-model="form.title" placeholder="标题" class="app-input sm:col-span-2" />
+                    <input v-model="form.category" placeholder="分类，如 product / guide" class="app-input" />
+                    <input v-model="form.tagsText" placeholder="标签，逗号分隔" class="app-input" />
                     <!-- 封面：可从附件选择或直接上传，避免手填会过期的预签名地址 -->
                     <div class="sm:col-span-2">
                         <ImagePicker v-model="form.coverImage" :placeholder="t('adminForm.coverImagePlaceholder')" />
                     </div>
-                    <textarea
-                        v-model="form.summary"
-                        rows="2"
-                        placeholder="摘要（列表展示）"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-                    />
+                    <textarea v-model="form.summary" rows="2" placeholder="摘要（列表展示）" class="app-input sm:col-span-2" />
                     <div class="sm:col-span-2">
                         <textarea
                             v-model="form.content"
                             rows="10"
                             :placeholder="loadingContent ? t('adminForm.loadingContent') : t('adminForm.newsContentPlaceholder')"
                             :disabled="loadingContent || contentFailed"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs disabled:bg-gray-50 disabled:opacity-60"
+                            class="app-input !font-mono !text-xs"
                         />
-                        <p v-if="loadingContent" class="mt-1 text-[11px] text-gray-400">{{ t('adminForm.loadingContent') }}</p>
-                        <p v-else-if="contentFailed" class="mt-1 text-[11px] text-red-500">
+                        <p v-if="loadingContent" class="text-faint mt-1 text-[11px]">{{ t('adminForm.loadingContent') }}</p>
+                        <p v-else-if="contentFailed" class="app-help-error mt-1 text-[11px]">
                             {{ t('adminForm.contentLoadFailed') }}
                             <button type="button" class="underline hover:no-underline" @click="retryContent">{{ t('common.retry') }}</button>
                         </p>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-4">
-                    <select v-model="form.status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <div class="flex flex-wrap items-center gap-3">
+                    <select v-model="form.status" class="app-input !w-auto">
                         <option value="draft">草稿</option>
                         <option value="published">已发布</option>
                     </select>
-                    <input v-model="form.publishedAt" type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    <label class="flex items-center gap-2 text-sm text-gray-600">
-                        <input v-model="form.pinned" type="checkbox" />
+                    <input v-model="form.publishedAt" type="date" class="app-input !w-auto" />
+                    <label class="text-soft flex items-center gap-2 text-sm">
+                        <input v-model="form.pinned" type="checkbox" class="app-checkbox" />
                         <span>置顶</span>
                     </label>
                 </div>
             </div>
             <template #footer>
-                <button class="rounded-lg bg-gray-100 px-4 py-1.5 text-sm" @click="editing = null">{{ t('common.cancel') }}</button>
-                <button
-                    class="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                    :disabled="saving || loadingContent || contentFailed"
-                    @click="save"
-                >
+                <button class="app-btn app-btn-ghost" @click="editing = null">{{ t('common.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="saving || loadingContent || contentFailed" @click="save">
                     {{ t('common.save') }}
                 </button>
             </template>
         </AdminDrawer>
 
         <!-- 列表 -->
-        <div class="rounded-2xl bg-white p-6 shadow-sm">
-            <div class="mb-4 flex flex-wrap items-center gap-3 text-xs">
-                <input v-model="keyword" :placeholder="t('common.search')" class="rounded-lg border border-gray-300 px-3 py-1.5" />
-                <select v-model="status" class="rounded-lg border border-gray-300 px-3 py-1.5">
+        <div class="app-card p-6">
+            <div class="mb-4 flex flex-wrap items-center gap-3">
+                <input v-model="keyword" :placeholder="t('common.search')" class="app-input !w-48 !py-1.5 !text-xs" />
+                <select v-model="status" class="app-input !w-auto !py-1.5 !text-xs">
                     <option value="all">{{ t('common.all') }}</option>
                     <option value="draft">草稿</option>
                     <option value="published">已发布</option>
                 </select>
-                <span class="text-gray-400">{{ t('common.total') }} {{ total }}</span>
+                <span class="text-faint text-xs">{{ t('common.total') }} {{ total }}</span>
             </div>
 
             <div v-if="loading" class="space-y-2">
-                <div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-xl bg-gray-50" />
+                <div v-for="i in 3" :key="i" class="app-skeleton h-16 !rounded-xl" />
             </div>
 
             <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="text-left text-xs text-gray-400">
+                <table class="app-table">
+                    <thead>
                         <tr>
-                            <th class="py-2 pr-4">标题</th>
-                            <th class="py-2 pr-4">分类</th>
-                            <th class="py-2 pr-4">状态</th>
-                            <th class="py-2 pr-4">阅读</th>
-                            <th class="py-2 pr-4">发布时间</th>
-                            <th class="py-2">{{ t('common.actions') }}</th>
+                            <th>标题</th>
+                            <th>分类</th>
+                            <th>状态</th>
+                            <th>阅读</th>
+                            <th>发布时间</th>
+                            <th class="text-right">{{ t('common.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in items" :key="row.id" class="border-t border-gray-100">
-                            <td class="py-3 pr-4">
+                        <tr v-for="row in items" :key="row.id">
+                            <td class="app-table-cell-wrap">
                                 <div class="flex items-center gap-2">
-                                    <span v-if="row.pinned" class="text-[10px] text-amber-500">📌</span>
+                                    <span v-if="row.pinned" aria-hidden="true">📌</span>
                                     <div class="min-w-0">
-                                        <p class="max-w-[22rem] truncate font-medium text-gray-800">{{ row.title }}</p>
-                                        <p class="max-w-[22rem] truncate text-[11px] text-gray-400">{{ row.summary }}</p>
+                                        <p class="text-strong font-medium">{{ row.title }}</p>
+                                        <p class="text-faint text-[11px]">{{ row.summary }}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-3 pr-4 text-xs text-gray-500">{{ row.category }}</td>
-                            <td class="py-3 pr-4">
+                            <td class="text-muted-2 text-xs">{{ row.category }}</td>
+                            <td>
                                 <button
-                                    :class="row.status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'"
-                                    class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                                    :class="row.status === 'published' ? 'app-badge-success' : 'app-badge-neutral'"
+                                    class="app-badge"
                                     @click="toggleStatus(row)"
                                 >
                                     {{ row.status === 'published' ? '已发布' : '草稿' }}
                                 </button>
                             </td>
-                            <td class="py-3 pr-4 text-xs text-gray-500">{{ row.viewCount }}</td>
-                            <td class="py-3 pr-4 text-xs text-gray-400">{{ formatDate(row.publishedAt || row.createdAt) }}</td>
-                            <td class="space-x-2 py-3 text-xs whitespace-nowrap">
-                                <button class="text-emerald-600 hover:underline" @click="togglePin(row)">{{ row.pinned ? '取消置顶' : '置顶' }}</button>
-                                <button class="text-emerald-600 hover:underline" @click="openEdit(row)">{{ t('common.edit') }}</button>
-                                <button class="text-red-500 hover:underline" @click="remove(row)">{{ t('common.delete') }}</button>
+                            <td class="text-muted-2 text-xs tabular-nums">{{ row.viewCount }}</td>
+                            <td class="text-faint text-xs">{{ formatDate(row.publishedAt || row.createdAt) }}</td>
+                            <td>
+                                <div class="app-table-actions">
+                                    <button class="app-btn app-btn-ghost app-btn-sm" @click="togglePin(row)">{{ row.pinned ? '取消置顶' : '置顶' }}</button>
+                                    <button class="app-btn app-btn-ghost app-btn-sm" @click="openEdit(row)">{{ t('common.edit') }}</button>
+                                    <button class="app-btn app-btn-danger app-btn-sm" @click="remove(row)">{{ t('common.delete') }}</button>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="!items.length">
-                            <td colspan="6" class="py-8 text-center text-xs text-gray-400">{{ t('admin.tableEmpty') }}</td>
+                            <td colspan="6" class="!whitespace-normal">
+                                <div class="app-empty">
+                                    <span class="app-empty-icon">📰</span>
+                                    <p class="app-empty-title">{{ t('admin.tableEmpty') }}</p>
+                                    <p class="app-empty-desc">{{ t('admin.addRecord') }}</p>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
             <div v-if="totalPages > 1" class="mt-4 flex items-center justify-end gap-2 text-xs">
-                <button class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-                <span>{{ page }} / {{ totalPages }}</span>
-                <button class="rounded border border-gray-300 px-2 py-1 disabled:opacity-40" :disabled="page >= totalPages" @click="goPage(page + 1)">
-                    下一页
-                </button>
+                <button class="app-btn app-btn-outline app-btn-sm" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+                <span class="text-muted-2 tabular-nums">{{ page }} / {{ totalPages }}</span>
+                <button class="app-btn app-btn-outline app-btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
             </div>
         </div>
     </div>
