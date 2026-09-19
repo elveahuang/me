@@ -239,7 +239,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 管理接口可能使用不带方法后缀的文件并在内部按 HTTP 方法分支，例如知识库 `documents.ts`；不要只搜索 `.post.ts` 就认定上传接口不存在。
 - 智能体创建/更新已把主表写入与四类能力绑定（`replaceAgent*`）收进同一个 `db.transaction`，通过 `agent-skills.ts` 的 `DbRunner`（默认 `db`）把事务句柄传下去；`[id].patch.ts` 在主表 0 行更新时先抛 404 再动绑定。改动时保持这一事务边界，不要退回"多次独立写"。
 - 管理端 `providers` 成为默认、`mcp-servers` 创建/改名走同一事务：providers 用事务清除其他默认，MCP 用 `pg_advisory_xact_lock(hashtext(name))` 包住查重+写入并把冲突降到 409；`mcp-servers/[id].ts` 仅在改名时才进事务，普通字段走非事务 update。`baseUrl`/`url` 统一经 `assertAbsoluteHttpUrl()`（要求绝对 http/https，`outbound.ts` 提供）。
-- 知识库上传当前将文件按 UTF-8 文本解码，multipart 文件限制为 2MB；不是通用 PDF/Word 解析入口。JSON 上传分支单独处理，不可将文件分支的限制当作两种输入都已覆盖。
+- 知识库上传当前将文件按 UTF-8 文本解码，不是通用 PDF/Word 解析入口。`documents.ts` 的 POST 两条通道（multipart 与 JSON）都以 `MAX_DOCUMENT_BYTES = 2MB` 按 UTF-8 字节数统一限制正文；JSON 分支只接受字符串 `title`/`content`（非字符串回退默认值，避免 drizzle 把非文本值带进 SQL）。嵌入按 `EMBED_BATCH_SIZE = 16` 分批调用（与 `reindex.post.ts` 一致），单批失败只让该批降级为 Bigram，不再整篇丢向量；分块行按 `INSERT_BATCH_SIZE = 200` 分批插入，仍在同一事务内。
 - 文档上传会调用 embedding 供应商；失败可保存空向量并将文档标记为 `ready`。因此 `ready` 不等于向量生成成功，也不代表上传是无外部副作用操作。
 - `catalog.ts` 定义 Card、Stat、Badge、Alert 的模型输出 schema。即使注释声称共用目录，也应检查客户端实际导入和注册方式；新增组件须同步提示词、属性定义和双端渲染。
 - 移动路由守卫读取的 `fetchSession()` 已缓存降级（见 §5）：瞬时故障保留上次会话、仅 401/403 判登出，微信回调路由单独放行且回跳页 `sync()` 可重试，不要把回调跳转只当作路由配置问题而忽略 token 接收与 `apiUrl` 域名。Ionic 标签页组件切换时保活，`HomeView` 用 `onIonViewWillEnter` 而非仅 `onMounted` 刷新，改其他常驻标签页时同理。
