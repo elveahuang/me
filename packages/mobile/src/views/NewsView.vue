@@ -105,9 +105,7 @@ onUnmounted(() => {
                         <div class="relative h-36 bg-[color:var(--surface-3)]">
                             <img v-if="item.coverImage" :src="item.coverImage" :alt="item.title" class="h-full w-full object-cover" />
                             <div v-else class="text-faint flex h-full items-center justify-center text-3xl">📰</div>
-                            <span v-if="item.pinned" class="absolute top-2 left-2 rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-bold text-white">
-                                {{ t('agents.topPin') }}</span
-                            >
+                            <span v-if="item.pinned" class="app-chip app-chip-brand absolute top-2 left-2 !text-[9px]">{{ t('agents.topPin') }}</span>
                         </div>
                         <div class="p-3">
                             <h3 class="line-clamp-2 text-xs font-black">{{ item.title }}</h3>

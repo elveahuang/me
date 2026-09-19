@@ -15,11 +15,12 @@ const { t } = useI18n();
 const bulletins = ref<BulletinRecord[]>([]);
 const dismissed = ref<string[]>([]);
 
-const levelBg: Record<string, string> = {
-    info: 'border-[color:var(--brand-400)] bg-[color:var(--brand-50)]',
-    success: 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
-    warning: 'border-amber-300 bg-amber-50 dark:bg-amber-950/40',
-    danger: 'border-red-300 bg-red-50 dark:bg-red-950/40',
+/** 与 Web 端 BulletinBanner 同一套 app-alert 级别类：色块由主题令牌给出，深色模式才不会读不出来 */
+const levelClass: Record<string, string> = {
+    info: 'app-alert-info',
+    success: 'app-alert-success',
+    warning: 'app-alert-warning',
+    danger: 'app-alert-danger',
 };
 
 async function load() {
@@ -54,13 +55,13 @@ function dismiss(id: string) {
 
 <template>
     <div v-if="visible.length" class="space-y-2 px-4 pt-3">
-        <div v-for="item in visible" :key="item.id" :class="['flex items-start gap-2 rounded-xl border p-3', levelBg[item.level] ?? levelBg.info]">
+        <div v-for="item in visible" :key="item.id" :class="['app-alert flex items-start gap-2', levelClass[item.level] ?? levelClass.info]">
             <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.title" class="h-10 w-10 shrink-0 rounded-lg object-cover" />
             <div class="min-w-0 flex-1">
                 <p class="text-[11px] font-bold">{{ item.title }}</p>
                 <p v-if="item.content" class="text-muted-2 mt-0.5 line-clamp-2 text-[10px] leading-relaxed">{{ item.content }}</p>
                 <div class="mt-1.5 flex items-center gap-2">
-                    <a v-if="item.linkUrl" :href="item.linkUrl" class="text-primary-600 text-[10px] font-bold underline" target="_blank" rel="noopener">
+                    <a v-if="item.linkUrl" :href="item.linkUrl" class="app-link text-[10px] underline" target="_blank" rel="noopener">
                         {{ item.linkText || t('common.viewDetail') }}
                     </a>
                     <span v-if="item.endsAt" class="text-faint text-[9px]">{{ t('common.endsAt', { date: formatDate(item.endsAt) }) }}</span>

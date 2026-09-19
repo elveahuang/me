@@ -142,7 +142,7 @@ const filteredAgents = computed(() => {
                     type="button"
                     :class="[
                         'shrink-0 rounded-full px-3 py-1 font-bold transition-all active:scale-95',
-                        activeCategory === cat.key ? 'bg-primary-600 text-white shadow-xs' : 'bg-surface-2 text-muted hover:bg-[color:var(--surface-3)]',
+                        activeCategory === cat.key ? 'bg-brand shadow-xs' : 'bg-surface-2 text-muted hover:bg-[color:var(--surface-3)]',
                     ]"
                     @click="activeCategory = cat.key"
                 >
@@ -213,7 +213,7 @@ const filteredAgents = computed(() => {
                 <!-- 失败时不渲染空态：否则「还没有智能体」会把「接口挂了」读成「真的没有数据」 -->
                 <div v-if="!filteredAgents.length && !loading && !error" class="text-faint py-16 text-center text-xs">
                     <p class="mb-2 text-3xl">🔍</p>
-                    <p class="font-bold text-slate-700 dark:text-slate-300">{{ t('agents.noAgents') }}</p>
+                    <p class="text-strong font-bold">{{ t('agents.noAgents') }}</p>
                     <button
                         v-if="searchKeyword || activeCategory !== 'all'"
                         type="button"

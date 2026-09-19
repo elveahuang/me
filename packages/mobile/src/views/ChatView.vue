@@ -601,11 +601,11 @@ async function copyConversationMarkdown() {
                 <div v-if="showScrollBottom" class="fixed right-4 bottom-20 z-50">
                     <button
                         type="button"
-                        class="bg-primary-600 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-lg transition-transform active:scale-95"
+                        class="bg-brand flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-lg transition-transform active:scale-95"
                         @click="scrollToBottom"
                     >
                         <span>↓ {{ t('chat.scrollToBottom') }}</span>
-                        <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-amber-300" />
+                        <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-[color:var(--warning)]" />
                     </button>
                 </div>
 
