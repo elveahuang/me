@@ -519,6 +519,7 @@ export default {
         plansCount: 'Membership Plans',
         ordersCount: 'Total Orders',
         active24h: '24h Active Chats',
+        messagesCount: 'Messages',
         recentUsers: 'Recent Users',
         recentConversations: 'Recent Conversations',
         modelUsage: 'Model Invocation Distribution',

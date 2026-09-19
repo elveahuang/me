@@ -70,6 +70,36 @@ const maxModelCount = computed(() => {
     if (!stats.value?.modelUsage?.length) return 1;
     return Math.max(...stats.value.modelUsage.map((m) => m.conversations), 1);
 });
+
+interface StatCard {
+    label: string;
+    value: number;
+    hint?: string;
+}
+
+// 主指标：业务规模与活跃度。数值一律深灰，颜色只留给错误/预警，不做装饰性配色
+const primaryCards = computed<StatCard[]>(() => {
+    const s = stats.value;
+    if (!s) return [];
+    return [
+        { label: t('admin.usersCount'), value: s.users },
+        { label: t('admin.active24h'), value: s.activeConversations24h, hint: `${t('admin.conversationsCount')} ${s.conversations}` },
+        { label: t('admin.messagesCount'), value: s.messages },
+        { label: t('admin.ordersCount'), value: s.orders, hint: `${t('admin.plansCount')} ${s.plans}` },
+    ];
+});
+
+// 资产指标：平台配置规模，视觉上弱于主指标一档
+const assetCards = computed<StatCard[]>(() => {
+    const s = stats.value;
+    if (!s) return [];
+    return [
+        { label: t('admin.agentsCount'), value: s.agents, hint: `${s.skills} Skill · ${s.tools} Tool` },
+        { label: t('admin.providersCount'), value: s.providers },
+        { label: t('admin.mcpCount'), value: s.mcpServers },
+        { label: t('admin.kbCount'), value: s.knowledgeBases },
+    ];
+});
 </script>
 
 <template>
@@ -111,41 +141,33 @@ const maxModelCount = computed(() => {
         </div>
 
         <!-- 首次加载骨架：接口未回来前不渲染 KPI/明细，避免全 0 被误读为「平台没有数据」 -->
-        <div v-if="loading && !stats" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            <div v-for="n in 6" :key="n" class="app-skeleton h-28 rounded-3xl" />
+        <div v-if="loading && !stats" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                <div v-for="n in 4" :key="n" class="app-skeleton h-24 rounded-2xl" />
+            </div>
+            <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <div v-for="n in 4" :key="n" class="app-skeleton h-14 rounded-xl" />
+            </div>
         </div>
 
-        <!-- 核心 KPI 指标卡片 -->
-        <div v-else-if="stats" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">{{ t('admin.usersCount') }}</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">{{ stats?.users ?? 0 }}</p>
-                <p class="mt-1 text-[11px] font-bold text-emerald-600">账号活跃</p>
+        <!-- 核心 KPI：标准 4 列两行，主指标实心卡 + 资产指标浅底条 -->
+        <div v-else-if="stats" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                <div v-for="card in primaryCards" :key="card.label" class="app-card p-5">
+                    <p class="text-faint text-xs font-bold">{{ card.label }}</p>
+                    <p class="text-strong mt-2 text-2xl font-black tabular-nums">{{ card.value }}</p>
+                    <p v-if="card.hint" class="text-faint mt-1 text-[11px]">{{ card.hint }}</p>
+                </div>
             </div>
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">{{ t('admin.active24h') }}</p>
-                <p class="mt-2 text-2xl font-black text-blue-600">{{ stats?.activeConversations24h ?? 0 }}</p>
-                <p class="mt-1 text-[11px] text-slate-400">{{ t('admin.conversationsCount') }} {{ stats?.conversations ?? 0 }}</p>
-            </div>
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">交互消息</p>
-                <p class="mt-2 text-2xl font-black text-purple-600">{{ stats?.messages ?? 0 }}</p>
-                <p class="mt-1 text-[11px] font-bold text-purple-500">大模型对话请求</p>
-            </div>
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">{{ t('admin.ordersCount') }}</p>
-                <p class="mt-2 text-2xl font-black text-amber-600">{{ stats?.orders ?? 0 }}</p>
-                <p class="mt-1 text-[11px] font-bold text-amber-600">微信/模拟订阅</p>
-            </div>
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">{{ t('admin.agentsCount') }}</p>
-                <p class="mt-2 text-2xl font-black text-emerald-600">{{ stats?.agents ?? 0 }}</p>
-                <p class="mt-1 text-[11px] text-slate-400">{{ stats?.skills ?? 0 }} Skill / {{ stats?.tools ?? 0 }} Tool</p>
-            </div>
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-                <p class="text-xs font-bold text-slate-400">{{ t('admin.kbCount') }}</p>
-                <p class="mt-2 text-2xl font-black text-indigo-600">{{ stats?.knowledgeBases ?? 0 }}</p>
-                <p class="mt-1 text-[11px] text-slate-400">{{ stats?.mcpServers ?? 0 }} MCP 集成</p>
+
+            <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <div v-for="card in assetCards" :key="card.label" class="app-panel flex items-center justify-between gap-3 px-4 py-3">
+                    <div class="min-w-0">
+                        <p class="text-faint truncate text-[11px] font-bold">{{ card.label }}</p>
+                        <p v-if="card.hint" class="text-faint mt-0.5 truncate text-[10px]">{{ card.hint }}</p>
+                    </div>
+                    <p class="text-strong shrink-0 text-lg font-black tabular-nums">{{ card.value }}</p>
+                </div>
             </div>
         </div>
 

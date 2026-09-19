@@ -522,6 +522,7 @@ export default {
         plansCount: '会员套餐',
         ordersCount: '订单总量',
         active24h: '24h 活跃对话',
+        messagesCount: '交互消息',
         recentUsers: '最新注册用户',
         recentConversations: '最新会话动态',
         modelUsage: '模型调用负载分布',
