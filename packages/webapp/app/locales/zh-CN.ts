@@ -528,6 +528,7 @@ export default {
         modelUsage: '模型调用负载分布',
         addRecord: '新建记录',
         tableEmpty: '暂无数据记录',
+        waitingForData: '等待数据上报',
         filterStatus: '订单状态',
         filterRole: '用户角色',
         filterAll: '全部',

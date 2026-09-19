@@ -525,6 +525,7 @@ export default {
         modelUsage: 'Model Invocation Distribution',
         addRecord: 'Create Record',
         tableEmpty: 'No records found',
+        waitingForData: 'Waiting for data',
         filterStatus: 'Order Status',
         filterRole: 'User Role',
         filterAll: 'All',

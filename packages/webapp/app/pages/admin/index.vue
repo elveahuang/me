@@ -105,38 +105,21 @@ const assetCards = computed<StatCard[]>(() => {
 <template>
     <div class="space-y-8">
         <!-- 加载失败提示：否则所有 KPI 显示 0，会被误读为「平台无数据」 -->
-        <div v-if="loadError" class="flex items-center justify-between gap-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+        <div v-if="loadError" class="app-alert app-alert-danger flex items-center justify-between gap-3 text-sm">
             <span>{{ loadError }}</span>
-            <button type="button" class="shrink-0 rounded-lg bg-white px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-100" @click="load">
-                {{ t('common.retry') }}
-            </button>
+            <button type="button" class="app-btn app-btn-outline app-btn-sm shrink-0" @click="load">{{ t('common.retry') }}</button>
         </div>
 
-        <!-- 头部欢迎与快捷入口 -->
+        <!-- 头部欢迎与快捷入口：仅主操作保留品牌色，其余降权为次级按钮 -->
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ t('admin.dashboardTitle') }}</h1>
-                <p class="mt-1 text-xs text-slate-500">{{ t('admin.dashboardSubtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('admin.dashboardTitle') }}</h1>
+                <p class="app-page-subtitle mt-1">{{ t('admin.dashboardSubtitle') }}</p>
             </div>
-            <div class="flex flex-wrap items-center gap-2.5">
-                <NuxtLink
-                    to="/admin/agents"
-                    class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
-                >
-                    + {{ t('agents.createAgent') }}
-                </NuxtLink>
-                <NuxtLink
-                    to="/admin/plans"
-                    class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
-                >
-                    {{ t('nav.plans') }}
-                </NuxtLink>
-                <NuxtLink
-                    to="/admin/orders"
-                    class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
-                >
-                    {{ t('nav.orders') }}
-                </NuxtLink>
+            <div class="app-page-actions !mb-0">
+                <NuxtLink to="/admin/agents" class="app-btn app-btn-primary app-btn-sm">＋ {{ t('agents.createAgent') }}</NuxtLink>
+                <NuxtLink to="/admin/plans" class="app-btn app-btn-ghost app-btn-sm">💳 {{ t('nav.plans') }}</NuxtLink>
+                <NuxtLink to="/admin/orders" class="app-btn app-btn-ghost app-btn-sm">🧾 {{ t('nav.orders') }}</NuxtLink>
             </div>
         </div>
 
@@ -174,89 +157,108 @@ const assetCards = computed<StatCard[]>(() => {
         <!-- 详细数据面板：模型使用热度 + 最新动态 -->
         <div v-if="stats" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <!-- 模型调用活跃度排行 -->
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs">
-                <div class="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="flex items-center gap-2 text-sm font-black text-slate-900">
+            <div class="app-card p-6">
+                <div class="app-divider mb-4 flex items-center justify-between pb-3">
+                    <h3 class="text-strong flex items-center gap-2 text-sm font-black">
                         <span>⚡</span>
                         <span>{{ t('admin.modelUsage') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/providers" class="text-xs font-bold text-emerald-600 hover:underline"> {{ t('nav.providers') }} › </NuxtLink>
+                    <NuxtLink to="/admin/providers" class="app-link text-xs font-bold"> {{ t('nav.providers') }} › </NuxtLink>
                 </div>
 
                 <div v-if="stats?.modelUsage?.length" class="space-y-3.5">
                     <div v-for="item in stats.modelUsage" :key="item.model" class="space-y-1.5">
                         <div class="flex items-center justify-between text-xs">
-                            <span class="max-w-[70%] truncate font-mono font-semibold text-slate-800">{{ item.model }}</span>
-                            <span class="text-[11px] text-slate-400">{{ item.conversations }}</span>
+                            <span class="text-strong max-w-[70%] truncate font-mono font-semibold">{{ item.model }}</span>
+                            <span class="text-faint text-[11px] tabular-nums">{{ item.conversations }}</span>
                         </div>
-                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div class="bg-surface-3 h-2 w-full overflow-hidden rounded-full">
                             <div
-                                class="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500"
+                                class="bg-brand-gradient h-full rounded-full transition-all duration-500"
                                 :style="{ width: Math.max(8, Math.round((item.conversations / maxModelCount) * 100)) + '%' }"
                             />
                         </div>
                     </div>
                 </div>
-                <p v-else class="py-12 text-center text-xs text-slate-400">{{ t('admin.tableEmpty') }}</p>
+                <!-- 空态保留坐标轴与虚拟柱形，而不是把版面塌成一句话 -->
+                <div v-else class="app-divider flex h-[168px] flex-col justify-end gap-2 pt-2">
+                    <div class="flex h-full items-end gap-2 opacity-50">
+                        <div v-for="n in 7" :key="n" class="bg-surface-3 flex-1 rounded-t" :style="{ height: [30, 52, 24, 64, 40, 20, 46][n - 1] + '%' }" />
+                    </div>
+                    <p class="text-faint pt-2 text-center text-[11px]">{{ t('admin.waitingForData') }}</p>
+                </div>
             </div>
 
             <!-- 最新活跃会话 -->
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs">
-                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="flex items-center gap-2 text-sm font-black text-slate-900">
+            <div class="app-card p-6">
+                <div class="app-divider mb-3 flex items-center justify-between pb-3">
+                    <h3 class="text-strong flex items-center gap-2 text-sm font-black">
                         <span>💬</span>
                         <span>{{ t('admin.recentConversations') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/conversations" class="text-xs font-bold text-emerald-600 hover:underline"> {{ t('common.all') }} › </NuxtLink>
+                    <NuxtLink to="/admin/conversations" class="app-link text-xs font-bold"> {{ t('common.all') }} › </NuxtLink>
                 </div>
 
-                <div v-if="stats?.recentConversations?.length" class="divide-y divide-slate-100">
+                <div v-if="stats?.recentConversations?.length" class="divide-line divide-y">
                     <div v-for="conv in stats.recentConversations" :key="conv.id" class="flex items-center justify-between py-3 text-xs">
                         <div class="flex min-w-0 items-center gap-2.5 pr-2">
                             <span class="text-base">{{ conv.agentEmoji || '🤖' }}</span>
                             <div class="min-w-0">
-                                <p class="truncate font-bold text-slate-800">{{ conv.title }}</p>
-                                <p class="truncate text-[10px] text-slate-400">{{ conv.agentName }}</p>
+                                <p class="text-strong truncate font-bold">{{ conv.title }}</p>
+                                <p class="text-faint truncate text-[10px]">{{ conv.agentName }}</p>
                             </div>
                         </div>
-                        <span class="text-[10px] whitespace-nowrap text-slate-400">
+                        <span class="text-faint text-[10px] whitespace-nowrap tabular-nums">
                             {{ new Date(conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
                         </span>
                     </div>
                 </div>
-                <p v-else class="py-12 text-center text-xs text-slate-400">{{ t('admin.tableEmpty') }}</p>
+                <div v-else class="divide-line space-y-3 divide-y opacity-60">
+                    <div v-for="n in 4" :key="n" class="flex items-center gap-2.5 pt-3">
+                        <div class="app-skeleton h-6 w-6 shrink-0 rounded-full" />
+                        <div class="min-w-0 flex-1 space-y-1.5">
+                            <div class="app-skeleton app-skeleton-text !w-2/3" />
+                            <div class="app-skeleton app-skeleton-text !w-1/3" />
+                        </div>
+                    </div>
+                    <p class="text-faint pt-3 text-center text-[11px]">{{ t('admin.waitingForData') }}</p>
+                </div>
             </div>
 
             <!-- 最新入驻用户 -->
-            <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xs">
-                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="flex items-center gap-2 text-sm font-black text-slate-900">
+            <div class="app-card p-6">
+                <div class="app-divider mb-3 flex items-center justify-between pb-3">
+                    <h3 class="text-strong flex items-center gap-2 text-sm font-black">
                         <span>👥</span>
                         <span>{{ t('admin.recentUsers') }}</span>
                     </h3>
-                    <NuxtLink to="/admin/users" class="text-xs font-bold text-emerald-600 hover:underline"> {{ t('nav.users') }} › </NuxtLink>
+                    <NuxtLink to="/admin/users" class="app-link text-xs font-bold"> {{ t('nav.users') }} › </NuxtLink>
                 </div>
 
-                <div v-if="stats?.recentUsers?.length" class="divide-y divide-slate-100">
+                <div v-if="stats?.recentUsers?.length" class="divide-line divide-y">
                     <div v-for="u in stats.recentUsers" :key="u.id" class="flex items-center justify-between py-3 text-xs">
                         <div class="flex min-w-0 items-center gap-2.5 pr-2">
-                            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-black text-slate-700">
+                            <div class="app-avatar-icon h-7 w-7 shrink-0 text-[11px] font-black">
                                 {{ u.name?.[0]?.toUpperCase() || 'U' }}
                             </div>
                             <div class="min-w-0">
-                                <p class="truncate font-bold text-slate-800">{{ u.name }}</p>
-                                <p class="truncate text-[10px] text-slate-400">{{ u.email }}</p>
+                                <p class="text-strong truncate font-bold">{{ u.name }}</p>
+                                <p class="text-faint truncate text-[10px]">{{ u.email }}</p>
                             </div>
                         </div>
-                        <span
-                            class="rounded-full px-2.5 py-0.5 text-[10px] font-bold"
-                            :class="u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'"
-                        >
-                            {{ u.role === 'admin' ? 'Admin' : 'User' }}
-                        </span>
+                        <span class="app-chip shrink-0 text-[10px] font-bold">{{ u.role === 'admin' ? 'Admin' : 'User' }}</span>
                     </div>
                 </div>
-                <p v-else class="py-12 text-center text-xs text-slate-400">{{ t('admin.tableEmpty') }}</p>
+                <div v-else class="divide-line space-y-3 divide-y opacity-60">
+                    <div v-for="n in 4" :key="n" class="flex items-center gap-2.5 pt-3">
+                        <div class="app-skeleton h-7 w-7 shrink-0 rounded-full" />
+                        <div class="min-w-0 flex-1 space-y-1.5">
+                            <div class="app-skeleton app-skeleton-text !w-1/2" />
+                            <div class="app-skeleton app-skeleton-text !w-3/4" />
+                        </div>
+                    </div>
+                    <p class="text-faint pt-3 text-center text-[11px]">{{ t('admin.waitingForData') }}</p>
+                </div>
             </div>
         </div>
     </div>
