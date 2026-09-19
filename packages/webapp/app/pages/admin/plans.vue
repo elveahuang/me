@@ -170,169 +170,129 @@ async function remove(id: string) {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ t('nav.plans') }}</h1>
-                <p class="mt-1 text-xs text-slate-500">会员套餐定义每日对话配额与周期定价；free 为注册用户的免费兜底档</p>
+                <h1 class="app-page-title text-strong">{{ t('nav.plans') }}</h1>
+                <p class="app-page-subtitle">会员套餐定义每日对话配额与周期定价；free 为注册用户的免费兜底档</p>
             </div>
-            <button
-                class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95"
-                @click="openCreate"
-            >
-                + {{ t('admin.addRecord') }}
-            </button>
+            <div class="app-page-actions">
+                <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">+ {{ t('admin.addRecord') }}</button>
+            </div>
+        </div>
+
+        <!-- 列表加载失败独立提示：否则表格空态会被读成「还没有套餐」 -->
+        <div v-if="errorMessage && !editing" class="app-alert app-alert-danger">
+            {{ errorMessage }}
+            <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
         </div>
 
         <!-- 编辑 / 新建表单（右侧抽屉） -->
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('admin.addRecord')" width-class="sm:max-w-2xl" @close="editing = null">
             <div class="space-y-4">
-                <p v-if="errorMessage" class="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-600">{{ errorMessage }}</p>
+                <p v-if="errorMessage" class="app-alert app-alert-danger">{{ errorMessage }}</p>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐编码 (创建后不可修改)</label>
-                        <input
-                            v-model="form.code"
-                            :disabled="Boolean(editing?.id)"
-                            placeholder="如 pro / max"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white disabled:bg-slate-100"
-                        />
+                        <label class="app-label">套餐编码 (创建后不可修改)</label>
+                        <input v-model="form.code" :disabled="Boolean(editing?.id)" placeholder="如 pro / max" class="app-input" />
                     </div>
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐名称</label>
-                        <input
-                            v-model="form.name"
-                            placeholder="如 专业版 Pro"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        />
+                        <label class="app-label">套餐名称</label>
+                        <input v-model="form.name" placeholder="如 专业版 Pro" class="app-input" />
                     </div>
                 </div>
 
                 <div>
-                    <label class="mb-1.5 block text-xs font-bold text-slate-700">套餐描述与权益</label>
-                    <input
-                        v-model="form.description"
-                        placeholder="套餐核心权益简述"
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                    />
+                    <label class="app-label">套餐描述与权益</label>
+                    <input v-model="form.description" placeholder="套餐核心权益简述" class="app-input" />
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">每日对话配额 (留空不限)</label>
-                        <input
-                            v-model="form.chatQuotaPerDay"
-                            type="number"
-                            placeholder="留空为无限制"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        />
+                        <label class="app-label">每日对话配额 (留空不限)</label>
+                        <input v-model="form.chatQuotaPerDay" type="number" placeholder="留空为无限制" class="app-input" />
                     </div>
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">月付价格 (元)</label>
-                        <input
-                            v-model="form.monthlyPriceYuan"
-                            type="number"
-                            step="0.01"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        />
+                        <label class="app-label">月付价格 (元)</label>
+                        <input v-model="form.monthlyPriceYuan" type="number" step="0.01" class="app-input" />
                     </div>
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">年付价格 (元，留空不支持)</label>
-                        <input
-                            v-model="form.yearlyPriceYuan"
-                            type="number"
-                            step="0.01"
-                            placeholder="留空为无"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        />
+                        <label class="app-label">年付价格 (元，留空不支持)</label>
+                        <input v-model="form.yearlyPriceYuan" type="number" step="0.01" placeholder="留空为无" class="app-input" />
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="mb-1.5 block text-xs font-bold text-slate-700">显示排序 (越小越靠前)</label>
-                        <input
-                            v-model="form.sortOrder"
-                            type="number"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        />
+                        <label class="app-label">显示排序 (越小越靠前)</label>
+                        <input v-model="form.sortOrder" type="number" class="app-input" />
                     </div>
                     <div class="flex items-center gap-2 pt-6">
-                        <label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-                            <input v-model="form.enabled" type="checkbox" class="rounded text-emerald-600" />
+                        <label class="text-soft flex cursor-pointer items-center gap-2 text-xs font-bold">
+                            <input v-model="form.enabled" type="checkbox" class="app-checkbox" />
                             <span>启用上架并对用户可见</span>
                         </label>
                     </div>
                 </div>
             </div>
             <template #footer>
-                <button
-                    class="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200 disabled:opacity-50"
-                    :disabled="saving"
-                    @click="editing = null"
-                >
-                    {{ t('common.cancel') }}
-                </button>
-                <button
-                    class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
-                    :disabled="saving"
-                    @click="save"
-                >
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('common.cancel') }}</button>
+                <button class="app-btn app-btn-primary" :disabled="saving" @click="save">
                     {{ saving ? t('common.loading') : t('common.save') }}
                 </button>
             </template>
         </AdminDrawer>
 
         <!-- 套餐表格 -->
-        <div class="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
-                        <tr>
-                            <th class="p-4">编码</th>
-                            <th class="p-4">名称</th>
-                            <th class="p-4">每日配额</th>
-                            <th class="p-4">月价</th>
-                            <th class="p-4">年价</th>
-                            <th class="p-4">排序</th>
-                            <th class="p-4">{{ t('common.status') }}</th>
-                            <th class="p-4 text-right">{{ t('common.actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-slate-700">
-                        <tr v-for="p in plans" :key="p.id" class="transition-colors hover:bg-slate-50/60">
-                            <td class="p-4 font-mono font-bold text-slate-900">{{ p.code }}</td>
-                            <td class="p-4">
-                                <div class="font-bold text-slate-900">{{ p.name }}</div>
-                                <div class="mt-0.5 max-w-xs truncate text-[11px] text-slate-400">{{ p.description }}</div>
-                            </td>
-                            <td class="p-4 font-semibold text-slate-800">{{ p.chatQuotaPerDay ?? '∞ 不限量' }}</td>
-                            <td class="p-4 font-black text-slate-900">¥{{ (p.monthlyPriceCents / 100).toFixed(2) }}</td>
-                            <td class="p-4 text-slate-600">{{ p.yearlyPriceCents !== null ? `¥${(p.yearlyPriceCents / 100).toFixed(2)}` : '—' }}</td>
-                            <td class="p-4 text-slate-400">{{ p.sortOrder }}</td>
-                            <td class="p-4">
-                                <span
-                                    :class="[
-                                        'rounded-full px-2.5 py-0.5 text-[10px] font-bold',
-                                        p.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500',
-                                    ]"
-                                >
-                                    {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
-                                </span>
-                            </td>
-                            <td class="space-x-2 p-4 text-right whitespace-nowrap">
-                                <button class="font-bold text-emerald-600 hover:text-emerald-700" @click="openEdit(p)">{{ t('common.edit') }}</button>
-                                <button v-if="p.code !== 'free'" class="font-medium text-rose-500 hover:text-rose-700" @click="remove(p.id)">
+        <div class="app-table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>编码</th>
+                        <th>名称</th>
+                        <th>每日配额</th>
+                        <th>月价</th>
+                        <th>年价</th>
+                        <th>排序</th>
+                        <th>{{ t('common.status') }}</th>
+                        <th class="text-right">{{ t('common.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="p in plans" :key="p.id">
+                        <td class="text-strong font-mono font-bold">{{ p.code }}</td>
+                        <td>
+                            <div class="text-strong font-bold">{{ p.name }}</div>
+                            <div class="text-faint mt-0.5 max-w-xs truncate text-[11px]">{{ p.description }}</div>
+                        </td>
+                        <td class="text-soft font-semibold">{{ p.chatQuotaPerDay ?? '∞ 不限量' }}</td>
+                        <td class="text-strong font-black tabular-nums">¥{{ (p.monthlyPriceCents / 100).toFixed(2) }}</td>
+                        <td class="text-soft tabular-nums">{{ p.yearlyPriceCents !== null ? `¥${(p.yearlyPriceCents / 100).toFixed(2)}` : '—' }}</td>
+                        <td class="text-faint">{{ p.sortOrder }}</td>
+                        <td>
+                            <span :class="p.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge">
+                                {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="app-table-actions">
+                                <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(p)">{{ t('common.edit') }}</button>
+                                <button v-if="p.code !== 'free'" class="app-btn app-btn-danger app-btn-sm" @click="remove(p.id)">
                                     {{ t('common.delete') }}
                                 </button>
-                            </td>
-                        </tr>
-                        <tr v-if="!plans.length">
-                            <td colspan="8" class="p-12 text-center text-xs text-slate-400">{{ t('admin.tableEmpty') }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!plans.length">
+                        <td colspan="8" class="!whitespace-normal">
+                            <div class="app-empty">
+                                <span class="app-empty-icon">📦</span>
+                                <p class="app-empty-title">{{ t('admin.tableEmpty') }}</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </template>
