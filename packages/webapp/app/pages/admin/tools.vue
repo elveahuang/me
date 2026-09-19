@@ -265,9 +265,15 @@ async function remove(id: string) {
                             </span>
                         </td>
                         <td>
-                            <button :class="tool.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(tool)">
-                                {{ tool.enabled ? t('common.enabled') : t('common.disabled') }}
-                            </button>
+                            <button
+                                type="button"
+                                role="switch"
+                                class="app-switch"
+                                :aria-checked="tool.enabled"
+                                :aria-label="t('adminForm.enable')"
+                                :title="tool.enabled ? t('common.enabled') : t('common.disabled')"
+                                @click="toggle(tool)"
+                            />
                         </td>
                         <td>
                             <div class="app-table-actions">

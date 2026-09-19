@@ -218,10 +218,20 @@ function levelLabel(value: string) {
                             {{ t('storage.sortOrder') }} {{ row.sortOrder }} · {{ bulletinWindowText(row.startsAt, row.endsAt) }}
                         </p>
                     </div>
-                    <div class="flex shrink-0 flex-col items-end gap-1">
-                        <button class="app-btn app-btn-ghost app-btn-sm" @click="openEdit(row)">{{ t('common.edit') }}</button>
-                        <button class="app-btn app-btn-ghost app-btn-sm" @click="toggleEnabled(row)">{{ row.enabled ? '停用' : '启用' }}</button>
-                        <button class="app-btn app-btn-danger app-btn-sm" @click="remove(row)">{{ t('common.delete') }}</button>
+                    <div class="flex shrink-0 flex-col items-end gap-2">
+                        <button
+                            type="button"
+                            role="switch"
+                            class="app-switch"
+                            :aria-checked="row.enabled"
+                            :aria-label="t('adminForm.enable')"
+                            :title="row.enabled ? t('common.enabled') : t('common.disabled')"
+                            @click="toggleEnabled(row)"
+                        />
+                        <div class="flex items-center gap-1">
+                            <button class="app-btn app-btn-ghost app-btn-sm" @click="openEdit(row)">{{ t('common.edit') }}</button>
+                            <button class="app-btn app-btn-danger app-btn-sm" @click="remove(row)">{{ t('common.delete') }}</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -204,9 +204,15 @@ async function remove(id: string) {
                                 <span class="app-chip uppercase">{{ s.transport }}</span>
                             </td>
                             <td>
-                                <button :class="s.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(s)">
-                                    {{ s.enabled ? t('common.enabled') : t('common.disabled') }}
-                                </button>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    class="app-switch"
+                                    :aria-checked="s.enabled"
+                                    :aria-label="t('adminForm.enable')"
+                                    :title="s.enabled ? t('common.enabled') : t('common.disabled')"
+                                    @click="toggle(s)"
+                                />
                             </td>
                             <td>
                                 <div class="app-table-actions">

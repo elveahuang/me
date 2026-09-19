@@ -216,9 +216,15 @@ async function remove(id: string) {
                         <td class="app-table-cell-wrap text-muted-2 font-mono text-xs">{{ p.apiKey || t('adminForm.providerApiKeyUnset') }}</td>
                         <td class="text-muted-2 tabular-nums">{{ p.models?.length ?? 0 }}</td>
                         <td>
-                            <button :class="p.enabled ? 'app-badge-success' : 'app-badge-neutral'" class="app-badge" @click="toggle(p)">
-                                {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
-                            </button>
+                            <button
+                                type="button"
+                                role="switch"
+                                class="app-switch"
+                                :aria-checked="p.enabled"
+                                :aria-label="t('adminForm.enable')"
+                                :title="p.enabled ? t('common.enabled') : t('common.disabled')"
+                                @click="toggle(p)"
+                            />
                         </td>
                         <td>
                             <div class="app-table-actions">
