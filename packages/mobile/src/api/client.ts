@@ -11,6 +11,12 @@ import { createAuthClient } from 'better-auth/client';
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/+$/, '') ?? '';
 const TOKEN_KEY = 'ee_mobile_token';
 
+/**
+ * 普通请求超时。给得比会话探针宽，因为下单/登记附件这类请求有真实副作用，
+ * 过早判失败会诱导用户在服务端其实已完成后重复提交。
+ */
+const API_TIMEOUT_MS = 30_000;
+
 export function getToken(): string | null {
     try {
         return localStorage.getItem(TOKEN_KEY);
@@ -41,14 +47,34 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
 
 /** 通用 JSON 请求；失败时抛出带可读文案的错误 */
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const res = await fetch(apiUrl(path), {
-        credentials: 'include',
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders(options.headers as Record<string, string> | undefined),
-        },
-    });
+    /**
+     * 弱网下 fetch 可能永久 pending，列表页会一直卡在骨架屏且没有任何错误可显示。
+     * 调用方自带 signal 时不接管：它自己的取消语义（组件卸载、用户主动取消）优先于超时。
+     */
+    const controller = options.signal ? null : new AbortController();
+    const timer = controller ? setTimeout(() => controller.abort(), API_TIMEOUT_MS) : null;
+
+    let res: Response;
+    try {
+        res = await fetch(apiUrl(path), {
+            credentials: 'include',
+            ...options,
+            ...(controller ? { signal: controller.signal } : {}),
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders(options.headers as Record<string, string> | undefined),
+            },
+        });
+    } catch (error) {
+        if (controller?.signal.aborted) {
+            throw Object.assign(new Error(`请求超时（${Math.round(API_TIMEOUT_MS / 1000)} 秒），请检查网络后重试`), { status: 0 });
+        }
+        const message = error instanceof Error && error.name === 'AbortError' ? error.message : '网络请求失败，请检查网络后重试';
+        throw Object.assign(new Error(message), { status: 0, cause: error });
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+
     if (!res.ok) {
         let payload: unknown = null;
         try {

@@ -86,7 +86,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - Mobile 聊天页：`packages/mobile/src/views/ChatView.vue`；路由与导航先从移动端入口及 router 目录定位，不套用 Nuxt 自动路由约定。
 - 双端聊天使用 AI SDK 的 `Chat<UIMessage>` 与 `DefaultChatTransport`，请求 `/api/chat`，携带 `agentId`、`conversationId`、`messages`。
 - 恢复聊天历史必须保留 `parts`，不能只存/只回填纯文本，否则工具调用和富内容会丢失。
-- 移动端普通接口与认证实现集中在 `packages/mobile/src/api/client.ts`：`credentials: include`，存在 token 时附带 Bearer；token 键为 `ee_mobile_token`，并捕获 `set-auth-token` 响应头。`api/auth.ts` 只是它的 5 行再导出 shim，改实现看 `client.ts`。
+- 移动端普通接口与认证实现集中在 `packages/mobile/src/api/client.ts`：`credentials: include`，存在 token 时附带 Bearer；token 键为 `ee_mobile_token`，并捕获 `set-auth-token` 响应头。`api/auth.ts` 只是它的 5 行再导出 shim，改实现看 `client.ts`。`api()` 自带 30s 超时（调用方传了 `signal` 就不接管），超时与网络失败都抛 `status: 0` 的中文文案，以便列表页能渲染错误而不是永久骨架屏。
 - `fetchSession()` 带 `AbortController` 超时（约 10s）、并发去重（`inflightSession` 单飞）与模块级 `cachedSession`：网络失败/超时/5xx 等瞬时故障降级返回缓存，**仅 401/403 判定为登出并清缓存返回 null**。因此 `router/index.ts` 的守卫不会因为一次抖动就把已登录用户踢回登录页；冷启动无缓存时仍返回 null。缓存是内部的，未导出 `getCachedSession/setCachedSession`，`signOut()` 会同步清空。改鉴权降级语义时以这段为准。
 - 移动端聊天 transport 另行显式设置 Bearer，不直接复用普通 JSON `api()`。更改认证逻辑时两处都要核对。
 - 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
