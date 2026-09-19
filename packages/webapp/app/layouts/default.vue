@@ -42,6 +42,28 @@ async function refreshUnread() {
 
 let unreadTimer: ReturnType<typeof setInterval> | null = null;
 
+function startUnreadPolling() {
+    if (unreadTimer) return;
+    unreadTimer = setInterval(() => void refreshUnread(), 60_000);
+}
+
+function stopUnreadPolling() {
+    if (unreadTimer) {
+        clearInterval(unreadTimer);
+        unreadTimer = null;
+    }
+}
+
+/** 后台标签页不产生轮询请求；回到前台时立即刷新一次再恢复定时器 */
+function onVisibilityChange() {
+    if (document.hidden) {
+        stopUnreadPolling();
+    } else {
+        void refreshUnread();
+        startUnreadPolling();
+    }
+}
+
 /**
  * useAsyncData（不加 await）：SSR 渲染器会等待其 resolve，因此首屏就是正确的登录态，
  * 不会先渲染「登录/注册」再闪成用户名；客户端则复用同一份 payload，不重复请求。
@@ -97,15 +119,17 @@ watch(
 
 onMounted(() => {
     void refreshUnread();
-    unreadTimer = setInterval(() => void refreshUnread(), 60_000);
+    startUnreadPolling();
+    document.addEventListener('visibilitychange', onVisibilityChange);
 });
 
 onBeforeUnmount(() => {
     if (import.meta.client) {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onKeydown);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
     }
-    if (unreadTimer) clearInterval(unreadTimer);
+    stopUnreadPolling();
 });
 
 if (import.meta.client) {
