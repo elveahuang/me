@@ -1,0 +1,304 @@
+# AGENTS.md — ME 智能体平台
+
+> 项目知识核实日期：2026-09-22。本文是后续代理的工作入口，不是运行验证报告。
+> 优先使用本文定位相关模块，再读本次修改涉及的实现；不要每次重新扫描整个仓库。
+> 当代码与本文或 README 冲突时，以当前源码、包脚本和配置为准，并在相关任务中更新本文。
+
+## 1. 工作方式与边界
+
+- 默认使用中文沟通。先理解用户要的是分析还是修改；分析任务不顺手改业务代码。
+- 开始先检查 `git status --short`，保留已有未提交修改。不要重置、覆盖或把无关变更一起提交。
+- 使用 pnpm workspace，不混用 npm/yarn 安装，不为了排障无差别升级依赖或重建锁文件。
+- 按任务范围查找文件，排除 `node_modules`、`.git`、`.nuxt`、`.output`、`dist` 和本地数据库目录。
+- 环境配置优先阅读 `.env.example`；不要把实际密钥、令牌、连接串或用户数据写入文档与日志。
+- 数据库迁移、种子、支付、外部模型调用都可能有真实副作用；不要把它们当作无副作用的代码检查。
+- 仅文档修改不需要启动应用、安装依赖、访问外部服务或迁移数据库。结尾说明实际验证了什么、未验证什么。
+- 本仓库可在 Windows 上工作；工具的 shell 不一定是 Bash。不要假设分号、POSIX 路径或 Bash 语法可用；优先单命令或当前 shell 支持的 `&&`。
+
+## 2. 项目地图与技术边界
+
+ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nuxt/Nitro API，不是两个独立后端。
+
+| 目录                       | 职责与入口                                                   |
+| -------------------------- | ------------------------------------------------------------ |
+| `packages/webapp`          | Nuxt 4 全栈应用；`app/` 是 Vue 页面，`server/` 是 Nitro 后端 |
+| `packages/mobile`          | Ionic + Vue + Vite 前端、Capacitor 原生壳；调用 Web 后端     |
+| `packages/commons`         | 共享契约、主题及其他可复用资产；修改前确认实际消费者         |
+| `packages/config`          | ESLint、Prettier、Stylelint、TypeScript 等共享配置           |
+| `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口             |
+| `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                      |
+
+当前核心栈：Vue 3、Nuxt 4、Tailwind CSS 4、Nuxt UI、Ionic/Capacitor、AI SDK 7、Better Auth、Drizzle ORM、PostgreSQL。附件模块另用 `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`（S3 协议，兼容 RustFS / MinIO）。依赖的精确版本查各 `package.json` 和 `pnpm-lock.yaml`，不要根据旧 README 或记忆选择版本。
+
+**共享契约属于 commons 包，不是独立 workspace 包。**
+
+- 实际共享契约是 `packages/commons/src/contract/index.ts`，业务代码使用 `@commons/contract`。
+- 共享主题是 `packages/commons/src/styles/theme.css`，通过 `@repo/commons/styles/theme.css` 使用。
+- Web 的 `@commons` 别名配置在 `packages/webapp/nuxt.config.ts` 顶层 `alias`（不是 `nitro.alias`，也没有独立 `nitro` 块），指向 `../commons/src`。Nuxt 4 会把顶层 `alias` 一并写入 `tsconfig.server.json`，但**服务端运行时能否解析 `@commons` 尚未经真实构建验证**；当前约定是 `server/` 从不 import 共享契约，`server/utils/billing.ts` 仍本地重复声明 `BillingPeriod`/`Plan`/`MembershipStatus`（与 contract 同名同形，是刻意复制而非依赖）。要在服务端复用契约前，先确认运行时解析确实生效，不要凭别名存在就认定可用。
+- `packages/commons/src` 里有消费者的是 `contract/`、`styles/theme.css` 与 `markdown-export.ts`（会话 Markdown 导出序列化，Web `ChatPane` 与 Mobile `ChatView` 共用；导出文案由调用方经 `labels` 传入，commons 内不硬编码中文）；其余（`api/ types/ store/ hooks/ utils/ components/ i18n/ router/ services/` 等）均无消费者，是遗留结构；`commons/package.json` 的 exports map 也没有 `./contract` 条目，靠别名访问。修改前先确认实际消费者，不要假定两端已全面接入这些旧目录。
+- Mobile 的 `@commons/*` 在 `packages/mobile/tsconfig.json`，Vite 使用 `resolve.tsconfigPaths: true`。
+- 根依赖列表很大，不代表所有库都已用于核心链路；不要仅凭依赖名推断功能。
+
+## 3. 常用命令与验证边界
+
+以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.5.1`（CI 与 `tools/deploy/dockerfile` 的 corepack 都钉在同一版本，改版本时三处一起）；CI 使用 Node 24，但依赖升级后仍需检查各依赖的 engines，不能把 CI 配置视为兼容性证明。
+
+| 命令                                     | 实际作用 / 前提                                                                   |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `pnpm install`                           | 安装 workspace 依赖；`prepare` 会安装 Husky 钩子，可能修改锁文件                  |
+| `pnpm webapp:start`                      | 启动 Nuxt Web/API，默认端口 3000                                                  |
+| `pnpm mobile:start`                      | 启动移动端 Vite 开发服务；后端仍需单独启动                                        |
+| `pnpm webapp:build`                      | Nuxt 生产构建                                                                     |
+| `pnpm mobile:build`                      | 执行移动端包的构建脚本；不等于完成原生平台打包                                    |
+| `pnpm typecheck`                         | 先 Web 再 Mobile；前者失败会阻止后者执行                                          |
+| `pnpm lint`                              | ESLint；覆盖 Web server/app、Mobile src、Commons src                              |
+| `pnpm test`                              | Web 的 `smoke-test`，不是双端端到端测试                                           |
+| `pnpm --filter @repo/webapp typecheck`   | 仅 Web 类型检查                                                                   |
+| `pnpm --filter @repo/mobile typecheck`   | 仅 Mobile 类型检查                                                                |
+| `pnpm --filter @repo/webapp icons:check` | 检查图标生成结果是否同步                                                          |
+| `pnpm webapp:db:generate`                | 根据 schema 生成迁移文件，会写文件                                                |
+| `pnpm webapp:db:migrate`                 | 向目标数据库应用迁移，会改数据结构                                                |
+| `pnpm webapp:db:seed`                    | 执行 `server/db/seed.ts`，会写数据库                                              |
+| `pnpm webapp:init`                       | 依次 migrate + seed，不是只读环境检查                                             |
+| `pnpm webapp:auth:secret`                | 生成 Better Auth 会话密钥（转调 webapp 包同名脚本）；只输出密钥，不写库、不改配置 |
+
+- `webapp:start:pro` 实际仍是 dev；`webapp:build:dev`、`webapp:build:pro` 当前与普通 build 相同，不能据命名假设加载不同环境。
+- `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
+- 业务变更按涉及包执行类型检查和构建；改共享代码须考虑双端。检查失败时区分本次回归与既有问题，不通过删代码或削弱检查掩盖失败。
+- `packages/webapp/scripts/smoke-test.ts` 主要直接调用模块/断言；数据库不可用可仅警告跳过，局部算法断言也不代表真实接口、计费或数据库事务已通过。
+- CI（`.github/workflows/ci.yml`）当前**只做镜像构建与推送**（Build & Push Docker Image to ACR：checkout → pnpm 12.5.1 + Node 24 → `pnpm install` → `docker build -f tools/deploy/dockerfile` → push），**不运行 lint/typecheck/构建/冒烟**；这些校验必须在提交前本地执行。CI 在 runner 上生成的 `packages/webapp/.env` 不会进镜像（`.dockerignore` 的 `**/.env` 已将其排除出构建上下文），运行时配置一律由容器运行环境注入。
+
+## 4. 环境、数据与危险脚本
+
+- 配置从 `packages/webapp/.env.example` 与 `packages/mobile/.env.example` 了解。先准备本地环境，再执行依赖这些变量的数据库命令；不要照抄 README 中先迁移后配置的顺序。
+- Web 的 `nuxt.config.ts` 为 Nuxt Content 配置 PostgreSQL，URL 来自 `POSTGRES_URL`；仅页面内容模块也可能需要数据库，不能假设静态页面构建完全离线。
+- `NUXT_DEEPSEEK_API_KEY` 对应私有 `runtimeConfig.deepseekApiKey`；模型供应商还存在数据库配置，不要把所有模型选择简化成一个环境变量。
+- 生产运行 `.output/server/index.mjs` 时应由运行环境注入变量，不要假设它会自动读取开发 `.env`。认证及管理员初始密码必须使用真实安全配置；查看 `server/plugins/env-guard.ts` 的约束。判定规则在 `server/utils/env-guard.ts`（纯函数 `auditEnv`）：除了 `replace-with/xxxx/example/changeme/your-` 这类通用 marker，它还**点名了 `.env.example` 里的具体值**（`BETTER_AUTH_SECRET` 的那串 hex、`ADMIN_INITIAL_PASSWORD=Admin@123`）——示例文件给的是「抄了就能跑」的真值而不是占位符，公开仓库里的真值等同已泄露。`problems` 在生产环境直接拒绝启动（示例 secret、过短的 secret/口令、`BETTER_AUTH_URL`、`POSTGRES_URL` 未设置——后者缺失时 `db.ts` 会静默回落到写死的 `postgres:postgres@localhost`），示例管理员口令只进 `warnings`：seed 已不再信任它的字面值，用它拒绝启动会把「管理员早已存在、只是沿用示例文件」的存量部署下次重启直接变砖。
+- 跨域配置同时关系到 CORS 和认证可信来源；修改 API 域名、Web 域名或原生回调协议时一起核对，不要只改客户端地址。
+- **`packages/webapp` 只能显式声明精确钉死的 `h3: "1.15.11"`（无 `^`），根 `package.json` 有 `pnpm.overrides.h3 = 1.15.11` 护栏，绝不可改成 `^2`**：Nitro 2.x 运行的是 h3 1.x，`defineEventHandler` 交给 handler 的 `event` 就是 h3 v1 的 `H3Event`。一旦解析到 `h3@^2`（依赖升级脚本很容易顺手带进来），server 里那些 `import { createError } from 'h3'` / `import type { H3Event } from 'h3'` 会全部解析到 v2，与 Nitro 的 v1 类型互不兼容——`requireUser(event)`、`requireAdmin(event, …)` 之类的调用点会一次性炸出两百多个 typecheck 错误，`event.node` 在 v2 里还可能未定义（把 v1 实例当 v2 用不只是类型问题，运行时形状就不一样）；overrides 让即使有人写了 `^2` 也解析到 1.15.11，是这条禁令的结构化护栏（此回归已发生两次：R221 修复后被 `33cb016` 加回、R257 再删）。**「完全不声明 h3」同样是错的（R257→R268 的教训）**：`pnpm test`（tsx 直跑 `scripts/smoke-test.ts`）导入 `server/utils/embedding → outbound` 的 `createError` 时走的是纯 node 解析链，拿不到 Nitro 构建期才提供的 h3，webapp 没有本地依赖就 `ERR_MODULE_NOT_FOUND`——而更早冒烟测试「能通过」恰恰因为本地装着违规的 v2，测试通过本身依赖错误状态；精确的 1.15.11 与 Nitro 自带那份同版本，构建与脚本两侧一致。**依赖变动后若 typecheck 表现成「代码没错、两百多个错误一条不少」**，先查 `.nuxt/tsconfig*.json` 的 `paths.h3`——Nuxt 把它硬编码到**当时解析到的那份** h3 绝对路径，改依赖不会自动刷新，跑 `pnpm --filter @repo/webapp exec nuxt prepare` 重新生成。
+- **禁止自动执行** `scripts/update.mjs`：它会清理锁文件/依赖、批量升级、重装并全局格式化。
+- **禁止作为常规初始化执行** `tools/db/init.sql`：含 `DROP DATABASE me`。
+- README 中旧 schema 升级的 `DROP SCHEMA ... CASCADE` 是破坏性操作，不是解决迁移错误的默认方案。必须先核对目标库、现有迁移与数据保留要求。
+- **旧的 `deploy/` 容器套件（compose、entrypoint 自动迁移、healthcheck、init-env）已整体删除**（commit 9d948bf 依赖清理时一并移除，勿按旧文档寻找这些文件）。当前部署只有 `tools/deploy/dockerfile`：两阶段最小构建（builder 整仓 `pnpm install --frozen-lockfile` + `pnpm --filter @repo/webapp build`，runner 仅带 `.output`、非 root uid 1001、`node server/index.mjs`），corepack 显式钉 `pnpm@12.5.1`。**镜像不再自动应用数据库迁移**——迁移需在部署环境手动执行；运行时环境变量（POSTGRES_URL、BETTER_AUTH_* 等）必须由容器运行环境注入。`.dockerignore` 排除所有 `.env` 与本地产物，构建上下文不含任何密钥。
+
+## 5. Web / Mobile / 共享代码的修改入口
+
+- Web 路由在 `packages/webapp/app/pages`，管理端在 `app/pages/admin`；Nuxt 文件路由与 Nitro API 文件路由不要混淆。
+- **Web 用户端对话入口已收敛到首页**：`pages/index.vue` 登录后渲染对话（`app/components/HomeChat.vue`），未登录渲染平台介绍（`app/components/WelcomeLanding.vue`）；`/chat` 的 `pages/chat/index.vue` 是智能体广场（列表 + 最近会话），`pages/chat/[agentId].vue` 是固定智能体的对话页。三个页面的对话主体都是 `app/components/ChatPane.vue`，会话侧栏是 `app/components/ConversationList.vue`。
+- **ChatPane 是受控组件**：`agentId`/`conversationId` 由父级持有，组件只按 props 组合决定「载入历史 / 复位成新对话」，首次发送才 POST `/api/conversations` 建会话（不预建空会话）；`agentList` 多于一项时头部出现智能体切换器（首页用），切换即 emit `update:agentId`，由父级同时清空 `conversationId`（会话归属不能跨智能体续聊）。会话历史只在客户端拉取（`ChatPane` 内的 `import.meta.server` 早退）：SSR 阶段 `$fetch` 不带 cookie 会 401，切换会话时父级必须同时改 agent 与 conversationId，否则会看到「新智能体 + 旧会话」的中间态。
+- Mobile 聊天页：`packages/mobile/src/views/ChatView.vue`；路由与导航先从移动端入口及 router 目录定位，不套用 Nuxt 自动路由约定。
+- 双端聊天使用 AI SDK 的 `Chat<UIMessage>` 与 `DefaultChatTransport`，请求 `/api/chat`，携带 `agentId`、`conversationId`、`messages`。
+- **生成期间不能再发第二条消息，护栏要放在提交函数而不是按钮**：`ai@7` 的 `Chat`（实际从 `@ai-sdk/vue` 导出，`ai` 包本身不导出 `Chat`）对并发 `sendMessage` **没有任何去重**——实测第二次调用照样发出一个真实请求，于是同一段会话并行跑出两个 `/api/chat`，各扣一次额度、各存一条 assistant 消息，两条流还往同一个 Chat 实例交错写；界面上这时只有「停止」，而 `stop()` 只中止最后一条活动响应（实测第一条继续跑）。判据用 `chat.status !== 'ready'`（实测 `submitted`/`streaming` 全程成立）。Web 的 `ChatPane.handleSubmit` 里必须在预检之后直接 `return`（忽略这次提交、**保留输入文字**，等本轮结束再发）：输入框在 `<form @submit.prevent>` 里，回车永远会提交表单，而 `current.sendMessage()` 在 ChatPane 里是不 await 的，`submitting` 只盖住建会话/解析附件那几毫秒，靠按钮换成「停止」挡不住。移动端 `ChatView.handleSubmit` 是 `await chat.value.sendMessage(...)`，该 promise 覆盖整条流，所以 `sending` 天然为 true、回车路径已受保护，不需要同样改动。
+- 恢复聊天历史必须保留 `parts`，不能只存/只回填纯文本，否则工具调用和富内容会丢失。
+- **提交路径上每个 await 之后都要重新确认「消息要发给哪个实例」**：建会话（`POST /api/conversations`）与解析附件（`/api/attachments/chat-parts`）都是网络往返，期间用户点侧栏另一条会话或「新对话」会换掉面板持有的 Chat 实例。Web 的 `ChatPane.handleSubmit` 把实例存在局部变量 `current` 里，丢弃后的实例上 `sendMessage` 照样发出真实请求（实测：transport 被调用、请求带的还是用户已经离开的那个 conversationId、消息只落在旧实例上，界面因此毫无痕迹而额度已扣），且这条流不在 `chat.value` 上，`stopActiveStream()` 与 `status !== 'ready'` 两道护栏都盖不到——所以必须在清空输入**之前**比对 `chat.value === current`，不等就放弃这一次（文字与附件留在输入区，不需要重敲）。移动端 `ChatView` 反过来是「重新读 `chat.value`」，会把 A 里敲的内容塞进切开后那条会话，护栏是比对 `chat.value` 与 `conversationId` 双双未变。两端同理：`stop()` 对 `status === 'ready'` 的实例是空操作，切换时的清理不能指望它兜住尚未起跑的发送。
+- 移动端普通接口与认证实现集中在 `packages/mobile/src/api/client.ts`：`credentials: include`，存在 token 时附带 Bearer；token 键为 `ee_mobile_token`，并捕获 `set-auth-token` 响应头。`api/auth.ts` 只是它的 5 行再导出 shim，改实现看 `client.ts`。`api()` 自带 30s 超时（调用方传了 `signal` 就不接管），超时与网络失败都抛 `status: 0` 的可读文案，以便列表页能渲染错误而不是永久骨架屏；这些文案（含 `useUpload.ts` 的上传与相机提示）已全量走 locales 的 `common.*` 键，非组件模块用 `i18n.global.t(...)` 取。
+- **外部可控的值不能裸插进请求路径**（两端同规则）：vue-router 会把 `route.params` 里的 `%2F` 解码成真正的 `/`，模型输出的消息 part（如 `attachmentId`）与 localStorage 里的收藏 id 同样不可信。`apiUrl()`/`$fetch` 都是字符串拼接，`fetch` 随后还会按 RFC 规范化 `..`，所以 `/chat/x%2F..%2F..%2Fapi%2Fadmin%2Fstorage` 会让应用带着登录凭证去 GET `/api/admin/storage`。写路径时把变量关进单个路径段：`` `/api/agents/${encodeURIComponent(id)}` ``（查询串同理，已有 `?agentId=${encodeURIComponent(...)}` 的写法）。服务端 uuid 只有 hex+`-`，编码是 no-op、无兼容代价；新增插值点默认包一层，不要靠「这个 id 应该来自接口响应」的假设。
+- `fetchSession()` 带 `AbortController` 超时（约 10s）、并发去重（`inflightSession` 单飞）与模块级 `cachedSession`：网络失败/超时/5xx 等瞬时故障降级返回缓存，**仅 401/403 判定为登出并清缓存返回 null**。因此 `router/index.ts` 的守卫不会因为一次抖动就把已登录用户踢回登录页；冷启动无缓存时仍返回 null。另有 **5s 短 TTL（`SESSION_FRESH_MS`）只复用「确定结论」**：上一次探针拿到 2xx 或 401/403 后 5s 内，同一批导航里守卫 + 目标页（HomeView/MeView）背靠背的 `fetchSession` 直接复用缓存不再发请求；瞬时故障降级**不**刷新时间戳，下一次导航仍会重试探针。缓存作废钩子：`setToken()` 检测到 token 实际变化、`signOut()`、以及新导出的 `invalidateSessionCache()`（登录/注册成功后必须调用，否则刚认证就可能读到窗口内残留的「未登录」确定结论）。缓存本身是内部的，未导出 `getCachedSession/setCachedSession`。改鉴权降级语义时以这段为准。
+- 移动端聊天 transport 另行显式设置 Bearer，不直接复用普通 JSON `api()`。更改认证逻辑时两处都要核对。
+- 移动端聊天不直接吃 part 里的站内地址：`ChatView` 会按 `attachmentId` 调 `/api/attachments/{id}/url` 换成预签名地址再渲染（原生壳的 `<img>`/`<a>` 带不上 Bearer，相对路径还会解析到 capacitor://localhost），换不到才退回绝对化的站内路径。改这条链路时保留该兜底。
+- 不要把移动鉴权实现描述为“代码严格按浏览器/原生分支”：当前是否发送 Bearer 取决于是否持有 token。
+- **Web 端会话探测在 `app/utils/auth-client.ts`**：`resolveSession()` 返回 `signed-in | anonymous | error`，只有 401/403 算 anonymous；`fetchSession()` 是把它折叠成 null 的展示用包装。`middleware/auth.ts`、`middleware/admin.ts` 用 `resolveSession()`，抖动/5xx 时放行而不是跳登录页（服务端才是鉴权权威）；`middleware/guest.ts` 同样走 `resolveSession()`，只在 `signed-in` 时才把访客踢回首页。`useSession().load()` 在 error 时保留上次会话。`app/layouts/admin.vue` 已收敛到同一个 `useSession()`，不再有本地 session 副本。
+- 修改接口字段、错误归一化、金额/日期/额度格式化时，先读共享契约，再同步服务端响应与两端消费者，避免另造同名类型。
+- 主题先改共享语义变量，再查 Web 样式和 Mobile 的 Ionic 映射；不要为单页硬编码一套颜色绕过浅色/深色/品牌色。
+- 用户端内容页入口：Web 在 `app/pages/` 下的 `news/`、`notifications.vue`、`attachments.vue`（attachments 是刻意不进用户端导航的页面：入口只在聊天附件选择弹层与直达 URL，不要当遗漏加回导航；notifications 独立页面已并入个人中心子路由 `/profile/notifications`，页面文件只做重定向，头部铃铛即其入口，未读角标走 `shell-unread` 共享 useState；个人中心四分区均为子路由（overview/preferences/orders/notifications），数据由父页 `pages/profile.vue` 获取后经 NuxtPage 传参，`?section=` 旧深链在父页 setup 内改写）；移动端对应 `src/views/NewsView.vue`、`NewsDetailView.vue`、`NotificationsView.vue`、`AttachmentsView.vue`，导航入口分别在 `TabsView.vue`（底部）与 `HomeView.vue`/`MeView.vue`（顶部与列表）。
+- 管理端内容/运营页面：`app/pages/admin/news.vue`、`bulletins.vue`、`notifications.vue`（内容运营分组）；`conversations.vue`、`plans.vue`、`orders.vue`、`users.vue`、`attachments.vue`（商业与运营分组，`/admin/attachments` 是附件总览表）。侧栏分组见 `app/layouts/admin.vue` 的 `navGroups`。
+- **商业化链路现状（收费后环节仍薄弱）**：`套餐 → 下单 → 微信(Native/JSAPI/H5)/mock → 回调验签 → activateMembership → 每日配额` 已闭环，但**退款、对账、发票、优惠券、加油包、推荐返佣均未实现**——`orders.status='refunded'` 全链路（契约枚举/徽章 tone/i18n/管理端筛选）都有展示位，服务端却没有任何代码路径能写入它；pricing 页 FAQ 承诺的「24 小时内未消耗配额全额原路退款」目前无系统支撑。支付回调在 `server/api/pay/notify/wechat.post.ts`（不是 `server/api/payments/`）；`payments/types.ts` 的 `PaymentProvider` 接口只有 `isConfigured/createPayment/queryOrder/closeOrder`，**接口层没有 refund**，但依赖的 `better-wechatpay@1.x` 已含 `refund()/queryRefund()` 与退款回调解密类型，补退款不必换依赖。
+- **微信 SDK 实例只能经 `WechatPayProvider.shared().ready()` 取回，禁止同步 `new WeChatPay(...)`**（`server/utils/payments/wechat.ts`）。`better-wechatpay@1.1` 的构造器会发起 `GET /v3/certificates` 预取平台证书，但**不 await 那条 promise**，而 `CertificateManager.fetchCertificates` 记录后原样 `throw`——商户号/证书不匹配或一次网络抖动都会以 unhandledRejection 撞上 `server/plugins/error-guard.ts` 的 `process.exit(1)`，一次下单请求就能带走全部在途会话；同时证书未到货时 `Verifier.verify()` 读空表会把第一条真实回调误判为验签失败（冷启动竞态，实测已复现）。`ready()` 用官方等待入口 `WeChatPay.initialize()` 并外层 catch：未配置/初始化失败一律返回 `null`（`createPayment` 转成不带渠道细节的通用 502 文案、`queryOrder` 返回 `null` 即「不可据此关单」、`closeOrder` 返回 `false`），失败不缓存、下次重试，成功实例复用。等待另有 `SDK_INIT_WAIT_MS = 10s` 上限——回调端点无登录态可被反复触发，不能让出网挂起变成常驻请求占用；**超时只放弃等待，在途那条初始化仍留在缓存里**，后续调用复用同一次预取而不是每次重开外呼。`/api/health` 仍只用无副作用的 `isConfigured()`。
+- **续费语义与折扣展示**：付费会员到期前可续费当前套餐，服务端 `activateMembership()` 会从当前到期时间顺延（用户级 advisory lock + 订单级唯一约束保幂等）；所以「当前套餐」按钮不能按 code 相等就禁用——Free 档 code 也相等但没有 `expiresAt`，只有**无 `expiresAt` 的免费档**才是纯展示态，判定用契约的 `isActivePaidPlan(plan, membership)`。年付折扣角标必须由 `yearlyDiscountPercent/bestYearlyDiscountPercent` 按真实价格算出（seed 里 pro/max 实为 -17%，此前前端硬编码 `-20%` 属虚假宣传；mobile locale 的 `yearly: '按年 (省 20%)'` 一并去掉了硬编码数字）。
+- **`/api/admin/orders` 是分页 + 服务端聚合接口**：支持 `page/pageSize(上限100)/status/keyword/dateFrom/dateTo`，参数按「服务端健壮性约定」夹逼取整（`page` 上界 1e6），非法状态值与非法日期直接忽略而非报错；响应除 `orders/page/pageSize/total/totalPages` 外还带 `stats`（`total/paidCount/pendingCount/closedCount/refundedCount/paidAmountCents`，用 SQL `count(*) filter` / `sum() filter` 在库内聚合，营收已剔除退款）。**不要在管理端页面用前端求和当营收**：此前的 `totalRevenue` 是对最近 200 条求和，订单量超过一页后必然偏低；聚合与列表共用同一组筛选条件，选定时间范围时统计卡即为该区间对账汇总。
+- **Nitro 定时任务已启用**：`nuxt.config.ts` 配 `nitro.experimental.tasks=true`（不开启就不会扫描 `server/tasks/`）与 `nitro.scheduledTasks`；任务名由文件路径决定（`server/tasks/orders/close-stale.ts` → `orders:close-stale`），`defineTask` 属 Nitro 自动导入。当前每 15 分钟跑 `orders:close-stale` 关闭超时未支付订单（此前只有用户轮询订单详情会惰性触发，管理端 `clean-stale` 接口在前端 0 引用，现已接入订单页按钮）。生产由 node preset 的 `startScheduleRunner()`（`croner`）驱动，多实例下每实例都会注册调度，任务幂等所以安全；`/_nitro/tasks` 触发路由**仅 dev 可用**，生产验证任务只能看日志或落库结果。
+- **`server/utils/` 模块用到其他 server 工具时要显式 import**：Nitro 自动导入只在 Nuxt 构建产物里生效，`tsx` 直跑脚本（smoke-test、临时排查脚本）时未 import 的符号会变成运行时报错而非构建失败——`billing.ts` 曾漏 import `getPaymentProvider`，使该函数在脚本环境下静默失效。同理 `@commons/contract` 别名只在 Nuxt 构建期生效，`tsx` 脚本里要用相对路径导入。
+- **系统设置模块 `/admin/settings`**（`app/pages/admin/settings.vue`，"系统设置"分组）：单页 + 顶部标签分区，承载平台级配置项，当前有"基础设置"与"存储配置"。每个分区是独立组件 `app/components/AdminSettingsBasic.vue`、`AdminSettingsStorage.vue`，页面按 `?tab=basic|storage` 深链切换（默认 basic）。基础设置是**单例行表单**（不是列表 + AdminDrawer），字段为系统标题、默认语言、默认显示模式（light/dark/system）与默认品牌色（blue/green/yellow/red），存于 `system_settings` 表（`server/db/schema.ts`，单行 id=`default`），读写走 `server/utils/system-settings.ts` 的 `readSystemSettings/writeSystemSettings`，管理端 `server/api/admin/system-settings.ts`（GET/PATCH，`requireAdmin`，枚举/长度校验），公开只读探针 `server/api/system-settings.get.ts`。**生效链路**：Nitro 对共享 runtimeConfig 做了 deepFreeze（dev/生产一致），不能在启动插件或 PATCH 里对它 `Object.assign`；`server/plugins/site-settings.ts` 启动时把数据库值写入 `server/utils/system-settings.ts` 的进程内当前设置，并注册 request 钩子把该值注入每个请求 `useRuntimeConfig(event)` 的配置克隆——SSR 首屏与客户端 payload 由此拿到 DB 值（nuxt.config 的同形静态兜底仅用于 DB 不可用时回退），管理端 PATCH 成功后即时刷新该进程内设置；站点标题由 `app.vue` 的 `useHead` 与 `layouts/default.vue` 的导航品牌文字消费，默认语言在 `app/plugins/i18n.ts`（用户语言偏好存 `app_locale` cookie 供 SSR 读取、与 localStorage 双写；初始 locale = cookie > localStorage 未同步旧值 > 该默认，SSR 首屏即正确语言、刷新不闪，`<html lang>` 由 app.vue 的 useHead 随 locale 响应），默认品牌色在 `useTheme.ts` 作为无 cookie 时的 fallback（SSR 即生效、不闪色），默认显示模式在 `app/plugins/theme-defaults.client.ts`（仅当 `localStorage` 无 `nuxt-color-mode` 时播种 color-mode 偏好，全新访客设 light/dark 时首屏可能有一次极短切换）。多实例部署下非处理 PATCH 的进程要到重启才刷新，属可接受的最终一致。新增平台级配置项时在 settings 页加一个分区组件，不要再建独立页面。**模型供应商已移回独立页** `app/pages/admin/providers.vue`（"AI 资产"分组，`/admin/providers`），不再作为 settings 分区；原 `AdminSettingsProviders.vue` 已删除。
+- **管理端新增/编辑统一走右侧滑出抽屉 `AdminDrawer`**（`app/components/AdminDrawer.vue`，Nuxt 自动导入）。列表页只保留列表 + 加载/错误/空态，实体表单不再内联在列表上方。已接入：`skills/tools/mcp/plans/news/bulletins/agents/notifications/knowledge/providers`，以及系统设置的存储配置分区（knowledge 的新建与编辑各用一个抽屉；notifications 的发送表单）。基础设置分区是单例行表单，直接内联卡片 + 保存，不套用抽屉。约定：`:open` 绑 `editing !== null`（或各自开关），标题 `editing?.id ? t('common.edit') : t('adminForm.<x>New')`，页脚顺序 取消→保存，宽表单传 `width-class="sm:max-w-2xl"`；抽屉 slot 内的 `editing` 必须可选链（`editing?.id`），vue-tsc 会对未打开的 slot 体也做类型检查。`conversations/orders/users/index` 无新增/编辑表单，会话详情是只读侧栏面板，不套用抽屉。
+- **移动抽屉的滚动锁/焦点圈闭要在跨断点时释放**：`layouts/admin.vue` 的移动菜单与 `AdminDrawer` 共用 `useDrawerFocus`（Esc 关闭、Tab 圈闭、body 滚动锁、焦点归还）。`lg:hidden` 只隐藏抽屉 DOM，**不会**触发任何 watch——窄屏打开菜单后把窗口拉宽，body 会一直锁死滚动。`useCloseDrawerOnWide(openRef)`（`app/composables/`）监听 `matchMedia('(min-width: 1024px)')` 变宽即自动关闭，已接入 `layouts/default.vue`（shell 抽屉，其本地 Tab 圈闭在元素全隐藏时还会吞掉按键）与 `layouts/admin.vue`。新增「仅窄屏出现」的抽屉时同样挂上。
+
+## 6. 服务端定位原则
+
+以下路径均相对于 `packages/webapp/`：
+
+| 任务                           | 优先读取                                                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| 对话编排、流式返回             | `server/api/chat.post.ts`                                                                                               |
+| 表结构与种子                   | `server/db/schema.ts`、`server/db/seed.ts`                                                                              |
+| 迁移配置                       | `drizzle.config.ts`                                                                                                     |
+| 数据访问、认证、模型及工具实现 | `server/utils/` 对应模块                                                                                                |
+| 登录/注册、会话                | `server/api/auth/`、`server/middleware/`                                                                                |
+| 会话列表与消息历史             | `server/api/conversations/`、`server/api/conversations.get.ts`、`server/api/conversations.post.ts`                      |
+| 管理端资源配置                 | `server/api/admin/` 下 agents/providers/skills/tools/mcp-servers/knowledge-bases 等资源                                 |
+| 套餐、账单、支付               | `server/api/plans.get.ts`、`server/api/billing/`、`server/api/pay/`                                                     |
+| 附件与对象存储                 | `server/api/attachments*.ts`、`server/api/admin/storage*`、`server/utils/storage.ts`                                    |
+| 资讯新闻                       | `server/api/news*`、`server/api/admin/news*`                                                                            |
+| 宣传栏                         | `server/api/bulletins.get.ts`、`server/api/admin/bulletins*`                                                            |
+| 消息通知                       | `server/api/notifications*`、`server/api/admin/notifications*`、`server/utils/notify.ts`                                |
+| 运行时配置保护                 | `server/plugins/env-guard.ts`（启动闸门）+ `server/utils/env-guard.ts`（`auditEnv`/`isPlaceholderEnvValue`，seed 共用） |
+
+- Skill 是注入系统提示词的可复用指令块；Tool 是可执行工具。不能因为旧文档把二者混用就重新合并数据模型。
+- MCP 是外部工具来源；修改时关注工具命名、连接生命周期和清理，不能只改管理表单。
+- RAG 涉及分块、索引、检索与提示词注入；更换 embedding 模型/维度后须核对历史索引兼容性。
+- 生成式 UI 是提示词、组件目录和客户端渲染协作，不是任意服务端 HTML 输出。修改组件 schema 时同步提示词与渲染端。
+- 页面路由守卫不能代替服务端鉴权；管理 API 要验证管理员，会话读写要验证所有者。
+- 工具、MCP、模型供应商和支付涉及外部调用。维持现有地址校验、超时、鉴权、额度及幂等边界，不为“让测试通过”放开内网访问或关闭认证。
+
+### 主对话链路与数据不变量
+
+`server/api/chat.post.ts` 的实际顺序：鉴权与每用户限流 → 校验请求与消息体积 → **1.5 清洗 parts + 站内附件归属过滤，并据此判定「本轮有没有可落库的用户内容」（没有就 400，不扣额度、不建会话）** → 校验启用的 agent → 扣额度 → 加载能力绑定 → 检查/创建会话 → 保存用户消息 → 读取数据库历史 → RAG → 解析模型、工具与提示词 → 流式生成 → 保存 assistant 消息并关闭 MCP。
+
+- 额度按请求次数而非 token 扣减；通过初步校验后、会话归属检查和模型调用前扣额，失败不自动退款。调整顺序会改变业务语义。
+- 数据库历史是模型上下文的权威来源。客户端仅能提交落库 user 消息，parts 有白名单；消息主键冲突忽略用于幂等。
+- 上下文读取最近 24 条并按 `messages.seq` 排序，裁掉开头非 user 消息，对较早工具输出做压缩。`seq` 为全局 bigserial，不要改成仅按时间排序。
+- 历史回放必须带 `convertToModelMessages(..., { ignoreIncompleteToolCalls: true })`：被中断的那一轮会把「只有入参、没有结果」的工具调用原样落库（流被 cancel 时 `onFinish` 照样触发，落库只看 `parts` 非空、不看 `isAborted`），这种 part 发出的 `tool_calls` 没有配套结果，OpenAI 兼容端点会 400 掉整次请求，使该会话此后每轮都失败且每轮都照扣额度。在读取侧过滤（而非落库时）才能救回已污染的既有会话。
+- 生成使用 `streamText` + `stepCountIs(maxSteps)`；输出 UIMessage stream 和 reasoning，结束保存 assistant 消息，中断也保留已生成部分；响应携 `x-conversation-id`。
+- `server/utils/providers.ts` 使用 OpenAI 兼容 `.chat()`，不是 Responses API；模型解析可能创建默认 provider 或回填空 key，并非纯读。
+- `server/utils/system-prompt.ts` 用 `Intl.DateTimeFormat(..., { timeZone: 'Asia/Shanghai' })` 固定注入北京时间的 `current_date`/`current_time` 与上下文时间行，不依赖运行主机时区；改这里不要退回 `new Date().toLocaleDateString()` 之类主机本地格式化。
+- `server/utils/self-config.ts` 修改的是数据库中的全局 agent 及绑定，不是会话私有配置；当前请求已加载的工具集不会因此立即重建。其 `list` 动作返回值会进入模型上下文（tool result），只回传选择/切换所需的 `id`/`name`（及 provider 的 `models`），**不回传 MCP `url`、provider `baseUrl` 等端点**，避免把内部地址或带令牌的查询串透出给模型/日志；新增可回传字段时守住这条边界。
+- `server/api/completion.ts` 是独立简化链路，不具备主 chat 的历史、agent、工具和 RAG 编排，但它**同样扣每日额度**（入参校验通过后调 `consumeChatQuota()`，与主链路同一账本）——它只有 20 次/分的限流，若不记账就会成为配额的旁路。
+
+### 数据库、检索、支付与认证
+
+- `server/db/schema.ts` 集中定义认证、供应商/智能体/能力绑定、MCP、知识库/文档/分块、会话/消息、套餐/订单/会员/用量表。关系绑定采用复合主键；删除 agent 会级联删除其会话和消息，删除前必须确认影响。
+- `server/utils/db.ts` 使用 postgres-js + Drizzle，`prepare: false`；连接本身不执行迁移或 seed。迁移以 `drizzle.config.ts` 与 `server/db/migrations` 为入口，不凭本地代码推断目标数据库已迁移。
+- `server/db/seed.ts` 可创建/提升管理员，更新套餐及示例 agent 并补绑定；重跑会覆盖部分配置，不是只补缺。管理员口令走 `env-guard.ts` 的 `isPlaceholderEnvValue()`：未设置**或等于 `.env.example` 里的示例值/通用占位符**时都改为随机生成并打印（seed 通常在终端里跑、`NODE_ENV` 不是 production，服务端启动闸门管不到它，而 README 让人直接 `cp .env.example .env`）。
+- `server/utils/embedding.ts` 将向量存为 JSONB 数组，在内存做余弦检索，**不是 pgvector**；默认分块 800/100、检索 top-5，向量失败或无命中可降级 Bigram。混合知识库有向量命中时优先向量结果，不是将两种得分直接混排。`retrieveContext()` 取查询向量时按 `(供应商, 嵌入模型)` 归并（跨模型向量不可比）并用 `RAG_EMBED_CONCURRENCY` 限并发、共享 `RAG_EMBED_BUDGET_MS` 总预算：这段是扣完配额之后才跑的，逐个 `await` 会让黑洞端点按库数线性放大等待（10 库 × 30s = 300s），新增逐库外部调用时不要退回串行。文档/重建索引走的是分批 `embedTexts`（`EMBED_BATCH_SIZE = 16`），不共用这条预算。**分块扫描按库均摊预算**（`CHUNK_SCAN_BUDGET = 5000`，每库一条 `where kb_id = ? limit ⌈预算/库数⌉` 并累加封顶）：不要退回成一条 `where kb_id in (...) limit 5000` —— 没有 `ORDER BY` 时 PostgreSQL 按物理顺序给前 5000 行，「A 库 6000 块 + B 库 10 块」会把 B 库整批挤出去，用户看到的现象是 B 库的知识永远检索不出来且日志里什么都没有。向量存在 JSONB、余弦在应用层暴力算，所以这个预算就是每轮检索的内存/CPU 硬边界，新增逐库读取时不要绕过它（库数超过预算时后面的库无份额可用，属已知取舍）。**维度不同的向量一律不可比**：`cosineSimilarity()` 遇到长度不等直接返回 0，**不要退回 `Math.min` 截断公共前缀**——换过嵌入模型后老分块是 1024 维、新查询向量是 1536 维，截断前缀实测能算出 1.00，于是无意义的片段带着「相关度 1.00」被注入提示词且日志无任何痕迹。真正的剔除在 `retrieveContext()` 的候选层做（`c.embedding.length === queryVector.length` 先过滤，再打分），这样维度不齐的库整体落到 Bigram 兜底，也让 `/admin/knowledge-bases/:id/search` 那条 `minScore = 0` 的调用不会把「0 分不可比片段」挤进结果；有跳过分块时必须打一条含库 id、两侧维度、条数与「去重建索引」的 `console.warn`，运维要的是为什么检索变差，不是静默正确。修复手段是管理端「重建索引」（`reindex.post.ts` 会按当前模型重写全部分块）。
+- `server/utils/billing.ts` 中金额单位是整数分，额度 `null` 表示不限量，日额度按 UTC+8 划分；条件 upsert 原子扣额。Redis 不是额度账本。
+- 会员开通依赖事务、用户级 advisory lock、订单 pending 条件更新及唯一约束保证幂等；续费顺延到期时间。修改支付不能移除这些并发约束。
+- 下单金额来自服务端套餐；微信通知需要原始请求体验签。订单查询 GET 会查询支付渠道、补开通或关单，**不是无副作用查询**；`pending` 分支的渠道同步按订单走 `rateLimit('order-sync:<orderNo>', 45, 60_000)`（两端 2s 轮询即 30 次/分，留了多标签页余量），超预算时跳过同步只回库里的当前状态而不是 429——回调链路独立开通会员，少一次同步不会漏单。
+- **订单号受渠道字段约束**：`out_trade_no`（= `orders.orderNo`，下单/查单/关单/回调四处共用同一个值）在微信支付 JSAPI/H5/Native 三个产品下都要求「6-32 个字符，只能是数字、大小写字母与 `-_|*`，同一商户号下唯一」。`generateOrderNo()` 现为 `mo_` + 13 位毫秒 + 12 位随机十六进制 = 29 字符。**mock 渠道根本不校验长度**，改这个格式时本地/mock 跑通都不代表微信会接受，不要为了「更像 UUID」把随机段加回全长。
+- Mock 支付并非生产绝对禁用：生产显式启用 `MOCK_PAY_ENABLED=true` 后仍可用。不要通过真实或 mock 支付替代普通静态验证。
+- `server/utils/auth.ts` 使用 Better Auth 的 `admin()`/`bearer()` 插件；`server/utils/guard.ts` 的 `requireAdmin` 要求 `session.user.role === 'admin'`，`requireUser` 除要求已登录外还会拒绝 `banExpires` 未过期的封禁用户。当前认证在 `advanced` 下显式设 `disableOriginCheck: true`、`disableCSRFCheck: true`（better-auth 1.7 对 POST 强制 Origin 检查，改由 SameSite=Lax 兜底），不能把 trustedOrigins 存在当作这些保护已开启；涉及认证改动需重新评估，本文不是安全验收结论。
+- `server/middleware/auth.ts` 把 `/api/auth` **整段前缀**交给 `auth.handler`，而 better-auth 的 router 对未注册路径直接回 404；Nitro 中间件先于文件路由执行，所以自建端点若也放在 `/api/auth` 下（现状：`/api/auth/wechat`、`/api/auth/wechat/{status,callback}`），必须同时登记进该文件的 `OWN_PREFIXES`，否则 handler 永远收不到请求、对外只是静默 404。新增 `/api/auth/*` 端点时优先换个前缀（如 `/api/wechat`），避免再依赖这份白名单。
+- `server/middleware/cors.ts` 已不再向带凭证请求反射 `*`：`resolveOrigins()` 把 `*` 从允许列表剔除、仅记录 `wildcardConfigured` 并一次性告警，只有 origin **显式命中允许列表**才回写 `Access-Control-Allow-Origin`（带 `Vary: Origin`，并 expose `set-auth-token`、`x-conversation-id`），`OPTIONS` 直接 204。允许列表来自 `CORS_ORIGINS` + `BETTER_AUTH_URL` + 默认值。改 API/前端域名或原生回调协议时三处一起核对。
+- `server/utils/tools.ts` 的 HTTP 工具调用 `outbound.ts` 的 URL/DNS 校验，15 秒超时、输出截取 4000 字符；`ALLOW_PRIVATE_OUTBOUND=true` 可绕过校验。这不是覆盖 MCP、embedding 等全部请求的全局出站保护。`outbound.ts` 现行三件套：`fillAndPinOrigin()` 做 URL 模板填充时拒绝把值注入 host 段（参数值只能落在 path/query），`safeOutboundFetch()` 是替代裸 fetch 的出站入口（先 `assertSafeOutboundUrl` 预检，再用 `guardedLookup` 建连，连接时二次校验解析出的 IP，堵 DNS 重绑定），`guardedLookup` 内注意 **Node 24 起 `dns.promises.lookup` 即使传 callback 也只返回 Promise**，必须 then/catch 衔接而不是回退旧写法。HTTP 工具的 `bodyTemplate` 填充走 `tools.ts` 的 `fillTemplate()` 而不是 `fillUrlTemplate()`：占位符由模型自主拼接，所以 JSON 模板必须按字符串字面量内/外分别做转义或补引号（`fillUrlTemplate` 那套 `String(value)` 直替会让 `x", "confirmed": true, "z": "` 往管理员钉死的请求体里注入字段，一个普通引号还会让 body 直接失配成非法 JSON）；非 JSON 模板（表单编码等）保持直替。
+- **读外部响应体一律走 `outbound.ts` 的 `readCappedResponseText(res, maxBytes)`，不要 `await res.text()` / `res.json()`**：两者会把**整个**响应体先缓冲进内存，之后再 `slice(0, 300)` 只是丢弃副本——供应商 `baseUrl` 打错到一个大文件、或端点被换成持续推送的流，一次「连通测试」就能把 Nitro 进程内存吃爆。该助手按块读到上限即停并 `reader.cancel()`（实测：32MB 响应下旧写法传满 32MB 并全量留缓冲，新写法只读 4096 字节、服务端停在 0.75MB），返回 `{ text, truncated }`。调用方必须处理 `truncated`：半截 JSON 解析失败可以，**半截清单覆盖回库**不行（`providers/[id]/test.post.ts` 即在 `truncated` 时拒绝写回 `provider.models`）。`safeOutboundFetch()` 自带的 4000 字符截断读取是同一不变量；`wechat.ts` 的两处 `res.json()` 是例外（主机名硬编码在微信官方域名、响应体量固定）。
+- Redis 未配置时限流降级单进程内存，缓存回源；不要宣称无 Redis 的多实例部署仍有全局一致限流。原样复制 Web example 会配置 Redis URL，并不等同于禁用 Redis。
+- Nitro 自动导入是实际运行约定，不因 handler 缺少显式 `db/createError` import 就判错；独立 tsx 脚本不应假设具备同样环境。
+- **面向用户的能力清单必须与运行时口径一致**：`server/api/agents.get.ts` 与 `agents/[id].get.ts` 的 skill/tool/MCP join 都带 `eq(<x>.enabled, true)`，因为 `chat.post.ts`（skills/tools）和 `mcp.ts:91`（MCP）本来就只加载启用的能力；少这个条件时 ChatPane 头部的 🛠️/🧩/🔌 计数、智能体广场与移动端的技能 chip 会把运营已停用的能力照常宣传出去，用户读到的是「卡片说有、模型不会」。`knowledge_bases` 表**没有** `enabled` 列，不要给它补上这个条件（PG 42703）。
+- `/api/agents` 与 `/api/conversations` 都走 `requireUser`（需登录）。首页登录态由 `pages/index.vue` 用 `fetchSession(ssrCookieHeaders())` 判定后渲染 `HomeChat`（内含两处 `useFetch`），匿名访客只看到 `WelcomeLanding`，不会再出现「登录了却看不到数据/区块静默隐藏」的情况；若这两处 `useFetch` 拿到 401，要先确认访问者会话是否有效，而不是当作「平台没有智能体」。`/admin/agents`（管理端）与 `nav.agents`（智能体广场）不是同一入口。
+
+### 内容运营与附件模块（资讯 / 宣传栏 / 通知 / 附件）
+
+四个模块的表都在 `server/db/schema.ts` 尾部；共享类型与格式化函数在 `packages/commons/src/contract/index.ts` 的对应小节。
+
+- **迁移现状**：`server/db/migrations/` 有压缩后的 `0000_smiling_peter_quill.sql`（含 28 张表：content-ops/附件/订单/存储配置等）与其后的 `0001_same_marvel_zombies.sql`（新增 `system_settings` 单行表，供基础设置分区使用）。迁移文件已在仓库里，但是否已应用到目标库要自己核对（`drizzle.config.ts` + 该目录 + 库里 `__drizzle_migrations`）；`0001` 需要人工执行 `pnpm webapp:db:migrate` 才生效，代理不要代为应用。不要假设还有按模块拆分的其它迁移。
+
+- **链接/时间归一集中在 `server/utils/content-ops.ts`**：`normalizeLink()` 拒绝协议相对(`//`)、只放行 http/https 绝对地址或以 `/` 开头的站内路径（管理员通知 `linkUrl`、宣传栏链接都走它，避免存下 `javascript:`/协议相对 XSS）；`parseDateInput()` 统一解析活动/通知时间并抛 400；`normalizeSortOrder()` 把宣传栏的 `sortOrder` 取整并夹到 int4 安全区间（非法值回退 0），因此 `?sortOrder=1.5` / 天文数字不再变成 500。消费者是 `admin/bulletins*`、`admin/notifications` 与 `admin/news*`（news 用 `assertNewsField`/`normalizeContentTags`）。`storage` 未用。改这类校验改这一处，不要在各 handler 里各写一份。
+
+- **附件是 S3 协议，不是本地磁盘**。`server/utils/storage.ts` 是唯一适配层，面向 RustFS / MinIO / AWS S3 等；自建存储默认 `forcePathStyle=true`。改存储行为时改这一处，不要在各 handler 里各写一套。`endpoint` 的归一（必填、绝对 http/https URL、去尾斜杠，失败 400）是它的导出 `normalizeStorageEndpoint()`，`admin/storage` 的 POST/PATCH 与 `[id]/test` 三处共用——连接自检携带的是未保存表单值，绕过它会让畸形地址进到 SDK 后只回 `连接失败：Invalid URL`。
+- **两类上传通道都要保留**：服务端中转 `POST /api/attachments`（兼容未配 CORS 的桶）与前端直传 `POST /api/attachments/presign` + `/complete`。直传又分 PUT 预签名与 `mode=post` 预签名 POST policy 两种。直传的 `complete` 会校验 objectKey 必须落在当前配置 prefix 下且不含 `..`，否则用户可以"认领"任意已存在对象。
+- **中转上传有硬上限**（`RELAY_UPLOAD_HARD_LIMIT_MB=64`）：`readMultipartFormData()` 会把请求体读进内存，因此 `assertRelayRequestAllowed()` 在解析前按 Content-Length 拒绝，解析后 `assertRelayPayloadSize()` 再按**文件实际字节**兜住 `relayLimitBytes()`（正文可以比文件上限多出协议开销那 64KB）。R209 起这条路径也按实际字节封顶：handler 在解析前调 `readCappedBodyIntoH3Cache(event, relayReadLimitBytes(...))`，chunked 上传不再可能被整段缓冲（详见服务端健壮性约定里的 h3 缓存位条目）。调大上限前先确认内存占用。
+- **私有桶返回预签名 URL**（默认 1 小时，`DEFAULT_PRESIGN_EXPIRES=3600`），配置 `publicBaseUrl` 时改走公共地址；`presignDownload` 只在本地签名（`getSignedUrl`），不产生存储侧请求。脱敏要看清方向：`sanitizeStorageConfig()` **直接丢弃** `secretAccessKey`、只回传 `accessKeyIdPreview`（形如 `AKIA****`）与 `hasCredentials`，**响应里根本没有 `********`**；`********`（`SECRET_PLACEHOLDER`）只是 admin 存储 PATCH/test 的**请求侧**「保持原密钥不变」哨兵值，管理 UI 在留空时压根不发该字段。不要把这两者混为一谈。
+- **`createS3Client()` 必须带超时，且超时只能写在 `requestHandler` 里**。AWS SDK v3 的 `requestTimeout` 默认是 `DEFAULT_REQUEST_TIMEOUT = 0`（不超时），而客户端**顶层**的 `requestTimeout`/`connectionTimeout` 不会传进默认 handler——生成码是 `NodeHttpHandler.create(config?.requestHandler ?? defaultConfigProvider)`，只认 `requestHandler` 的构造参数。更坑的是 `requestTimeout` 单独配置只打一条 WARN 并继续挂着，必须同时给 `throwOnRequestTimeout: true` 才会真正 `req.destroy(TimeoutError)`。此前 RustFS/MinIO 网关进程挂死（端口通、不回响应）时，`headObject`/`putObject`/`testStorageConnection` 会永久悬挂，还把最多 64MB 的中转正文一直攥在内存里。现在的档位：建连 5s、元数据类 15s、`putObject` 写入 120s 且 `maxAttempts: 1`（超时是可重试错误，默认 3 次会把等待放大三倍；写入不该重试整段正文）。新调用点不要绕开这个工厂去 `new S3Client`。`requestTimeout` 只管「等响应头」，**响应体流中途停摆**由 `server/api/attachments/[id]/raw.get.ts` 的 `guardBodyStall()` 兜（全站唯一的 `sendStream` 消费者）：`res.setTimeout(30s)` 挂在响应 socket 上，空闲到点就销毁源流并按情况收尾——已发过响应头只能 `res.destroy()`，一个字节没发则回 502（回 502 前必须 `removeHeader('Content-Length')`，否则客户端等不到承诺的字节数，502 反而变成挂死的 abort）；`res.on('finish')` 里必须 `setTimeout(0)`，因为 keep-alive 连接会被下一条请求继承。写这个守卫前实测过：Node 的 socket 空闲计时在**只写不读**的慢下载上不会触发（6s/15 段的持续传输安然通过），所以它不会误杀正常下载。
+- 附件列表的 `stats` 按用户全量统计，**不随 category/keyword 筛选变化**；管理端存储列表用一次聚合查询带出各配置占用（避免 N+1）。
+- **通知的受众语义**：`audience=all` 不预展开收件人（含未来注册用户），`users` 在创建时展开。因此广播的 `targetCount` 用当前用户总数当分母，会随时间增长而下降，这是正确表现。`markNotificationsRead()` 只对当前用户可见的通知写入已读记录，改动时不要绕过该可见性过滤。
+- **通知类型图标是契约 `NOTIFICATION_TYPES` 预置项上的 `icon` 字段**（`@commons/contract`），移动端通知列表直接取它，不再在视图里各写一份 value→emoji 映射；新增类型时补进契约预置项即可。
+- **宣传栏的时间窗**：结束日期取当天 23:59:59.999（`dateInputToBoundary(value, 'end')`），不是当天 00:00——否则选到当天的活动会在当天上午提前下线。`isBulletinActive()` 目前只在管理端 `admin/bulletins.vue` 调用来做"进行中/已结束"标注；两端 `BulletinBanner.vue` 依赖的是服务端 `bulletins.get.ts` 的时间窗过滤，不在前端再判一次。改活动可见性时以服务端过滤为准。
+- **资讯浏览量按 (用户, 文章) 30 分钟去重**：Redis 可用时跨实例生效，否则降级进程内 Map。详情页用 `useAsyncData` 承载首屏，避免 SSR 后客户端二次请求。
+- 用户端 `/news`、`/notifications`、`/attachments` 与移动端同名路由都需要登录；管理端在 `/admin/news`、`/admin/bulletins`、`/admin/notifications`。存储配置与模型供应商在系统设置页 `/admin/settings`（`?tab=storage|providers`），附件总览在 `/admin/attachments`。
+- 移动端未读角标用 `packages/mobile/src/composables/useUnread.ts` 的共享单例，不要在页面里各自维护未读数，否则读完消息返回后角标不同步。
+- 移动端拍照上传走 `@capacitor/camera`（仅原生壳展示入口，动态导入因此只进附件分包）；仓库内暂无 android/ios 原生工程，接入原生构建时需另行声明相机权限。
+- **直传的体积上限由登记接口兜底**：S3 的 PUT 预签名 URL 无法携带 `content-length-range`，因此客户端自报的 size 不可信。`/api/attachments/complete` 会回源 `HeadObject` 读真实大小，超限则删除对象并拒绝登记；另有 `mode=post` 的预签名 POST policy 可在上传阶段直接拒绝。改动直传链路时不要绕过这一步校验。
+- **每用户累计配额（`USER_STORAGE_QUOTA_BYTES`）的判定与落库必须原子**：两条上传通道此前都是「`assertUserStorageQuota()` SUM 求和 → 各自独立 `insert`」，同一用户并发发 N 个请求时每个都读到改动前的总量、全部通过闸门，配额被**永久**超出（没有任何回收路径压回去）。现在统一走 `storage.ts` 的 `registerAttachmentWithinQuota(row)`——事务内先 `pg_advisory_xact_lock(hashtextextended('attachments:' || userId, 0))`（锁键刻意带前缀，不与 `billing.ts` 会员开通那把裸 userId 锁互相排队），再在锁内重读 SUM、才插行；`assertUserStorageQuota()` 降级为**只做预检**（中转上传用它省掉一次注定被拒的 64MB PUT），不要再拿它替代登记。调用方在对象已上桶之后收到 413 必须 `deleteObject()`，否则越限内容留在桶里却没有记录、再也删不掉。
+- **附件的「同一对象重复登记」去重也在那把锁里**：`attachments` 没有 `(user_id, object_key)` 唯一索引（补索引要迁移，需另行授权），所以并发 complete 只能靠 `registerAttachmentWithinQuota` 锁内 SELECT 兜住——命中即返回 `{ id: 已有行 id, duplicateOf: 已有行 }`、不插行也不扣配额。`complete.post.ts` 里锁外那次 SELECT 只是**快速路径**（省一次锁往返，并让「对象已被清掉但记录还在」的重试仍能拿到记录），别把它当成正确性保障。三条返回必须共用 `registrationResponse()`，且 `duplicateOf` 分支**绝不能** `deleteObject()`（那会让另一个并发请求登记的行连带死链）。中转通道的 objectKey 每次新生成 UUID，理论上撞不上，但响应同样改用 `registered.id` 而不是本地变量，保证返回的 id 一定是库里存在的行。
+
+### 前端约定与易错点
+
+- **i18n 消息不能直接写 `{{x}}`**：vue-i18n 把它当插值语法，渲染时抛 `Not allowed nest placeholder` / `Invalid token in placeholder`。字面量大括号要写成 `{'{{'}…{'}}'}`；JSON 示例这类代码片段应放在组件内拼接，不要进 locale。改动 locale 后建议对每条消息做一次编译校验（`zh-CN`/`en-US` 与移动端两份都要查）。
+- **页面 UI 文案已全量迁入 locales，不要再硬编码**：管理端列表页表单/表头走 `adminForm.*`（按资源加 `planX`/`newsX`/`bulletinX` 等前缀是可接受的）；登录注册页走 `auth:`；落地页 `WelcomeLanding.vue` 特性卡与 Hero 走 `welcome:`（已删除旧的 titleEn/descEn 双字段手工选语，切语言由 i18n 响应）；pricing 残余文案在 `billing:`（`wechatOnlyInApp`/`featureReAct`/`featureMcpUi`/`faqSubtitle`/`recentOrdersHint`），ChatPane 输入计数在 `chat.charCount`。新增文案时同步两端 locales 的同名键。
+- **模板里不要用会遮蔽 i18n `t` 的循环变量名**：`v-for="t in list"` 会让同一模板内的 `t('...')` 变成「对象不可调用」。循环变量用具体名词（如 `tool in toolList`）。
+- **管理端页面需同时处理 loading / 错误 / 空态三种状态**：失败时若直接套用空态文案，用户会把「接口挂了」读成「没有数据」。列表页失败应清空数据并渲染错误提示 + 重试按钮。
+- **凡是「在 `onMounted`/`onIonViewWillEnter` 里发首个请求」的列表页/组件，`const loading` 必须初值为 `true`**：挂载钩子跑在首次渲染**之后**，初值 `false` 会让模板里 `v-if="loading"` 骨架 / `v-else-if="!list.length"` 空态先闪一帧「暂无…」；Web 页面还走 SSR，首屏 HTML 直接把空态发给用户，弱网下要持续到水合+请求返回才变。已按此约定收敛：Web 的 `pages/attachments.vue`、`pages/news/index.vue`、`components/ProfileNotifications.vue`、`pages/admin/{attachments,bulletins,conversations,news,notifications}.vue`，移动端的 `{Attachments,Home,Membership,Me,News,Notifications}View.vue`（与 `admin/{agents,index,mcp,orders,providers,skills,tools,users}`、`chat/index`、`pricing` 等原有页面对齐）。改这条的前提是 loader 在 `finally` 里复位 `loading`（带 `loadSeq` 竞态守卫的写法只在最新请求完成时复位，不会卡住骨架屏）；`login/register` 与 `ImagePicker`（按打开时机才取数）这类「提交中/弹层内」进度标志仍应是 `false`。
+- **页面内的本地提示变量要有"弹窗未打开时的出口"**：`pricing.vue` 的 `payError` 只在支付弹窗内渲染，而 `handleBuy` 的两条本地前置校验（免费套餐说明、该套餐无年付价格）会在开弹窗之前就 return，所以额外有一条 `v-if="payError && !showPayModal"` 的页级提示，否则这两类点击是静默失败。切换计费周期时用 `switchPeriod()` 一并清掉 `payError`，避免上一条提示跨周期残留。新增这类"表单/弹窗内错误"时同理。
+- **订单状态展示统一走共享契约，不要再复制**：`@commons/contract` 的 `orderStatusTone(status)` 返回 `app-badge-*` 类名、`orderStatusLabelKey(status)` 返回 i18n 键；`pricing.vue`、`profile.vue`、移动端 `MembershipView.vue`、`MeView.vue` 都 `t(orderStatusLabelKey(...))`。此前各页自写 `statusTone`/`orderStatusText` 会把 `refunded` 误显示成「已关闭」，已收敛。前提是两端 locales 的 `billing` 段都含四个 `status*` 键（含 `statusRefunded`）。两端 locales 的 `billing` 段并非完全同构：R143 死键清扫已删掉 Web 侧一组未被任何代码引用的旧键（`sandboxDesc`/`scanQrCode`/`payPending` 等），保留的 `mockPayHint`/`wechatOnlyInApp` 确有 Web 消费者（`pricing.vue`）；`wechatOnlyInApp` 两端同名各有一份（微信内 JSAPI 支付提示）。mobile 若将来复用 Web 侧其他文案，先补两份 locale 再引用。
+- **通用徽章 tone 与金额展示同样走契约**：tone/通知级别 → `app-badge-*` 的映射是契约的 `badgeTone(tone)`（未知值回退 neutral），两端 `json-ui/JrBadge.vue` 与 Web `ProfileNotifications.vue` 共用，不要再在各组件里自写 toneClasses；分→元展示统一 `formatYuan(cents)`（`admin/orders.vue`、`admin/plans.vue` 已接入，plans 编辑表单回填也走它、保存时再 parse 回整数分）。
+- **日期/时间展示统一走契约的 `formatDate`/`formatDateTime`/`formatTime`**（`@commons/contract`，默认 `zh-CN`、无效值回退 `-`）：`chat/index.vue`、`admin/{conversations,users,orders}.vue` 与 `pricing.vue` 都已接入，不要再在各页手写 `new Date(x).toLocaleDateString()` 或本地复制 `formatDateTime`。纯时刻（`HH:mm`）展示用 `formatTime`，`admin/index.vue` 的最近会话已接入；两端源码内已无 `toLocaleTimeString` 残留。这三个格式化器的 `timeZone` 固定为 `Asia/Shanghai`（与计费日界 UTC+8、`system-prompt.ts` 注入的北京时间同一口径），**不随主机/浏览器时区漂移**：容器默认 UTC 时曾经把「北京时间 09-24 02:30」显示成「09-23 18:30」（错一天），SSR 首屏与水合也会各说一套。要新增展示用格式化器请带上同一个常量，不要退回裸 `toLocaleXxx()`；`dateInputToBoundary()`/`isoToDateInput()` 是 `<input type="date">` 的输入侧，刻意仍按浏览器本地时区。
+- **页面内的 `setTimeout`/`setInterval` 必须在卸载时清理**：搜索防抖等定时器若不清，SPA 内快速进出页面会在组件销毁后继续发请求或写状态。**成功提示已收敛到 `useFlashSuccess`**（web `app/composables/` 自动导入，mobile `src/composables/` 需显式 import），返回 `{ success, flashSuccess, showPersistent }`：瞬时提示一律走 `flashSuccess(text, ms?)`（web 默认 2000ms、mobile 默认 2500ms，个别页面以构造参数 `useFlashSuccess(2500)`/`useFlashSuccess(3000)` 保留原时长），卸载清理由 composable 自管；长期驻留文案（如 `storage.rustfsHint`）必须走 `showPersistent()`——它会先取消挂起的自动清除，直接写 `success.value = …` 虽能渲染，但上一条成功提示挂起的定时器会在数秒后把驻留文案提前清掉。新增页面不要再手写「success ref + successTimer + 卸载清理」三件套（全库已清零）；搜索防抖等其他定时器仍由页面自管自清，错误侧的瞬时提示见 `app/composables/useTransientError.ts`。
+- **localStorage 的 `JSON.parse` 不能只 try/catch，还要类型护栏**：合法的 JSON 也可能是 `null`/数字/对象，数组方法（`includes`/`map`）在其上抛错会整页渲染崩溃。`pages/chat/index.vue` 的 `favorite_agents`、`layouts/admin.vue` 的 `readStoredGroups`、两端 `BulletinBanner.vue` 的 `*_dismissed_bulletins` 与移动端 `HomeView.vue` 的 `mobile_favorite_agents` 都已固定为 `Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []`；新增持久化数组键时照此写。
+- **会话 Markdown 导出（`packages/commons/src/markdown-export.ts`）把每个字段都当不可信输入**：两端传入的 `messages` 是 AI SDK 的客户端状态（`as any`，不经服务端 schema），所以 `title`/`agentName`/`model`/`exportTime`/文件名/工具名一律先经 `toInlineText()` 折成单行（换行会在导出文档里另起一行，伪造标题、列表或引用块），文件名与工具名再包进 `inlineCode()`；行内代码与工具输出的 `围栏按**内容里最长的连续反引号**加长定界符（CommonMark 规则），否则输出含` 就会提前闭合围栏，里面的裸 URL 与 `###` 变成可点击链接和真标题。附件链接目标只承认绝对 http(s) 与单斜杠站内路径（`safeLinkHref()`）：`)`、空白、`<>`、`"` 会闭合 `[text](…)`，协议相对 `//host` 是站外主机，`data:` 虽在服务端 part 白名单里但可能是几 MB base64、会把导出文件撑爆，`javascript:` 在部分渲染器可直接执行——不可信时降级为只留文件名，不生成链接。注意**逐字符转义挡不住 GFM 的裸 URL 自动链接**（marked 默认 `gfm: true` 会 linkify `http://…`），所以走代码段而不是走反斜杠。`msg.content` 也要 `typeof === 'string'` 再 `.trim()`（非字符串曾让整个导出按钮抛错）。
+- 修改共享契约后同步两端；`pnpm lint` 覆盖 Web server/app、Mobile src 与 Commons src，`.husky/pre-commit` 只跑 lint-staged（不含 Vue 的 ESLint），提交成功不等于通过检查。
+- **主题 CSS 未分层，优先级高于整个 Tailwind utilities 层**（`main.css` 里 `@import tailwindcss → @nuxt/ui → @repo/commons/styles/theme.css`，原 `base.css` 已删除并入 theme.css；`@theme` 只注册了 `--font-sans/--font-mono/--color-primary-50..950`，其余 `text-*/bg-*/border-*` 都是手写的未分层类）。三条后果：
+    1. 对主题自定义类用变体（`hover:text-strong`、`group-hover:bg-brand`、`open:bg-surface-3`）**不生成任何 CSS**。交互态颜色只能在 theme.css 里写原语：已有 `.text-hover-strong/-muted/-brand`、`.group:hover .group-hover-strong/-brand`、`.border-hover-brand`；确实要覆盖时用 `!` 前缀工具类（`open:!bg-[color:var(--surface-3)]`）。`!` 加在自定义类上（`!border-brand`）同样是死类，改用 `!border-[color:var(--brand)]`。
+    2. theme.css 内部同特异性按书写顺序决胜：`.app-card` 的 `border`/`box-shadow` 简写会盖掉写在它前面的 `.border-brand`/`.ring-brand`，所以「当前/选中」卡片高亮必须用写在 `.app-card` 之后的 `.app-card-brand`。新增覆盖型原语时要排在被覆盖者之后（`bg-surface-*`、`text-*`、`shadow-*` 同理）。
+    3. 行内 `style` 只覆盖同名属性：`backgroundColor: '#fff'` 盖不住 `.app-progress-bar` 的 `background-image` 渐变——品牌实底（`.bg-brand-gradient`）上的覆盖层改用 `.on-brand-tile`/`.on-brand-line`/`.bg-brand-gradient .app-chip`/`.bg-brand-gradient .app-progress{,-bar}`，它们按 `--on-brand` 混色，黄色品牌下才不糊成一片。
+- **不要新增 `rgb()`/十六进制/`white/NN` 硬编码覆盖层**，也不要再手写 `fixed inset-0 + 半透明底色` 的弹窗：遮罩、抽屉、表格、进度条、空态、骨架屏统一用 theme.css 原语（`app-modal*`、`app-drawer*`、`app-table`/`app-table-wrap`/`app-table-cell-wrap`/`app-table-actions`、`app-progress`、`app-empty*`、`app-skeleton*`、`app-panel`、`app-list-row`、`app-page-header/-title/-subtitle/-actions`、`app-help-error`）。两端共用同一份 theme.css，移动端角标/徽章/横幅同样走这些类（如 `BulletinBanner.vue` 用 `app-alert-*`）。
+- **管理端启用/停用统一用 `.app-switch`**（`role="switch"` + `aria-checked` + `:title`，点击即切换），已接入 `skills/tools/mcp/providers/bulletins`；没有切换处理函数的只读状态才用 `app-badge-*`。
+- **死类自查（一次性，不入库为脚本）**：构建后把 `app/**`、`mobile/src/**` 里 `class="…"` 的 token 与 `.output/public/_nuxt/*.css`、`mobile/dist/assets/*.css` 中真实存在的选择器（去掉反斜杠转义后）对照，未命中的即完全不生成 CSS。曾发现 `group-text-hover-brand`（正确名是 `group-hover-brand`）、`bg-surface-2/60`（自定义类不支持透明度后缀）这类静默失效的写法；对照时注意变体要整段比（`sm:p-14` 的选择器是 `.sm\:p-14`），Ionic 自带类（`ion-no-border`）不在产物 CSS 里属正常。
+
+### 服务端健壮性约定
+
+- **无鉴权接口不得有副作用**：`/api/health` 是公开探针，模型检查必须走只读的 `peekModelAvailability()`，不要调 `resolveModel()`——后者会触发 `ensureDefaultProvider()` 写库。探针也不应回传供应商地址、数据库错误原文或运行环境信息。
+- **分页参数一律夹到合法区间并取整**：`limit`/`offset` 的负数会被 PostgreSQL 拒绝（2201W/2201X）并把 SQL 细节透出到响应体，`page=Infinity` 会让 offset 溢出。统一用 `Math.min(Math.max(1, Math.floor(Number(x)) || 缺省), 上限)` 与 `Math.max(0, Math.floor(Number(x)) || 0)`：`Math.floor` 不可省，小数的 `pageSize`/`limit` 会作为 int8/int4 参数被拒为 22P02（同样是 500 + SQL 细节外泄）。`page` 的上界用 `1e6` 夹逼。
+- **入参要防御 `undefined`**：`readBody` 对空请求体返回 undefined（解构即 500）；聊天请求的 `messages[].id` 缺失会让 drizzle 传 undefined 参数（同样 500，且额度已扣）。服务端应为缺失的主键补值，而不是依赖客户端。
+- **只信 `Content-Length` 的体积闸门等于没有闸门**：h3 1.15 的 `readBody` 没有任何体积参数（先把整个请求体读进内存再 `JSON.parse`），而 `Transfer-Encoding: chunked` 请求压根不带长度头，`Number(getHeader(event,'content-length'))` 得到 `NaN`、预检分支直接被跳过。`server/api/chat.post.ts` 现在用 `server/utils/request-body.ts` 的 `readCappedJsonBody(event, maxBytes)` 按**实际字节**封顶（`MAX_CHAT_BODY_BYTES = 2 × MAX_MESSAGE_BYTES`，给转义/空白留余量）：越限即丢掉已缓冲分片但**继续把流读干**（直接 `req.destroy()` 会连 413 响应一起撕掉），内存占用与请求体大小解耦；改前一条已登录用户的 chunked 4MB 请求会被完整缓冲并解析成功，配合 30 次/分（按次不按字节）的限流足以把 Nitro 进程吃穿。解析失败统一 400「请求体不是合法 JSON」，空 body 仍返回 `undefined` 与 `readBody` 一致。新的大 body 接口沿用同一 helper。multipart 是另一条路径，且**不能照搬这里的写法**：h3 的 `readMultipartFormData` 只接受「已经读完的一整段 Buffer」（内部 `readRawBody(event, false)` 再交给解析器），所以封顶必须设在读取阶段——`request-body.ts` 的 `readCappedBodyIntoH3Cache(event, maxBytes)` 就是为此：按实际字节读成 Buffer，再写回 `event.node.req[Symbol.for('h3RawBody')]`。这个 symbol 在 h3 源码里正是 `Symbol.for('h3RawBody')`（**跨模块实例同键**，因此不必 import 私有常量），而 `readRawBody` 命中的值若 `Buffer.isBuffer` 会原样返回、不做二次编码，二进制附件正文逐字节一致（探针用真实 h3 1.15.11 解析器验证过：含 0x00/0xFF 与前缀像边界但不完整的干扰串）。消费者有 `server/api/attachments.post.ts`（闸门值来自 `storage.ts` 的 `relayReadLimitBytes`，详见 §6 附件「中转上传有硬上限」）与 `server/api/admin/knowledge-bases/[kbId]/documents.ts`（multipart 与 JSON 两条通道共用的闸门值 `MAX_REQUEST_BYTES ≈ 4.1MB`，因为它的两条通道都要允许 2MB 正文——**别把它夹到 256KB 默认值**；R212 起这个值是以 `bodyLimitBytes` 传给 `requireAdmin` 去读的，见下一条）。
+- **判「哪个端点缺体积封顶」要按鉴权排序，无登录态的那个优先**：`server/utils/request-body.ts` 除 `readCappedJsonBody` 外还导出 `readCappedBodyText(event, maxBytes)`（同一套按字节累计、越限丢缓冲但读干流的实现，返回未解析文本），因为 `readRawBody` 同样没有体积参数。消费者是 `server/api/pay/notify/wechat.post.ts`：它是全服务端**唯一**「读请求体却没有登录态」的入口（用扫描 `readBody|readRawBody|readMultipartFormData` 且不含 `requireUser/requireAdmin` 确认过，其余全在 `guard.ts` 之后），验签又必然发生在正文读完之后——所以之前任何人无需账号、不受每用户限流，打一条 chunked 大请求就能把整个正文灌进 Nitro 进程内存。现在闸门（`MAX_NOTIFY_BODY_BYTES = 256KB`，加密通知实为 KB 级）刻意放在兜底 `try` **之外**：越限要原样抛 413，不能被那条 `catch` 改写成 500「处理失败」。其余带登录态的 JSON 端点已全部收口（R208）：`readCappedJsonBody` 的 `maxBytes` 现在默认取 `DEFAULT_JSON_BODY_BYTES = 256KB`，用户侧 8 个取体接口（`completion`、`conversations.post`、`conversations/[id].patch`、`billing/orders.post`、`notifications/read.post`、`attachments/presign`、`attachments/complete`、`attachments/chat-parts`）都换用它，其中 presign/complete/chat-parts **完全没有按次限流**，体积是它们唯一的成本上界。换用后不再包 `.catch(() => null)` / `.catch(() => {})`：那类兜底会把 413 与「非法 JSON」一起吞成假成功，`notifications/read.post.ts` 尤甚——畸形 body 被折成 `{}` 就等于「标记该用户全部未读为已读」。真实客户端每次最多带 1 个通知 id、10 个附件 id（服务端再切 500），completion 最长的 8000 字符全 CJK 正文也只有 24KB，256KB 余量充足。**新增用户侧写接口直接用该 helper**，不要再裸调 `readBody`。**管理端的读取封顶已收敛到 `requireAdmin` 一处**（R212）：它在鉴权通过之后、handler 解析之前用 `readCappedBodyIntoH3Cache(event, options.bodyLimitBytes ?? ADMIN_BODY_LIMIT_BYTES)`（公共上限 1MB）按实际字节读完并写回 h3 缓存位，所以 26 个管理端 handler 里那些裸 `readBody(event)` 拿到的就是这段已校验的字节，解析结果与不预读**逐案例验证为完全一致**（含空 body/`Content-Length: 0`/纯空白/非法 JSON 的 400/无 content-type/text-plain/chunked multipart 二进制字段）。三个必须记住的边界：① 封顶只放在鉴权**之后**——放前面等于给匿名访客新增「每条连接可让服务端缓冲 1MB」的额度，而未授权请求今天是 401 直接返回、正文根本不读；② 只有请求确实带正文时才读（`transfer-encoding` 存在或 `content-length > 0`），否则 GET/无体写请求会被挂在一个永不结束的流上；③ 需要更大正文的端点用 `requireAdmin(event, { bodyLimitBytes })` 显式放大（当前只有知识库文档：2MB 正文 → 4.1MB 请求体），别去动公共值。`readCappedBodyIntoH3Cache` 因此必须幂等（缓存位已有 Buffer 就原样返回）：流读完即结束，第二次读会把缓存覆盖成空 Buffer。
+- **同一资源的 POST 与 PATCH 归一规则要对称，别把 POST 留成绕后门**：`admin/providers.ts` 的 POST 曾只校验 `name`/`baseUrl` 必填，不做 trim/长度、不校验 `enabled`/`isDefault` 布尔与 `models` 非空字符串数组，而 `[id].ts` 的 PATCH 早已逐字段归一——非字符串塞 text 列、非布尔塞 boolean 列都会被 PG 拒成 500 并透出 SQL 细节。`models` 的归一已收敛到 `server/utils/admin-provider-input.ts` 的 `normalizeProviderModels(raw, 'reject' | 'skip')`：POST/PATCH 用 `reject`（非字符串/空白项/单条 >100 字符 → 400，去重后整表 ≤200），`providers/[id]/test` 对**上游 `/models` 响应**用 `skip`（坏项只丢单项、整表截断）——`providers.models` 是 jsonb，脏值不报错却会经 `admin/agents.get.ts`、`agents/auto-config` 的提示词拼接和 `self-config` 的 `list` 结果一路进模型上下文，且非字符串 id 永远匹配不上 `models.includes(model)`。前端 `providers.vue` 提交前也 `trim()`。`admin/tools` 走更早建立的 `server/utils/admin-tool-input.ts`（`normalizeToolName/Description/Config`），且 `normalizeToolConfig` 会校验 `config.parameters` 必须为数组、`config.headers` 必须为对象（主对话链对二者做 `for...of`/展开，形状错会让每个用到该工具的会话抛错），前端 `tools.vue` 的 `buildConfig` 同步这层形状校验。新增管理端写接口时，把 POST 与 PATCH 的校验放同一处共享。
+- **管理端布尔列写入一律走 `server/utils/admin-boolean.ts` 的 `normalizeAdminBoolean(raw, label, fallback)`，不要在 handler 里 `Boolean(body.x)`**：`Boolean('false') === Boolean('0') === Boolean([]) === true`，而表单编码（`x-www-form-urlencoded`/multipart）与手工请求送来的就是字符串——`enabled`/`pinned` 只是状态反了，`isDefault`（存储配置、模型供应商）却是「清掉其它行的默认位 + 把自己设为默认」，一次本意取消默认的点击会静默改掉全局配置；非布尔现在回 400，`undefined`/`null` 回退 `fallback`（PATCH 有旧行时传该行现值）。此前 agents/tool/skill/mcp 各自的第四份同形实现已合并进这一处。
+- **落库前校验 part 结构**：相对路径的 `file`/`image` part 会因 AI SDK 的 `new URL()` 抛错而让该会话**永久** 500（历史来自数据库，每轮都会重放）。`sanitizeUserParts()` 现在会校验 url 必须是绝对 http(s)/data 地址。清洗与站内附件归属过滤都在**扣额之前**（chat.post.ts 的 1.5）：全部 part 被丢弃时直接 400，不会白扣配额、也不会留下「新对话」空会话；会话标题与 RAG 检索词同样取「本轮真正落库的那条」，从原始 incoming 取名会给一条被丢弃的消息起名字。
+- **多行写入要考虑事务**：文档行与分块行、默认存储切换（`admin/storage.ts` 的 POST 新建并设为默认，同样是「清掉旧默认 + 插入新行」单事务，不再先 insert 后调独立事务）、默认供应商/能力绑定，失败时会留下不一致状态（如双默认），需同事务执行。
+- **「先查引用再删」的删除要在同一事务里对目标行 `FOR UPDATE`**（`admin/plans/[id].delete.ts`、`admin/storage/[id].ts` 的 DELETE）：事务外的那次读与删除之间，并发写入随时能让检查结果变成过去式。套餐侧 `orders.plan_id`/`user_memberships.plan_id` 是 `onDelete: 'restrict'`，中途多出一笔订单就会让删除撞 23503 变 500（开发态还把 SQL 原文带进 stack），管理员看不到「请改为下架」；存储侧 `attachments.storage_config_id` 是 `set null`，PG 根本不拦，删完那条附件就不知道自己属于哪个桶。行上的 FOR UPDATE 与并发 INSERT 在父行上取的 FK 锁互斥，窗口因此关死——新写入要么先被引用查询查到（于是拒绝删除），要么排到删除提交之后。删除本身不再需要「0 行即 404」的兜底（锁内那次读已经保证行存在）。
+- **删除主体前先问「有没有财务/审计行跟着级联消失」**：`orders.user_id` 与 `user_memberships.user_id` 都是 `onDelete: 'cascade'`，所以 `admin/users/[id].delete.ts` 现在先数该用户的 `status='paid'` 订单，>0 直接 409 并引导改用封禁——否则管理端营收/对账聚合会在删除后凭空变小且无法追回。同类的引用保护见 `admin/storage/[id].ts` 删除前的附件引用检查。
+- **`server/plugins/error-guard.ts` 会把未处理的 rejection 变成进程退出**（`process.exit(1)`，设计如此：由容器重启带走未知状态）。白名单 `IGNORABLE_CODES` 是连接层断连的豁免口，判定时沿 `cause` 链最多走 5 层——undici 抛的是 `TypeError: fetch failed`，真实的 `ECONNRESET`/`ABORT_ERR` 在 `cause.code` 上。所以给外部调用新增超时/中断时，别指望调用方的 catch 一定覆盖到：一条逃逸的 abort 就会打挂整个进程、连带所有在途会话。
+- **MCP 建连有 15 秒总预算**（`server/utils/mcp.ts` 的 `MCP_CONNECT_BUDGET_MS`）：`@ai-sdk/mcp` 只有在显式传 `initializationOptions` 时才给握手设超时，`client.tools()`（内部会分页拉 `tools/list`）更是完全没有预算，所以那里用一条 `AbortSignal.timeout` 同时约束两段——握手段交给 SDK（abort 时它会自己关掉 transport），工具发现段由 `withinBudget` 竞速兜住，竞速落败的那条 promise 预先 `.catch` 过，残包不会变成 unhandledRejection。超时/失败只让 `connectEnabledMcpServers` 记日志并跳过该服务器，会话继续（少一批工具），但要注意：**这条链路在「已扣额度 → 加载能力绑定」之后，慢服务器仍会把该次请求拖到预算用完**。
+- **绕过 `client.tools()` 直接调 client 方法时，必须自带 `options.timeout`**：SDK 的 `RequestOptions`（`{ signal?, timeout?, maxTotalTimeout? }`）只有 `listTools`/`callTool`/`listResources` 这类**显式请求方法**支持，不传就完全没有预算（实测：一台握手正常、对 `tools/list` 不回包的服务器上，`listTools()` 2.5s 内不结算，最坏只能等 undici 的默认上限——**约 300 秒，不是无限**：不回响应头在 +304.7s 抛 `HeadersTimeoutError`、响应体中途停摆在 +305.1s 抛 `AI_APICallError: Failed to process successful response`，而 `finally` 里的 `closeMcpConnections` 在那之前根本跑不到，连接跟着请求一起挂着）。`admin/mcp-servers/[id]/tools.get.ts` 现在把第二次 `tools/list`（handler 要拿原始名称/描述/inputSchema，所以建连之后又发了一次）包进 `MCP_TOOL_LIST_BUDGET_MS`，超时回 `ok:false` + 那句 `Request timed out after …ms`，管理端不至于停在「连接中…」。仍未覆盖的一处是 `client.tools()` 自身不接受 options（只能继续用 `withinBudget`）。另一处缺口已经补上：SDK 生成的工具在 `execute` 里**只透传 `options.abortSignal`、不带 timeout**（读安装版源码确认），所以对话链上若有 MCP 服务器在 `tools/call` 上不回包，只有调用方给 `streamText` 传了 abortSignal 才切得断。**`chat.post.ts` 现在传 `timeout: { toolMs: TOOL_TIMEOUT_MS }`（30 秒）**来补这个口：SDK 会给同一步里的每条工具调用合一个 `AbortSignal.timeout`，超时/抛错的那一条在 SDK 侧记为 `tool-error`、在协议侧以 `output.type === 'error-text'` 的 tool-result 回喂给模型，成功同伴的结果照常保留，agent 循环继续走到最终回答；同一步的调用是并发执行的（实测 10 个工具全卡住只花约 1 个预算，不是 10 个）。注意 `timeout` 传**裸数字等价于 `totalMs`**（整次生成总预算，不是每工具），要按工具限必须写成 `{ toolMs }`。**模型侧流卡住也已补上**：同一处再传 `firstChunkMs`/`chunkMs`（各 60 秒），它们是**按步**计数的「首个内容块」与「相邻内容块间隔」预算，长回答不会因总时长被误杀；实测不带任何 timeout 时，「接受连接后不回包／吐半句就停」的 mock 流永远不会 finish（mock 没有网络层，是真·永挂；真实供应商则由上面那条 undici 约 300 秒的上限兜住），`onError`/`onFinish` 都不触发（SSE、MCP 连接、已扣额度一起挂到那个上限），设了预算就在预算点以 abort 分支收尾、已产出的文本仍留在最终消息里。60 秒的取值理由是它必须高于 `TOOL_TIMEOUT_MS`：工具那一步在模型输出结束后还有最长 30 秒执行时间才轮到下一步的首个块。仍未设的是 `stepMs`/`totalMs`。
+- **统计避免全表拉取**：计数用 `count(*) GROUP BY`，不要在应用层把整表查进内存再 filter；列表里的关联数据用一次 IN 查询后分组，避免 N+1。
+
+### 前端配套与代码风格
+
+- Mobile 路由入口是 `packages/mobile/src/router/index.ts`，主导航为 `/tabs/home`、`/tabs/membership`、`/tabs/me`；聊天为 `/chat/:agentId`，微信回调为 `/wechat-callback`。
+- Mobile Vite 的 `/api` dev/preview 代理读取 `API_PROXY_TARGET`（默认 localhost:3000）；代理不会随生产静态包发布。原生本地 dist 使用 `VITE_API_BASE` 配后端；`CAPACITOR_SERVER_URL` 则让 WebView 加载远端页面。保留 Vite 的 `vue-router` dedupe，避免 Ionic 与应用持有不同路由实例。
+- 双端生成式 UI 映射分别在 `packages/webapp/app/utils/json-ui.ts` 与 `packages/mobile/src/components/json-ui.ts`；Web 消息组件为 `packages/webapp/app/components/ChatMessage.vue`。
+- i18n 入口分别是 `packages/webapp/app/plugins/i18n.ts`、`packages/mobile/src/i18n.ts`，翻译在各自 locales 目录；不要因 commons 有旧 i18n/api/store 就假设两端已全面接入它们。
+- Prettier 配置在 `packages/config/src/prettier/prettier.config.mjs`：4 空格、单引号、分号、尾逗号、宽度 160、LF；插件可能重排 imports 和 Tailwind class。
+- `.husky/pre-commit` 只执行 lint-staged，不执行 typecheck/test；其 ESLint 文件模式不含 Vue，不能以提交成功代替完整检查。
+- `packages/webapp/app/utils/app-icons.ts` 是生成文件。新增图标应改 `packages/webapp/scripts/generate-icons.mjs` 的 NAMES，再运行 `pnpm --filter @repo/webapp icons`，不要手改生成结果。
+
+## 7. 已知文档/配置偏差（静态核实，不是本次修复项）
+
+1. pnpm 版本已对齐：根 `packageManager`、CI 的 `pnpm/action-setup` 与 `tools/deploy/dockerfile` 的 corepack 都是 12.5.1（此前声明/CI 一度漂移到 12.4.x，已收敛）。升级 pnpm 时三处一起改，仍不在普通业务任务中顺手更改。
+2. README 的“冒烟测试含 DB 连通性”不意味着测试成功时 DB 一定可用；该脚本可跳过数据库检查。
+
+## 8. 快速导航与最小阅读范围
+
+开始任务时先读本文对应章节，再按下列入口读取实现及直接消费者。路径存在不代表实现已通过运行验证；不要为了理解一个页面重新扫描全部 packages。
+
+### 常见任务从哪里开始
+
+以下路径均相对仓库根目录：
+
+| 任务                         | 首选入口与联动文件                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 修改智能体管理字段或能力绑定 | `packages/webapp/app/pages/admin/agents.vue` → `packages/webapp/server/api/admin/agents/[id].patch.ts` → `packages/webapp/server/utils/agent-skills.ts`；新增持久化字段再查 `packages/webapp/server/db/schema.ts`                                                                                                                                                                               |
+| 修改其他管理资源             | 从 `packages/webapp/app/pages/admin/` 对应页面进入 `packages/webapp/server/api/admin/`；知识库页面为 `knowledge.vue`、API 为 `knowledge-bases`，MCP 页面为 `mcp.vue`、API 为 `mcp-servers`，不要假设名称相同                                                                                                                                                                                    |
+| 修改移动端页面或导航         | `packages/mobile/src/router/index.ts` → `packages/mobile/src/views/` 对应页面；底部导航在 `TabsView.vue`，会员在 `MembershipView.vue`，个人中心在 `MeView.vue`                                                                                                                                                                                                                                  |
+| 修改登录、会话与跨域         | Web 的 `packages/webapp/app/composables/useSession.ts`；Mobile 的 `packages/mobile/src/api/client.ts` 与 `packages/mobile/src/api/auth.ts`；后端联查 `packages/webapp/server/utils/auth.ts`、`packages/webapp/server/utils/guard.ts`、`packages/webapp/server/middleware/cors.ts`                                                                                                               |
+| 修改生成式 UI 组件或 schema  | `packages/webapp/server/utils/catalog.ts`、`packages/webapp/server/utils/system-prompt.ts`；同步两端 `json-ui.ts` 映射及 Web 的 `packages/webapp/app/components/json-ui/`、Mobile 的 `packages/mobile/src/components/Jr*.vue`                                                                                                                                                                   |
+| 修改知识库上传、分块或索引   | `packages/webapp/server/api/admin/knowledge-bases/[kbId]/documents.ts` → `packages/webapp/server/utils/embedding.ts`；重建入口为同目录的 `reindex.post.ts`，对话检索消费者为 `packages/webapp/server/api/chat.post.ts`                                                                                                                                                                          |
+| 修改套餐、会员或订单展示     | Web 的 `packages/webapp/app/pages/pricing.vue`、`packages/webapp/app/pages/profile.vue`；Mobile 的 `MembershipView.vue`、`MeView.vue`；订单状态徽章/文案统一用契约 `orderStatusTone`/`orderStatusLabelKey`；联查共享契约、`packages/webapp/server/api/billing/` 和 `packages/webapp/server/utils/billing.ts`                                                                                    |
+| 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                                                                                                                                    |
+| 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                                                                                                                                             |
+| 修改附件 / 对象存储          | `packages/webapp/server/utils/storage.ts` → `packages/webapp/server/api/attachments*`（上传/直传/下载代理）→ 用户端 `packages/webapp/app/pages/attachments.vue` 与移动端 `packages/mobile/src/views/AttachmentsView.vue`；管理端配置在系统设置分区 `packages/webapp/app/components/AdminSettingsStorage.vue`（`/admin/settings`），附件总览在 `packages/webapp/app/pages/admin/attachments.vue` |
+| 修改资讯新闻                 | `packages/webapp/server/api/news*`、`packages/webapp/server/api/admin/news*` → Web 的 `app/pages/news/`、`app/pages/admin/news.vue` 与移动端 `NewsView.vue`、`NewsDetailView.vue`；契约 `NewsSummary`/`NewsDetailResponse`                                                                                                                                                                      |
+| 修改宣传栏                   | `packages/webapp/server/api/bulletins.get.ts`、`packages/webapp/server/api/admin/bulletins*` → 两端 `BulletinBanner.vue` 与管理端 `admin/bulletins.vue`；时间窗边界用契约的 `dateInputToBoundary()`                                                                                                                                                                                             |
+| 修改消息通知                 | `packages/webapp/server/utils/notify.ts`、`server/api/notifications*`、`server/api/admin/notifications*` → Web 的 `app/pages/notifications.vue`、`admin/notifications.vue` 与移动端 `NotificationsView.vue`；移动端未读角标走 `composables/useUnread.ts`                                                                                                                                        |
+
+### 阅读实现时不能跳过的边界
+
+- 管理接口可能使用不带方法后缀的文件并在内部按 HTTP 方法分支，例如知识库 `documents.ts`；不要只搜索 `.post.ts` 就认定上传接口不存在。
+- 智能体创建/更新已把主表写入与四类能力绑定（`replaceAgent*`）收进同一个 `db.transaction`，通过 `agent-skills.ts` 的 `DbRunner`（默认 `db`）把事务句柄传下去；`[id].patch.ts` 在主表 0 行更新时先抛 404 再动绑定。改动时保持这一事务边界，不要退回"多次独立写"。
+- 管理端 `providers` 成为默认、`mcp-servers` 创建/改名走同一事务：providers 用事务清除其他默认，MCP 用 `pg_advisory_xact_lock(hashtext(name))` 包住查重+写入并把冲突降到 409；`mcp-servers/[id].ts` 仅在改名时才进事务，普通字段走非事务 update。`baseUrl`/`url` 统一经 `assertAbsoluteHttpUrl()`（要求绝对 http/https，`outbound.ts` 提供）。
+- 知识库上传当前将文件按 UTF-8 文本解码，不是通用 PDF/Word 解析入口。`documents.ts` 的 POST 两条通道（multipart 与 JSON）都以 `MAX_DOCUMENT_BYTES = 2MB` 按 UTF-8 字节数统一限制正文；正文之前还有一道 `MAX_REQUEST_BYTES`（2×2MB + 64KB）**实际字节**封顶（`readCappedBodyIntoH3Cache`，见服务端健壮性约定），chunked 请求也不会先整段缓冲进内存；JSON 分支只接受字符串 `title`/`content`（非字符串回退默认值，避免 drizzle 把非文本值带进 SQL）。嵌入按 `EMBED_BATCH_SIZE = 16` 分批调用（与 `reindex.post.ts` 一致），单批失败只让该批降级为 Bigram，不再整篇丢向量；分块行按 `INSERT_BATCH_SIZE = 200` 分批插入，仍在同一事务内。
+- 文档上传会调用 embedding 供应商；失败可保存空向量并将文档标记为 `ready`。因此 `ready` 不等于向量生成成功，也不代表上传是无外部副作用操作。
+- `catalog.ts` 定义 Card、Stat、Badge、Alert 的模型输出 schema。即使注释声称共用目录，也应检查客户端实际导入和注册方式；新增组件须同步提示词、属性定义和双端渲染。
+- 移动路由守卫读取的 `fetchSession()` 已缓存降级（见 §5）：瞬时故障保留上次会话、仅 401/403 判登出，微信回调路由单独放行且回跳页 `sync()` 可重试，不要把回调跳转只当作路由配置问题而忽略 token 接收与 `apiUrl` 域名。Ionic 标签页组件切换时保活，`HomeView` 用 `onIonViewWillEnter` 而非仅 `onMounted` 刷新，改其他常驻标签页时同理。
+
+### 最小验证与知识更新
+
+- 文档修改：核对新增路径和描述，针对文档执行格式检查及 `git diff --check`；不启动应用、数据库或外部服务。
+- 页面或共享契约修改：检查直接消费者及对应包类型；涉及共享代码则检查双端，不用单端通过代表双端通过。
+- API、schema 或业务链路修改：区分静态检查、模块测试、真实 HTTP/数据库验证；执行会写数据或调用外部服务的验证前先确认环境与授权。
+- 记录稳定约束与入口，不记录一次性 lint 报错为永久事实。任务结束总结实际改动、已验证范围和未验证边界；不要为了让检查通过扩大到无关修复。
+
+## 9. 如何维护这份知识
+
+- 优先更新稳定事实：模块职责、契约位置、关键链路、命令前提与副作用、常见陷阱。
+- 不写入临时分支、单次报错、机器绝对路径、密钥或一次性的测试通过结论。
+- 修改 package scripts、共享别名、认证方式、数据库初始化或聊天协议时，同步更新对应章节。
+- 不需要把所有 API 和组件抄进本文。遵循“本文定位 → 阅读相关实现 → 最小修改 → 针对性验证”的顺序。

@@ -1,0 +1,62 @@
+name: Build & Push Docker Image to ACR
+
+on:
+    push:
+        branches: [main]
+        tags: ['*']
+
+jobs:
+    build-and-push:
+        runs-on: ubuntu-26.04
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+            - name: Setup Node & pnpm
+              uses: pnpm/action-setup@v6
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install
+            - name: Set image tags
+              id: meta
+              run: |
+                  REGISTRY=${{ secrets.ACR_REGISTRY }}
+                  NAMESPACE=${{ secrets.ACR_NAMESPACE }}
+                  REPO=${{ secrets.ACR_REPOSITORY }}
+                  # 用短 commit hash 作为标签；若有 tag 则也推送该 tag
+                  SHA=$(git rev-parse --short HEAD)
+                  echo "TAG_SHA=$SHA" >> $GITHUB_OUTPUT
+                  if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+                    TAG_NAME=${{ github.ref_name }}
+                    echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+                  fi
+            - name: Log in to ACR
+              run: |
+                  docker login ${{ secrets.ACR_REGISTRY }} \
+                    -u ${{ secrets.ACR_ACCESS_KEY_ID }} \
+                    -p ${{ secrets.ACR_ACCESS_KEY_SECRET }}
+            - name: Build Docker image
+              run: |
+                  IMAGE=${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/${{ secrets.ACR_REPOSITORY }}:${{ steps.meta.outputs.TAG_SHA }}
+                  # Docker 28+ 默认生成 provenance attestation 并把 tag 指向 OCI manifest list，
+                  # ACR 控制台因此显示镜像ID/大小为空白；单平台构建显式关闭
+                  docker build -f tools/deploy/dockerfile -t $IMAGE --provenance=false --sbom=false .
+                  echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+            - name: Push image (SHA tag)
+              run: |
+                  docker push $IMAGE
+            - name: Push image (Git tag, if any)
+              if: steps.meta.outputs.TAG_NAME != ''
+              run: |
+                  IMAGE_TAG=${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/${{ secrets.ACR_REPOSITORY }}:${{ steps.meta.outputs.TAG_NAME }}
+                  docker tag $IMAGE $IMAGE_TAG
+                  docker push $IMAGE_TAG
+            - name: Image digest (optional)
+              run: |
+                  echo "Image digest: $(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE)"
