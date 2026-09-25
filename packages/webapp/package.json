@@ -18,13 +18,13 @@
     },
     "dependencies": {
         "@ai-sdk/deepseek": "^3.0.52",
-        "@ai-sdk/mcp": "^2.0.57",
-        "@ai-sdk/openai": "^4.0.74",
-        "@ai-sdk/vue": "^4.0.113",
-        "@aws-sdk/client-s3": "^3.1139.0",
+        "@ai-sdk/mcp": "^2.0.58",
+        "@ai-sdk/openai": "^4.0.75",
+        "@ai-sdk/vue": "^4.0.114",
+        "@aws-sdk/client-s3": "^3.1140.0",
         "@aws-sdk/s3-presigned-post": "^3.1139.0",
-        "@aws-sdk/s3-request-presigner": "^3.1139.0",
-        "@better-auth/core": "^1.7.5",
+        "@aws-sdk/s3-request-presigner": "^3.1140.0",
+        "@better-auth/core": "^1.7.6",
         "@comark/nuxt": "^0.7.0",
         "@comark/vue": "^0.7.0",
         "@electric-sql/pglite": "^0.5.8",
@@ -36,8 +36,8 @@
         "@nuxt/ui": "^4.11.2",
         "@nuxthub/core": "^0.10.8",
         "@repo/commons": "workspace:*",
-        "ai": "^7.0.113",
-        "better-auth": "^1.7.5",
+        "ai": "^7.0.114",
+        "better-auth": "^1.7.6",
         "better-wechatpay": "^1.1.0",
         "drizzle-orm": "^0.45.3",
         "drizzle-zod": "^0.8.3",
@@ -64,6 +64,6 @@
         "drizzle-kit": "^0.31.11",
         "tsx": "^4.23.15",
         "typescript": "6.0.3",
-        "vite": "^8.3.0"
+        "vite": "^8.3.1"
     }
 }
