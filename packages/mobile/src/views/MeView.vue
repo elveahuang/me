@@ -6,9 +6,11 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, fetchSession, signOut, type SessionPayload } from '../api/auth';
 import ThemeSettings from '../components/ThemeSettings.vue';
+import ChangePasswordModal from '../components/ChangePasswordModal.vue';
 import { useDialog } from '../composables/useDialog';
 import { useUnread } from '../composables/useUnread';
 import { setMobileLocale } from '../i18n';
+import { version as appVersion } from '../../package.json';
 import PageShell from './PageShell.vue';
 
 const { t, locale } = useI18n();
@@ -19,6 +21,8 @@ const session = ref<SessionPayload | null>(null);
 const me = ref<MeResponse | null>(null);
 const orders = ref<OrdersResponse['orders']>([]);
 const showLanguageSheet = ref(false);
+/** 修改密码弹层:走 Better Auth 内置 change-password,组件自含表单与成功态 */
+const showChangePassword = ref(false);
 const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
 const error = ref('');
 
@@ -103,7 +107,7 @@ async function logout() {
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2">
                             <h2 class="truncate text-base font-black">{{ session.user.name }}</h2>
-                            <span v-if="session.user.role === 'admin'" class="app-badge app-badge-danger uppercase">Admin</span>
+                            <span v-if="session.user.role === 'admin'" class="app-badge app-badge-danger uppercase">{{ t('common.adminBadge') }}</span>
                         </div>
                         <p class="text-faint mt-1 truncate text-[11px]">{{ session.user.email }}</p>
                     </div>
@@ -159,6 +163,15 @@ async function logout() {
                         <span class="flex-1 text-xs font-bold">{{ t('nav.attachments') }}</span>
                         <span class="text-faint text-xs">›</span>
                     </router-link>
+                    <button
+                        type="button"
+                        class="flex w-full items-center gap-3 p-3.5 text-left transition-colors active:bg-[color:var(--surface-3)]"
+                        @click="showChangePassword = true"
+                    >
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--surface-3)] text-base">🔑</span>
+                        <span class="flex-1 text-xs font-bold">{{ t('profile.changePassword') }}</span>
+                        <span class="text-faint text-xs">›</span>
+                    </button>
                 </div>
 
                 <!-- 主题设置 -->
@@ -194,7 +207,8 @@ async function logout() {
                 </div>
 
                 <button class="app-btn app-btn-danger w-full !py-3" @click="logout">{{ t('nav.logout') }}</button>
-                <p class="text-faint pb-4 text-center text-[10px]">ME Agent Platform · v26.4.0</p>
+                <!-- 版本号从 package.json 读取，避免与包版本双重维护漂移 -->
+                <p class="text-faint pb-4 text-center text-[10px]">ME Agent Platform · v{{ appVersion }}</p>
             </div>
 
             <div v-else class="flex h-full flex-col items-center justify-center p-8 text-center">
@@ -218,5 +232,7 @@ async function logout() {
             :buttons="languageActions"
             @did-dismiss="showLanguageSheet = false"
         />
+
+        <ChangePasswordModal :open="showChangePassword" @close="showChangePassword = false" />
     </PageShell>
 </template>

@@ -1,6 +1,9 @@
 export default {
     common: {
         appName: 'ME 智能体',
+        adminBadge: '管理员',
+        passwordMismatch: '两次输入的新密码不一致',
+        passwordMinLength: '密码长度至少 8 位',
         loading: '加载中…',
         apiTimeout: '请求超时（{seconds} 秒），请检查网络后重试',
         apiNetworkFailed: '网络请求失败，请检查网络后重试',
@@ -61,6 +64,7 @@ export default {
     },
     auth: {
         welcomeBack: '欢迎回来 · {app}',
+        networkKickHint: '网络不稳定，未能确认登录状态。请检查网络后重试；若您此前已登录过，重试即可继续使用。',
         registerHint: '创建账号，开启智能体之旅',
         name: '昵称',
         email: '邮箱',
@@ -168,6 +172,7 @@ export default {
         renew: '续费',
         freePlan: '免费版',
         payMethod: '选择支付方式',
+        wechatPay: '微信支付',
         mockPay: '测试沙箱支付',
         mockPayConfirm: '确认模拟支付',
         wechatOnlyInApp: '请在微信内打开以完成支付',
@@ -190,12 +195,21 @@ export default {
         freePlanHint: '免费版无需购买，随时可升级到付费套餐',
         periodUnavailable: '该套餐未开放按年订阅，请选择按月',
         pollTimeout: '等待支付超时，请稍后在「我的 → 我的订单」查看结果',
+        hotBadge: '热门',
+        plansEmpty: '暂无可购买的套餐',
     },
     admin: {
         tableEmpty: '暂无记录',
     },
     profile: {
         memberLevel: '会员特权',
+        changePassword: '修改密码',
+        currentPassword: '当前密码',
+        newPassword: '新密码',
+        confirmNewPassword: '确认新密码',
+        passwordChanged: '密码已修改，其他设备已退出登录',
+        revokeOtherHint: '为保障安全，修改成功后其他设备的登录状态将被退出',
+        errorInvalidPassword: '当前密码不正确',
         preferences: '偏好设置',
         appearanceMode: '外观模式',
         appearanceModeHint: '浅色 / 深色 / 跟随系统',

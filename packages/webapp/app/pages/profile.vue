@@ -91,6 +91,7 @@ async function logout() {
 
             <div class="flex flex-wrap items-center gap-2.5">
                 <NuxtLink v-if="session?.user.role === 'admin'" to="/admin" class="app-btn app-btn-outline">{{ t('nav.admin') }}</NuxtLink>
+                <ProfileChangePassword />
                 <button class="app-btn app-btn-danger" @click="logout">{{ t('nav.logout') }}</button>
             </div>
         </div>

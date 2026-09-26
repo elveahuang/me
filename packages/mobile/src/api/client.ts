@@ -213,6 +213,24 @@ export async function refreshSession(): Promise<SessionPayload | null> {
 }
 
 /**
+ * 路由守卫专用：在 fetchSession 语义之外额外回答「服务端是否给出了明确结论」。
+ * 冷启动无缓存时一次瞬时故障也会让 fetchSession 返回 null，守卫只能跳登录页；
+ * offline=true 表示这是探针失败而非确定未登录，登录页据此提示网络问题，
+ * 避免弱网用户误以为自己被登出。并发在途或 TTL 窗口内复用时拿不到独立的失败信息，
+ * 按非离线处理（与旧行为一致）。
+ */
+export async function checkSessionDecision(): Promise<{ session: SessionPayload | null; offline: boolean }> {
+    if (inflightSession) {
+        return { session: await inflightSession, offline: false };
+    }
+    if (Date.now() - sessionConfirmedAt < SESSION_FRESH_MS) {
+        return { session: cachedSession, offline: false };
+    }
+    const result = await probeSession();
+    return result.ok ? { session: result.session, offline: false } : { session: cachedSession, offline: true };
+}
+
+/**
  * 作废 TTL 复用与缓存：认证状态刚发生变化（登录/注册成功、微信回调用新 token 换取会话成功）时调用。
  * 否则 fetchSession 可能把同一次访问里几秒前的 401「确定结论」端给守卫，把刚登录的用户踢回登录页。
  */

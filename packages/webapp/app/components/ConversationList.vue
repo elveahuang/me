@@ -18,8 +18,13 @@ const props = withDefaults(
         error?: string;
         /** 列表项副信息是否显示所属智能体（首页列表跨智能体，需要） */
         showAgentName?: boolean;
+        /**
+         * 布局形态：sidebar 是桌面侧栏（< md 隐藏，父级需另配移动端抽屉入口）；
+         * drawer 填满父级给的移动端抽屉容器（app-drawer 是 flex column，靠 flex-1 撑满）。
+         */
+        variant?: 'sidebar' | 'drawer';
     }>(),
-    { activeId: null, loading: false, error: '', showAgentName: false },
+    { activeId: null, loading: false, error: '', showAgentName: false, variant: 'sidebar' },
 );
 
 const emit = defineEmits<{
@@ -33,6 +38,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const route = useRoute();
+
+/** 两种形态的根样式在此收口，避免调用方用外部 class 去跟 hidden/flex/w-64 打 cascade 优先级仗 */
+const rootClass = computed(() =>
+    props.variant === 'drawer' ? 'flex min-h-0 w-full flex-1 flex-col overflow-hidden' : 'app-card hidden w-64 shrink-0 flex-col overflow-hidden md:flex',
+);
 
 /** 首页是根路径，去智能体广场不叫「返回」：只有对话页才显示回退箭头 */
 const backArrow = computed(() => (route.path === '/' ? '' : '← '));
@@ -98,7 +108,7 @@ async function removeConversation(id: string) {
 </script>
 
 <template>
-    <aside class="app-card hidden w-64 shrink-0 flex-col overflow-hidden md:flex">
+    <aside :class="rootClass">
         <div class="app-divider border-t-0 p-3">
             <NuxtLink to="/chat" class="text-muted-2 text-hover-brand flex items-center gap-1.5 text-xs font-semibold transition-colors">
                 <span>{{ backArrow }}{{ t('nav.agents') }}</span>
@@ -148,7 +158,7 @@ async function removeConversation(id: string) {
                     <div class="app-hover-reveal absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
                         <button
                             type="button"
-                            class="text-faint text-hover-brand rounded p-1 transition-colors"
+                            class="text-faint text-hover-brand rounded p-2 transition-colors"
                             :title="t('chat.renameChat')"
                             :aria-label="t('chat.renameChat')"
                             @click.stop="startRename(c)"
@@ -157,7 +167,7 @@ async function removeConversation(id: string) {
                         </button>
                         <button
                             type="button"
-                            class="text-faint text-hover-danger rounded p-1 transition-colors"
+                            class="text-faint text-hover-danger rounded p-2 transition-colors"
                             :title="t('chat.deleteChat')"
                             :aria-label="t('chat.deleteChat')"
                             @click.stop="removeConversation(c.id)"

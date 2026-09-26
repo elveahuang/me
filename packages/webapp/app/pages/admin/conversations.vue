@@ -200,13 +200,14 @@ function textOf(parts: MessageRow['parts']) {
 
             <!-- 会话详情面板 -->
             <div class="w-full lg:w-1/2">
-                <div v-if="detail" class="app-card sticky top-20 space-y-4 p-6">
+                <!-- sticky 只在 lg 双栏时有意义；窄屏单列下吸顶会盖住列表内容 -->
+                <div v-if="detail" class="app-card space-y-4 p-6 lg:sticky lg:top-20">
                     <div class="border-line flex items-center justify-between border-b pb-3">
                         <div class="min-w-0">
                             <h2 class="text-strong max-w-full truncate text-base font-black">{{ detail.conversation.title }}</h2>
                             <p class="text-faint mt-0.5 truncate text-xs">{{ detail.conversation.agentName }} · {{ detail.conversation.userEmail }}</p>
                         </div>
-                        <button class="text-faint shrink-0 hover:opacity-70" :aria-label="t('common.close')" @click="closeDetail">✕</button>
+                        <button class="text-faint shrink-0 p-1.5 hover:opacity-70" :aria-label="t('common.close')" @click="closeDetail">✕</button>
                     </div>
 
                     <div class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">

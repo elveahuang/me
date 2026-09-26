@@ -8,8 +8,8 @@ import {
     type AttachmentsResponse,
     type PresetItem,
 } from '@commons/contract';
-import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, apiUrl, extractApiError } from '../api/auth';
 import { useDialog } from '../composables/useDialog';
@@ -78,6 +78,8 @@ async function load(reset = false) {
     } catch (e) {
         // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"还没有附件"
         items.value = [];
+        // 分页脚注按 total 渲染，留着上一次成功的 total 会与错误横幅并存且页码可点
+        total.value = 0;
         error.value = extractApiError(e, t('common.error'));
     } finally {
         if (seq === loadSeq) loading.value = false;
@@ -89,18 +91,14 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(() => load(true));
+// Ionic 路由栈保活：从上传/删除等操作返回时组件不重建，onMounted 不会再次触发。
+// 首次进入本钩子同样触发（早于 mounted），加载只挂这里即可。
+onIonViewWillEnter(() => load(true));
 
-/** 搜索防抖；卸载时清理，避免页面销毁后仍触发请求 */
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
+/** ion-searchbar 自带 :debounce="300"，无需再叠一层手写定时器 */
 function onSearch() {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => void load(true), 300);
+    void load(true);
 }
-
-onUnmounted(() => {
-    if (searchTimer) clearTimeout(searchTimer);
-});
 
 function changeCategory(value: string) {
     category.value = value;
@@ -312,7 +310,7 @@ function preview(item: AttachmentRecord) {
         <!-- 图片预览：声明了 aria-modal 的弹层必须自带出口——只靠 @click.self 点遮罩，图片铺满时没有可点的地方，
              读屏与键盘用户完全关不掉（Web 端同名预览已有 ✕ 按钮，这里补齐） -->
         <div v-if="previewUrl" class="app-modal-backdrop" role="dialog" aria-modal="true" :aria-label="t('attachments.preview')" @click.self="previewUrl = ''">
-            <img :src="previewUrl" alt="preview" class="max-h-full max-w-full rounded-xl object-contain" />
+            <img :src="previewUrl" :alt="t('attachments.preview')" class="max-h-full max-w-full rounded-xl object-contain" />
             <button type="button" class="app-btn app-btn-soft absolute top-4 right-4" :aria-label="t('common.close')" @click="previewUrl = ''">✕</button>
         </div>
     </PageShell>

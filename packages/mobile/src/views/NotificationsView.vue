@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { formatRelativeTime, NOTIFICATION_TYPES, presetText, type NotificationRecord, type NotificationsResponse, type PresetItem } from '@commons/contract';
-import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { api, apiUrl, extractApiError } from '../api/auth';
 import { useFlashSuccess } from '../composables/useFlashSuccess';
 import { useUnread } from '../composables/useUnread';
@@ -69,6 +70,9 @@ async function load(reset = false) {
     } catch (e) {
         // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"没有消息"
         items.value = [];
+        // 分页脚注按 total 渲染，留着上一次成功的 total 会与错误横幅并存且页码可点；
+        // unread 角标是独立权威值，失败时保留不清零
+        total.value = 0;
         error.value = extractApiError(e, t('common.error'));
     } finally {
         if (seq === loadSeq) loading.value = false;
@@ -80,7 +84,9 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(() => load(true));
+// Ionic 路由栈保活：从详情跳转返回时组件不重建，onMounted 不会再次触发。
+// 首次进入本钩子同样触发（早于 mounted），加载只挂这里即可。
+onIonViewWillEnter(() => load(true));
 
 watch([filterUnread, type], () => void load(true));
 
@@ -128,6 +134,24 @@ async function markAllRead() {
 }
 
 const iconFor = (value: string) => NOTIFICATION_TYPES.find((item) => item.value === value)?.icon ?? '🔔';
+
+const router = useRouter();
+
+/**
+ * 「查看」链接：站内相对地址走应用内路由，外部 http(s) 才开新窗口——
+ * 原生壳下 target=_blank 的新窗口要么解析到 capacitor://localhost（404）要么跳出 App。
+ * 跳转的同时补上已读标记：卡片点击即已读是主交互，链接不该成为绕过它的入口。
+ */
+function openLink(item: NotificationRecord) {
+    const url = item.linkUrl;
+    if (!url) return;
+    void markRead(item);
+    if (url.startsWith('/')) {
+        void router.push(url);
+        return;
+    }
+    window.open(apiUrl(url), '_blank', 'noopener');
+}
 </script>
 
 <template>
@@ -207,9 +231,7 @@ const iconFor = (value: string) => NOTIFICATION_TYPES.find((item) => item.value 
                                         v-if="item.linkUrl"
                                         :href="apiUrl(item.linkUrl)"
                                         class="text-primary-600 text-[9px] font-bold underline"
-                                        target="_blank"
-                                        rel="noopener"
-                                        @click.stop
+                                        @click.prevent.stop="openLink(item)"
                                     >
                                         {{ t('common.viewDetail') }}
                                     </a>

@@ -90,7 +90,7 @@ async function removeConversation(id: string) {
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[272px_minmax(0,1fr)] lg:gap-6">
         <!-- 最近会话历史列表 -->
         <aside class="order-2 min-w-0 lg:order-1">
-            <div class="app-panel flex flex-col overflow-hidden lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]">
+            <div class="app-panel flex flex-col overflow-hidden lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)]">
                 <h2 class="flex shrink-0 items-center justify-between px-4 py-3.5 text-sm font-black">
                     <span>{{ t('nav.conversations') }}</span>
                     <span class="app-chip">{{ conversations.length }}</span>
@@ -113,7 +113,7 @@ async function removeConversation(id: string) {
                         </NuxtLink>
                         <button
                             type="button"
-                            class="app-hover-reveal text-faint text-hover-danger absolute top-1/2 right-2 block -translate-y-1/2 rounded-md p-1 transition-colors"
+                            class="app-hover-reveal text-faint text-hover-danger absolute top-1/2 right-1.5 block -translate-y-1/2 rounded-md p-2 transition-colors"
                             :title="t('chat.deleteChat')"
                             :aria-label="t('chat.deleteChat')"
                             @click="removeConversation(c.id)"
@@ -158,7 +158,7 @@ async function removeConversation(id: string) {
                         v-if="searchKeyword"
                         type="button"
                         :aria-label="t('chat.clearInput')"
-                        class="text-faint text-hover-strong absolute top-2 right-2.5 text-xs"
+                        class="text-faint text-hover-strong absolute top-1.5 right-1.5 p-1.5 text-xs"
                         @click="searchKeyword = ''"
                     >
                         ✕

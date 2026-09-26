@@ -7,6 +7,16 @@ export default defineNuxtConfig({
     modules: ['@nuxt/content', '@nuxt/icon', '@nuxt/image', '@nuxt/ui', '@comark/nuxt'],
     devtools: { enabled: false },
     css: [resolve(__dirname, 'app/assets/css/main.css')],
+    app: {
+        head: {
+            /**
+             * viewport-fit=cover 让 theme.css 的 safe-top/safe-bottom（iOS 刘海/home indicator）真正生效；
+             * interactive-widget=resizes-content 让 Android 键盘弹起时压缩视口而不是遮挡聊天输入栏
+             * （iOS Safari 的 dvh 本身不含键盘，Chrome 108+ 需要这个开关）。
+             */
+            viewport: 'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
+        },
+    },
     alias: {
         '@commons': fileURLToPath(new URL('../commons/src', import.meta.url)),
     },

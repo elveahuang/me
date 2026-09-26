@@ -103,6 +103,56 @@ function clearFilters() {
 
 const hasFilters = computed(() => Boolean(q.value.trim() || roleFilter.value !== 'all'));
 
+/** 成功提示(重置密码):就地展示,靠 useFlashSuccess 的定时器自动清除 */
+const { success: flashMessage, flashSuccess } = useFlashSuccess();
+
+/** 重置密码抽屉:走 Better Auth 的 /api/auth/admin/set-user-password(服务端 admin 插件内置,无需新接口) */
+const resetTarget = ref<AdminUser | null>(null);
+const resetForm = ref({ newPassword: '', confirmPassword: '', revokeSessions: true });
+const resetting = ref(false);
+const resetError = ref('');
+
+function openResetPassword(u: AdminUser) {
+    resetTarget.value = u;
+    resetForm.value = { newPassword: '', confirmPassword: '', revokeSessions: true };
+    resetError.value = '';
+}
+
+async function submitResetPassword() {
+    const target = resetTarget.value;
+    if (!target) return;
+    resetError.value = '';
+    // 与 Better Auth 默认的 password.minLength(8)保持一致,服务端 assertPasswordNotTooShort 还会再校验
+    if (resetForm.value.newPassword.length < 8) {
+        resetError.value = t('common.passwordMinLength');
+        return;
+    }
+    if (resetForm.value.newPassword !== resetForm.value.confirmPassword) {
+        resetError.value = t('common.passwordMismatch');
+        return;
+    }
+    resetting.value = true;
+    try {
+        await $fetch('/api/auth/admin/set-user-password', {
+            method: 'POST',
+            body: { userId: target.id, newPassword: resetForm.value.newPassword },
+        });
+        // 重置密码的常见目的是让原凭据立即失效:不吊销旧会话的话,已登录设备仍可继续使用
+        if (resetForm.value.revokeSessions) {
+            await $fetch('/api/auth/admin/revoke-user-sessions', {
+                method: 'POST',
+                body: { userId: target.id },
+            });
+        }
+        resetTarget.value = null;
+        flashSuccess(t('adminForm.passwordResetDone'));
+    } catch (e) {
+        resetError.value = extractApiError(e, t('adminForm.operationFailed'));
+    } finally {
+        resetting.value = false;
+    }
+}
+
 async function action(userId: string, act: string, extra?: Record<string, unknown>) {
     loadError.value = '';
     try {
@@ -137,6 +187,7 @@ async function removeUser(userId: string) {
 
 <template>
     <div class="space-y-6">
+        <div v-if="flashMessage" class="app-alert app-alert-success">{{ flashMessage }}</div>
         <div v-if="loadError" class="app-alert app-alert-danger">
             {{ loadError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load()">{{ t('common.retry') }}</button>
@@ -255,6 +306,9 @@ async function removeUser(userId: string) {
                         <td class="text-faint">{{ formatDate(u.createdAt) }}</td>
                         <td>
                             <div class="app-table-actions">
+                                <button class="app-btn app-btn-outline app-btn-sm" @click="openResetPassword(u)">
+                                    {{ t('adminForm.resetPassword') }}
+                                </button>
                                 <button v-if="!u.banned" class="app-btn app-btn-danger app-btn-sm" @click="action(u.id, 'ban')">
                                     {{ t('adminForm.ban') }}
                                 </button>
@@ -287,6 +341,57 @@ async function removeUser(userId: string) {
                 <div v-for="i in 3" :key="i" class="app-skeleton h-10 !rounded-xl" />
             </div>
         </div>
+
+        <!-- 重置密码抽屉：管理端统一右侧滑出，标题带目标用户（抽屉未打开时 resetTarget 为 null，绑定走可选链） -->
+        <AdminDrawer
+            :open="resetTarget !== null"
+            :title="t('adminForm.resetPasswordFor', { name: resetTarget?.name || resetTarget?.email || '' })"
+            @close="resetTarget = null"
+        >
+            <form class="space-y-3" @submit.prevent="submitResetPassword">
+                <div class="app-panel p-3 text-xs">
+                    <p class="text-strong font-bold">{{ resetTarget?.name }}</p>
+                    <p class="text-faint mt-0.5">{{ resetTarget?.email }}</p>
+                </div>
+                <div>
+                    <label class="app-label" for="admin-reset-password">{{ t('adminForm.resetNewPassword') }}</label>
+                    <input
+                        id="admin-reset-password"
+                        v-model="resetForm.newPassword"
+                        type="password"
+                        required
+                        minlength="8"
+                        autocomplete="new-password"
+                        class="app-input"
+                    />
+                </div>
+                <div>
+                    <label class="app-label" for="admin-reset-confirm">{{ t('adminForm.resetConfirmPassword') }}</label>
+                    <input
+                        id="admin-reset-confirm"
+                        v-model="resetForm.confirmPassword"
+                        type="password"
+                        required
+                        minlength="8"
+                        autocomplete="new-password"
+                        class="app-input"
+                    />
+                </div>
+                <label class="flex items-start gap-2 text-xs">
+                    <input v-model="resetForm.revokeSessions" type="checkbox" class="app-checkbox mt-0.5" />
+                    <span class="text-soft">{{ t('adminForm.revokeUserSessions') }}</span>
+                </label>
+
+                <p v-if="resetError" class="app-help app-help-error">{{ resetError }}</p>
+
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" class="app-btn app-btn-ghost" @click="resetTarget = null">{{ t('common.cancel') }}</button>
+                    <button type="submit" class="app-btn app-btn-primary" :disabled="resetting">
+                        {{ resetting ? t('common.loading') : t('common.save') }}
+                    </button>
+                </div>
+            </form>
+        </AdminDrawer>
 
         <!-- 分页：总数与列表都由服务端返回，用户量增长后不再只看到最早的一页 -->
         <div v-if="!loading && pagination.totalPages > 1" class="flex items-center justify-between">

@@ -1,6 +1,9 @@
 export default {
     common: {
         appName: 'ME Agent',
+        adminBadge: 'Admin',
+        passwordMismatch: "Passwords don't match",
+        passwordMinLength: 'Password must be at least 8 characters',
         loading: 'Loading…',
         apiTimeout: 'Request timed out ({seconds}s). Check your network and retry.',
         apiNetworkFailed: 'Network request failed. Check your connection and retry.',
@@ -59,6 +62,7 @@ export default {
     },
     auth: {
         welcomeBack: 'Welcome back · {app}',
+        networkKickHint: 'Unstable network — your sign-in status could not be confirmed. If you were signed in before, check your connection and retry.',
         registerHint: 'Create an account to start your agent journey',
         name: 'Nickname',
         email: 'Email',
@@ -166,6 +170,7 @@ export default {
         renew: 'Renew',
         freePlan: 'Free Tier',
         payMethod: 'Payment Method',
+        wechatPay: 'WeChat Pay',
         mockPay: 'Mock Sandbox Pay',
         mockPayConfirm: 'Simulate payment',
         wechatOnlyInApp: 'Open this page inside WeChat to complete the payment',
@@ -188,12 +193,21 @@ export default {
         freePlanHint: 'The free tier needs no purchase — upgrade anytime',
         periodUnavailable: 'Yearly billing is not available for this plan, please choose monthly',
         pollTimeout: 'Timed out waiting for payment — check Me → Orders shortly',
+        hotBadge: 'POPULAR',
+        plansEmpty: 'No plans available',
     },
     admin: {
         tableEmpty: 'No records yet',
     },
     profile: {
         memberLevel: 'Membership',
+        changePassword: 'Change Password',
+        currentPassword: 'Current password',
+        newPassword: 'New password',
+        confirmNewPassword: 'Confirm new password',
+        passwordChanged: 'Password updated. Other devices have been signed out',
+        revokeOtherHint: 'For security, other devices will be signed out after the change',
+        errorInvalidPassword: 'Current password is incorrect',
         preferences: 'Preferences',
         appearanceMode: 'Appearance',
         appearanceModeHint: 'Light / Dark / System',

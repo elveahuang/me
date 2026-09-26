@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
-import { fetchSession } from '../api/auth';
+import { checkSessionDecision } from '../api/auth';
 import ChatView from '../views/ChatView.vue';
 import HomeView from '../views/HomeView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -41,12 +41,16 @@ const router = createRouter({
 router.beforeEach(async (to) => {
     if (to.name === 'Login' || to.name === 'Register' || to.name === 'WechatCallback') {
         if (to.name === 'WechatCallback') return true;
-        const session = await fetchSession();
+        const { session } = await checkSessionDecision();
         if (session) return '/home';
         return true;
     }
-    const session = await fetchSession();
-    if (!session) return '/login';
+    const { session, offline } = await checkSessionDecision();
+    if (!session) {
+        // offline 表示探针失败而非确定未登录：带上标记让登录页提示网络问题，
+        // 否则弱网冷启动的用户会被静默带到登录页，误以为自己被登出
+        return offline ? { path: '/login', query: { network: '1' } } : '/login';
+    }
     return true;
 });
 

@@ -199,7 +199,7 @@ async function remove(id: string) {
             @close="editing = null"
         >
             <div class="space-y-3">
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input
                         :aria-label="t('adminForm.toolNamePlaceholder')"
                         v-model="form.name"
@@ -219,7 +219,7 @@ async function remove(id: string) {
                 />
 
                 <template v-if="form.type === 'http'">
-                    <div class="grid grid-cols-[6rem_1fr] gap-3">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-[6rem_1fr]">
                         <select v-model="form.method" :aria-label="t('adminForm.selectMethod')" class="app-input">
                             <option>GET</option>
                             <option>POST</option>

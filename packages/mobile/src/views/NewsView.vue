@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDate, type NewsListResponse, type NewsSummary } from '@commons/contract';
-import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar } from '@ionic/vue';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, extractApiError } from '../api/auth';
 import BulletinBanner from '../components/BulletinBanner.vue';
@@ -39,6 +39,8 @@ async function load(reset = false) {
     } catch (e) {
         // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"没有内容"
         items.value = [];
+        // 分页脚注按 total 渲染，留着上一次成功的 total 会与错误横幅并存且页码可点
+        total.value = 0;
         error.value = extractApiError(e, t('common.error'));
     } finally {
         if (seq === loadSeq) loading.value = false;
@@ -50,17 +52,14 @@ async function handleRefresh(event: CustomEvent) {
     (event.target as HTMLIonRefresherElement).complete();
 }
 
-onMounted(() => load(true));
+// Ionic 路由栈保活：从详情页返回时组件不重建，onMounted 不会再次触发。
+// 首次进入本钩子同样触发（早于 mounted），加载只挂这里即可。
+onIonViewWillEnter(() => load(true));
 
-/** 搜索防抖；卸载时清理，避免页面销毁后仍触发请求 */
-let timer: ReturnType<typeof setTimeout> | null = null;
+/** ion-searchbar 自带 :debounce="300"，无需再叠一层手写定时器 */
 function onSearch() {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void load(true), 300);
+    void load(true);
 }
-onUnmounted(() => {
-    if (timer) clearTimeout(timer);
-});
 </script>
 
 <template>

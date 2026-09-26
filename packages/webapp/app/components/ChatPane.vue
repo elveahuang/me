@@ -43,6 +43,8 @@ const emit = defineEmits<{
     'update:conversationId': [id: string | null];
     /** 服务端会话列表可能已变化（新建、自动回填标题）：父级刷新侧栏 */
     'conversation-list-stale': [];
+    /** 移动端点头部的历史按钮：会话侧栏 < md 隐藏，由父级打开会话历史抽屉 */
+    'open-history': [];
 }>();
 
 const { t, locale } = useI18n();
@@ -523,6 +525,20 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
         <!-- 顶部信息条：智能体（首页可切换）+ 导出 / 新对话 -->
         <div class="flex items-center justify-between gap-2 px-4 py-3" style="border-bottom: 1px solid var(--line); background-color: var(--surface-2)">
             <div class="flex min-w-0 items-center gap-3">
+                <!-- 移动端会话历史入口：侧栏 < md 隐藏，抽屉由父级摆放。
+                     按钮外层包 md:hidden 容器而非在 .app-btn 上加变体：
+                     主题 CSS 未分层，.app-btn 的 display 会压掉 utilities 层的 md:hidden。 -->
+                <div class="md:hidden">
+                    <button
+                        type="button"
+                        class="app-btn app-btn-ghost app-btn-icon"
+                        :title="t('chat.recentConversations')"
+                        :aria-label="t('chat.recentConversations')"
+                        @click="emit('open-history')"
+                    >
+                        <AppIcon name="menu" :size="18" />
+                    </button>
+                </div>
                 <button
                     v-if="switchable"
                     type="button"
@@ -536,7 +552,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                 <div v-else class="app-avatar-icon h-10 w-10 shrink-0 text-xl">{{ agentEmoji }}</div>
 
                 <div class="min-w-0">
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <button
                             v-if="switchable"
                             type="button"
@@ -698,7 +714,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                     <AppIcon :name="a.isImage ? 'file-image-outline' : 'file-outline'" :size="13" />
                     <span class="truncate">{{ a.filename }}</span>
                     <span class="text-faint text-[10px]">{{ formatBytes(a.size) }}</span>
-                    <button type="button" class="text-faint text-hover-strong" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
+                    <button type="button" class="text-faint text-hover-strong -m-1 p-1.5" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
                 </span>
             </div>
             <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]">{{ attachError }}</div>
@@ -721,7 +737,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                     <button
                         v-if="input"
                         type="button"
-                        class="text-faint text-hover-strong absolute top-1/2 right-2.5 -translate-y-1/2 text-xs"
+                        class="text-faint text-hover-strong absolute top-1/2 right-1.5 -translate-y-1/2 p-1.5 text-xs"
                         :title="t('chat.clearInput')"
                         @click="input = ''"
                     >

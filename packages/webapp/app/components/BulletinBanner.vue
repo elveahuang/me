@@ -65,7 +65,13 @@ function dismiss(id: string) {
             <a v-if="item.linkUrl" :href="item.linkUrl" class="app-btn app-btn-soft shrink-0 !px-3 !py-1 !text-[11px]" target="_blank" rel="noopener">
                 {{ item.linkText || t('common.more') }}
             </a>
-            <button type="button" class="shrink-0 opacity-60 transition-opacity hover:opacity-100" :aria-label="t('common.close')" @click="dismiss(item.id)">
+            <!-- -m 抵消 padding 的占位，只扩大触摸热区（icon 14px 裸放小于任何触控标准） -->
+            <button
+                type="button"
+                class="-m-1.5 shrink-0 p-1.5 opacity-60 transition-opacity hover:opacity-100"
+                :aria-label="t('common.close')"
+                @click="dismiss(item.id)"
+            >
                 <AppIcon name="close" :size="14" />
             </button>
         </div>

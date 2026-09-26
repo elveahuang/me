@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { extractApiError } from '@commons/contract';
 import { IonContent, IonInput } from '@ionic/vue';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api, apiUrl, authClient, invalidateSessionCache } from '../api/auth';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
+
+/** 守卫在「会话探针失败而非确定未登录」时带来 network=1：提示网络问题，别让人误以为被登出 */
+const networkKick = computed(() => route.query.network === '1');
 
 const email = ref('');
 const password = ref('');
@@ -59,6 +63,7 @@ function loginWithWechat() {
     <PageShell>
         <ion-content>
             <div class="flex min-h-full flex-col justify-center p-5">
+                <p v-if="networkKick" class="app-alert app-alert-warning mb-4">{{ t('auth.networkKickHint') }}</p>
                 <div class="app-card overflow-hidden">
                     <div class="bg-brand-gradient px-6 py-6 text-center">
                         <div class="on-brand-tile mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-black">ME</div>

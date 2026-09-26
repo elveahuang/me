@@ -231,7 +231,7 @@ const currentRouteName = computed(() => {
                     </div>
                     <button
                         type="button"
-                        class="text-faint text-hover-danger ml-1 p-1 text-xs transition-colors"
+                        class="text-faint text-hover-danger ml-1 p-2 text-xs transition-colors"
                         :title="t('nav.logout')"
                         @click="handleLogout"
                     >
@@ -287,7 +287,7 @@ const currentRouteName = computed(() => {
                 <div ref="mobileMenuRef" class="app-drawer app-drawer-left lg:hidden" role="dialog" aria-modal="true" :aria-label="t('common.adminAppName')">
                     <div class="app-divider flex items-center justify-between px-4 py-3.5">
                         <span class="text-strong text-sm font-bold">{{ t('common.adminAppName') }}</span>
-                        <button type="button" class="text-faint text-hover-strong p-1" :aria-label="t('common.close')" @click="mobileMenuOpen = false">
+                        <button type="button" class="text-faint text-hover-strong p-2" :aria-label="t('common.close')" @click="mobileMenuOpen = false">
                             ✕
                         </button>
                     </div>

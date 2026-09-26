@@ -6,6 +6,7 @@ export {
     api,
     apiUrl,
     authClient,
+    checkSessionDecision,
     extractApiError,
     fetchSession,
     getToken,

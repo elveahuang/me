@@ -212,7 +212,7 @@ async function loadConversations(): Promise<boolean> {
         if (token === chatToken) conversations.value = list;
         return true;
     } catch {
-        if (token === chatToken) conversations.value = [];
+        // 失败时保留已加载的列表：清空会让头部计数失真为 0、弹层里已有的会话凭空消失
         return false;
     }
 }
@@ -436,6 +436,15 @@ function handleRegenerate() {
     const current = chat.value;
     if (sending.value || !current || current.status !== 'ready') return;
     void current.regenerate();
+}
+
+/**
+ * 输入框的 Enter 提交：中文输入法确认候选词时也会发 keyup.enter，
+ * 组词期间（isComposing / keyCode 229）直接忽略，否则刚上屏的内容会被当场发出去。
+ */
+function onInputEnter(event: KeyboardEvent) {
+    if (event.isComposing || event.keyCode === 229) return;
+    void handleSubmit();
 }
 
 async function handleSubmit(overrideText?: string) {
@@ -790,7 +799,8 @@ async function copyConversationMarkdown() {
                                 :placeholder="t('chat.inputPlaceholder')"
                                 :aria-label="t('chat.inputPlaceholder')"
                                 class="app-input w-full !pr-7"
-                                @keyup.enter="handleSubmit()"
+                                enterkeyhint="send"
+                                @keyup.enter="onInputEnter"
                             />
                             <button
                                 v-if="input"
@@ -884,7 +894,7 @@ async function copyConversationMarkdown() {
             :aria-label="t('attachments.preview')"
             @click.self="previewImage = ''"
         >
-            <img :src="previewImage" alt="preview" class="max-h-full max-w-full rounded-xl object-contain" />
+            <img :src="previewImage" :alt="t('attachments.preview')" class="max-h-full max-w-full rounded-xl object-contain" />
             <button type="button" class="app-btn app-btn-soft absolute top-4 right-4" :aria-label="t('common.close')" @click="previewImage = ''">✕</button>
         </div>
 

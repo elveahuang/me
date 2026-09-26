@@ -2,6 +2,7 @@
 import { formatDate, type BulletinListResponse, type BulletinRecord } from '@commons/contract';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { api, apiUrl } from '../api/auth';
 
 /**
@@ -45,6 +46,20 @@ onMounted(() => {
 
 const visible = computed(() => bulletins.value.filter((item) => !dismissed.value.includes(item.id)));
 
+const router = useRouter();
+
+/**
+ * 站内相对地址走应用内路由：原生壳里 target=_blank 的新窗口会解析到 capacitor://localhost（404）
+ * 或跳出 App 到系统浏览器；只有外部 http(s) 链接才开新窗口。
+ */
+function openLink(url: string) {
+    if (url.startsWith('/')) {
+        void router.push(url);
+        return;
+    }
+    window.open(apiUrl(url), '_blank', 'noopener');
+}
+
 function dismiss(id: string) {
     dismissed.value.push(id);
     try {
@@ -64,13 +79,15 @@ function dismiss(id: string) {
                 <p class="text-[11px] font-bold">{{ item.title }}</p>
                 <p v-if="item.content" class="text-muted-2 mt-0.5 line-clamp-2 text-[10px] leading-relaxed">{{ item.content }}</p>
                 <div class="mt-1.5 flex items-center gap-2">
-                    <a v-if="item.linkUrl" :href="apiUrl(item.linkUrl)" class="app-link text-[10px] underline" target="_blank" rel="noopener">
+                    <a v-if="item.linkUrl" :href="apiUrl(item.linkUrl)" class="app-link text-[10px] underline" @click.prevent="openLink(item.linkUrl)">
                         {{ item.linkText || t('common.viewDetail') }}
                     </a>
                     <span v-if="item.endsAt" class="text-faint text-[9px]">{{ t('common.endsAt', { date: formatDate(item.endsAt) }) }}</span>
                 </div>
             </div>
-            <button type="button" class="text-faint shrink-0 p-0.5 text-xs leading-none" :aria-label="t('common.close')" @click="dismiss(item.id)">✕</button>
+            <button type="button" class="text-faint -m-1 shrink-0 p-1.5 text-xs leading-none" :aria-label="t('common.close')" @click="dismiss(item.id)">
+                ✕
+            </button>
         </div>
     </div>
 </template>

@@ -931,7 +931,9 @@ select.app-input {
     flex-direction: column;
     width: 100%;
     max-width: 32rem;
+    /* dvh 跟随移动浏览器地址栏收展；不支持 dvh 的旧浏览器回退到 vh */
     max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
     overflow: hidden;
     background-color: var(--surface);
     border: 1px solid var(--line);
@@ -975,6 +977,7 @@ select.app-input {
     .app-modal {
         max-width: none;
         max-height: 88vh;
+        max-height: 88dvh;
         border-bottom: 0;
         border-radius: var(--radius-xl) var(--radius-xl) 0 0;
         animation-name: app-sheet-in;
@@ -1659,6 +1662,56 @@ select.app-input {
 
 .app-theme-dot[data-active='true'] {
     border-color: var(--content);
+}
+
+/* ============================================================
+   移动端适配。本文件未分层、优先级高于 utilities 层，且书写顺序在各原语
+   定义之后——这里的同特异性规则天然覆盖前面的声明，桌面样式不受影响。
+   ============================================================ */
+
+/* iOS Safari / 部分安卓内核：input 字号 < 16px 时聚焦会整页自动放大。
+   输入控件在移动端统一提到 1rem。重复一次 .app-input 是有意的：
+   (0,2,1) + important 才能压过组件里 `.app-input.\!text-xs` (0,2,0) 的 important 覆盖。
+   ion-input/ion-textarea 是 Ionic 的自定义元素宿主，上面的原生 input 选择器够不到它的
+   shadow DOM——但其内部 input 是 font-size: inherit，把宿主字号提到 1rem 即可传导进去。 */
+@media (max-width: 640px) {
+    input.app-input.app-input,
+    textarea.app-input.app-input,
+    select.app-input.app-input {
+        font-size: 1rem !important;
+    }
+
+    ion-input.app-input,
+    ion-textarea.app-input {
+        font-size: 1rem;
+    }
+
+    /* ion-searchbar 宿主上常挂着 text-xs 工具类，同样会传导进内部 input 触发 iOS 放大 */
+    ion-searchbar {
+        font-size: 1rem !important;
+    }
+
+    /* 表格行内小按钮加大触摸热区（≥44px 邻近），桌面密度不变 */
+    .app-btn-sm {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .app-btn-icon.app-btn-sm {
+        width: 2.25rem;
+        height: 2.25rem;
+    }
+}
+
+/* 触屏没有 hover：hover-reveal 的行内操作（会话改名/删除、消息复制、提示词编辑）
+   直接常显，否则纯触屏用户永远看不到这些入口。行内标题已用 pr-14 预留空间。 */
+@media (hover: none) {
+    .app-hover-reveal,
+    .group:hover .app-hover-reveal,
+    .group:focus-within .app-hover-reveal {
+        pointer-events: auto;
+        opacity: 1;
+    }
 }
 
 /* 减少动效偏好 */

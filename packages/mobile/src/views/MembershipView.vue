@@ -359,7 +359,7 @@ function planActionLabel(plan: Plan): string {
                             v-if="plan.code === 'pro'"
                             class="bg-brand-gradient absolute -top-2.5 right-4 rounded-full px-2.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase"
                         >
-                            HOT
+                            {{ t('billing.hotBadge') }}
                         </div>
                         <div class="flex items-start justify-between">
                             <div class="min-w-0 pr-2">
@@ -393,6 +393,12 @@ function planActionLabel(plan: Plan): string {
                         >
                             {{ planActionLabel(plan) }}
                         </button>
+                    </div>
+
+                    <!-- 套餐空态：服务端返回 0 个启用套餐时不再静默空白 -->
+                    <div v-if="!plans.length && !loading" class="app-empty">
+                        <div class="app-empty-icon">💳</div>
+                        <p class="app-empty-title">{{ t('billing.plansEmpty') }}</p>
                     </div>
                 </div>
 
@@ -467,7 +473,12 @@ function planActionLabel(plan: Plan): string {
                         <p class="mt-2 text-2xl font-black">¥{{ formatYuan(activeOrder?.amountCents) }}</p>
 
                         <div v-if="activeOrder?.mode === 'qrcode' && qrCodeDataUrl" class="mt-4 flex flex-col items-center">
-                            <img :src="qrCodeDataUrl" alt="WeChat Pay QR" class="h-48 w-48 rounded-2xl border p-2" style="border-color: var(--line)" />
+                            <img
+                                :src="qrCodeDataUrl"
+                                :alt="t('billing.wechatPay')"
+                                class="h-48 w-48 rounded-2xl border p-2"
+                                style="border-color: var(--line)"
+                            />
                             <p class="text-faint mt-2 text-xs">{{ t('billing.scanToPay') }}</p>
                         </div>
 

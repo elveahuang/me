@@ -297,7 +297,7 @@ async function remove(id: string) {
             @close="editing = null"
         >
             <div class="space-y-3">
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input :aria-label="t('adminForm.namePlaceholder')" v-model="form.name" :placeholder="t('adminForm.namePlaceholder')" class="app-input" />
                     <input
                         :aria-label="t('adminForm.agentEmojiPlaceholder')"
@@ -314,7 +314,7 @@ async function remove(id: string) {
                     rows="3"
                     class="app-input"
                 />
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                         <label class="app-label">{{ t('adminForm.provider') }}</label>
                         <select :aria-label="t('adminForm.provider')" v-model="form.providerId" class="app-input">
@@ -336,7 +336,7 @@ async function remove(id: string) {
                         </datalist>
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-3">
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <div>
                         <label class="app-label">{{ t('adminForm.agentTemperature') }}</label>
                         <input

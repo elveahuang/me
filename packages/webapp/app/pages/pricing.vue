@@ -133,8 +133,8 @@ function startPolling(orderNo: string) {
                 payError.value = t('billing.payFailed');
                 return;
             }
-        } catch (e) {
-            console.error('轮询订单状态失败:', e);
+        } catch {
+            // 单次查询失败（网络抖动等）不中断轮询，下一次 tick 会重试；超过上限由 attempt 计数收口
         }
         // 关键一步：await 之后必须重新确认轮次，否则这就是关闭后仍在续链的那一行
         if (!alive()) return;
@@ -330,7 +330,7 @@ function planActionLabel(plan: Plan): string {
                     v-if="p.code === 'pro'"
                     class="bg-brand-gradient absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-[10px] font-black tracking-wider uppercase shadow-xs"
                 >
-                    POPULAR
+                    {{ t('billing.hotBadge') }}
                 </div>
 
                 <div>

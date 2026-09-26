@@ -167,7 +167,7 @@ async function remove(id: string) {
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.providerNew')" @close="editing = null">
             <div class="space-y-3">
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input
                         :aria-label="t('adminForm.providerNamePlaceholder')"
                         v-model="form.name"
