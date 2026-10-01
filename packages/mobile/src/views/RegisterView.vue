@@ -1,0 +1,120 @@
+<script setup lang="ts">
+import { extractApiError } from '@commons/contract';
+import { IonContent, IonHeader, IonInput, IonTitle, IonToolbar } from '@ionic/vue';
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
+import { authClient, invalidateSessionCache } from '../api/auth';
+import { useTheme } from '../composables/useTheme';
+import PageShell from './PageShell.vue';
+
+const { t } = useI18n();
+const { toggleMode } = useTheme();
+const router = useRouter();
+
+const name = ref('');
+const email = ref('');
+const password = ref('');
+const error = ref('');
+const loading = ref(false);
+
+async function submit() {
+    error.value = '';
+    loading.value = true;
+    let err: unknown;
+    try {
+        ({ error: err } = await authClient.signUp.email({
+            name: name.value,
+            email: email.value,
+            password: password.value,
+        }));
+    } catch (e) {
+        // 抛出的网络异常若不复位，注册按钮会永久停在加载态
+        err = e;
+    } finally {
+        loading.value = false;
+    }
+    if (err) {
+        error.value = extractApiError(err, t('common.error'));
+        return;
+    }
+    // 注册即登录：作废 TTL 窗口内的「未登录」确定结论，避免守卫把刚注册的用户踢回登录页
+    invalidateSessionCache();
+    router.replace('/home');
+}
+</script>
+
+<template>
+    <PageShell>
+        <ion-header class="ion-no-border">
+            <ion-toolbar>
+                <ion-title class="!text-sm font-black">{{ t('nav.register') }}</ion-title>
+                <template v-slot:end>
+                    <button
+                        type="button"
+                        class="app-btn app-btn-ghost mr-1 !px-2.5"
+                        :title="t('chat.toggleTheme')"
+                        :aria-label="t('chat.toggleTheme')"
+                        @click="toggleMode"
+                    >
+                        🌓
+                    </button>
+                </template>
+            </ion-toolbar>
+        </ion-header>
+
+        <ion-content>
+            <div class="flex min-h-full flex-col justify-center p-5">
+                <div class="app-card overflow-hidden">
+                    <div class="bg-brand-gradient px-6 py-6 text-center">
+                        <div class="on-brand-tile mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-black">ME</div>
+                        <h1 class="mt-3 text-lg font-black">{{ t('nav.register') }}</h1>
+                        <p class="mt-1 text-[11px] opacity-85">{{ t('auth.registerHint') }}</p>
+                    </div>
+
+                    <form class="space-y-3.5 p-6" @submit.prevent="submit">
+                        <ion-input
+                            v-model="name"
+                            :label="t('auth.name')"
+                            label-placement="floating"
+                            type="text"
+                            required
+                            autocomplete="nickname"
+                            class="app-input"
+                        />
+                        <ion-input
+                            v-model="email"
+                            :label="t('auth.email')"
+                            label-placement="floating"
+                            type="email"
+                            required
+                            autocomplete="email"
+                            class="app-input"
+                        />
+                        <ion-input
+                            v-model="password"
+                            :label="t('auth.passwordMin')"
+                            label-placement="floating"
+                            type="password"
+                            required
+                            :minlength="8"
+                            autocomplete="new-password"
+                            class="app-input"
+                        />
+
+                        <p v-if="error" class="app-alert app-alert-danger">{{ error }}</p>
+
+                        <button type="submit" :disabled="loading" class="app-btn app-btn-primary w-full !py-3">
+                            {{ loading ? t('common.loading') : t('nav.register') }}
+                        </button>
+                    </form>
+                </div>
+
+                <p class="text-muted-2 mt-5 text-center text-xs">
+                    {{ t('auth.hasAccount') }}
+                    <router-link to="/login" class="app-link">{{ t('nav.login') }}</router-link>
+                </p>
+            </div>
+        </ion-content>
+    </PageShell>
+</template>

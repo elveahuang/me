@@ -1,0 +1,25 @@
+{
+    "extends": "@repo/config/typescript/vue.json",
+    "compilerOptions": {
+        "paths": {
+            "@commons/core/*": ["../commons/src/*"],
+            "@commons/mobile/*": ["../mobile/src/*"],
+            "@commons/webapp/*": ["../webapp/src/*"]
+        }
+    },
+    "include": [
+        "./src/**/*.js",
+        "./src/**/*.jsx",
+        "./src/**/*.ts",
+        "./src/**/*.tsx",
+        "./src/**/*.d.ts",
+        "./src/**/*.vue",
+        "../packages/*/src/**/*.js",
+        "../packages/*/src/**/*.jsx",
+        "../packages/*/src/**/*.ts",
+        "../packages/*/src/**/*.tsx",
+        "../packages/*/src/**/*.d.ts",
+        "../packages/*/src/**/*.vue"
+    ],
+    "exclude": ["node_modules"]
+}

@@ -1,0 +1,5 @@
+@import './ionic.css';
+@import 'tailwindcss';
+@import 'konsta/vue/theme.css';
+@import '@repo/commons/styles/theme.css';
+@import './base.css';

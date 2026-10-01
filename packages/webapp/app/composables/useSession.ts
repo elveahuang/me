@@ -1,0 +1,47 @@
+import type { SessionUser } from '~/utils/auth-client';
+import { resolveSession, ssrCookieHeaders } from '~/utils/auth-client';
+
+/**
+ * 全局会话状态。
+ *
+ * 之前头部导航、后台侧栏、各页面各自 `ref(null)` + `onMounted(fetchSession)`，
+ * 结果是每次挂载都打一次 /api/auth/get-session，且 SSR 首屏拿不到会话（导航栏先渲染成未登录态再闪成已登录）。
+ * 这里用 useState 缓存：SSR 阶段就取一次，客户端跨组件共享同一个结果。
+ */
+export function useSession() {
+    const session = useState<{ user: SessionUser } | null>('session', () => null);
+    const pending = useState<boolean>('session-pending', () => false);
+
+    /** 拉取并缓存会话；已加载过则直接复用 */
+    async function load(force = false) {
+        if (session.value && !force) return session.value;
+        if (pending.value) return session.value;
+        pending.value = true;
+        try {
+            const outcome = await resolveSession(ssrCookieHeaders());
+            // 探测失败（网络抖动/5xx）时保留上一次的会话，否则导航栏会在一次抖动后闪成未登录
+            if (outcome.status === 'error') return session.value;
+            session.value = outcome.status === 'signed-in' ? outcome.session : null;
+        } finally {
+            pending.value = false;
+        }
+        return session.value;
+    }
+
+    async function signOut() {
+        const { authClient } = await import('~/utils/auth-client');
+        // better-auth 客户端不抛异常、失败放在返回的 {error} 里：不检查就直接清会话的话，
+        // 服务端会话仍然有效，跳转 /login 后一次 load() 就把用户「复活」成已登录
+        const { error } = await authClient.signOut();
+        if (error) throw error;
+        session.value = null;
+    }
+
+    return {
+        session,
+        pending,
+        load,
+        signOut,
+        isAdmin: computed(() => session.value?.user?.role === 'admin'),
+    };
+}

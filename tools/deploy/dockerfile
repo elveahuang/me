@@ -1,0 +1,47 @@
+# ====================================================================================================
+# Builder
+# ====================================================================================================
+FROM node:24-bookworm AS builder
+
+WORKDIR /app
+
+# Prepare corepack（版本与根 package.json 的 packageManager、CI 的 pnpm/action-setup 保持一致；
+# 此处早于 COPY package.json，corepack 读不到 packageManager 字段，必须显式钉版本）
+RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
+
+# Prepare project
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/commons ./packages/commons
+COPY packages/config ./packages/config
+COPY packages/webapp ./packages/webapp
+COPY scripts ./scripts
+
+# Install
+RUN pnpm install --frozen-lockfile
+
+# Compile
+RUN pnpm --filter @repo/webapp run build
+
+# ====================================================================================================
+# Runner
+# ====================================================================================================
+FROM node:24-bookworm AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+# 创建专属用户
+RUN addgroup --system --gid 1001 me && \
+    adduser --system --uid 1001 me
+USER me
+
+# 仅从 builder 阶段中提取 webapp 生成的独立 .output 运行包
+COPY --from=builder --chown=me:me /app/packages/webapp/.output ./
+
+EXPOSE 3000
+
+# 运行 Nitro 独立服务
+CMD ["node", "server/index.mjs"]

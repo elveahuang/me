@@ -1,0 +1,53 @@
+/* 移动端采用 class 策略的深色模式（由 useTheme 切换 <html class="dark">） */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+ * Ionic 组件跟随同一套令牌
+ * ============================================================ */
+
+ion-content {
+    --background: var(--surface-2);
+    --color: var(--content);
+}
+
+ion-toolbar {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+}
+
+ion-tab-bar {
+    --background: var(--surface);
+    --color: var(--content-muted);
+    --color-selected: var(--brand);
+    --border: 1px solid var(--line);
+}
+
+ion-item,
+ion-input,
+ion-textarea,
+ion-select {
+    --background: var(--surface);
+    --color: var(--content);
+    --border-color: var(--line);
+    --placeholder-color: var(--content-dim);
+    --highlight-color-focused: var(--brand);
+}
+
+ion-searchbar {
+    --background: var(--surface-3);
+    --color: var(--content);
+    --placeholder-color: var(--content-dim);
+    --icon-color: var(--content-muted);
+    --clear-button-color: var(--content-muted);
+    --border-radius: 0.9rem;
+}
+
+ion-modal {
+    --background: var(--surface);
+    --color: var(--content);
+}
+
+ion-spinner {
+    color: var(--brand);
+}
