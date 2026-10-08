@@ -1,0 +1,19 @@
+minimumReleaseAge: 0
+
+packages:
+    - packages/*
+
+allowBuilds:
+    '@capacitor/background-runner': true
+    '@parcel/watcher': true
+    '@prisma/client': true
+    '@swc/core': true
+    '@tarojs/binding': true
+    '@tarojs/cli': true
+    better-sqlite3: true
+    core-js: true
+    core-js-pure: true
+    es5-ext: true
+    esbuild: true
+    sharp: true
+    vue-demi: true

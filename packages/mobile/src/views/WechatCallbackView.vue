@@ -1,0 +1,78 @@
+<script setup lang="ts">
+import { extractApiError } from '@commons/contract';
+import { IonContent, IonPage, IonSpinner } from '@ionic/vue';
+import { onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
+import { refreshSession, setToken } from '../api/auth';
+
+const { t } = useI18n();
+const router = useRouter();
+const errorMessage = ref('');
+const syncing = ref(false);
+const token = ref<string | null>(null);
+
+/** 从回跳地址的 hash/query 中取出服务端下发的 session token。
+ *  服务端固定回跳 `#token=<sessionToken>`，用 URLSearchParams 精确取键，
+ *  不再用裸 `/token=/` 正则误配 `access_token=` 之类的前缀键。 */
+function readToken(): string | null {
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    return new URLSearchParams(hash).get('token') ?? new URLSearchParams(window.location.search).get('token');
+}
+
+/**
+ * 微信授权回跳页。
+ * 服务端回跳地址形如 `<mobile>/wechat-callback#token=<sessionToken>`，
+ * 这里把 token 存进本地（原生壳用 bearer 认证），随后校验会话并进入首页。
+ * get-session 可能因瞬时网络抖动失败，故保留 token 并允许重试，而不是直接判定登录失败。
+ */
+async function sync() {
+    errorMessage.value = '';
+    syncing.value = true;
+    try {
+        if (token.value) {
+            setToken(token.value);
+            // 清掉地址栏里的 token，避免留在历史记录中
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+        // 严格探针：本次必须拿到服务端的明确答复才算登录成功。
+        // 走 fetchSession 的缓存降级会在抖动时拿「上一账号的缓存」判成功并跳转，把坏 token 带进已登录界面。
+        const session = await refreshSession();
+        if (session?.user) {
+            router.replace('/home');
+        } else {
+            errorMessage.value = t('auth.wechatSyncFailed');
+        }
+    } catch (e) {
+        errorMessage.value = extractApiError(e, t('auth.wechatFailed'));
+    } finally {
+        syncing.value = false;
+    }
+}
+
+onMounted(() => {
+    token.value = readToken();
+    void sync();
+});
+</script>
+
+<template>
+    <ion-page>
+        <ion-content>
+            <div class="flex h-full flex-col items-center justify-center p-8 text-center">
+                <template v-if="syncing">
+                    <ion-spinner name="crescent" class="mb-4" />
+                    <p class="text-soft text-sm font-medium">{{ t('auth.wechatSyncing') }}</p>
+                </template>
+                <template v-else-if="errorMessage">
+                    <div class="app-alert app-alert-danger max-w-xs">
+                        <span class="text-3xl">⚠️</span>
+                        <p class="mt-3 text-sm font-semibold">{{ errorMessage }}</p>
+                        <button type="button" class="app-btn app-btn-primary mt-4 w-full" @click="sync">{{ t('common.retry') }}</button>
+                        <router-link to="/login" class="app-btn app-btn-outline mt-2 w-full">{{ t('auth.backToLogin') }}</router-link>
+                    </div>
+                </template>
+            </div>
+        </ion-content>
+    </ion-page>
+</template>
