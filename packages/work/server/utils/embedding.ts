@@ -1,4 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
+import { createError } from 'h3';
 import type { KnowledgeBase, Provider } from '../db/schema';
 import { kbChunks, knowledgeBases, providers } from '../db/schema';
 import { db } from './db';

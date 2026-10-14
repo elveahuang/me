@@ -14,7 +14,7 @@ for (const p of ['.env', '.env.local', '../../.env', '../../.env.local']) {
 }
 
 async function runSmokeTests() {
-    console.log('🚀 开始执行全链路系统冒烟测试…\n');
+    console.log('🚀 开始执行 work 本机工作台冒烟测试…\n');
     let passed = 0;
     let failed = 0;
 
@@ -28,18 +28,37 @@ async function runSmokeTests() {
         }
     }
 
-    // 1. 测试 Bigram 相似度与 RAG 兜底算法
+    /** 归一函数越界时应抛出 400（而不是静默改值或回 500） */
+    const threw400 = (fn: () => unknown): boolean => {
+        try {
+            fn();
+            return false;
+        } catch (e: any) {
+            return e?.statusCode === 400;
+        }
+    };
+
+    // 1. RAG 兜底算法：向量缺失时靠 Bigram 重叠打分
     console.log('1. 测试 Bigram 关键词检索算法');
-    const { bigrams, bigramScore } = await import('../server/utils/embedding');
+    const { bigrams, bigramScore, chunkText } = await import('../server/utils/embedding');
     const bg1 = bigrams('你好世界');
     assert(bg1.has('你好') && bg1.has('好世') && bg1.has('世界'), '正确提取中文 Bigram 集合');
 
-    const scoreHigh = bigramScore('平台使用指南', '这是ME智能体平台使用指南，包含计费与对话');
-    const scoreLow = bigramScore('今天天气怎么样', '这是ME智能体平台使用指南，包含计费与对话');
-    assert(scoreHigh > scoreLow && scoreHigh > 0.5, '关键词重叠率精准打分');
+    const doc = '项目周报模板：本周里程碑、风险与下周计划';
+    assert(bigramScore('周报里程碑', doc) > bigramScore('今天天气怎么样', doc) && bigramScore('周报里程碑', doc) > 0.5, '关键词重叠率精准打分');
 
-    // 2. 测试滑窗限流算法（内存降级与计数逻辑）
-    console.log('\n2. 测试滑动窗口限流器');
+    // 2. 知识库分块：长度与重叠量决定检索粒度
+    console.log('\n2. 测试 RAG 知识库切块算法');
+    const longText = '段落一：任务与日程。\n\n段落二：笔记与检索。\n\n段落三：每日简报。';
+    const chunks = chunkText(longText, 30, 5);
+    assert(chunks.length >= 2, '按长度与重叠量正确拆分为多个切块');
+    assert(
+        chunks.every((c) => c.length > 0),
+        '切块内容非空且保持文本完整',
+    );
+
+    // 3. 限流器（无 Redis 时降级为进程内存）
+    console.log('\n3. 测试滑动窗口限流器');
     const { rateLimit } = await import('../server/utils/rate-limit');
     const testId = `smoke_test_${Date.now()}`;
     const r1 = await rateLimit(testId, 3, 60_000);
@@ -49,35 +68,27 @@ async function runSmokeTests() {
     const r4 = await rateLimit(testId, 3, 60_000);
     assert(!r4.ok && r4.retryAfterSec > 0, '达到 3 次限额后精准拦截');
 
-    // 3. 测试系统提示词注入器
-    console.log('\n3. 测试 System Prompt 变量替换');
+    // 4. 系统提示词装配
+    console.log('\n4. 测试 System Prompt 变量替换');
     const { buildSystemPrompt } = await import('../server/utils/system-prompt');
     const mockAgent: any = {
-        name: '测试智能体',
-        systemPrompt: '你好 {{user_name}}，今天是 {{current_date}}。',
+        name: '工作助手',
+        systemPrompt: '你好 {{user_name}}，今天是 {{current_date}}。未知变量 {{not_a_var}} 保持原样。',
     };
-    const rendered = buildSystemPrompt(mockAgent, [], '知识库参考资料片段', '工具摘要说明', { name: '测试用户', role: 'admin' });
-    assert(rendered.includes('测试用户') && rendered.includes('知识库参考资料片段'), '系统提示词变量注入与 RAG 挂载成功');
-
-    // 4. 测试支付提供商注册表
-    console.log('\n4. 测试支付渠道注册表');
-    const { getPaymentProvider, listPaymentProviders } = await import('../server/utils/payments');
-    const mockProvider = getPaymentProvider('mock');
-    assert(mockProvider.code === 'mock', 'MockPayProvider 成功加载');
-    const providersList = listPaymentProviders();
+    const rendered = buildSystemPrompt(mockAgent, [], '笔记检索到的片段', '工具摘要说明', { name: '本机用户' });
     assert(
-        providersList.some((p) => p.code === 'mock'),
-        '可用支付渠道列表正确导出',
+        rendered.includes('本机用户') && rendered.includes('笔记检索到的片段') && rendered.includes('{{not_a_var}}') && !rendered.includes('{{current_date}}'),
+        '变量注入、RAG 片段挂载成功，未知占位符不被吞掉',
     );
 
-    // 5. 测试 Markdown 序列化工具
+    // 5. 会话导出（共享契约，两端同一份序列化）
     console.log('\n5. 测试会话 Markdown 导出序列化');
-    // markdown-export 已迁至 commons，与下方契约测试同理用相对路径导入
+    // markdown-export 在 commons 里，与下方契约测试同理用相对路径导入（@commons 别名只在 Nuxt 构建期生效）
     const { formatConversationMarkdown } = await import('../../commons/src/markdown-export');
     const sampleMd = formatConversationMarkdown({
         title: '测试对话',
-        agentName: '架构助手',
-        model: 'deepseek-r1',
+        agentName: '工作助手',
+        model: 'deepseek-chat',
         labels: {
             doc: '对话记录',
             untitled: '未命名对话',
@@ -93,166 +104,191 @@ async function runSmokeTests() {
             toolCall: '工具调用',
         },
         messages: [
-            { role: 'user', parts: [{ type: 'text', text: '请介绍一下项目的架构' }] },
+            { role: 'user', parts: [{ type: 'text', text: '把这周的任务整理一下' }] },
             {
                 role: 'assistant',
                 parts: [
-                    { type: 'reasoning', reasoning: '首先分析 Nuxt 4 服务端与 Ionic 移动端' },
-                    { type: 'text', text: '该项目采用现代化全栈架构。' },
-                    { type: 'tool-weather', toolName: 'weather', output: { city: '深圳', temp: 26 } },
+                    { type: 'reasoning', reasoning: '先按项目分组，再列到期任务' },
+                    { type: 'text', text: '本周有 3 项到期。' },
+                    { type: 'tool-time', toolName: 'builtin_time', output: { now: '2026-10-15 09:00' } },
                 ],
             },
         ],
     });
     assert(sampleMd.includes('# 对话记录: 测试对话'), '包含标题标头');
-    assert(sampleMd.includes('### 👤 用户') && sampleMd.includes('### 🤖 架构助手'), '包含双方身份标头');
-    assert(sampleMd.includes('> 💭 **深度思考过程**:') && sampleMd.includes('首先分析 Nuxt 4'), '包含深度思考折叠引用');
-    assert(sampleMd.includes('> 🛠️ **工具调用** (`weather`):'), '包含工具调用结构化输出');
+    assert(sampleMd.includes('### 👤 用户') && sampleMd.includes('### 🤖 工作助手'), '包含双方身份标头');
+    assert(sampleMd.includes('> 💭 **深度思考过程**:') && sampleMd.includes('先按项目分组'), '包含深度思考折叠引用');
+    assert(sampleMd.includes('> 🛠️ **工具调用** (`builtin_time`):'), '包含工具调用结构化输出');
 
-    // 6. 测试会员额度与余量边界计算
-    console.log('\n6. 测试会员配额边界计算');
-    function calculateRemaining(quota: number | null, used: number): number | null {
-        if (quota === null) return null;
-        return Math.max(0, quota - used);
-    }
-    assert(calculateRemaining(null, 50) === null, '无限次套餐余量为 null (无限制)');
-    assert(calculateRemaining(20, 5) === 15, '未耗尽时准确计算剩余额度');
-    assert(calculateRemaining(20, 25) === 0, '超出配额时不出现负数，截断为 0');
-
-    // 6.1 测试套餐折扣与续费判定（契约函数，双端共用）
-    // 用相对路径导入：本脚本由 tsx 直接执行，@commons 别名只在 Nuxt 构建期生效
-    console.log('\n6.1 测试套餐折扣与续费判定');
-    const { bestYearlyDiscountPercent, isActivePaidPlan, yearlyDiscountPercent } = await import('../../commons/src/contract/index');
-    const monthlyPlan = {
-        id: 'p1',
-        code: 'pro',
-        name: 'Pro',
-        description: '',
-        chatQuotaPerDay: 200,
-        monthlyPriceCents: 2900,
-        yearlyPriceCents: null,
-        enabled: true,
-        sortOrder: 1,
-    };
-    const yearlyPlan = { ...monthlyPlan, yearlyPriceCents: 27840 };
-    const noDiscountPlan = { ...monthlyPlan, yearlyPriceCents: 34800 };
-    assert(yearlyDiscountPercent(monthlyPlan) === null, '无年付价格时不显示折扣角标');
-    assert(yearlyDiscountPercent(yearlyPlan) === 20, '年付折扣由真实价格算出（27840/34800 = -20%）');
-    assert(yearlyDiscountPercent(noDiscountPlan) === null, '年付不低于月付 ×12 时不显示折扣');
-    assert(bestYearlyDiscountPercent([monthlyPlan, yearlyPlan, noDiscountPlan]) === 20, '取套餐中最高的年付折扣');
-    assert(bestYearlyDiscountPercent([monthlyPlan, noDiscountPlan]) === null, '全部无折扣时返回 null');
-    assert(
-        isActivePaidPlan(yearlyPlan, { plan: { ...yearlyPlan, code: 'pro' }, expiresAt: '2027-01-01T00:00:00.000Z' }) === true,
-        '到期前的当前付费套餐可续费',
-    );
-    assert(isActivePaidPlan(yearlyPlan, { plan: yearlyPlan, expiresAt: null }) === false, '免费档不可续费（仅展示态）');
-    assert(isActivePaidPlan(yearlyPlan, { plan: { ...yearlyPlan, code: 'max' }, expiresAt: '2027-01-01T00:00:00.000Z' }) === false, '非当前套餐不是续费语义');
-
-    // 7. 测试文档切块分片算法
-    console.log('\n7. 测试 RAG 知识库切块算法');
-    const { chunkText } = await import('../server/utils/embedding');
-    const longText = '段落一：企业级多智能体协同平台。\n\n段落二：基于 Nuxt 4 与 Ionic 架构。\n\n段落三：离线高可用检索支持。';
-    const chunks = chunkText(longText, 30, 5);
-    assert(chunks.length >= 2, '按长度与重叠量正确拆分为多个切块');
-    assert(
-        chunks.every((c) => c.length > 0),
-        '切块内容非空且保持文本完整',
-    );
-
-    // 8. 测试数据库连接与核心表结构
-    console.log('\n8. 测试数据库连通性与核心数据表');
-    try {
-        const { sql } = await import('drizzle-orm');
-        const { db } = await import('../server/utils/db');
-        const { membershipPlans, agents, user } = await import('../server/db/schema');
-        await db.execute(sql`SELECT 1`);
-        assert(true, 'PostgreSQL 数据库连通正常');
-
-        const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(user);
-        const [agentCount] = await db.select({ count: sql<number>`count(*)` }).from(agents);
-        const [planCount] = await db.select({ count: sql<number>`count(*)` }).from(membershipPlans);
-        assert(Number(userCount?.count ?? 0) >= 0, 'User 表可正常查询');
-        assert(Number(agentCount?.count ?? 0) >= 0, 'Agents 表可正常查询');
-        assert(Number(planCount?.count ?? 0) >= 0, 'MembershipPlans 表可正常查询');
-    } catch (e: any) {
-        console.warn('  ⚠️ 数据库未运行或无法连接，跳过真实 DB 查询:', e?.message);
-    }
-
-    // 9. 测试入参与内容归一化纯函数（LIKE 转义、参数夹逼、链接/时间/排序/标签归一）
-    console.log('\n9. 测试入参与内容归一化纯函数');
+    // 6. 查询入参归一（分页与关键词）
+    console.log('\n6. 测试查询入参归一');
     const { likePattern, intParam } = await import('../server/utils/query');
-    const { normalizeLink, normalizeSortOrder, parseDateInput, normalizeContentTags } = await import('../server/utils/content-ops');
-
-    assert(likePattern('100%') === '%100\\%%', 'LIKE 模式转义 % 通配符');
-    assert(likePattern('a_b') === '%a\\_b%', 'LIKE 模式转义 _ 通配符');
+    assert(likePattern('100%') === '%100\\%%' && likePattern('a_b') === '%a\\_b%', 'LIKE 模式转义 % 与 _ 通配符');
     assert(likePattern('  hi  ') === '%hi%' && likePattern('x'.repeat(500)).length === 130, '关键词先 trim 再夹到 128 字符');
     assert(
         intParam('1.7', 10, 1, 100) === 1 && intParam('-3', 10, 1, 100) === 1 && intParam('1e9', 10, 1, 100) === 100 && intParam('abc', 10, 1, 100) === 10,
-        '分页参数取整、夹逼、非法值回退',
+        '分页参数取整、夹逼、非法值回退（小数会被 PG 拒成 22P02 → 500 + SQL 细节外泄）',
     );
 
-    const threw400 = (fn: () => unknown): boolean => {
-        try {
-            fn();
-            return false;
-        } catch (e: any) {
-            return e?.statusCode === 400;
-        }
-    };
+    // 7. 设置页写入归一（布尔、模型列表、工具配置与类型）
+    console.log('\n7. 测试设置页入参归一');
+    const { normalizeAdminBoolean } = await import('../server/utils/admin-boolean');
+    const { normalizeProviderModels } = await import('../server/utils/admin-provider-input');
+    const { normalizeToolConfig, normalizeToolType } = await import('../server/utils/admin-tool-input');
+    assert(normalizeAdminBoolean(undefined, 'enabled', true) === true && normalizeAdminBoolean(false, 'enabled', true) === false, '缺省回退、真布尔照写');
     assert(
-        normalizeLink('/news/1') === '/news/1' && normalizeLink('https://a.com/x') === 'https://a.com/x' && normalizeLink('') === '',
-        '链接归一放行站内路径与 http(s) 绝对地址',
+        threw400(() => normalizeAdminBoolean('false', 'enabled', true)),
+        '字符串 "false" 拒绝而不是被 Boolean() 变成 true',
     );
-    assert(threw400(() => normalizeLink('//evil.com')) && threw400(() => normalizeLink('javascript:alert(1)')), '链接归一拒绝协议相对与 javascript: 协议');
+    assert(normalizeProviderModels([' a ', 'a', '', 'b'], 'skip').join(',') === 'a,b', 'skip 模式只丢坏项并去重');
     assert(
-        normalizeSortOrder(3.7) === 4 && normalizeSortOrder('abc', 7) === 7 && normalizeSortOrder(1e18) === 1_000_000_000,
-        '排序值取整、非法回退、超界夹到安全区间',
+        threw400(() => normalizeProviderModels([{ id: 'x' }], 'reject')),
+        'reject 模式拒绝非字符串模型 id（它会一路进提示词）',
     );
     assert(
-        parseDateInput('') === null && parseDateInput('2026-01-02') instanceof Date && threw400(() => parseDateInput('not-a-date')),
-        '时间入参空值放行、非法值 400',
+        threw400(() => normalizeToolConfig({ parameters: {} })),
+        'config.parameters 非数组直接 400（执行期 for...of 会炸每个会话）',
     );
-    assert(normalizeContentTags([' a ', '', 123]).join(',') === 'a,123', '标签归一去空并字符串化');
+    assert(
+        threw400(() => normalizeToolConfig({ headers: 'x' })),
+        'config.headers 非对象直接 400',
+    );
+    assert(threw400(() => normalizeToolType('builtin_time ')) && threw400(() => normalizeToolType('rest')), '工具类型未知值不静默回退');
 
-    // 10. 测试共享契约的展示层不变量（时区固定、金额、徽章/状态映射、日期边界）
-    console.log('\n10. 测试共享契约展示层不变量');
-    const { badgeTone, dateInputToBoundary, formatDateTime, formatDate, formatTime, formatYuan, isoToDateInput, orderStatusLabelKey, orderStatusTone } =
-        await import('../../commons/src/contract/index');
+    // 8. 出站安全边界（HTTP 工具与供应商 baseUrl）
+    console.log('\n8. 测试出站地址校验边界');
+    const { assertAbsoluteHttpUrl, fillAndPinOrigin, isPrivateAddress } = await import('../server/utils/outbound');
+    assert(
+        isPrivateAddress('127.0.0.1') &&
+            isPrivateAddress('0.0.0.0') &&
+            isPrivateAddress('169.254.169.254') &&
+            isPrivateAddress('100.64.0.1') &&
+            isPrivateAddress('::1') &&
+            isPrivateAddress('::ffff:10.0.0.1'),
+        '回环 / 全零 / 云元数据 / CGNAT / IPv6 环回 / IPv4 映射地址都判为私网',
+    );
+    assert(!isPrivateAddress('8.8.8.8') && !isPrivateAddress('not-an-ip'), '公网地址与非法值不误判为私网');
+    assert(assertAbsoluteHttpUrl('baseUrl', 'https://api.example.com/v1/') === 'https://api.example.com/v1', '绝对地址去尾斜杠');
+    assert(
+        threw400(() => assertAbsoluteHttpUrl('baseUrl', '/v1/chat')) && threw400(() => assertAbsoluteHttpUrl('baseUrl', 'javascript:alert(1)')),
+        '相对路径与非 http(s) 协议拒绝',
+    );
+    assert(fillAndPinOrigin('https://internal.test/api/{{id}}', { id: '7' }).endsWith('/api/7'), '参数落在路径段正常填充');
+    assert(
+        threw400(() => fillAndPinOrigin('https://{{host}}/api', { host: 'evil.com' })),
+        '参数改写主机时拒绝（origin 已锁定，SSRF 预检才不会被打空）',
+    );
+
+    // 9. 存储与附件归一（endpoint / objectKey / 文件名 / MIME / 体积 / 密钥脱敏）
+    console.log('\n9. 测试存储与附件归一');
+    const {
+        buildObjectKey,
+        isMimeAllowed,
+        normalizeAttachmentCategory,
+        normalizeMimeType,
+        normalizeStorageEndpoint,
+        relayLimitBytes,
+        relayReadLimitBytes,
+        sanitizeFilename,
+        sanitizeStorageConfig,
+    } = await import('../server/utils/storage');
+    assert(normalizeStorageEndpoint('http://127.0.0.1:9000/') === 'http://127.0.0.1:9000', 'endpoint 去尾斜杠');
+    assert(threw400(() => normalizeStorageEndpoint('')) && threw400(() => normalizeStorageEndpoint('ftp://h/p')), 'endpoint 必填且只允许 http(s)');
+    const key = buildObjectKey({ prefix: '/uploads/' }, '../../etc/passwd', 'Image');
+    assert(key.startsWith('uploads/image/') && !key.includes('..'), '对象键归一 prefix、类别小写，文件名不带走路径穿越');
+    assert(sanitizeFilename('a/b\\c.pdf') === 'c.pdf' && sanitizeFilename('中文 报告.docx') === '中文 报告.docx', '文件名只取末段且保留中文名');
+    assert(
+        normalizeMimeType('x'.repeat(500)).length === 128 && normalizeMimeType('bad\u0000mime') === 'application/octet-stream',
+        'MIME 截到 128 并拒绝控制字符',
+    );
+    assert(normalizeAttachmentCategory('  !!  ') === 'other', '空类别回退 other');
+    assert(
+        isMimeAllowed({ allowedMimeTypes: [] }, 'any/thing') &&
+            isMimeAllowed({ allowedMimeTypes: ['image/'] }, 'image/png') &&
+            !isMimeAllowed({ allowedMimeTypes: ['image/png'] }, 'image/jpeg'),
+        'MIME 白名单：空列表放行、前缀与全等两种匹配',
+    );
+    assert(
+        relayReadLimitBytes(1024) === relayLimitBytes(1024) + 64 * 1024 && relayLimitBytes(1024) === 64 * 1024 * 1024,
+        '中转读取上限 = 配置与硬上限取小 + 协议开销余量',
+    );
+    const sanitized = sanitizeStorageConfig({
+        id: 's1',
+        name: 'minio',
+        accessKeyId: 'AKIA1234567890',
+        secretAccessKey: 'top-secret',
+    } as any);
+    assert(
+        sanitized.accessKeyIdPreview === 'AKIA****' && sanitized.hasCredentials === true && !('secretAccessKey' in sanitized) && !('accessKeyId' in sanitized),
+        '存储配置脱敏：只回前缀与是否有密钥，响应里没有密钥原文',
+    );
+
+    // 10. 本机来源闸门（work 唯一的跨站写防护）
+    console.log('\n10. 测试本机来源闸门');
+    const { blocksWrite, isLocalOrigin } = await import('../server/utils/local-origin');
+    assert(isLocalOrigin(undefined) && isLocalOrigin('http://127.0.0.1:3001') && isLocalOrigin('http://localhost:5173'), '无 Origin 与回环来源放行');
+    assert(
+        !isLocalOrigin('https://evil.example') && !isLocalOrigin('127.0.0.1') && !isLocalOrigin('http://127.0.0.1.evil.example'),
+        '外站、裸串与仿冒主机名判为外部',
+    );
+    assert(
+        blocksWrite('POST', 'https://evil.example') && blocksWrite('DELETE', 'https://evil.example') && !blocksWrite('GET', 'https://evil.example'),
+        '写方法拦、读方法不拦',
+    );
+    assert(!blocksWrite('POST', 'http://localhost:3001') && !blocksWrite('PATCH', undefined), '本机来源与非浏览器客户端放行');
+
+    // 11. 单主数据不变量：work 的表刻意没有归属列，也不该长出商业表
+    console.log('\n11. 测试单主 schema 数据不变量');
+    const { getTableConfig } = await import('drizzle-orm/pg-core');
+    const schema = await import('../server/db/schema');
+    const columnsOf = (t: any) => getTableConfig(t).columns.map((c) => c.name);
+    const primaryOf = (t: any) =>
+        getTableConfig(t)
+            .columns.filter((c: any) => c.primary)
+            .map((c) => c.name);
+    assert(!columnsOf(schema.attachments).includes('user_id') && !columnsOf(schema.conversations).includes('user_id'), '附件与会话表没有 user_id 归属列');
+    assert(columnsOf(schema.messages).includes('seq'), '消息表保留全局 seq（上下文按它排序）');
+    assert(primaryOf(schema.briefs).join(',') === 'brief_date', '简报以日期为主键（定时任务重复触发靠 upsert 幂等）');
+    assert(
+        ['orders', 'membershipPlans', 'user', 'users'].every((k) => !(k in schema)),
+        'schema 里没有订单/会员/账号表（fork 时刻意不带）',
+    );
+
+    // 12. 共享契约展示层：时区固定与徽章回退
+    console.log('\n12. 测试共享契约展示层不变量');
+    const { badgeTone, formatDate, formatDateTime, formatTime } = await import('../../commons/src/contract/index');
     const boundaryInstant = '2026-09-24T00:30:00+08:00';
     assert(
         formatTime(boundaryInstant) === '00:30' && formatDate(boundaryInstant).endsWith('24'),
-        '展示时区固定 Asia/Shanghai（主机时区为 UTC 时该时刻应显示 16:30/23 日）',
+        '展示时区固定 Asia/Shanghai（主机为 UTC 时裸 toLocaleXxx 会显示 16:30/23 日）',
     );
     assert(formatDateTime('garbage') === '-' && formatDateTime(null) === '-', '无效时间值回退 - 而不是 Invalid Date');
-    assert(formatYuan(1234) === '12.34' && formatYuan(null) === '0.00', '分转元保留两位、空值视为 0.00');
     assert(
         badgeTone('danger') === 'app-badge-danger' && badgeTone(null) === 'app-badge-neutral' && badgeTone('不存在的tone') === 'app-badge-neutral',
         '徽章 tone 映射且未知值回退 neutral',
     );
-    assert(
-        orderStatusTone('paid').startsWith('app-badge-') &&
-            orderStatusTone('不存在') === 'app-badge-neutral' &&
-            orderStatusLabelKey('不存在') === 'billing.statusClosed',
-        '订单状态徽章与文案键映射、未知状态回退',
-    );
-    const endBoundary = dateInputToBoundary('2026-09-24', 'end');
-    const startBoundary = dateInputToBoundary('2026-09-24', 'start');
-    assert(
-        endBoundary !== null &&
-            endBoundary.getHours() === 23 &&
-            endBoundary.getMinutes() === 59 &&
-            endBoundary.getSeconds() === 59 &&
-            endBoundary.getMilliseconds() === 999,
-        '活动结束边界取当天 23:59:59.999 而不是当天零点',
-    );
-    assert(
-        startBoundary !== null && startBoundary.getHours() === 0 && startBoundary.getMilliseconds() === 0 && dateInputToBoundary('', 'end') === null,
-        '起始边界为当天零点、空值不设边界',
-    );
-    assert(
-        isoToDateInput('bad') === '' && isoToDateInput(null) === '' && /^\d{4}-\d{2}-\d{2}$/.test(isoToDateInput('2026-09-24T15:00:00.000Z')),
-        'ISO 转日期输入：无效回退空串、有效输出 YYYY-MM-DD',
-    );
+
+    // 13. 数据库连通性与核心表（可选：本机未起数据库时跳过）
+    console.log('\n13. 测试数据库连通性与核心数据表');
+    try {
+        const { sql } = await import('drizzle-orm');
+        const { db } = await import('../server/utils/db');
+        await db.execute(sql`SELECT 1`);
+        assert(true, 'PostgreSQL 数据库连通正常');
+        for (const [name, table] of [
+            ['projects', schema.projects],
+            ['tasks', schema.tasks],
+            ['notes', schema.notes],
+            ['events', schema.events],
+            ['briefs', schema.briefs],
+            ['agents', schema.agents],
+        ] as const) {
+            const [row] = await db.select({ count: sql<number>`count(*)` }).from(table);
+            assert(Number(row?.count ?? 0) >= 0, `${name} 表可正常查询`);
+        }
+    } catch (e: any) {
+        console.warn('  ⚠️ 数据库未运行或无法连接，跳过真实 DB 查询:', e?.message);
+    }
 
     console.log(`\n========================================`);
     console.log(`🏁 冒烟测试完成: 通过 ${passed} 项，失败 ${failed} 项`);

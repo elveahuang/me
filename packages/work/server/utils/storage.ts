@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { desc, eq, sql } from 'drizzle-orm';
+import { createError } from 'h3';
 import { attachments, storageConfigs, type StorageConfig } from '../db/schema';
 import { db } from './db';
 import { LOCAL_OWNER } from './owner';
