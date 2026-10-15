@@ -3,10 +3,10 @@ import { extractApiError, type ConversationSummary } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 /**
- * 会话历史侧栏：首页（全部会话）与智能体对话页（该智能体的会话）共用。
+ * 会话历史区：布局左栏（桌面）与抽屉（窄屏）的「中间」区块。
  *
- * 组件是展示型 + 自身的重命名/删除动作，列表数据由父级持有（首页走 useFetch 享受 SSR，
- * 对话页按 agentId 客户端拉取）。删除与重命名成功后 emit('changed')，由父级决定怎么刷新。
+ * 组件是展示型 + 自身的重命名/删除动作，列表数据由 `useChatSidebar` 共享状态提供
+ * （布局拉取、页面消费），删除与重命名成功后 emit('changed')，由布局统一刷新。
  */
 const props = withDefaults(
     defineProps<{
@@ -16,36 +16,22 @@ const props = withDefaults(
         loading?: boolean;
         /** 列表拉取失败的原因：与「没有会话」区分，避免用户把接口故障读成没数据 */
         error?: string;
-        /** 列表项副信息是否显示所属智能体（首页列表跨智能体，需要） */
+        /** 列表项副信息是否显示所属智能体（跨智能体的列表需要） */
         showAgentName?: boolean;
-        /**
-         * 布局形态：sidebar 是桌面侧栏（< md 隐藏，父级需另配移动端抽屉入口）；
-         * drawer 填满父级给的移动端抽屉容器（app-drawer 是 flex column，靠 flex-1 撑满）。
-         */
-        variant?: 'sidebar' | 'drawer';
     }>(),
-    { activeId: null, loading: false, error: '', showAgentName: false, variant: 'sidebar' },
+    { activeId: null, loading: false, error: '', showAgentName: true },
 );
 
 const emit = defineEmits<{
     select: [payload: { id: string; agentId: string }];
     create: [];
-    /** 重命名成功：父级需要刷新列表 */
+    /** 重命名成功：布局需要刷新列表 */
     changed: [];
-    /** 删除成功：父级刷新列表；若删的正是当前打开的会话，还需切到下一个或复位 */
+    /** 删除成功：布局刷新列表；若删的正是当前打开的会话，还需切到下一个或复位 */
     deleted: [id: string];
 }>();
 
 const { t } = useI18n();
-const route = useRoute();
-
-/** 两种形态的根样式在此收口，避免调用方用外部 class 去跟 hidden/flex/w-64 打 cascade 优先级仗 */
-const rootClass = computed(() =>
-    props.variant === 'drawer' ? 'flex min-h-0 w-full flex-1 flex-col overflow-hidden' : 'app-card hidden w-64 shrink-0 flex-col overflow-hidden md:flex',
-);
-
-/** 首页是根路径，去智能体广场不叫「返回」：只有对话页才显示回退箭头 */
-const backArrow = computed(() => (route.path === '/' ? '' : '← '));
 
 const searchQuery = ref('');
 const editingTitleId = ref<string | null>(null);
@@ -55,8 +41,8 @@ let editTitleOriginal = '';
 
 /**
  * 改名广播：ChatPane 持有的会话标题是它自己的本地值（载入历史时取一次），
- * 侧栏的 PATCH 不会同步过去，于是改名后导出 Markdown 仍用旧标题当文档标题与文件名。
- * 组件是兄弟关系（侧栏与面板都由父级摆放，谁都不是谁的 parent），所以走共享状态而不是 props。
+ * 列表的 PATCH 不会同步过去，于是改名后导出 Markdown 仍用旧标题当文档标题与文件名。
+ * 组件是兄弟关系（列表与面板都由布局/页面摆放，谁都不是谁的 parent），所以走共享状态而不是 props。
  */
 const renamedConversation = useState<{ id: string; title: string } | null>('conversation-renamed', () => null);
 
@@ -72,18 +58,18 @@ function startRename(c: ConversationSummary) {
     editTitleOriginal = c.title;
 }
 
-/** 改名/删除失败的就地提示：侧栏常驻，靠 showTransient 的超时自动清除 */
+/** 改名/删除失败的就地提示：列表常驻，靠 showTransient 的超时自动清除 */
 const { error: actionError, show: showActionError } = useTransientError();
 
 async function saveRename(id: string) {
     // Enter 提交会把输入框整个卸载（editingTitleId 置空），而卸载焦点元素还会补发一次 blur，
-    // 于是同一次改名发出两条一模一样的 PATCH——第二条还会再 emit('changed')，让父级并发重载会话列表。
+    // 于是同一次改名发出两条一模一样的 PATCH——第二条还会再 emit('changed')，让布局并发重载会话列表。
     if (editingTitleId.value !== id) return;
     const newTitle = editTitleInput.value.trim();
     editingTitleId.value = null;
     /**
      * 文字没改动过就不发：只点了一下 ✎ 再点别处，同样会以原标题跑完这个函数，
-     * 而 PATCH 无条件把 updatedAt 顶到当前时间、侧栏按它倒序排——
+     * 而 PATCH 无条件把 updatedAt 顶到当前时间、列表按它倒序排——
      * 一次什么都没改的操作会让那条会话凭空跳到列表最前面。
      */
     if (!newTitle || newTitle === editTitleOriginal) return;
@@ -108,24 +94,19 @@ async function removeConversation(id: string) {
 </script>
 
 <template>
-    <aside :class="rootClass">
-        <div class="app-divider border-t-0 p-3">
-            <NuxtLink to="/chat" class="text-muted-2 text-hover-brand flex items-center gap-1.5 text-xs font-semibold transition-colors">
-                <span>{{ backArrow }}{{ t('nav.agents') }}</span>
-            </NuxtLink>
-        </div>
-        <div class="p-3">
-            <button class="app-btn app-btn-primary w-full" @click="emit('create')">+ {{ t('chat.newChat') }}</button>
+    <aside class="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+        <div class="shrink-0 p-3">
+            <button type="button" class="app-btn app-btn-primary w-full" @click="emit('create')">+ {{ t('chat.newChat') }}</button>
         </div>
 
-        <p v-if="showAgentName" class="app-sidebar-group-title">{{ t('chat.recentConversations') }}</p>
+        <p class="app-sidebar-group-title shrink-0">{{ t('chat.recentConversations') }}</p>
 
-        <div class="px-2.5 pb-2">
+        <div class="shrink-0 px-2.5 pb-2">
             <input v-model="searchQuery" :placeholder="t('chat.searchChat')" :aria-label="t('chat.searchChat')" class="app-input !px-2.5 !py-1 !text-xs" />
         </div>
 
-        <div v-if="error" class="app-alert app-alert-danger mx-2.5 mb-2 !text-[11px]">{{ error }}</div>
-        <div v-if="actionError" class="app-alert app-alert-danger mx-2.5 mb-2 !text-[11px]">{{ actionError }}</div>
+        <div v-if="error" class="app-alert app-alert-danger mx-2.5 mb-2 shrink-0 !text-[11px]">{{ error }}</div>
+        <div v-if="actionError" class="app-alert app-alert-danger mx-2.5 mb-2 shrink-0 !text-[11px]">{{ actionError }}</div>
 
         <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-3">
             <li v-if="loading" class="space-y-1.5">
@@ -150,6 +131,7 @@ async function removeConversation(id: string) {
                             c.id === activeId ? 'bg-brand-soft font-semibold' : 'text-soft hover:bg-[color:var(--surface-3)]',
                         ]"
                         :title="c.title"
+                        :aria-current="c.id === activeId ? 'true' : undefined"
                         @click="emit('select', { id: c.id, agentId: c.agentId })"
                     >
                         {{ c.title }}

@@ -2,7 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { mcpServers } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
-import { maskHeaders, normalizeMcpHeaders, normalizeMcpName, normalizeMcpTransport } from '../../utils/mcp';
+import { findMcpNamespaceConflict, maskHeaders, mcpToolNamespace, normalizeMcpHeaders, normalizeMcpName, normalizeMcpTransport } from '../../utils/mcp';
 import { requireMethod } from '../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
@@ -25,11 +25,16 @@ export default defineEventHandler(async (event) => {
         // name 会被用作运行时工具前缀（mcp_<name>_<tool>），重名会静默覆盖彼此的工具。
         // 表上没有唯一约束，先查再插存在并发双写窗口：以 name 哈希取事务级咨询锁串行化「查重 + 插入」，
         // 锁随事务提交/回滚自动释放，不影响不同 name 的并发创建。
+        // 锁键与查重口径都取「塌成 `_` 之后的命名空间」而不是原始 name：`DB-Core` 与 `DB_Core` 的
+        // 原始串不同、拿到的锁也不同，但它们共用一个工具命名空间，按原始串加锁正好放行了这次双写。
         await db.transaction(async (tx) => {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`);
-            const existing = await tx.select({ id: mcpServers.id }).from(mcpServers).where(eq(mcpServers.name, name));
-            if (existing.length) {
-                throw createError({ statusCode: 409, statusMessage: `同名 MCP Server「${name}」已存在` });
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${mcpToolNamespace(name)}, 0))`);
+            const conflict = await findMcpNamespaceConflict(tx, name);
+            if (conflict) {
+                throw createError({
+                    statusCode: 409,
+                    statusMessage: `「${name}」与已有的「${conflict.name}」会生成同一个工具命名空间「${mcpToolNamespace(name)}」，请改名`,
+                });
             }
             await tx.insert(mcpServers).values({
                 id,

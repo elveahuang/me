@@ -2,10 +2,12 @@ import { asc, eq } from 'drizzle-orm';
 import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../../../db/schema';
 import { db } from '../../../../utils/db';
 import { chunkText, embedTexts, INDEX_EMBED_BUDGET_MS } from '../../../../utils/embedding';
+import { gateExpensiveCalls } from '../../../../utils/expensive-gate';
 import { requireMethod } from '../../../../utils/method';
 import { stripNull } from '../../../../utils/pg-text';
 import { intParam } from '../../../../utils/query';
 import { capBody } from '../../../../utils/request-body';
+import { routeId } from '../../../../utils/route-id';
 
 /** 正文体积上限：两条上传通道共用，此前只有 multipart 分支受限，JSON 分支可以塞任意大小正文 */
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
@@ -39,13 +41,20 @@ export default defineEventHandler(async (event) => {
     // 2MB 正文要按这个端点自己的闸门收口，而不是写接口公共的 1MB（capBody 会按实际字节封顶读完
     // 并写回 h3 缓存位，两条解析通道复用它，chunked 因此也只能缓冲这么多）
     await capBody(event, MAX_REQUEST_BYTES);
-    const kbId = getRouterParam(event, 'kbId')!;
+    // 方法白名单排在查库之前：一个非法动词（PUT/PATCH/DELETE）原本要先付一次知识库行查询，
+    // 再拿「知识库不存在」的 404 回来，读者会以为是库的问题而不是方法拼错了——顺序与同目录其它端点保持一致。
+    // 守卫本身也不能省：少了它，PUT/PATCH/DELETE 会落进下面的读取分支，拿到 200 + 列表，看起来像写成功了。
+    const method = requireMethod(event, ['GET', 'POST']);
+    const kbId = routeId(event, 'kbId', '知识库');
+
+    // 只闸 POST：GET 是选中知识库时自动发的列表请求（reloadDocs），给它计额度会让正常浏览处处碰壁。
+    // 闸门排在查库之前——否则「知识库不存在」的 404 会先被消费掉一次额度，验证也看不出顺序对不对。
+    // 一次文档写入 = 分块 + 按 EMBED_BATCH_SIZE 逐批打 /embeddings（INDEX_EMBED_BUDGET_MS 预算），
+    // 上限按「人手往一个库里连投文档」的节奏给，只挡脚本与重复提交。
+    if (method === 'POST') await gateExpensiveCalls(`kb-doc-write:${kbId}`, '文档入库', 30);
 
     const [kb] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, kbId));
     if (!kb) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });
-
-    // 其余方法（PUT/PATCH/DELETE）原本落进下面的读取分支：请求拿到 200 + 列表，看起来像写成功了
-    const method = requireMethod(event, ['GET', 'POST']);
 
     if (method === 'POST') {
         let title = '未命名文档';

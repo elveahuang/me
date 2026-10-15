@@ -28,7 +28,10 @@ export default defineNuxtConfig({
         '@commons': fileURLToPath(new URL('../commons/src', import.meta.url)),
     },
     runtimeConfig: {
-        deepseekApiKey: '',
+        // 这里刻意不再放 deepseekApiKey：全应用的模型供应商都配在数据库里（设置 → 模型供应商），
+        // 默认供应商的自动 seed 由 server/utils/providers.ts 的 envDeepseekKey() 直接读
+        // NUXT_DEEPSEEK_API_KEY / DEEPSEEK_API_KEY。原先这条 runtimeConfig 只有孤儿端点
+        // /api/completion 在读，等于给同一个 Key 开了第二个「硬编码 DeepSeek、绕过数据库」的口径。
         public: {
             siteSettings: {
                 siteTitle: 'WORK',

@@ -46,3 +46,17 @@ export function stringParam(raw: unknown, max = 128): string | undefined {
     const trimmed = value.trim().slice(0, max);
     return trimmed || undefined;
 }
+
+/**
+ * 开关型查询参数（`?force=1`、`?download=true`）。
+ *
+ * 之前这些参数是裸标量比较：`getQuery(event).force === '1'`。客户端写成
+ * `?force=1&force=1`（表单重复提交、axios 的 `params` 传了数组）时 h3 给出 `['1','1']`，
+ * 比较整体落空、开关静默变回「关」——用户点「强制删除」拿到 409 却不知道为什么，
+ * 点「下载」拿到的还是预览地址，界面上一句错误都没有。先按 `stringParam` 取单值再认，
+ * 重复参数照第一个走，与其余筛选参数同一口径。
+ */
+export function flagParam(raw: unknown): boolean {
+    const value = stringParam(raw);
+    return value === '1' || value === 'true';
+}

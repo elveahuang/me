@@ -3,6 +3,7 @@ import { projects } from '../db/schema';
 import { normalizeAdminBoolean } from '../utils/admin-boolean';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
+import { stringParam } from '../utils/query';
 import { capBody } from '../utils/request-body';
 import { PROJECT_COLOR_MAX, PROJECT_DESCRIPTION_MAX, PROJECT_NAME_MAX, normalizeWorkOptionalText, normalizeWorkText } from '../utils/work-input';
 
@@ -30,7 +31,10 @@ export default defineEventHandler(async (event) => {
         return row;
     }
 
-    const { archived } = getQuery(event);
+    // 走 stringParam 而不是裸解构：`?archived=active&archived=only` 会让 h3 给出数组，
+    // 数组跟任何字面量都不相等，于是「只看归档」这种筛选被静默取消、返回整张表，
+    // 客户端看到的是一次毫无作用的点击。
+    const archived = stringParam(getQuery(event).archived);
     if (archived === 'active' || archived === 'false') {
         return db.select().from(projects).where(eq(projects.archived, false)).orderBy(asc(projects.createdAt));
     }

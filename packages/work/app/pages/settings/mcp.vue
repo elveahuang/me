@@ -27,6 +27,8 @@ const listError = ref('');
 const toolResult = ref<Record<string, { ok: boolean; message: string; tools: McpTool[] }>>({});
 /** 保存中标记：防止重复提交并在请求期间禁用按钮 */
 const saving = ref(false);
+/** 逐台服务器的工具探测在途标记 */
+const probing = ref<Record<string, boolean>>({});
 
 const form = reactive({
     name: '',
@@ -107,7 +109,16 @@ async function save() {
     }
 }
 
+/**
+ * 一次点击 = 建一条真实 MCP 连接（握手 + `tools/list`，预算十几秒起步），
+ * 而按钮原本既不禁用也没有在途判定：连点 N 下就有 N 条并发连接打到同一台服务器上，
+ * 对方不支持并发会话时后几条会以握手失败收场，界面显示的却是最后一次落进 `toolResult` 的那条——
+ * 慢的那次往往更晚返回，于是「连接失败」会盖掉先前一次成功的结果。
+ * 与 `providers.vue` 的 test()、本页 saving 同一口径：按行加在途标记，期间按钮禁用。
+ */
 async function listTools(s: McpItem) {
+    if (probing.value[s.id]) return;
+    probing.value[s.id] = true;
     toolResult.value[s.id] = { ok: true, message: t('adminForm.mcpConnecting'), tools: [] };
     try {
         const res = await $fetch<{ ok: boolean; message?: string; tools: McpTool[] }>(`/api/settings/mcp-servers/${encodeURIComponent(s.id)}/tools`);
@@ -119,6 +130,8 @@ async function listTools(s: McpItem) {
     } catch (e) {
         // 接口报错时也要落一个结果，否则文案会永久停在「连接中…」
         toolResult.value[s.id] = { ok: false, message: extractApiError(e, t('adminForm.mcpConnectFailed')), tools: [] };
+    } finally {
+        probing.value[s.id] = false;
     }
 }
 
@@ -244,8 +257,8 @@ async function remove(id: string) {
                             </td>
                             <td>
                                 <div class="app-table-actions">
-                                    <button class="app-btn app-btn-ghost app-btn-sm" @click="listTools(s)">
-                                        {{ t('adminForm.mcpListTools') }}
+                                    <button class="app-btn app-btn-ghost app-btn-sm" :disabled="probing[s.id]" @click="listTools(s)">
+                                        {{ probing[s.id] ? t('adminForm.mcpConnecting') : t('adminForm.mcpListTools') }}
                                     </button>
                                     <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(s)">{{ t('adminForm.edit') }}</button>
                                     <button class="app-btn app-btn-danger app-btn-sm" @click="remove(s.id)">{{ t('adminForm.delete') }}</button>
@@ -262,7 +275,8 @@ async function remove(id: string) {
                             </td>
                         </tr>
                     </template>
-                    <tr v-if="!servers.length">
+                    <!-- 加载失败时不渲染空态：接口故障不能被读成「没有数据」 -->
+                    <tr v-if="!listError && !servers.length">
                         <td colspan="4" class="!whitespace-normal">
                             <div class="app-empty">
                                 <span class="app-empty-icon">🔌</span>

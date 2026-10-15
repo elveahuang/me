@@ -183,6 +183,7 @@ export default {
         agentAutoTooShort: 'Please describe the purpose in at least 5 characters',
         agentAutoFailed: 'Generation failed, please retry',
         agentDeleteConfirm: 'Delete this agent?',
+        agentForceDeleteConfirm: 'This agent still has conversations. Deleting it erases their chat history permanently. Force delete?',
         colAgent: 'Agent',
         colModel: 'Model',
         colKnowledge: 'Knowledge',
@@ -258,6 +259,9 @@ export default {
         kbReindexDone: 'Reindex finished: {updated}/{total} chunks succeeded, {failed} failed (provider: {provider})',
         kbReindexFailed: 'Reindex failed',
         kbReindexReason: ' · reason: {reason}',
+        kbEmbeddingStale:
+            'Embedding target changed: the vectors of {chunks} chunks were discarded (this base falls back to keyword search). Click "Reindex" to rebuild them with the new model.',
+        kbEmbeddingStaleNone: 'Embedding target changed. This base had no vectors to discard.',
         kbDocs: 'Documents',
         kbClose: 'Close',
         kbDocTitlePlaceholder: 'Document title',

@@ -1,5 +1,6 @@
 import { createError } from 'h3';
-import { stripNull } from './pg-text';
+import { assertJsonDepth } from './jsonb-input';
+import { stripNull, stripNullDeep } from './pg-text';
 
 /**
  * 管理端 tools 资源的入参归一。
@@ -87,12 +88,12 @@ function normalizeToolHeaders(raw: unknown): void {
 export function normalizeToolConfig(raw: unknown): Record<string, unknown> {
     if (raw === undefined || raw === null) return {};
     if (typeof raw !== 'object' || Array.isArray(raw)) throw createError({ statusCode: 400, statusMessage: 'config 必须为对象' });
-    // config 整段进 jsonb：JSON 里裸的 U+0000 会被 PostgreSQL 判成非法输入，
-    // 所以先把字符串字段过一遍再校验，校验的与落库的才是同一个值。
-    const config: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
-    for (const key of ['url', 'method', 'bodyTemplate']) {
-        if (typeof config[key] === 'string') config[key] = stripNull(config[key] as string);
-    }
+    // 先夹深度，再整棵树剔 NUL（jsonb 不接受 U+0000，而落库靠 JSON.stringify——递归的序列化器会被深嵌套炸成 500）。
+    // 只处理 url/method/bodyTemplate 三个已知键是不够的：config 是自由形状，
+    // 实测 `{"note":"a\u0000b"}` 就是一条 `Failed query: insert into "tools" (…)` 带整张列清单进响应体。
+    // 校验与落库共用剔除后的这一份，所以两者看到的始终是同一个值。
+    assertJsonDepth('config', raw);
+    const config = stripNullDeep(raw as Record<string, unknown>);
     // 执行期对 parameters 做 for...of、对 headers 做展开：存下非数组/非对象会让该工具每轮对话都抛错
     if (config.parameters !== undefined && !Array.isArray(config.parameters)) {
         throw createError({ statusCode: 400, statusMessage: 'config.parameters 必须为数组' });

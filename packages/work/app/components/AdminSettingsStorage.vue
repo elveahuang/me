@@ -272,7 +272,8 @@ async function remove(item: StorageConfigItem) {
             </div>
         </div>
 
-        <div v-else class="app-card app-empty">
+        <!-- 加载失败时不渲染空态：接口故障不能被读成「还没有存储配置」 -->
+        <div v-else-if="!error" class="app-card app-empty">
             <span class="app-empty-icon">🗄️</span>
             <p class="app-empty-title">{{ t('storage.noConfig') }}</p>
             <p class="app-empty-desc">{{ t('storage.noConfigHint') }}</p>

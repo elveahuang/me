@@ -4,12 +4,13 @@ import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { capBody } from '../../utils/request-body';
+import { routeId } from '../../utils/route-id';
 import { PROJECT_COLOR_MAX, PROJECT_DESCRIPTION_MAX, PROJECT_NAME_MAX, normalizeWorkOptionalText, normalizeWorkText } from '../../utils/work-input';
 
 export default defineEventHandler(async (event) => {
     await capBody(event);
     const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
-    const id = getRouterParam(event, 'id')!;
+    const id = routeId(event, 'id', '项目');
 
     if (method === 'DELETE') {
         // 三张子表的 project_id 是 `set null`：直接删会让「项目下的任务」静默散成「无项目」，

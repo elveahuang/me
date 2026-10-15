@@ -33,6 +33,8 @@ const listError = ref('');
 const loading = ref(true); // 首帧即加载态：数据要等挂载后的请求，初值 false 会让「暂无…」空态先闪一帧，SSR 首屏更是直接把空态发给用户
 /** 右侧文档列表同理：open() 后要等 documents 请求返回，期间不能把「暂无文档」当空态显示 */
 const docsLoading = ref(false);
+/** 文档列表自己的加载错误：与 message（成功提示位）分开，否则「读不到文档」会显示成「这个库还没有文档」 */
+const docsError = ref('');
 
 const newKb = reactive({ name: '', description: '', embeddingModel: 'text-embedding-3-small' });
 /** 新建知识库抽屉开关 */
@@ -152,13 +154,15 @@ async function open(kb: KbItem) {
 async function reloadDocs(kbId: string) {
     const token = docsToken;
     docsLoading.value = true;
+    docsError.value = '';
     try {
         const rows = await $fetch<DocItem[]>(`/api/settings/knowledge-bases/${encodeURIComponent(kbId)}/documents`);
         if (token !== docsToken || current.value?.id !== kbId) return;
         docs.value = rows;
     } catch (e) {
         if (token !== docsToken || current.value?.id !== kbId) return;
-        message.value = extractApiError(e, t('adminForm.loadFailed'));
+        docs.value = [];
+        docsError.value = extractApiError(e, t('adminForm.loadFailed'));
     } finally {
         // 只有最新一次请求可以收尾：迟到的旧响应不能把新一轮的加载态提前掐掉
         if (token === docsToken) docsLoading.value = false;
@@ -181,13 +185,19 @@ async function saveKb() {
     editError.value = '';
     savingKb.value = true;
     try {
-        const updated = await $fetch<KbItem>(`/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`, {
-            method: 'PATCH',
-            body: { name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel },
-        });
+        const { vectorsInvalidated, ...updated } = await $fetch<KbItem & { vectorsInvalidated?: number }>(
+            `/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`,
+            { method: 'PATCH', body: { name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel } },
+        );
         // 同步当前面板标题，避免改名后仍显示旧名
         if (current.value?.id === updated.id) current.value = { ...current.value, ...updated };
         editingKb.value = null;
+        // 服务端在换了嵌入模型/供应商时会连带作废旧向量，必须当场说破：
+        // 否则用户只看到「保存成功」，之后才发现这个库的检索质量莫名变差，
+        // 而界面上既没有「向量已空」的标记、日志里也什么都没有。
+        if (vectorsInvalidated !== undefined) {
+            message.value = vectorsInvalidated ? t('adminForm.kbEmbeddingStale', { chunks: vectorsInvalidated }) : t('adminForm.kbEmbeddingStaleNone');
+        }
         await load();
     } catch (e) {
         editError.value = extractApiError(e, t('adminForm.saveFailed'));
@@ -336,7 +346,8 @@ async function search() {
                                 </div>
                             </td>
                         </tr>
-                        <tr v-else-if="!kbs.length">
+                        <!-- 加载失败时不渲染空态：接口故障不能被读成「没有数据」 -->
+                        <tr v-else-if="!listError && !kbs.length">
                             <td colspan="3" class="!whitespace-normal">
                                 <div class="app-empty">
                                     <span class="app-empty-icon">📚</span>
@@ -392,6 +403,12 @@ async function search() {
                         <div class="space-y-2">
                             <div v-for="i in 3" :key="i" class="app-skeleton h-8 !rounded-xl" />
                         </div>
+                    </li>
+                    <li v-else-if="docsError" class="app-help-error py-4 text-center text-sm">
+                        {{ docsError }}
+                        <button type="button" class="ml-2 underline hover:no-underline" @click="current && reloadDocs(current.id)">
+                            {{ t('common.retry') }}
+                        </button>
                     </li>
                     <li v-else-if="!docs.length" class="text-faint py-4 text-center text-sm">{{ t('adminForm.kbDocEmpty') }}</li>
                 </ul>

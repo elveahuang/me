@@ -3,38 +3,74 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 /**
- * 工作台外壳。
+ * 工作台外壳（主流 AI 工作台布局：固定左栏 + 无顶部导航）。
  *
- * work 没有账号体系，因此头部不含登录态/用户菜单；只保留导航、外观与语言三件事。
+ * 左栏自上而下三段：功能导航 / 会话列表（新建对话 + 对话记录）/ 设置（外观、语言、版权）。
  *
- * 响应式策略：
- * - < lg：主导航收进右侧抽屉，头部保留 外观/语言，汉堡按钮固定在最右端。
- * - ≥ lg：导航平铺在头部（纯文字），外观设置收进下拉，抽屉按钮隐藏。
- * - 汉堡按钮外层包 lg:hidden 容器而非在 .app-btn 上加变体：主题 CSS 未分层，
- *   .app-btn 的 display 会压掉 utilities 层的 lg:hidden（详见 AGENTS.md）。
+ * - ≥ lg：固定左侧栏占满高度；主内容区 `lg:pl-64`，没有顶部导航栏与页脚。
+ * - < lg：左栏收成左侧抽屉，只留一条极窄顶栏（汉堡 + Logo）作为抽屉入口。
+ * - 会话列表与选中态由 `useChatSidebar` 提供：布局拉数据、渲染左栏，聊天页只消费，
+ *   避免侧栏与页面各拉一份、选中态分叉。
+ * - 主题 CSS 未分层：.app-btn 的 display 会压掉 utilities 层的响应式隐藏，
+ *   所以顶栏上的汉堡按钮必须包在外层 lg:hidden 容器里（顶栏自身已是 lg:hidden）。
+ * - 抽屉是导航面板（不是 role=menu），布局内的 Tab 圈闭/滚动锁是唯一实现，勿另造。
  */
 const { t, locale } = useI18n();
 const { $setLocale } = useNuxtApp();
 const siteTitle = useRuntimeConfig().public.siteSettings.siteTitle;
 
 const route = useRoute();
-const drawerOpen = ref(false);
+/** 抽屉开关：布局持有，ChatPane 头部的历史按钮（窄屏）也开同一个抽屉 */
+const { open: drawerOpen } = useShellDrawer();
 const drawerRef = ref<HTMLElement | null>(null);
 
-/** 主导航：首页即对话主体，用 Logo 表达；这里只放功能性入口（纯文字，无图标） */
+/** 会话列表与选中态：左栏渲染，聊天页消费 */
+const { visibleConversations, activeConversationId, agentIdParam, conversationsPending, conversationsError, refreshConversations, effectiveConversationId, selectConversation, startNewChat } =
+    useChatSidebar();
+
+const conversationError = computed(() => (conversationsError.value ? t('common.loadFailed') : ''));
+
+/** 主导航：图标 + 文字；match 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由） */
 const navLinks = computed(() => [
-    { to: '/', label: t('nav.chat'), icon: 'chat-outline' },
-    { to: '/chat', label: t('nav.agents'), icon: 'robot-outline' },
-    { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline' },
-    { to: '/settings/agents', label: t('nav.systemSettings'), icon: 'cog-outline' },
+    { to: '/', label: t('nav.chat'), icon: 'chat-outline', match: '/' },
+    { to: '/chat', label: t('nav.agents'), icon: 'robot-outline', match: '/chat' },
+    { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
+    { to: '/settings/agents', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
 ]);
 
-const primaryLinks = computed(() => navLinks.value.filter((link) => link.to !== '/'));
+function isNavActive(match: string) {
+    const path = route.path;
+    return match === '/' ? path === '/' : path === match || path.startsWith(`${match}/`);
+}
 
 const otherLocaleLabel = computed(() => (locale.value === 'zh-CN' ? 'English' : '简体中文'));
 
 function switchLocale(next: 'zh-CN' | 'en-US' = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN') {
     $setLocale(next);
+}
+
+/** 侧栏点选会话：首页就地切换；其余页面跳到该会话所属智能体的对话页 */
+function onSelectConversation(payload: { id: string; agentId: string }) {
+    selectConversation(payload.agentId, payload.id);
+    const agentPath = `/chat/${encodeURIComponent(payload.agentId)}`;
+    if (route.path === '/' || route.path === agentPath) return;
+    return navigateTo(`${agentPath}?c=${encodeURIComponent(payload.id)}`);
+}
+
+/** 新建对话：清掉选中态；对话页回到该智能体无 ?c= 的页面，其余页面回首页 */
+function onCreateConversation() {
+    startNewChat();
+    if (agentIdParam.value) return navigateTo(`/chat/${encodeURIComponent(agentIdParam.value)}`);
+    if (route.path !== '/') return navigateTo('/');
+}
+
+/** 删掉的正是当前会话时，切到同列表里剩下最近的一条，没有则回到新对话 */
+function onConversationDeleted(id: string) {
+    if (activeConversationId.value === id) {
+        activeConversationId.value = visibleConversations.value.find((c) => c.id !== id)?.id ?? null;
+        if (activeConversationId.value) selectConversation('', activeConversationId.value);
+    }
+    refreshConversations();
 }
 
 /** 抽屉打开时把 Tab 焦点圈闭在抽屉内，避免焦点落到遮罩背后的页面内容 */
@@ -104,89 +140,85 @@ if (import.meta.client) {
 </script>
 
 <template>
-    <div class="bg-surface-2 text-strong flex min-h-screen flex-col antialiased">
+    <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
+        <!-- 桌面左侧栏：功能导航 + 会话列表 + 设置区 -->
+        <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
+            <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
+                <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
+                <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
+            </NuxtLink>
+
+            <nav class="shrink-0 space-y-1 px-3 py-2">
+                <NuxtLink
+                    v-for="link in navLinks"
+                    :key="link.to"
+                    :to="link.to"
+                    class="app-sidebar-link"
+                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                >
+                    <AppIcon :name="link.icon" :size="17" />
+                    <span>{{ link.label }}</span>
+                </NuxtLink>
+            </nav>
+
+            <!-- 中间段：新建对话 + 对话记录 -->
+            <ConversationList
+                class="border-line min-h-0 flex-1 border-t"
+                :conversations="visibleConversations"
+                :active-id="activeConversationId"
+                :loading="conversationsPending"
+                :error="conversationError"
+                :show-agent-name="!agentIdParam"
+                @select="onSelectConversation"
+                @create="onCreateConversation"
+                @changed="refreshConversations()"
+                @deleted="onConversationDeleted"
+            />
+
+            <!-- 底部设置区：外观、语言、版权；设置项全部落在这里而不是顶部 -->
+            <div class="border-line shrink-0 space-y-3 border-t p-3">
+                <ThemeSwitcher variant="panel" />
+
+                <!-- 抽屉是导航面板而非 role=menu，这里不能标 menuitem -->
+                <button type="button" class="app-dropdown-item" @click="switchLocale()">
+                    <AppIcon name="translate" :size="17" />
+                    <span>{{ otherLocaleLabel }}</span>
+                </button>
+
+                <p class="text-faint px-1 text-xs">© {{ new Date().getFullYear() }} {{ siteTitle }}</p>
+            </div>
+        </aside>
+
+        <!-- 窄屏顶栏：只有抽屉入口与品牌，导航/会话/外观/语言都在抽屉里 -->
         <header
-            class="sticky top-0 z-30 border-b backdrop-blur-md"
+            class="border-line sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-3 backdrop-blur-md lg:hidden"
             style="border-color: var(--line); background-color: color-mix(in oklab, var(--surface) 85%, transparent)"
         >
-            <div class="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6">
-                <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5">
-                    <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
-                    <span class="text-brand hidden text-lg font-black tracking-tight sm:inline">{{ siteTitle }}</span>
-                </NuxtLink>
-
-                <!-- 桌面端主导航（纯文字） -->
-                <nav class="ml-4 hidden items-center gap-1 lg:flex">
-                    <NuxtLink
-                        v-for="link in primaryLinks"
-                        :key="link.to"
-                        :to="link.to"
-                        class="app-nav-link inline-flex items-center"
-                        active-class="app-nav-link-active"
-                    >
-                        <span>{{ link.label }}</span>
-                    </NuxtLink>
-                </nav>
-
-                <div class="ml-auto flex items-center gap-1.5">
-                    <!-- 外观设置：桌面端收进下拉，避免头部堆一排主题按钮 -->
-                    <AppDropdown class="hidden lg:block" align="right" width="18rem">
-                        <template #trigger="{ toggle, attrs }">
-                            <button v-bind="attrs" type="button" class="app-btn app-btn-ghost app-btn-icon" :title="t('common.theme')" @click="toggle">
-                                <AppIcon name="theme-light-dark" :size="18" />
-                            </button>
-                        </template>
-                        <template #default>
-                            <div class="p-1.5">
-                                <ThemeSwitcher variant="panel" />
-                            </div>
-                        </template>
-                    </AppDropdown>
-
-                    <!-- 语言切换 -->
-                    <button
-                        type="button"
-                        class="app-btn app-btn-ghost app-btn-icon"
-                        :title="t('profile.languageSelect')"
-                        :aria-label="t('common.switchToLocale', { locale: otherLocaleLabel })"
-                        @click="switchLocale()"
-                    >
-                        <AppIcon name="translate" :size="18" />
-                    </button>
-
-                    <!-- 移动端汉堡菜单：固定在头部最右端；外层 lg:hidden 容器负责桌面端隐藏 -->
-                    <div class="lg:hidden">
-                        <button
-                            id="shell-drawer-trigger"
-                            type="button"
-                            class="app-btn app-btn-ghost app-btn-icon"
-                            :aria-label="t('common.openMenu')"
-                            aria-controls="shell-drawer"
-                            :aria-expanded="drawerOpen"
-                            @click="drawerOpen = true"
-                        >
-                            <AppIcon name="menu" :size="20" />
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <button
+                id="shell-drawer-trigger"
+                type="button"
+                class="app-btn app-btn-ghost app-btn-icon"
+                :aria-label="t('common.openMenu')"
+                aria-controls="shell-drawer"
+                :aria-expanded="drawerOpen"
+                @click="drawerOpen = true"
+            >
+                <AppIcon name="menu" :size="20" />
+            </button>
+            <NuxtLink to="/" class="flex min-w-0 items-center gap-2.5">
+                <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
+                <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
+            </NuxtLink>
         </header>
 
-        <main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-            <slot />
-        </main>
-
-        <footer class="app-divider" style="border-color: var(--line)">
-            <div class="text-faint mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-xs sm:flex-row sm:px-6">
-                <span>© {{ new Date().getFullYear() }} {{ siteTitle }}</span>
-                <nav class="flex items-center gap-4">
-                    <NuxtLink to="/chat" class="transition-colors hover:text-[color:var(--content-soft)]">{{ t('nav.agents') }}</NuxtLink>
-                    <NuxtLink to="/" class="transition-colors hover:text-[color:var(--content-soft)]">{{ t('nav.chat') }}</NuxtLink>
-                </nav>
-            </div>
-        </footer>
+        <div class="lg:pl-64">
+            <main id="main" class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
+                <slot />
+            </main>
+        </div>
 
         <!--
             移动端导航抽屉。遮罩与抽屉的入场动画写在 CSS 里（.app-drawer-backdrop / .app-drawer-left），
@@ -199,15 +231,15 @@ if (import.meta.client) {
                 <aside
                     id="shell-drawer"
                     ref="drawerRef"
-                    class="app-drawer app-drawer-right safe-top safe-bottom"
+                    class="app-drawer app-drawer-left safe-top safe-bottom"
                     role="dialog"
                     aria-modal="true"
                     :aria-label="t('common.navigation')"
                 >
-                    <div class="flex items-center justify-between border-b px-4 py-3" style="border-color: var(--line)">
+                    <div class="border-line flex shrink-0 items-center justify-between border-b px-4 py-3">
                         <span class="flex items-center gap-2.5">
                             <span class="app-avatar h-8 w-8 text-xs">W</span>
-                            <span class="text-sm font-black">{{ siteTitle }}</span>
+                            <span class="text-brand text-sm font-black">{{ siteTitle }}</span>
                         </span>
                         <button
                             type="button"
@@ -220,28 +252,46 @@ if (import.meta.client) {
                         </button>
                     </div>
 
-                    <div class="app-drawer-body space-y-4">
-                        <nav class="space-y-1">
+                    <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由三段各自控制内边距 -->
+                    <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
+                        <nav class="shrink-0 space-y-1 px-3 py-2">
                             <p class="app-sidebar-group-title !px-2">{{ t('common.navigation') }}</p>
-                            <NuxtLink v-for="link in navLinks" :key="link.to" :to="link.to" class="app-sidebar-link" active-class="app-sidebar-link-active">
+                            <NuxtLink
+                                v-for="link in navLinks"
+                                :key="link.to"
+                                :to="link.to"
+                                class="app-sidebar-link"
+                                :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                                :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                            >
                                 <AppIcon :name="link.icon" :size="17" />
                                 <span>{{ link.label }}</span>
                             </NuxtLink>
                         </nav>
 
-                        <div class="app-divider" />
+                        <ConversationList
+                            class="border-line min-h-0 flex-1 border-t"
+                            :conversations="visibleConversations"
+                            :active-id="activeConversationId"
+                            :loading="conversationsPending"
+                            :error="conversationError"
+                            :show-agent-name="!agentIdParam"
+                            @select="onSelectConversation"
+                            @create="onCreateConversation"
+                            @changed="refreshConversations()"
+                            @deleted="onConversationDeleted"
+                        />
 
-                        <div class="px-1">
+                        <div class="border-line shrink-0 space-y-3 border-t p-3">
                             <ThemeSwitcher variant="panel" />
+
+                            <button type="button" class="app-dropdown-item" @click="switchLocale()">
+                                <AppIcon name="translate" :size="17" />
+                                <span>{{ otherLocaleLabel }}</span>
+                            </button>
+
+                            <p class="text-faint px-1 text-xs">© {{ new Date().getFullYear() }} {{ siteTitle }}</p>
                         </div>
-
-                        <div class="app-divider" />
-
-                        <!-- 抽屉是导航面板而非 role=menu，这里不能标 menuitem -->
-                        <button type="button" class="app-dropdown-item" @click="switchLocale()">
-                            <AppIcon name="translate" :size="17" />
-                            <span>{{ otherLocaleLabel }}</span>
-                        </button>
                     </div>
                 </aside>
             </div>

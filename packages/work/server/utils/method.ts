@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3';
+import { createError, getMethod, type H3Event } from 'h3';
 
 /**
  * 限定事件处理只接受给定方法，其余一律 405。

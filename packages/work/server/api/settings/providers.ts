@@ -8,6 +8,7 @@ import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { safeTrim, stripNull } from '../../utils/pg-text';
 import { ensureDefaultProvider } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
+import { lockDefaultSlot } from '../../utils/unique-default';
 
 function maskKey(key: string) {
     if (!key) return '';
@@ -39,8 +40,11 @@ export default defineEventHandler(async (event) => {
         const baseUrl = assertAbsoluteHttpUrl('baseUrl', body.baseUrl);
         const id = crypto.randomUUID();
         // 设为默认要清除其它默认，且与本次插入同事务：否则中途失败会留下 0 个或 2 个默认供应商。
+        // 同事务还不够：并发进来另一个「设为默认」时，两边都看不到对方尚未提交的默认行，
+        // 各自清完再各插各的 → 两个默认。用槽位锁把「清 + 写」串起来（见 unique-default.ts）。
         await db.transaction(async (tx) => {
             if (isDefault) {
+                await lockDefaultSlot(tx, 'providers');
                 await tx.update(providers).set({ isDefault: false, updatedAt: new Date() }).where(eq(providers.isDefault, true));
             }
             await tx.insert(providers).values({

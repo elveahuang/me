@@ -5,6 +5,7 @@ import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { noteColumns } from '../../utils/note-select';
 import { capBody } from '../../utils/request-body';
+import { routeId } from '../../utils/route-id';
 import { NOTE_CONTENT_MAX, WORK_TITLE_MAX, normalizeNoteKind, normalizeWorkOptionalText, normalizeWorkTags } from '../../utils/work-input';
 import { assertProjectExists, lockProjectRow } from '../../utils/work-project';
 
@@ -13,7 +14,7 @@ const NOTE_BODY_LIMIT_BYTES = 1024 * 1024;
 export default defineEventHandler(async (event) => {
     await capBody(event, NOTE_BODY_LIMIT_BYTES);
     const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
-    const id = getRouterParam(event, 'id')!;
+    const id = routeId(event, 'id', '笔记');
 
     if (method === 'DELETE') {
         const deleted = await db.delete(notes).where(eq(notes.id, id)).returning({ id: notes.id });

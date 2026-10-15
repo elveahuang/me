@@ -311,7 +311,8 @@ async function remove(id: string) {
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!tools.length">
+                    <!-- 加载失败时不渲染空态：接口故障不能被读成「没有数据」 -->
+                    <tr v-if="!listError && !tools.length">
                         <td colspan="4" class="!whitespace-normal">
                             <div class="app-empty">
                                 <span class="app-empty-icon">🛠️</span>

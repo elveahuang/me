@@ -1,6 +1,7 @@
 import { createError } from 'h3';
 import { NOTE_KINDS, TASK_PRIORITIES, TASK_STATUSES, WORK_SOURCES } from '../db/schema';
 import { stripNull } from './pg-text';
+import { UUID_PATTERN } from './route-id';
 
 /**
  * 工作台五张表的入参归一。
@@ -146,7 +147,7 @@ export function normalizeWorkTags(raw: unknown): string[] {
 /** 项目 id 入参：uuid 形状（服务端生成，客户端只回传），形状不对直接 400，省一次无谓查库。 */
 export function normalizeWorkId(raw: unknown, label: string): string {
     const value = typeof raw === 'string' ? raw.trim() : '';
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) fail(400, `${label}不是合法的 id`);
+    if (!UUID_PATTERN.test(value)) fail(400, `${label}不是合法的 id`);
     return value;
 }
 

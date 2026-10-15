@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3';
+import { createError, type H3Event } from 'h3';
 
 /**
  * 带硬上限地读取请求体原始字节，不做解码、不解析。

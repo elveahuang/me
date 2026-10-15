@@ -19,6 +19,8 @@ const loading = ref(true);
 const editing = ref<Partial<ProviderItem> | null>(null);
 const modelsText = ref('');
 const testResult = ref<Record<string, string>>({});
+/** 逐条供应商的探测在途标记：一行探测中不让另一行重复起跑，也不允许同一行连点 */
+const testing = ref<Record<string, boolean>>({});
 const error = ref('');
 const { success, flashSuccess } = useFlashSuccess();
 const saving = ref(false);
@@ -110,6 +112,11 @@ async function save() {
 }
 
 async function test(p: ProviderItem) {
+    // 一次探测就是一发真实外呼（拉上游 /models，还可能把结果回填进 providers.models），预算最长几十秒。
+    // 按钮原本既不禁用也没有在途判定：连点 N 下就并发跑 N 次外呼，而两次响应都会 `await load()` 覆盖列表——
+    // 慢的那次后返回时，界面上的模型数与「连通/失败」结论来自上一次点击，用户读到的是过去的答案。
+    if (testing.value[p.id]) return;
+    testing.value[p.id] = true;
     testResult.value[p.id] = t('adminForm.providerTesting');
     try {
         const res = await $fetch<{ ok: boolean; message: string }>(`/api/settings/providers/${encodeURIComponent(p.id)}/test`, {
@@ -120,6 +127,8 @@ async function test(p: ProviderItem) {
     } catch (e) {
         // 测试接口本身报错时也要给出结果，否则「测试中…」会永久停留
         testResult.value[p.id] = extractApiError(e, t('adminForm.providerTestFailed'));
+    } finally {
+        testing.value[p.id] = false;
     }
 }
 
@@ -253,13 +262,16 @@ async function remove(id: string) {
                         </td>
                         <td>
                             <div class="app-table-actions">
-                                <button class="app-btn app-btn-ghost app-btn-sm" @click="test(p)">{{ t('adminForm.providerTest') }}</button>
+                                <button class="app-btn app-btn-ghost app-btn-sm" :disabled="testing[p.id]" @click="test(p)">
+                                    {{ testing[p.id] ? t('adminForm.providerTesting') : t('adminForm.providerTest') }}
+                                </button>
                                 <button class="app-btn app-btn-soft app-btn-sm" @click="openEdit(p)">{{ t('adminForm.edit') }}</button>
                                 <button class="app-btn app-btn-danger app-btn-sm" @click="remove(p.id)">{{ t('adminForm.delete') }}</button>
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!providers.length">
+                    <!-- 加载失败时不渲染空态：接口故障不能被读成「没有数据」 -->
+                    <tr v-if="!error && !providers.length">
                         <td colspan="6" class="!whitespace-normal">
                             <div class="app-empty">
                                 <span class="app-empty-icon">🛰️</span>

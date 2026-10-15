@@ -1,11 +1,13 @@
 import { desc, eq, sql } from 'drizzle-orm';
 import { attachments, storageConfigs } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
+import { normalizeStorageText } from '../../utils/admin-storage-input';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, sanitizeStorageConfig } from '../../utils/storage';
+import { lockDefaultSlot } from '../../utils/unique-default';
 
 /**
  * 存储配置（管理端）。
@@ -32,12 +34,13 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
             continue;
         }
         if (key === 'prefix') {
-            patch.prefix = stripNull(String(body.prefix ?? '')).replace(/^\/+|\/+$/g, '') || 'uploads';
+            patch.prefix = normalizeStorageText(body.prefix, key).replace(/^\/+|\/+$/g, '') || 'uploads';
             continue;
         }
-        // 全部文本列统一剔 NUL：name/region/accessKeyId/secretAccessKey/publicBaseUrl 任一带 U+0000
-        // 都会让 INSERT 失败并把 SQL 原文回给界面
-        patch[key] = body[key] === null ? '' : stripNull(String(body[key]));
+        // 全部文本列统一走 normalizeStorageText（剔 NUL + 拒绝非字符串）：name/region/accessKeyId/publicBaseUrl
+        // 任一带 U+0000 都会让 INSERT 失败并把 SQL 原文回给界面，而对象/数组会被 String() 折成
+        // '[object Object]' 静默落库，症状要到拼下载地址或连桶时才出现
+        patch[key] = normalizeStorageText(body[key], key);
     }
     for (const key of BOOLEAN_FIELDS) {
         if (body[key] !== undefined) patch[key] = normalizeAdminBoolean(body[key], key, false);
@@ -91,9 +94,15 @@ export default defineEventHandler(async (event) => {
             isDefault,
         };
 
-        // 清空旧默认与插入新默认必须同事务：分两步写时若在中间失败，库里会同时存在两份默认配置
+        // 清空旧默认与插入新默认必须同事务：分两步写时若在中间失败，库里会同时存在两份默认配置。
         await db.transaction(async (tx) => {
-            if (isDefault) await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
+            // 槽位锁管的是并发方向：另一笔「设为默认」在 READ COMMITTED 下看不到本笔尚未提交的行，
+            // 两边都清不到对方、各插各的，于是出现两个默认存储
+            // （附件写入按默认位取配置，同一份文件会随机落到另一个桶）。见 utils/unique-default.ts。
+            if (isDefault) {
+                await lockDefaultSlot(tx, 'storage');
+                await tx.update(storageConfigs).set({ isDefault: false, updatedAt: new Date() }).where(eq(storageConfigs.isDefault, true));
+            }
             await tx.insert(storageConfigs).values(values);
         });
         invalidateStorageConfigCache();

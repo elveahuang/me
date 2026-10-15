@@ -72,9 +72,10 @@ export async function connectMcpServer(server: {
     });
     try {
         const toolSet = await withinBudget(client.tools(), deadline, server.name);
-        // 命名空间化，避免多服务器工具重名
+        // 命名空间化，避免多服务器工具重名。塌平规则与查重口径共用 mcpToolNamespace()，
+        // 任何一侧单独改正则都会让「保存时判为不冲突、运行时照样撞车」重新出现。
         const namespaced: ToolSet = {};
-        const prefix = `mcp_${server.name.replace(/[^\w]/g, '_')}_`;
+        const prefix = `mcp_${mcpToolNamespace(server.name)}_`;
         for (const [name, t] of Object.entries(toolSet)) {
             namespaced[prefix + name] = t as never;
         }
@@ -144,8 +145,55 @@ export function normalizeMcpName(raw: unknown): string {
     return name;
 }
 
+/**
+ * 名字里非 `\w` 的字符全部塌成 `_`，所以 `DB-Core`、`DB Core` 与 `DB_Core` 落进同一个工具命名空间。
+ *
+ * 撞掉的到底是什么：两台服务器只要有同名工具（`search` 这类通用名字很常见），SDK 生成的工具 id 就完全相同，
+ * 合并工具集时后者覆盖前者；`tools/call` 于是打到另一台 `url` 上，而那台收到的是一个它从没 advertise 过的
+ * 名字（参数 schema 还是前一台的），要么回 -32602，要么按自己的逻辑解释一遍。界面看到的是「连上了一台
+ * 配好工具的 MCP」，看不出少了一组工具。查重口径必须是这个塌平之后的命名空间，而不是原始字符串。
+ */
+export function mcpToolNamespace(name: string): string {
+    return name.replace(/[^\w]/g, '_');
+}
+
+type McpRowRunner = Pick<typeof db, 'select'>;
+
+/**
+ * 找出与 `name` 共用工具命名空间的那台服务器（`excludeId` 用于改名时排除自己）。
+ *
+ * 比对必须放在 JS 里：`\w` 是 ASCII 口径，中点、破折号、CJK 字符都要换成 `_`，PostgreSQL 的
+ * `[^[:alnum:]_]` 会把它们全认成字母，两边各算一套就会漏判——而漏判的表现是 200 + 一份少了几件工具的
+ * 工具集，没有任何日志。mcp_servers 是个人工作台规模的少量行，为了一个确定性口径整表读两列，
+ * 比在 SQL 里复刻正则划算。
+ */
+export async function findMcpNamespaceConflict(runner: McpRowRunner, name: string, excludeId?: string) {
+    const namespace = mcpToolNamespace(name);
+    const rows = await runner.select({ id: mcpServers.id, name: mcpServers.name }).from(mcpServers);
+    return rows.find((row) => row.id !== excludeId && mcpToolNamespace(row.name) === namespace) ?? null;
+}
+
+/** transport 的取值域就是 schema 里注释的那两个值；连接层按它二选一（见 buildMcpTransport 那段）。 */
+const MCP_TRANSPORTS = ['http', 'sse'] as const;
+
+/**
+ * 未知值直接 400，不静默回退——与 `work-input.ts` 的 `normalizeWorkEnum` 同一立场。
+ *
+ * 原写法是 `raw === 'sse' ? 'sse' : 'http'`：除了 'sse' 以外的一切都被改写成 'http'。
+ * 表单的下拉里选不到错值，所以它平时不响；但手工请求、脚本回填、以后新增的传输类型都会撞上——
+ * 请求回 200、界面显示「已保存」，库里存的却是用户根本没提交过的值，
+ * 之后连接失败只表现为「这台服务器连不上」，没人会怀疑是保存环节把值换掉了。
+ * 未提供（undefined/null/空串）仍按列默认值 'http' 处理，那是「没选」而不是「选错了」。
+ */
 export function normalizeMcpTransport(raw: unknown): string {
-    return raw === 'sse' ? 'sse' : 'http';
+    if (raw === undefined || raw === null) return 'http';
+    if (typeof raw !== 'string') throw createError({ statusCode: 400, statusMessage: `transport 只能是 ${MCP_TRANSPORTS.join(' / ')}` });
+    const value = stripNull(raw).trim();
+    if (!value) return 'http';
+    if (!(MCP_TRANSPORTS as readonly string[]).includes(value)) {
+        throw createError({ statusCode: 400, statusMessage: `transport 只能是 ${MCP_TRANSPORTS.join(' / ')}` });
+    }
+    return value;
 }
 
 export function normalizeMcpHeaders(raw: unknown): Record<string, string> {

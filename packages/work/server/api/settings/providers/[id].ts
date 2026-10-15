@@ -7,6 +7,8 @@ import { requireMethod } from '../../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
+import { routeId } from '../../../utils/route-id';
+import { lockDefaultSlot } from '../../../utils/unique-default';
 
 function maskKey(key: string) {
     if (!key) return '';
@@ -17,7 +19,7 @@ export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
     // GET 原本会落进下面的更新分支（readBody 得空对象 → 只推进 updatedAt），读一次就写一次库
     const method = requireMethod(event, ['PATCH', 'DELETE']);
-    const id = getRouterParam(event, 'id')!;
+    const id = routeId(event, 'id', '供应商');
 
     if (method === 'DELETE') {
         // 与 agents/[id].delete.ts 同口径：0 行影响要报 404，否则 id 抄错或已被别的管理员删掉时，
@@ -49,7 +51,10 @@ export default defineEventHandler(async (event) => {
     const becomesDefault = patch.isDefault === true;
     await db.transaction(async (tx) => {
         // 提升为默认时先清掉其它默认，且与本行更新同事务，避免出现两个默认供应商。
+        // 槽位锁管的是另一个方向：并发时两个事务各自的「清掉其它默认」都读不到对方尚未提交的那行，
+        // 于是两行同时变成默认（表里本来没有默认行时尤其明显，见 unique-default.ts）。
         if (becomesDefault) {
+            await lockDefaultSlot(tx, 'providers');
             await tx
                 .update(providers)
                 .set({ isDefault: false, updatedAt: new Date() })

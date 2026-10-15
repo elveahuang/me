@@ -3,6 +3,7 @@ import { tasks } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { capBody } from '../../utils/request-body';
+import { routeId } from '../../utils/route-id';
 import {
     WORK_DETAIL_MAX,
     WORK_TITLE_MAX,
@@ -18,7 +19,7 @@ import { assertProjectExists, lockProjectRow } from '../../utils/work-project';
 export default defineEventHandler(async (event) => {
     await capBody(event);
     const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
-    const id = getRouterParam(event, 'id')!;
+    const id = routeId(event, 'id', '任务');
 
     if (method === 'DELETE') {
         const deleted = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });

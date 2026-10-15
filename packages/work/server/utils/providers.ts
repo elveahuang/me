@@ -1,9 +1,10 @@
 import { createOpenAI } from '@ai-sdk/openai';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { createError } from 'h3';
 import type { Provider } from '../db/schema';
 import { providers } from '../db/schema';
 import { db } from './db';
+import { lockDefaultSlot } from './unique-default';
 
 /**
  * 模型供应商解析：所有供应商按 OpenAI 兼容协议接入
@@ -14,6 +15,21 @@ import { db } from './db';
 function envDeepseekKey(): string {
     const raw = (process.env.NUXT_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || '').trim();
     return raw && !raw.includes('xxxx') ? raw : '';
+}
+
+/**
+ * DeepSeek 的 OpenAI 兼容端点。`ensureDefaultProvider()` 建默认行走这个值，
+ * 环境变量回填也只认它——两者必须是同一个常量，否则新建的默认行自己都不符合回填条件。
+ */
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
+
+/** 尾斜杠差异不算换服务：`https://api.deepseek.com/v1/` 与不带斜杠是同一个端点 */
+function isDeepSeekEndpoint(baseUrl: string | null | undefined): boolean {
+    return (
+        String(baseUrl ?? '')
+            .trim()
+            .replace(/\/+$/, '') === DEEPSEEK_BASE_URL
+    );
 }
 
 /**
@@ -40,6 +56,14 @@ export async function assertProviderExists(raw: unknown, label = '模型供应�
  * 注意回填逻辑：早期版本在环境变量缺失时创建了 apiKey 为空的行，
  * 之后再配置 NUXT_DEEPSEEK_API_KEY 也不会生效（管理端看不到原因、对话直接 400）。
  * 因此这里对「默认且 Key 为空」的行做一次环境变量回填。
+ *
+ * 但回填只认指向 DEEPSEEK_BASE_URL 的行。判据原来只有「apiKey 为空 且 isDefault」，
+ * 而空 Key 是常见的人为状态：本地模型运行时（Ollama / llama.cpp 的 OpenAI 兼容端点）本来就不需要
+ * key，第三方网关也可能先建好行再补 key。这种情况下只要环境变量里有一条 DeepSeek Key，
+ * 下一次解析模型（`resolveModel` → 这里，以及 GET /api/settings/providers 也在调）就会把它
+ * 静默写进那行，`createOpenAI({ baseURL: provider.baseUrl, apiKey })` 随即把
+ * `Authorization: Bearer <DeepSeek Key>` 发给用户配置的另一个主机——凭据就此出站到一台和 DeepSeek
+ * 无关的服务器，而管理端看到的是「这个供应商已经有 Key 了」，用户无从察觉。
  */
 export async function ensureDefaultProvider() {
     const usableKey = envDeepseekKey();
@@ -48,10 +72,10 @@ export async function ensureDefaultProvider() {
     if (existing) {
         if (!usableKey) return;
         const emptyKeyDefaults = await db
-            .select({ id: providers.id, name: providers.name })
+            .select({ id: providers.id, name: providers.name, baseUrl: providers.baseUrl })
             .from(providers)
             .where(and(eq(providers.apiKey, ''), eq(providers.isDefault, true)));
-        for (const row of emptyKeyDefaults) {
+        for (const row of emptyKeyDefaults.filter((item) => isDeepSeekEndpoint(item.baseUrl))) {
             await db.update(providers).set({ apiKey: usableKey, updatedAt: new Date() }).where(eq(providers.id, row.id));
             console.info(`[providers] 已用环境变量回填供应商「${row.name}」的 API Key`);
         }
@@ -62,16 +86,17 @@ export async function ensureDefaultProvider() {
     // （两路首聊、或列表页与聊天同时触发）会各插一行默认供应商，之后每行都会被回填成同样的 key，
     // 管理端出现两个「默认」而 resolveModel 只会认其中一行。
     await db.transaction(async (tx) => {
-        // hashtext() 返回 integer，而 pg_advisory_xact_lock 只吃 bigint：
-        // 尾上的 `::bigint`  cast 的是函数的 void 返回值（PG 直接报 cannot cast type void to bigint），
-        // 于是整个 GET /api/settings/providers 会 500。要用哈希取锁就换成返回 bigint 的 hashtextextended。
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('providers-default', 0))`);
+        // 与两个管理端写入点共用同一把槽位锁：否则「首聊触发的自动建行」和
+        // 「管理员同时手工设默认」各拿各的锁，照样能留下两个默认供应商。
+        // （早先这里用的是 hashtext()，返回 integer、尾上 ::bigint 又 cast 在 void 返回值上，
+        // 整条语句报错并把整个 GET /api/settings/providers 打成 500。）
+        await lockDefaultSlot(tx, 'providers');
         const [row] = await tx.select({ id: providers.id }).from(providers).orderBy(asc(providers.createdAt)).limit(1);
         if (row) return;
         await tx.insert(providers).values({
             id: crypto.randomUUID(),
             name: 'DeepSeek',
-            baseUrl: 'https://api.deepseek.com/v1',
+            baseUrl: DEEPSEEK_BASE_URL,
             apiKey: usableKey,
             models: ['deepseek-chat', 'deepseek-reasoner'],
             enabled: true,

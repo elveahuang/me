@@ -18,7 +18,6 @@ export function stripNull(value: string): string {
 export function toText(raw: unknown): string {
     return typeof raw === 'string' ? stripNull(raw) : '';
 }
-
 /**
  * handler 里到处都是 `typeof x === 'string' ? x.trim() : ''` 这一行：
  * 它缺了 stripNull，就是「名字里粘一个 NUL → 500 + SQL 细节」的那条路径。
@@ -26,4 +25,45 @@ export function toText(raw: unknown): string {
  */
 export function safeTrim(raw: unknown): string {
     return toText(raw).trim();
+}
+
+/**
+ * 递归剔除任意 JSON 结构里每个字符串（含对象键）中的 NUL，返回新的结构。
+ *
+ * 给 jsonb 列用的：`stripNull()` 只能救「一个已知字符串字段」这种形状，
+ * 而 jsonb 的值是一整棵树——聊天消息的 `parts` 里，`data` part 的载荷、`file` part 的
+ * filename、工具输出的嵌套字段都可能是字符串，逐字段点名必然漏。漏一个就是一条
+ * `Failed query: insert into "messages" (...)` 连同整张列清单进响应体。
+ *
+ * 用显式栈而不是递归：入参形状由客户端决定，`[[[[…]]]]` 套到几万层时递归版本
+ * 会先栈溢出，等于把「500 + SQL 外泄」换成另一种 500。
+ */
+export function stripNullDeep<T>(value: T): T {
+    if (typeof value === 'string') return stripNull(value) as unknown as T;
+    // Date 不含 NUL，且不能退化成 {}（jsonb 里会丢时间），原样交给驱动的序列化
+    if (value === null || typeof value !== 'object' || value instanceof Date) return value;
+
+    const root: object = Array.isArray(value) ? [] : {};
+    const stack: Array<{ src: object; dst: object }> = [{ src: value, dst: root }];
+    const set = (dst: object, key: string | number, item: unknown) => {
+        (dst as Record<string | number, unknown>)[key] = item;
+    };
+    while (stack.length) {
+        const { src, dst } = stack.pop()!;
+        const entries: Array<[string | number, unknown]> = Array.isArray(src)
+            ? src.map((item, index) => [index, item] as [number, unknown])
+            : Object.entries(src as Record<string, unknown>);
+        for (const [rawKey, item] of entries) {
+            // 对象键同样进 SQL 文本：{"a\u0000b": 1} 一样触发 22021
+            const key = typeof rawKey === 'string' ? stripNull(rawKey) : rawKey;
+            if (item !== null && typeof item === 'object' && !(item instanceof Date)) {
+                const child: object = Array.isArray(item) ? [] : {};
+                set(dst, key, child);
+                stack.push({ src: item, dst: child });
+                continue;
+            }
+            set(dst, key, typeof item === 'string' ? stripNull(item) : item);
+        }
+    }
+    return root as T;
 }

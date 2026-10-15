@@ -107,7 +107,7 @@ async function load() {
     listError.value = '';
     try {
         const [agentRows, skills, tools, kbs, mcps, providers] = await Promise.all([
-            $fetch('/api/settings/agents'),
+            $fetch<AgentItem[]>('/api/settings/agents'),
             $fetch<SkillItem[]>('/api/settings/skills'),
             $fetch<{ id: string; name: string; type: string; enabled: boolean }[]>('/api/settings/tools'),
             $fetch<KbItem[]>('/api/settings/knowledge-bases'),
@@ -262,10 +262,23 @@ async function remove(id: string) {
     listError.value = '';
     try {
         await $fetch(`/api/settings/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        await load();
     } catch (e) {
-        listError.value = extractApiError(e, t('adminForm.deleteFailed'));
+        // 服务端现在会用 409 拦住「名下还有会话」的删除（会话与消息是 cascade，删掉就永久没了）。
+        // 这里问第二遍，确认后才带 force 重试；不确认就当用户改主意，不额外挂错误横幅。
+        const status = (e as { status?: number; statusCode?: number }).status ?? (e as { statusCode?: number }).statusCode;
+        if (status !== 409) {
+            listError.value = extractApiError(e, t('adminForm.deleteFailed'));
+            return;
+        }
+        if (!confirm(t('adminForm.agentForceDeleteConfirm'))) return;
+        try {
+            await $fetch(`/api/settings/agents/${encodeURIComponent(id)}`, { method: 'DELETE', query: { force: '1' } });
+        } catch (retryError) {
+            listError.value = extractApiError(retryError, t('adminForm.deleteFailed'));
+            return;
+        }
     }
+    await load();
 }
 </script>
 
@@ -490,7 +503,9 @@ async function remove(id: string) {
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!agents.length">
+                    <!-- 接口失败时不渲染空态：否则「列表读不到」读成「一个智能体都没有」，
+                         而顶部那条错误横幅会被当成又一次抖动忽略掉（与 chat/index.vue 的 !loading && !loadError 同一口径） -->
+                    <tr v-if="!listError && !agents.length">
                         <td colspan="7" class="!whitespace-normal">
                             <div class="app-empty">
                                 <span class="app-empty-icon">🤖</span>
