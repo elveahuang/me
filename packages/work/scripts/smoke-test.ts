@@ -360,8 +360,85 @@ async function runSmokeTests() {
         '徽章 tone 映射且未知值回退 neutral',
     );
 
-    // 15. 数据库连通性与核心表（可选：本机未起数据库时跳过）
-    console.log('\n15. 测试数据库连通性与核心数据表');
+    // 15. 笔记摘要与 Markdown 归一（索引纯函数面，不碰库不外呼）
+    console.log('\n15. 测试笔记摘要归一');
+    const { NOTE_SUMMARY_MAX, deriveNoteSummary, markdownToPlainText } = await import('../server/utils/note-index');
+    assert(
+        markdownToPlainText('## 周报\n\n- **完成** [登录](https://x.test/a)\n- 修复 `bug`') === '周报 完成 登录 修复 bug',
+        '标题/列表/加粗/链接/行内代码都归一成可读纯文本',
+    );
+    assert(markdownToPlainText('```ts\nconst a = 1;\n```') === '', '代码围栏整段丢弃：里面是符号不是语义，进摘要只会把列表挤满乱码');
+    assert(deriveNoteSummary('# 标题\n\n正文一句', '兜底标题') === '标题 正文一句', '摘要走同一套 Markdown 归一');
+    assert(deriveNoteSummary('', '只有标题') === '只有标题', '正文为空回退标题，列表不至于两栏都空');
+    assert(deriveNoteSummary('', '') === '', '正文与标题皆空回退空串而不是 undefined');
+    const longSummary = deriveNoteSummary('内'.repeat(NOTE_SUMMARY_MAX + 50));
+    assert(longSummary.length === NOTE_SUMMARY_MAX + 1 && longSummary.endsWith('…'), `摘要封顶 ${NOTE_SUMMARY_MAX} 字符（正文可达数百 KB，摘要会进提示词）`);
+
+    // 16. 简报日期入参与 AI 工具桥口径
+    console.log('\n16. 测试简报入参与工具桥一致性');
+    const { briefDateInput } = await import('../server/utils/brief');
+    assert(briefDateInput('2026-10-15')?.toISOString() === '2026-10-14T16:00:00.000Z', '?date 按北京日解释成当天起点');
+    assert(
+        briefDateInput(undefined) === null && briefDateInput('tomorrow') === null && briefDateInput('2026-02-30') === null,
+        '缺失/非日期/假日期回退 null（= 今天）而不是 Invalid Date',
+    );
+
+    const { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } = await import('../server/utils/workbench-tools');
+    const workbenchTools = buildWorkbenchTools();
+    assert(
+        ['work_today', 'work_list_tasks', 'work_create_task', 'work_update_task', 'work_create_note', 'work_create_event', 'work_search'].every(
+            (name) => name in workbenchTools,
+        ),
+        '七个工作台动作全部注册为模型可见工具',
+    );
+    assert(
+        Object.keys(workbenchTools).every((name) => WORKBENCH_TOOL_SUMMARY.includes(name)),
+        '系统提示词的工具清单与真实工具同名：提示里写一个不存在的工具，模型每轮都会空跑一次失败调用',
+    );
+    assert(
+        Object.values(workbenchTools).every((item: any) => typeof item.description === 'string' && item.description.length > 10 && item.inputSchema),
+        '每个工具都带描述与入参 schema（缺描述时模型只会瞎猜参数）',
+    );
+
+    // 17. locales 对齐（zh/en 键集合、空值、插值名）——一次性探针的常驻版
+    console.log('\n17. 测试两端 locales 对齐');
+    const flattenLocale = (obj: unknown, prefix = ''): [string, unknown][] =>
+        Object.entries(obj as Record<string, unknown>).flatMap(([key, value]) =>
+            value && typeof value === 'object' ? flattenLocale(value, `${prefix}${key}.`) : [[`${prefix}${key}`, value]],
+        );
+    const { default: zhLocale } = await import('../app/locales/zh-CN');
+    const { default: enLocale } = await import('../app/locales/en-US');
+    const zhEntries = flattenLocale(zhLocale);
+    const enEntries = flattenLocale(enLocale);
+    const zhKeys = zhEntries.map((entry) => entry[0]).sort();
+    const enKeys = new Set(enEntries.map((entry) => entry[0]));
+    const onlyZh = zhKeys.filter((key) => !enKeys.has(key));
+    const onlyEn = [...enKeys].filter((key) => !new Set(zhKeys).has(key)).sort();
+    assert(onlyZh.length === 0 && onlyEn.length === 0, `zh/en 键集合一致（zh 独有 ${onlyZh.join(', ') || '无'}、en 独有 ${onlyEn.join(', ') || '无'}）`);
+    assert(
+        [...zhEntries, ...enEntries].every(([, value]) => typeof value === 'string' && value.trim() !== ''),
+        '没有空文案键（空串会在界面上渲染成空白，比缺键更难发现）',
+    );
+    const placeholdersOf = (entries: [string, unknown][]) =>
+        new Map(
+            entries.map(([key, value]) => [
+                key,
+                String(value)
+                    .match(/\{[A-Za-z_][A-Za-z0-9_]*\}/g)
+                    ?.sort()
+                    .join(',') ?? '',
+            ]),
+        );
+    const zhPlaceholders = placeholdersOf(zhEntries);
+    const enPlaceholders = placeholdersOf(enEntries);
+    const placeholderDiff = [...zhKeys].filter((key) => zhPlaceholders.get(key) !== enPlaceholders.get(key));
+    assert(
+        placeholderDiff.length === 0,
+        `同名键的插值参数成对一致（不一致时切换语言会在界面上露出裸 {n}）：${placeholderDiff.slice(0, 3).join(', ') || '无差异'}`,
+    );
+
+    // 18. 数据库连通性与核心表（可选：本机未起数据库时跳过）
+    console.log('\n18. 测试数据库连通性与核心数据表');
     try {
         const { sql } = await import('drizzle-orm');
         const { db } = await import('../server/utils/db');

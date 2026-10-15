@@ -3,6 +3,7 @@ import { notes } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
+import { scheduleNoteIndex } from '../../utils/note-index';
 import { noteColumns } from '../../utils/note-select';
 import { capBody } from '../../utils/request-body';
 import { routeId } from '../../utils/route-id';
@@ -37,8 +38,9 @@ export default defineEventHandler(async (event) => {
     if (body.tags !== undefined) patch.tags = normalizeWorkTags(body.tags);
     if (body.projectId !== undefined) patch.projectId = await assertProjectExists(body.projectId);
 
-    // 改了正文就要让旧摘要失效：summary 是给检索回喂用的，留着旧值等于拿过期结论回答新问题。
-    // 重新摘要是 P7 的事，这里只保证「正文一变，摘要即清空」这条不变量。
+    // 改了正文就要让旧索引失效：summary 是给检索回喂用的，留着旧值等于拿过期结论回答新问题。
+    // 清空之后立刻补一次异步索引（摘要 + 向量），否则这条笔记在用户下一次点开「重建索引」之前
+    // 既搜不到语义、列表里也没有摘要。
     if (body.content !== undefined) {
         patch.summary = '';
         patch.embedding = null;
@@ -52,5 +54,6 @@ export default defineEventHandler(async (event) => {
         return tx.update(notes).set(patch).where(eq(notes.id, id)).returning(noteColumns);
     });
     if (!row) throw createError({ statusCode: 404, statusMessage: '笔记不存在' });
+    if (body.content !== undefined) scheduleNoteIndex(id);
     return row;
 });

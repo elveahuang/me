@@ -1,6 +1,6 @@
 # AGENTS.md — ME 智能体平台
 
-> 项目知识核实日期：2026-09-22。本文是后续代理的工作入口，不是运行验证报告。
+> 项目知识核实日期：2026-10-16（`packages/work` 一节当日以真实请求核实；其余为 2026-09-22 起累积收敛）。本文是后续代理的工作入口，不是运行验证报告。
 > 优先使用本文定位相关模块，再读本次修改涉及的实现；不要每次重新扫描整个仓库。
 > 当代码与本文或 README 冲突时，以当前源码、包脚本和配置为准，并在相关任务中更新本文。
 
@@ -19,14 +19,15 @@
 
 ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nuxt/Nitro API，不是两个独立后端。
 
-| 目录                       | 职责与入口                                                   |
-| -------------------------- | ------------------------------------------------------------ |
-| `packages/webapp`          | Nuxt 4 全栈应用；`app/` 是 Vue 页面，`server/` 是 Nitro 后端 |
-| `packages/mobile`          | Ionic + Vue + Vite 前端、Capacitor 原生壳；调用 Web 后端     |
-| `packages/commons`         | 共享契约、主题及其他可复用资产；修改前确认实际消费者         |
-| `packages/config`          | ESLint、Prettier、Stylelint、TypeScript 等共享配置           |
-| `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口             |
-| `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                      |
+| 目录                       | 职责与入口                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `packages/webapp`          | Nuxt 4 全栈应用；`app/` 是 Vue 页面，`server/` 是 Nitro 后端                    |
+| `packages/work`            | 本机 AI 工作台（独立 Nuxt 应用 + 独立数据库）；**没有账号体系**，靠回环绑定保护 |
+| `packages/mobile`          | Ionic + Vue + Vite 前端、Capacitor 原生壳；调用 Web 后端                        |
+| `packages/commons`         | 共享契约、主题及其他可复用资产；修改前确认实际消费者                            |
+| `packages/config`          | ESLint、Prettier、Stylelint、TypeScript 等共享配置                              |
+| `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口                                |
+| `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                                         |
 
 当前核心栈：Vue 3、Nuxt 4、Tailwind CSS 4、Nuxt UI、Ionic/Capacitor、AI SDK 7、Better Auth、Drizzle ORM、PostgreSQL。附件模块另用 `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`（S3 协议，兼容 RustFS / MinIO）。依赖的精确版本查各 `package.json` 和 `pnpm-lock.yaml`，不要根据旧 README 或记忆选择版本。
 
@@ -43,24 +44,28 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.5.1`（CI 与 `tools/deploy/dockerfile` 的 corepack 都钉在同一版本，改版本时三处一起）；CI 使用 Node 24，但依赖升级后仍需检查各依赖的 engines，不能把 CI 配置视为兼容性证明。
 
-| 命令                                     | 实际作用 / 前提                                                                   |
-| ---------------------------------------- | --------------------------------------------------------------------------------- |
-| `pnpm install`                           | 安装 workspace 依赖；可能修改锁文件                                               |
-| `pnpm webapp:start`                      | 启动 Nuxt Web/API，默认端口 3000                                                  |
-| `pnpm mobile:start`                      | 启动移动端 Vite 开发服务；后端仍需单独启动                                        |
-| `pnpm webapp:build`                      | Nuxt 生产构建                                                                     |
-| `pnpm mobile:build`                      | 执行移动端包的构建脚本；不等于完成原生平台打包                                    |
-| `pnpm typecheck`                         | 先 Web 再 Mobile；前者失败会阻止后者执行                                          |
-| `pnpm lint`                              | ESLint；覆盖 Web server/app、Mobile src、Commons src                              |
-| `pnpm test`                              | Web 的 `smoke-test`，不是双端端到端测试                                           |
-| `pnpm --filter @repo/webapp typecheck`   | 仅 Web 类型检查                                                                   |
-| `pnpm --filter @repo/mobile typecheck`   | 仅 Mobile 类型检查                                                                |
-| `pnpm --filter @repo/webapp icons:check` | 检查图标生成结果是否同步                                                          |
-| `pnpm webapp:db:generate`                | 根据 schema 生成迁移文件，会写文件                                                |
-| `pnpm webapp:db:migrate`                 | 向目标数据库应用迁移，会改数据结构                                                |
-| `pnpm webapp:db:seed`                    | 执行 `server/db/seed.ts`，会写数据库                                              |
-| `pnpm webapp:init`                       | 依次 migrate + seed，不是只读环境检查                                             |
-| `pnpm webapp:auth:secret`                | 生成 Better Auth 会话密钥（转调 webapp 包同名脚本）；只输出密钥，不写库、不改配置 |
+| 命令                                                     | 实际作用 / 前提                                                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `pnpm install`                                           | 安装 workspace 依赖；可能修改锁文件                                                            |
+| `pnpm webapp:start`                                      | 启动 Nuxt Web/API，默认端口 3000                                                               |
+| `pnpm mobile:start`                                      | 启动移动端 Vite 开发服务；后端仍需单独启动                                                     |
+| `pnpm webapp:build`                                      | Nuxt 生产构建                                                                                  |
+| `pnpm mobile:build`                                      | 执行移动端包的构建脚本；不等于完成原生平台打包                                                 |
+| `pnpm typecheck`                                         | 依次 Web → Work → Mobile；前一个失败会阻止后一个                                               |
+| `pnpm lint`                                              | ESLint；覆盖 Web server/app、Work server/app、Mobile src、Commons src                          |
+| `pnpm test`                                              | Web 的 `smoke-test`，不是双端端到端测试；Work 另跑 `pnpm --filter @repo/work test`             |
+| `pnpm --filter @repo/webapp typecheck`                   | 仅 Web 类型检查                                                                                |
+| `pnpm --filter @repo/mobile typecheck`                   | 仅 Mobile 类型检查                                                                             |
+| `pnpm --filter @repo/webapp icons:check`                 | 检查图标生成结果是否同步                                                                       |
+| `pnpm webapp:db:generate`                                | 根据 schema 生成迁移文件，会写文件                                                             |
+| `pnpm webapp:db:migrate`                                 | 向目标数据库应用迁移，会改数据结构                                                             |
+| `pnpm webapp:db:seed`                                    | 执行 `server/db/seed.ts`，会写数据库                                                           |
+| `pnpm webapp:init`                                       | 依次 migrate + seed，不是只读环境检查                                                          |
+| `pnpm work:start`                                        | 启动 Work 工作台（Nuxt dev，`127.0.0.1:3001`）；库、模型供应商需在 work 自己的库里配           |
+| `pnpm work:build`                                        | Work 生产构建（与 webapp 完全独立，产物在 `packages/work/.output`）                            |
+| `pnpm work:db:generate` / `:migrate` / `:seed` / `:init` | 与 webapp 同名命令同理，但目标库由 `packages/work/.env` 的 `POSTGRES_URL` 决定；都有真实副作用 |
+| `pnpm --filter @repo/work test`                          | Work 的 `scripts/smoke-test.ts`（纯函数 + locales 对齐；数据库不可用时只警告跳过）             |
+| `pnpm webapp:auth:secret`                                | 生成 Better Auth 会话密钥（转调 webapp 包同名脚本）；只输出密钥，不写库、不改配置              |
 
 - `webapp:start:pro` 实际仍是 dev；`webapp:build:dev`、`webapp:build:pro` 当前与普通 build 相同，不能据命名假设加载不同环境。
 - `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
@@ -115,6 +120,16 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **移动抽屉的滚动锁/焦点圈闭要在跨断点时释放**：`layouts/admin.vue` 的移动菜单与 `AdminDrawer` 共用 `useDrawerFocus`（Esc 关闭、Tab 圈闭、body 滚动锁、焦点归还）。`lg:hidden` 只隐藏抽屉 DOM，**不会**触发任何 watch——窄屏打开菜单后把窗口拉宽，body 会一直锁死滚动。`useCloseDrawerOnWide(openRef, wideQuery?)`（`app/composables/`）在视口变宽跨过抽屉所属断点时自动关闭，第二个参数是 matchMedia query（默认 lg 的 `(min-width: 1024px)`；抽屉用 `md:hidden` 等其他断点时**必须传对应 query**，如聊天历史抽屉传 `(min-width: 768px)`），已接入 `layouts/default.vue`（shell 抽屉，其本地 Tab 圈闭在元素全隐藏时还会吞掉按键）、`layouts/admin.vue` 与 HomeChat/[agentId] 的历史抽屉。新增「仅窄屏出现」的抽屉时同样挂上。
 - **用户端外壳 `layouts/default.vue` 是「固定左栏」布局**：≥ lg 左侧 256px 固定侧栏（Logo + 图标导航 + 底部外观/语言/版权），主内容区 `lg:pl-64` 占满剩余宽度，**没有顶部导航与页脚**（版权并入侧栏底部）；< lg 侧栏收成左侧抽屉（`app-drawer-left`），只留一条 `h-14` 顶栏放汉堡 + Logo，导航与外观/语言都在抽屉底部（`mt-auto`）。因此聊天容器高度是 `h-[calc(100dvh-6.5rem)] lg:h-[calc(100dvh-3rem)]`（窄屏 = 顶栏 3.5rem + 主区 `py-6` 的 3rem，≥lg 只剩 padding）。改布局时 `lg:pl-64` 必须与侧栏宽度成对调整；导航高亮是本地 `isNavActive` 前缀匹配（`/` 精确匹配），不是 NuxtLink 默认的包含式匹配。
 - **theme.css 尾部有集中的移动端适配区块**（在 `.app-theme-dot` 之后、`prefers-reduced-motion` 之前）：`@media (max-width: 640px)` 里 `input/textarea/select.app-input` 强制 `1rem !important`——iOS Safari 对 font-size < 16px 的输入框聚焦会整页放大，而组件里大量 `.app-input !text-xs` 是 (0,2,0) 的 important 覆盖，所以规则刻意写成 `input.app-input.app-input`（重复一次类凑出 (0,2,1)，**不要"清理"这个重复**）。**Ionic 自定义元素要单独处理**：mobile 的 `ion-input/ion-textarea` 挂着 `app-input` 类但内部 input 在 shadow DOM 里（`input.app-input` 够不到），好在内部是 `font-size: inherit`（已对 @ionic/core 源码核实），所以同查询里有 `ion-input/ion-textarea.app-input { font-size: 1rem }` 把宿主字号传导进去；`ion-searchbar` 宿主上常挂 `text-xs` 工具类，需要 `ion-searchbar { font-size: 1rem !important }`（元素选择器特异性低于工具类，important 必须带）。同查询里 `.app-btn-sm`/`.app-btn-icon.app-btn-sm` 放大到可触尺寸（桌面密度不变）。另有 `@media (hover: none)` 让 `.app-hover-reveal` 行内操作在触屏上常显（触屏没有 hover，透明不可点等于永远够不到）。主题 CSS 未分层，该区块必须保持在各原语定义之后才能靠书写顺序覆盖生效。`dvh` 是 `100vh` 的移动端替代（地址栏收展），`.app-modal` 用「vh 行 + dvh 行」双写回退，聊天容器 `h-[calc(100dvh-6.5rem)] lg:h-[calc(100dvh-3rem)]` 直接用 dvh；viewport meta 在 `nuxt.config.ts` 的 `app.head`（`viewport-fit=cover` 让 safe-top/safe-bottom 生效，`interactive-widget=resizes-content` 让 Android 键盘压缩视口而不是盖住输入栏）。Web 端弹窗要用规范三段类 `.app-modal`（header/body/footer）而不是裸 `app-card` 拼装——只有前者有「≤640px 变底部抽屉」的移动端形态。
+
+### packages/work：本机 AI 工作台（单主、无鉴权，边界与 webapp 完全不同）
+
+- **它没有账号体系**：fork 时刻意不带 Better Auth、订单与会员表，`server/db/schema.ts` 里的工作台表**没有归属列**（冒烟测试第 13 节把「没有 user_id」和「没有订单/会员表」都当不变量钉住）。唯一的跨站写防护是 `server/utils/local-origin.ts` 的 `blocksWrite(method, origin)`（外站 Origin 的写请求 403，读不拦）+ `server/plugins/env-guard.ts` 要求回环绑定（`NITRO_HOST=127.0.0.1`；非回环绑定只有显式 `WORK_ALLOW_PUBLIC_BIND=true` 才降为告警，因为 nitro 的 node preset 只认 `NITRO_HOST/HOST`，不解析 `--host`）。写接口另配 `rateLimit`，会外呼的再过 `gateExpensiveCalls`。**想把 work 暴露到公网 = 必须先给它加鉴权**，只做绑定/反代那一步等于把可写库敞开。
+- 数据入口：`/api/tasks`、`/api/notes`、`/api/events`、`/api/projects`（`?stats=1` 用服务端聚合计数，别让前端把子项拉回浏览器再数）、`/api/overview`（Today 页一次拿全六块）、`/api/search`（任务/笔记/日程/项目分组返回，笔记命中片段已按 `position` 在库里截窗并过 `markdownToPlainText`）、`/api/briefs`、`/api/notes/{search,reindex}`。日期口径一律**北京日**（`server/utils/work-day.ts`），写入归一集中在 `server/utils/work-input.ts`（含 U+0000 剔除、枚举未知值直接 400）。
+- AI 工具桥在 `server/utils/workbench-tools.ts`：`buildWorkbenchTools()` 暴露 `work_today / work_list_tasks / work_create_task / work_update_task / work_create_note / work_create_event / work_search`，`WORKBENCH_TOOL_SUMMARY` 是注入系统提示词的**同源**清单（冒烟测试断言两边名字一一对应——提示里写一个不存在的工具，模型每轮都会空跑一次失败调用）。写动作各自有每分钟 20 次的 `gateWrite`；项目引用可以是名字或 id，歧义时把候选回给模型改正，绝不自作主张挑第一条。
+- 每日简报：`briefs` 以北京日为主键，`server/tasks/brief/daily.ts` → `ensureTodayBrief()` 幂等，Today 页手动生成走同一函数。`collectBriefSnapshot` 先抓结构化事实、模型只负责措辞，快照存 `data` 列；生成有 60 秒外层预算，模型不可用时抛可读错误**且不写库**（写一条空正文会把那天永久钉死，因为主键已存在就不再重跑）。
+- 笔记索引：正文变更后由 `note-index.ts` 的 `scheduleNoteIndex` 后台重建摘要/向量——它**必须自带 catch**（`server/plugins/error-guard.ts` 把未处理 rejection 变成 `process.exit(1)`）。本机没配嵌入模型时只写摘要、检索落到 Bigram 兜底；`note-search.ts` 的 cosine 不比较长度不同的向量（换模型后老向量维度不同，截断公共前缀会算出假相关度）。
+- 前端页面：`today / tasks / calendar / notes / notes/[id] / projects / attachments / settings/agents`，导航在 `layouts/default.vue` 的 `navGroups`（「工作台」「AI」两组），命令面板是 `app/components/WorkCommandPalette.vue`（⌘K，只在 layout 挂一次，父级用 `ref.openPalette()` 唤起）。**每个页面的状态都必须能用 URL 表示**（`?view/?project/?day/?q/?status/?sort/?kind/?tag/?archived`），面板的深链才不是装饰；`?new=1`、`?ask=` 这类一次性标志只能在 `onMounted` 里消费后 `router.replace` 掉——写在 setup 顶层会让 SSR 首屏 HTML 带一个不该存在的弹层，或者刷新即重复建数据。`?ask=` 由 `notes/[id].vue` 的「问问 AI」产出，`HomeChat` 把它交给 `ChatPane` 的 `draft` prop 填入输入框并聚焦，**不自动发送**。
+- 窄屏与主题：日历在 `< sm` 不塞 7 列网格（一屏 375px 每格约 50px，chip 连标题都放不下），改成按天分组的 `agenda` 清单（`sm:hidden`，网格本身 `hidden sm:grid`）；命令面板宽度只能写 `!w-[min(40rem,100%)]`——theme.css 未分层，普通 `w-*` 盖不过 `.app-modal` 的 `width:100%`。图标同 webapp 走 `scripts/generate-icons.mjs` 的 NAMES + `pnpm --filter @repo/work icons`，`app/utils/app-icons.ts` 是生成文件（不要手改，也不要对它跑 prettier）。`app/locales/{zh-CN,en-US}.ts` 的键集合对齐 / 空文案 / 插值名成对已由冒烟测试第 17 节常驻断言，新增文案只补一种语言会直接测出来。
 
 ## 6. 服务端定位原则
 
@@ -267,21 +282,22 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 以下路径均相对仓库根目录：
 
-| 任务                         | 首选入口与联动文件                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 修改智能体管理字段或能力绑定 | `packages/webapp/app/pages/admin/agents.vue` → `packages/webapp/server/api/admin/agents/[id].patch.ts` → `packages/webapp/server/utils/agent-skills.ts`；新增持久化字段再查 `packages/webapp/server/db/schema.ts`                                                                                                                                                                               |
-| 修改其他管理资源             | 从 `packages/webapp/app/pages/admin/` 对应页面进入 `packages/webapp/server/api/admin/`；知识库页面为 `knowledge.vue`、API 为 `knowledge-bases`，MCP 页面为 `mcp.vue`、API 为 `mcp-servers`，不要假设名称相同                                                                                                                                                                                    |
-| 修改移动端页面或导航         | `packages/mobile/src/router/index.ts` → `packages/mobile/src/views/` 对应页面；底部导航在 `TabsView.vue`，会员在 `MembershipView.vue`，个人中心在 `MeView.vue`                                                                                                                                                                                                                                  |
-| 修改登录、会话与跨域         | Web 的 `packages/webapp/app/composables/useSession.ts`；Mobile 的 `packages/mobile/src/api/client.ts` 与 `packages/mobile/src/api/auth.ts`；后端联查 `packages/webapp/server/utils/auth.ts`、`packages/webapp/server/utils/guard.ts`、`packages/webapp/server/middleware/cors.ts`                                                                                                               |
-| 修改生成式 UI 组件或 schema  | `packages/webapp/server/utils/catalog.ts`、`packages/webapp/server/utils/system-prompt.ts`；同步两端 `json-ui.ts` 映射及 Web 的 `packages/webapp/app/components/json-ui/`、Mobile 的 `packages/mobile/src/components/Jr*.vue`                                                                                                                                                                   |
-| 修改知识库上传、分块或索引   | `packages/webapp/server/api/admin/knowledge-bases/[kbId]/documents.ts` → `packages/webapp/server/utils/embedding.ts`；重建入口为同目录的 `reindex.post.ts`，对话检索消费者为 `packages/webapp/server/api/chat.post.ts`                                                                                                                                                                          |
-| 修改套餐、会员或订单展示     | Web 的 `packages/webapp/app/pages/pricing.vue`、`packages/webapp/app/pages/profile.vue`；Mobile 的 `MembershipView.vue`、`MeView.vue`；订单状态徽章/文案统一用契约 `orderStatusTone`/`orderStatusLabelKey`；联查共享契约、`packages/webapp/server/api/billing/` 和 `packages/webapp/server/utils/billing.ts`                                                                                    |
-| 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                                                                                                                                    |
-| 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                                                                                                                                             |
-| 修改附件 / 对象存储          | `packages/webapp/server/utils/storage.ts` → `packages/webapp/server/api/attachments*`（上传/直传/下载代理）→ 用户端 `packages/webapp/app/pages/attachments.vue` 与移动端 `packages/mobile/src/views/AttachmentsView.vue`；管理端配置在系统设置分区 `packages/webapp/app/components/AdminSettingsStorage.vue`（`/admin/settings`），附件总览在 `packages/webapp/app/pages/admin/attachments.vue` |
-| 修改资讯新闻                 | `packages/webapp/server/api/news*`、`packages/webapp/server/api/admin/news*` → Web 的 `app/pages/news/`、`app/pages/admin/news.vue` 与移动端 `NewsView.vue`、`NewsDetailView.vue`；契约 `NewsSummary`/`NewsDetailResponse`                                                                                                                                                                      |
-| 修改宣传栏                   | `packages/webapp/server/api/bulletins.get.ts`、`packages/webapp/server/api/admin/bulletins*` → 两端 `BulletinBanner.vue` 与管理端 `admin/bulletins.vue`；时间窗边界用契约的 `dateInputToBoundary()`                                                                                                                                                                                             |
-| 修改消息通知                 | `packages/webapp/server/utils/notify.ts`、`server/api/notifications*`、`server/api/admin/notifications*` → Web 的 `app/pages/notifications.vue`、`admin/notifications.vue` 与移动端 `NotificationsView.vue`；移动端未读角标走 `composables/useUnread.ts`                                                                                                                                        |
+| 任务                         | 首选入口与联动文件                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 修改智能体管理字段或能力绑定 | `packages/webapp/app/pages/admin/agents.vue` → `packages/webapp/server/api/admin/agents/[id].patch.ts` → `packages/webapp/server/utils/agent-skills.ts`；新增持久化字段再查 `packages/webapp/server/db/schema.ts`                                                                                                                                                                                                    |
+| 修改其他管理资源             | 从 `packages/webapp/app/pages/admin/` 对应页面进入 `packages/webapp/server/api/admin/`；知识库页面为 `knowledge.vue`、API 为 `knowledge-bases`，MCP 页面为 `mcp.vue`、API 为 `mcp-servers`，不要假设名称相同                                                                                                                                                                                                         |
+| 修改移动端页面或导航         | `packages/mobile/src/router/index.ts` → `packages/mobile/src/views/` 对应页面；底部导航在 `TabsView.vue`，会员在 `MembershipView.vue`，个人中心在 `MeView.vue`                                                                                                                                                                                                                                                       |
+| 修改登录、会话与跨域         | Web 的 `packages/webapp/app/composables/useSession.ts`；Mobile 的 `packages/mobile/src/api/client.ts` 与 `packages/mobile/src/api/auth.ts`；后端联查 `packages/webapp/server/utils/auth.ts`、`packages/webapp/server/utils/guard.ts`、`packages/webapp/server/middleware/cors.ts`                                                                                                                                    |
+| 修改生成式 UI 组件或 schema  | `packages/webapp/server/utils/catalog.ts`、`packages/webapp/server/utils/system-prompt.ts`；同步两端 `json-ui.ts` 映射及 Web 的 `packages/webapp/app/components/json-ui/`、Mobile 的 `packages/mobile/src/components/Jr*.vue`                                                                                                                                                                                        |
+| 修改知识库上传、分块或索引   | `packages/webapp/server/api/admin/knowledge-bases/[kbId]/documents.ts` → `packages/webapp/server/utils/embedding.ts`；重建入口为同目录的 `reindex.post.ts`，对话检索消费者为 `packages/webapp/server/api/chat.post.ts`                                                                                                                                                                                               |
+| 修改套餐、会员或订单展示     | Web 的 `packages/webapp/app/pages/pricing.vue`、`packages/webapp/app/pages/profile.vue`；Mobile 的 `MembershipView.vue`、`MeView.vue`；订单状态徽章/文案统一用契约 `orderStatusTone`/`orderStatusLabelKey`；联查共享契约、`packages/webapp/server/api/billing/` 和 `packages/webapp/server/utils/billing.ts`                                                                                                         |
+| 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                                                                                                                                                         |
+| 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                                                                                                                                                                  |
+| 修改附件 / 对象存储          | `packages/webapp/server/utils/storage.ts` → `packages/webapp/server/api/attachments*`（上传/直传/下载代理）→ 用户端 `packages/webapp/app/pages/attachments.vue` 与移动端 `packages/mobile/src/views/AttachmentsView.vue`；管理端配置在系统设置分区 `packages/webapp/app/components/AdminSettingsStorage.vue`（`/admin/settings`），附件总览在 `packages/webapp/app/pages/admin/attachments.vue`                      |
+| 修改工作台（packages/work）  | 页面 `packages/work/app/pages/`（`today/tasks/calendar/notes/projects`）与 `app/layouts/default.vue` 的 `navGroups`、`app/components/WorkCommandPalette.vue`；接口 `packages/work/server/api/`；写入与日期口径 `server/utils/work-input.ts`、`work-day.ts`；AI 能力 `server/utils/workbench-tools.ts`、`brief.ts`、`note-index.ts`。**先看 §5 末尾的 work 小节**：它没有鉴权，改动前先确认是否触碰绑定地址或来源闸门 |
+| 修改资讯新闻                 | `packages/webapp/server/api/news*`、`packages/webapp/server/api/admin/news*` → Web 的 `app/pages/news/`、`app/pages/admin/news.vue` 与移动端 `NewsView.vue`、`NewsDetailView.vue`；契约 `NewsSummary`/`NewsDetailResponse`                                                                                                                                                                                           |
+| 修改宣传栏                   | `packages/webapp/server/api/bulletins.get.ts`、`packages/webapp/server/api/admin/bulletins*` → 两端 `BulletinBanner.vue` 与管理端 `admin/bulletins.vue`；时间窗边界用契约的 `dateInputToBoundary()`                                                                                                                                                                                                                  |
+| 修改消息通知                 | `packages/webapp/server/utils/notify.ts`、`server/api/notifications*`、`server/api/admin/notifications*` → Web 的 `app/pages/notifications.vue`、`admin/notifications.vue` 与移动端 `NotificationsView.vue`；移动端未读角标走 `composables/useUnread.ts`                                                                                                                                                             |
 
 ### 阅读实现时不能跳过的边界
 

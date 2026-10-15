@@ -24,6 +24,7 @@ import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
 import { buildSystemPrompt } from '../utils/system-prompt';
 import { buildToolSet } from '../utils/tools';
+import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from '../utils/workbench-tools';
 
 /** 发送给模型的上下文窗口（最近 N 条消息），控制长会话的 token 成本 */
 const MAX_CONTEXT_MESSAGES = 24;
@@ -448,7 +449,9 @@ export default defineEventHandler(async (event) => {
     const { model } = await resolveModel(agent.providerId, agent.model);
 
     // 10. 工具集与 MCP 连接
-    let toolSet = buildToolSet(boundTools.map((row) => row.tool));
+    //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
+    //     用户说「帮我记个待办」时不该取决于所选智能体恰好绑了哪几行工具。
+    let toolSet = { ...buildWorkbenchTools(), ...buildToolSet(boundTools.map((row) => row.tool)) };
     if (agent.selfConfig) {
         toolSet['self-config'] = buildSelfConfigTool(agentId);
     }
@@ -474,6 +477,7 @@ export default defineEventHandler(async (event) => {
 
         // 11. 组装系统提示词
         const toolSummary = [
+            WORKBENCH_TOOL_SUMMARY,
             ...boundTools.map((row) => `- ${row.tool.name}（${row.tool.type === 'http' ? 'HTTP 工具' : '内置工具'}）：${row.tool.description}`),
             ...mcpConnections.map((c) => `- [MCP] ${c.serverName}`),
         ].join('\n');

@@ -8,38 +8,36 @@ import { useI18n } from 'vue-i18n';
  * 切换意味着开一段属于新智能体的对话。
  *
  * 选中态与会话数据都由 useChatSidebar 共享：布局左栏与本页读写同一份，不再各自拉取。
+ * 传给 ChatPane 的是 `effective*` 计算属性而不是 `active*` ref：布局先于页面渲染，
+ * 命令式播种读到的还是默认空数组，SSR 首屏会没有高亮。
  */
 const { t } = useI18n();
 
-const { agents, conversations, activeAgentId, activeConversationId, homeBootstrapped, agentsError, refreshAgents, refreshConversations } =
-    useChatSidebar();
+const {
+    agents,
+    conversations,
+    effectiveAgentId,
+    effectiveConversationId,
+    activeAgentId,
+    activeConversationId,
+    agentsError,
+    refreshAgents,
+    refreshConversations,
+} = useChatSidebar();
 
 const agentList = computed(() => agents.value ?? []);
-
-/**
- * 默认选中最近一段对话（「上次聊到哪」的连续性）。布局 setup 已播种过一次；
- * 从智能体对话页直接进首页时布局不会重跑 setup，这里补一次。
- */
-if (!homeBootstrapped.value) {
-    homeBootstrapped.value = true;
-    const latest = conversations.value[0] ?? null;
-    activeAgentId.value = latest?.agentId ?? agentList.value[0]?.id ?? null;
-    activeConversationId.value = latest?.id ?? null;
-} else if (!activeAgentId.value) {
-    activeAgentId.value = agentList.value[0]?.id ?? null;
-}
 
 /**
  * 选中态自检：从 `/chat/:agentId` 深链回到首页时，共享选中态可能属于别的智能体
  * （会话归属与当前智能体不一致）——复位成新对话，避免拿 A 的会话去续 B 的聊天。
  * activeConversationId 为 null 表示用户主动开了新对话，保持空白不动。
  */
-const selected = conversations.value.find((c) => c.id === activeConversationId.value && c.agentId === activeAgentId.value);
+const selected = conversations.value.find((c) => c.id === activeConversationId.value && c.agentId === effectiveAgentId.value);
 if (activeConversationId.value && !selected) activeConversationId.value = null;
 
 /** 换智能体：会话归属随之作废，回到全新对话（ChatPane 也会把自己的归属清空） */
 function switchAgent(id: string) {
-    if (id === activeAgentId.value) return;
+    if (id === effectiveAgentId.value) return;
     activeAgentId.value = id;
     activeConversationId.value = null;
 }
@@ -52,6 +50,20 @@ function retry() {
     refreshAgents();
     refreshConversations();
 }
+
+/**
+ * 笔记页「问问 AI」带过来的 `?ask=`：把文本交给 ChatPane 填入输入框，随后清掉查询串。
+ * 不直接发送——草稿要让用户改，而且长正文进输入框后还得看排版；
+ * 清 URL 是为了刷新不会把同一段草稿再填一次（盖掉用户已经敲进去的东西）。
+ */
+const route = useRoute();
+const router = useRouter();
+const askDraft = ref(typeof route.query.ask === 'string' ? route.query.ask.slice(0, 4000) : '');
+
+onMounted(() => {
+    if (!askDraft.value) return;
+    void router.replace({ query: { ...route.query, ask: undefined } });
+});
 </script>
 
 <template>
@@ -66,9 +78,10 @@ function retry() {
         <div class="flex h-[calc(100dvh-6.5rem)] flex-col lg:h-[calc(100dvh-3rem)]">
             <ChatPane
                 class="min-h-0 flex-1"
-                :agent-id="activeAgentId"
-                :conversation-id="activeConversationId"
+                :agent-id="effectiveAgentId"
+                :conversation-id="effectiveConversationId"
                 :agent-list="agentList"
+                :draft="askDraft"
                 @update:agent-id="switchAgent"
                 @update:conversation-id="onActiveConversationChange"
                 @conversation-list-stale="refreshConversations()"

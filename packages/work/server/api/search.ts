@@ -2,6 +2,7 @@ import { desc, ilike, or, sql } from 'drizzle-orm';
 import { events, notes, projects, tasks } from '../db/schema';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
+import { markdownToPlainText } from '../utils/note-index';
 import { intParam, likePattern, stringParam } from '../utils/query';
 import { capBody } from '../utils/request-body';
 
@@ -68,5 +69,13 @@ export default defineEventHandler(async (event) => {
             .limit(limit),
     ]);
 
-    return { q: keyword, tasks: taskHits, notes: noteHits, events: eventHits, projects: projectHits };
+    return {
+        q: keyword,
+        tasks: taskHits,
+        // 命中窗口截的是 Markdown 原文（`# 标题`、`**粗体**` 都还在），直接放进单行摘要会读成乱码；
+        // 与笔记摘要用同一个归一函数，两个入口的读感才一致。
+        notes: noteHits.map((hit) => ({ ...hit, snippet: markdownToPlainText(hit.snippet ?? '') })),
+        events: eventHits,
+        projects: projectHits,
+    };
 });

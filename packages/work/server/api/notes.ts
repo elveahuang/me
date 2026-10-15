@@ -3,6 +3,7 @@ import { notes } from '../db/schema';
 import { normalizeAdminBoolean } from '../utils/admin-boolean';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
+import { scheduleNoteIndex } from '../utils/note-index';
 import { noteColumns } from '../utils/note-select';
 import { LOCAL_OWNER } from '../utils/owner';
 import { intParam, likePattern, stringParam } from '../utils/query';
@@ -51,7 +52,13 @@ export default defineEventHandler(async (event) => {
                 tags: normalizeWorkTags(body.tags),
             });
         });
+        // 先把回给客户端的那一行读完，再触发异步索引：
+        // 反过来的话索引那次 `update(summary)` 可能与这里的 SELECT 交错，
+        // 同一次保存有时带摘要有时不带，界面列表就会闪一下「空摘要」。
         const [row] = await db.select(noteColumns).from(notes).where(eq(notes.id, id));
+        // 正文异步索引（摘要 + 向量）：放在响应之前触发、但不 await——
+        // 一次嵌入外呼不该挡在用户按下「保存」与看到列表之间。
+        scheduleNoteIndex(id);
         return row;
     }
 

@@ -120,6 +120,7 @@ const NAMES = [
     'gift-outline',
     'qrcode',
     'calendar-outline',
+    'calendar-check-outline',
     'clock-outline',
     'history',
     'star-outline',

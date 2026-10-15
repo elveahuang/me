@@ -45,6 +45,17 @@ export default defineNuxtConfig({
         experimental: {
             tasks: true,
         },
+        /**
+         * 每小时第 7 分钟补一次今日简报（`server/tasks/brief/daily.ts`）。
+         *
+         * 不在 cron 里写「每天 07:30」：croner 按进程本地时区解释表达式，容器几乎都是 UTC，
+         * 那样会变成北京时间下午才生成。任务自己判断「北京时间的今天还没有简报」才外呼，
+         * 所以每天实际只有一次模型调用，多出来的 23 次是零成本的空转。
+         * 分针取 7 而不是 0，是为了不和同一进程里其它整点任务挤在一起。
+         */
+        scheduledTasks: {
+            '7 * * * *': 'brief:daily',
+        },
     },
     fonts: {
         providers: {

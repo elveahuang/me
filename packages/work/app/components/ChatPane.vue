@@ -27,8 +27,10 @@ const props = withDefaults(
         agentList?: AgentSummary[];
         /** 父级已取回的详情（SSR），命中时不再重复请求 */
         initialAgent?: AgentDetail | null;
+        /** 外部带进来的草稿（笔记页「问问 AI」把正文片段拼成问题）：非空即填入输入框并聚焦 */
+        draft?: string | null;
     }>(),
-    { conversationId: null, agentList: () => [], initialAgent: null },
+    { conversationId: null, agentList: () => [], initialAgent: null, draft: null },
 );
 
 const emit = defineEmits<{
@@ -58,7 +60,26 @@ watch(renamedConversation, (renamed) => {
     if (renamed && renamed.id === loadedConversationId.value) conversationTitle.value = renamed.title;
 });
 const input = ref('');
+const inputRef = ref<HTMLInputElement | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
+
+/**
+ * 外部草稿（`/?ask=`）：放进输入框并聚焦，让用户改两个字再发。
+ * 这里只负责「给我文本我就填」，要不要清掉 URL 由父级决定——它才是深链的消费方。
+ */
+watch(
+    () => props.draft,
+    (value) => {
+        if (!value) return;
+        input.value = value;
+        void nextTick(() => inputRef.value?.focus());
+    },
+    { immediate: true },
+);
+/** hydration 阶段模板 ref 还没挂上，首屏带进来的草稿要在这里补一次聚焦（否则用户按键就覆盖掉草稿） */
+onMounted(() => {
+    if (props.draft) void nextTick(() => inputRef.value?.focus());
+});
 
 /**
  * 建会话与附件解析都要 await，期间按钮仍是「发送」；连点会重复发送。
@@ -704,7 +725,13 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                 <input ref="chatFileInput" type="file" class="hidden" @change="onChatFileChange" />
 
                 <div class="relative flex-1">
-                    <input v-model="input" :placeholder="t('chat.inputPlaceholder')" :aria-label="t('chat.inputPlaceholder')" class="app-input !pr-8" />
+                    <input
+                        ref="inputRef"
+                        v-model="input"
+                        :placeholder="t('chat.inputPlaceholder')"
+                        :aria-label="t('chat.inputPlaceholder')"
+                        class="app-input !pr-8"
+                    />
                     <button
                         v-if="input"
                         type="button"

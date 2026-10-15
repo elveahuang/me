@@ -23,19 +23,50 @@ const route = useRoute();
 /** 抽屉开关：布局持有，ChatPane 头部的历史按钮（窄屏）也开同一个抽屉 */
 const { open: drawerOpen } = useShellDrawer();
 const drawerRef = ref<HTMLElement | null>(null);
+/** 命令面板只暴露 openPalette()/close()，布局不持有它的开关状态 */
+const palette = ref<{ openPalette: () => void } | null>(null);
 
 /** 会话列表与选中态：左栏渲染，聊天页消费 */
-const { visibleConversations, activeConversationId, agentIdParam, conversationsPending, conversationsError, refreshConversations, effectiveConversationId, selectConversation, startNewChat } =
-    useChatSidebar();
+const {
+    visibleConversations,
+    activeConversationId,
+    agentIdParam,
+    conversationsPending,
+    conversationsError,
+    refreshConversations,
+    effectiveConversationId,
+    selectConversation,
+    startNewChat,
+} = useChatSidebar();
 
 const conversationError = computed(() => (conversationsError.value ? t('common.loadFailed') : ''));
 
-/** 主导航：图标 + 文字；match 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由） */
-const navLinks = computed(() => [
-    { to: '/', label: t('nav.chat'), icon: 'chat-outline', match: '/' },
-    { to: '/chat', label: t('nav.agents'), icon: 'robot-outline', match: '/chat' },
-    { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
-    { to: '/settings/agents', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
+/**
+ * 侧栏分组导航（Linear / Notion 的写法：条目多了靠分组标题保持可扫读）。
+ *
+ * `match` 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由）。
+ * 桌面端与抽屉共用同一个 computed，两侧不会因某次只改一处而菜单项分叉。
+ */
+const navGroups = computed(() => [
+    {
+        title: t('nav.groupWork'),
+        links: [
+            { to: '/today', label: t('nav.today'), icon: 'view-dashboard-outline', match: '/today' },
+            { to: '/tasks', label: t('nav.tasks'), icon: 'check-all', match: '/tasks' },
+            { to: '/calendar', label: t('nav.calendar'), icon: 'calendar-check-outline', match: '/calendar' },
+            { to: '/notes', label: t('nav.notes'), icon: 'book-open-page-variant-outline', match: '/notes' },
+            { to: '/projects', label: t('nav.projects'), icon: 'folder-outline', match: '/projects' },
+        ],
+    },
+    {
+        title: t('nav.groupAi'),
+        links: [
+            { to: '/', label: t('nav.chat'), icon: 'chat-outline', match: '/' },
+            { to: '/chat', label: t('nav.agents'), icon: 'robot-outline', match: '/chat' },
+            { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
+            { to: '/settings/agents', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
+        ],
+    },
 ]);
 
 function isNavActive(match: string) {
@@ -150,19 +181,31 @@ if (import.meta.client) {
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
 
-            <nav class="shrink-0 space-y-1 px-3 py-2">
-                <NuxtLink
-                    v-for="link in navLinks"
-                    :key="link.to"
-                    :to="link.to"
-                    class="app-sidebar-link"
-                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                >
-                    <AppIcon :name="link.icon" :size="17" />
-                    <span>{{ link.label }}</span>
-                </NuxtLink>
+            <nav class="min-h-0 shrink space-y-1 overflow-y-auto px-3 py-2">
+                <template v-for="group in navGroups" :key="group.title">
+                    <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
+                    <NuxtLink
+                        v-for="link in group.links"
+                        :key="link.to"
+                        :to="link.to"
+                        class="app-sidebar-link"
+                        :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                        :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                    >
+                        <AppIcon :name="link.icon" :size="17" />
+                        <span>{{ link.label }}</span>
+                    </NuxtLink>
+                </template>
             </nav>
+
+            <!-- 命令面板入口：快捷键是隐性的，看得见的路径（带 ⌘K 角标的按钮）才是发现方式 -->
+            <div class="shrink-0 px-3 pb-1">
+                <button type="button" class="app-btn app-btn-outline app-btn-block !justify-start gap-2 !text-xs" @click="palette?.openPalette()">
+                    <AppIcon name="magnify" :size="15" class="text-faint" />
+                    <span>{{ t('work.paletteTitle') }}</span>
+                    <kbd class="text-faint ml-auto rounded border border-[color:var(--line)] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+                </button>
+            </div>
 
             <!-- 中间段：新建对话 + 对话记录 -->
             <ConversationList
@@ -212,6 +255,10 @@ if (import.meta.client) {
                 <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
                 <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
+            <!-- 窄屏没有侧栏，命令面板的入口挂在顶栏右侧 -->
+            <button type="button" class="app-btn app-btn-ghost app-btn-icon ml-auto" :aria-label="t('work.paletteTitle')" @click="palette?.openPalette()">
+                <AppIcon name="magnify" :size="18" />
+            </button>
         </header>
 
         <div class="lg:pl-64">
@@ -225,6 +272,9 @@ if (import.meta.client) {
             不用 <Transition> 包裹：外层容器一旦拿到 transform 就会成为 fixed 子元素的包含块，
             而该容器自身高度为 0，会把抽屉压成 0 高度。
         -->
+        <!-- 命令面板：全局快捷键在组件内部注册（布局常驻，切页不会重复挂载） -->
+        <WorkCommandPalette ref="palette" />
+
         <Teleport to="body">
             <div v-if="drawerOpen" class="lg:hidden">
                 <div class="app-drawer-backdrop" @click="drawerOpen = false" />
@@ -255,18 +305,20 @@ if (import.meta.client) {
                     <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由三段各自控制内边距 -->
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
                         <nav class="shrink-0 space-y-1 px-3 py-2">
-                            <p class="app-sidebar-group-title !px-2">{{ t('common.navigation') }}</p>
-                            <NuxtLink
-                                v-for="link in navLinks"
-                                :key="link.to"
-                                :to="link.to"
-                                class="app-sidebar-link"
-                                :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                                :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                            >
-                                <AppIcon :name="link.icon" :size="17" />
-                                <span>{{ link.label }}</span>
-                            </NuxtLink>
+                            <template v-for="group in navGroups" :key="group.title">
+                                <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
+                                <NuxtLink
+                                    v-for="link in group.links"
+                                    :key="link.to"
+                                    :to="link.to"
+                                    class="app-sidebar-link"
+                                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                                >
+                                    <AppIcon :name="link.icon" :size="17" />
+                                    <span>{{ link.label }}</span>
+                                </NuxtLink>
+                            </template>
                         </nav>
 
                         <ConversationList
