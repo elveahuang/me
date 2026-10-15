@@ -9,7 +9,10 @@ export default defineEventHandler(async (event) => {
     await requireAdmin(event);
     // GET 曾会落进下面的更新分支（readBody 得空对象 → 只推进 updatedAt），读一次就改一次数据
     const method = requireMethod(event, ['PATCH', 'DELETE']);
-    const id = getRouterParam(event, 'id')!;
+    // 文件名与这里读的段名必须同为 kbId：radix3（h3 1.15 的路由匹配）在同一位置遇到
+    // `:id` 与 `:kbId` 两个不同名的参数节点时，五段路径直接匹配不到任何路由，
+    // `documents/[documentId].delete.ts` 会永远落进 SSR 兜底（管理端删除文档按钮 500）。
+    const id = getRouterParam(event, 'kbId')!;
 
     if (method === 'DELETE') {
         // 文档与分块跟着级联消失，所以「删了个不存在的库」绝不能被报成成功

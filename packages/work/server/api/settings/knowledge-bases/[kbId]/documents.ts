@@ -3,6 +3,7 @@ import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../../../db
 import { db } from '../../../../utils/db';
 import { chunkText, embedTexts, INDEX_EMBED_BUDGET_MS } from '../../../../utils/embedding';
 import { requireMethod } from '../../../../utils/method';
+import { stripNull } from '../../../../utils/pg-text';
 import { intParam } from '../../../../utils/query';
 import { capBody } from '../../../../utils/request-body';
 
@@ -67,7 +68,10 @@ export default defineEventHandler(async (event) => {
 
         // 两条通道的标题都要归一：multipart 分支此前连 trim 都没做，
         // 长度不受限的标题会整条进列表接口与检索片段头部
-        title = assertTitleLen(title.trim());
+        title = assertTitleLen(stripNull(title).trim());
+        // 按 UTF-8 解码上传的字节很可能带 NUL（选到二进制文件时整篇都是），
+        // 而 PostgreSQL 的 text 列一律拒绝它——不剔除就是一条 500 把 insert 语句原文带回界面
+        content = stripNull(content);
         if (Buffer.byteLength(content, 'utf-8') > MAX_DOCUMENT_BYTES) {
             throw createError({ statusCode: 400, statusMessage: '文档内容超过 2MB 限制' });
         }

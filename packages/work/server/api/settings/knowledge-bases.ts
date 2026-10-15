@@ -2,6 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
+import { safeTrim, stripNull } from '../../utils/pg-text';
 import { assertProviderExists } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
     if (method === 'POST') {
         const body = (await readBody(event)) ?? {};
         // 对齐 skills/tools：trim 后非空、限长 100；非字符串（对象/数字）不允许直写 text 列
-        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const name = safeTrim(body.name);
         if (!name) {
             throw createError({ statusCode: 400, statusMessage: 'name 必填' });
         }
@@ -26,10 +27,9 @@ export default defineEventHandler(async (event) => {
         await db.insert(knowledgeBases).values({
             id,
             name,
-            description: typeof body.description === 'string' ? body.description.slice(0, 500) : '',
+            description: typeof body.description === 'string' ? stripNull(body.description).slice(0, 500) : '',
             embeddingProviderId,
-            embeddingModel:
-                typeof body.embeddingModel === 'string' && body.embeddingModel.trim() ? body.embeddingModel.trim().slice(0, 100) : 'text-embedding-3-small',
+            embeddingModel: safeTrim(body.embeddingModel).slice(0, 100) || 'text-embedding-3-small',
         });
         const [row] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
         return row;

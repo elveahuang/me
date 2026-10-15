@@ -5,6 +5,7 @@ import { normalizeProviderModels } from '../../utils/admin-provider-input';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../utils/outbound';
+import { safeTrim, stripNull } from '../../utils/pg-text';
 import { ensureDefaultProvider } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
         const body = (await readBody(event)) ?? {};
         // 与 [id].ts 的 PATCH 用同一组归一规则：否则 POST 能建出带首尾空白的名称，
         // 非布尔的 enabled/isDefault 会被 PG 拒成 500 并透出 SQL 细节（models 是 jsonb，脏值不报错但会一路进模型上下文）
-        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const name = safeTrim(body.name);
         if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
         if (name.length > 100) throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
         if (!body.baseUrl) {
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
                 id,
                 name,
                 baseUrl,
-                apiKey: body.apiKey ?? '',
+                apiKey: body.apiKey === undefined ? '' : stripNull(body.apiKey as string),
                 models,
                 enabled,
                 isDefault,

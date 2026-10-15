@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createError } from 'h3';
 import { mcpServers } from '../db/schema';
 import { db } from './db';
+import { stripNull } from './pg-text';
 
 /**
  * MCP 工具接入：把后台配置的 MCP Server（http/sse）连接起来，
@@ -137,7 +138,7 @@ const MASKED_HEADER_VALUE = '****';
 const MCP_NAME_MAX = 100;
 
 export function normalizeMcpName(raw: unknown): string {
-    const name = typeof raw === 'string' ? raw.trim() : '';
+    const name = typeof raw === 'string' ? stripNull(raw).trim() : '';
     if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
     if (name.length > MCP_NAME_MAX) throw createError({ statusCode: 400, statusMessage: `name 过长（最多 ${MCP_NAME_MAX} 字符）` });
     return name;
@@ -155,7 +156,8 @@ export function normalizeMcpHeaders(raw: unknown): Record<string, string> {
         // 列类型是 Record<string,string>，而连接层会把这些值直接塞进请求头：
         // 数字/对象虽然能进 jsonb，运行时要不出错要么被静默 stringify 成 "[object Object]"
         if (typeof value !== 'string') throw createError({ statusCode: 400, statusMessage: `header「${key}」的值必须为字符串` });
-        headers[key] = value;
+        // headers 整段落 jsonb，键或值里的 NUL 会让 PostgreSQL 判整段 JSON 非法
+        headers[stripNull(key)] = stripNull(value);
     }
     return headers;
 }

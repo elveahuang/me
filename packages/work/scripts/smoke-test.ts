@@ -237,8 +237,100 @@ async function runSmokeTests() {
     );
     assert(!blocksWrite('POST', 'http://localhost:3001') && !blocksWrite('PATCH', undefined), '本机来源与非浏览器客户端放行');
 
-    // 11. 单主数据不变量：work 的表刻意没有归属列，也不该长出商业表
-    console.log('\n11. 测试单主 schema 数据不变量');
+    // 11. 工作台写入归一与北京日口径（projects/tasks/notes/events 各 handler 共用的同一套规则）
+    console.log('\n11. 测试工作台写入归一与北京日口径');
+    const {
+        WORK_TITLE_MAX,
+        normalizeWorkDate,
+        normalizeWorkDateRange,
+        normalizeWorkId,
+        normalizeWorkOptionalText,
+        normalizeWorkTags,
+        normalizeWorkText,
+        normalizeTaskStatus,
+        taskCompletionPatch,
+    } = await import('../server/utils/work-input');
+    const { safeTrim, stripNull } = await import('../server/utils/pg-text');
+    const { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange } = await import('../server/utils/work-day');
+
+    assert(normalizeWorkText('  写周报  ', 'title', WORK_TITLE_MAX) === '写周报', '必填文本 trim 后返回');
+    assert(
+        threw400(() => normalizeWorkText('   ', 'title', WORK_TITLE_MAX)) && threw400(() => normalizeWorkText(123, 'title', 10)),
+        '全空白与非字符串的必填文本回 400（非字符串会被 postgres-js 拒成 500 并透出 SQL）',
+    );
+    assert(
+        normalizeWorkOptionalText(undefined, 'detail', 10) === '' && normalizeWorkOptionalText(null, 'detail', 10) === '',
+        "选填文本缺失归一成空串（列是 notNull default ''）",
+    );
+    assert(
+        stripNull('a\u0000b') === 'ab' && normalizeWorkText('x\u0000', 'title', 5) === 'x',
+        'U+0000 一律剔除（text/jsonb 列都不接受它，带进去整条 INSERT 连 SQL 一起回显）',
+    );
+    assert(safeTrim({ toString: () => ' x ' }) === '' && safeTrim('  y  ') === 'y', 'safeTrim 只认字符串，对象不会被 toString 蒙混过关');
+    assert(
+        normalizeTaskStatus(undefined) === 'todo' && threw400(() => normalizeTaskStatus('one')),
+        '枚举缺失回退、未知值拒绝：静默落库的坏状态会让任务在看板与筛选里凭空消失',
+    );
+    assert(normalizeWorkTags(['a', 'a', '  ', 2026, {}, null, 'b']).join(',') === 'a,2026,b', '标签去重、标量字符串化、对象与空串丢弃');
+    assert(
+        threw400(() => normalizeWorkTags('a,b')) && threw400(() => normalizeWorkId('not-a-uuid', 'projectId')),
+        'tags 非数组与 id 形状不对都回 400（省一次无谓查库）',
+    );
+    assert(
+        threw400(() => normalizeWorkDate('2026-02-30', 'dueAt')) && threw400(() => normalizeWorkDate('2025-02-29', 'dueAt')),
+        '不存在的日历日拒绝：V8 会把 02-30 顺延成 03-02，提醒与简报就静默错一天',
+    );
+    assert(threw400(() => normalizeWorkDate(1e18, 'dueAt')) && normalizeWorkDate('', 'dueAt') === null, '超出 1970–2100 的脏时间戳拒绝，空串归一为 null');
+    const dayStart = new Date('2026-10-15T06:00:00+08:00');
+    assert(
+        threw400(() => normalizeWorkDateRange('2026-10-15T05:00:00+08:00', dayStart)),
+        'endsAt 早于 startsAt 拒绝',
+    );
+    assert(
+        'completedAt' in taskCompletionPatch('done', null) && !('completedAt' in taskCompletionPatch('done', new Date())),
+        '置 done 补完成时间、已完成的不再重写',
+    );
+    assert(
+        JSON.stringify(taskCompletionPatch('todo', new Date(0))) === '{"completedAt":null}',
+        '退回未完成时清掉旧的完成时间（否则统计里有一条「进行中但已完成于…」）',
+    );
+    assert(
+        shanghaiDateInput('2026-10-15')?.toISOString() === '2026-10-14T16:00:00.000Z' &&
+            shanghaiDateInput('2026-10-15', 'end')?.toISOString() === '2026-10-15T15:59:59.999Z',
+        '日期入参按北京日解释：起于 UTC 前一日 16:00，止于 23:59:59.999',
+    );
+    assert(shanghaiDateInput('2026-02-30') === null && shanghaiDateInput('tomorrow') === null, '假日期与非 YYYY-MM-DD 回退 null 而不是 Invalid Date');
+    assert(
+        shanghaiDayRange(new Date('2026-10-14T16:30:00Z')).start.toISOString() === '2026-10-14T16:00:00.000Z' &&
+            shanghaiDateKey(new Date('2026-10-14T16:30:00Z')) === '2026-10-15',
+        '「今天」的窗口与日键固定北京口径，不受主机时区影响（UTC 容器上会差一天）',
+    );
+
+    // 12. 启动环境审计（work 无鉴权，绑定地址是唯一边界）
+    console.log('\n12. 测试启动环境审计');
+    const { auditEnv } = await import('../server/utils/env-guard');
+    assert(
+        auditEnv({ NODE_ENV: 'production', POSTGRES_URL: 'postgresql://u:p@127.0.0.1:5432/work', NITRO_HOST: '127.0.0.1' }).problems.length === 0,
+        '生产 + 回环绑定 + 已配库：无阻塞问题',
+    );
+    assert(
+        auditEnv({ NODE_ENV: 'production', POSTGRES_URL: '' }).problems.some((p) => p.includes('POSTGRES_URL')),
+        '缺 POSTGRES_URL 在生产直接拒绝启动（否则会静默连到 db.ts 写死的默认库）',
+    );
+    assert(
+        auditEnv({ NODE_ENV: 'production', POSTGRES_URL: 'postgresql://u:p@127.0.0.1:5432/work', NITRO_HOST: '0.0.0.0' }).problems.some((p) =>
+            p.includes('回环'),
+        ),
+        '非回环绑定且没有显式放行时判为 problem（nitro 的 node preset 不解析 --host，只认 NITRO_HOST/HOST）',
+    );
+    assert(
+        auditEnv({ NODE_ENV: 'production', POSTGRES_URL: 'postgresql://u:p@127.0.0.1:5432/work', NITRO_HOST: '0.0.0.0', WORK_ALLOW_PUBLIC_BIND: 'true' })
+            .problems.length === 0,
+        'WORK_ALLOW_PUBLIC_BIND=true 是显式出口：降为告警而不是拒绝',
+    );
+
+    // 13. 单主数据不变量：work 的表刻意没有归属列，也不该长出商业表
+    console.log('\n13. 测试单主 schema 数据不变量');
     const { getTableConfig } = await import('drizzle-orm/pg-core');
     const schema = await import('../server/db/schema');
     const columnsOf = (t: any) => getTableConfig(t).columns.map((c) => c.name);
@@ -254,8 +346,8 @@ async function runSmokeTests() {
         'schema 里没有订单/会员/账号表（fork 时刻意不带）',
     );
 
-    // 12. 共享契约展示层：时区固定与徽章回退
-    console.log('\n12. 测试共享契约展示层不变量');
+    // 14. 共享契约展示层：时区固定与徽章回退
+    console.log('\n14. 测试共享契约展示层不变量');
     const { badgeTone, formatDate, formatDateTime, formatTime } = await import('../../commons/src/contract/index');
     const boundaryInstant = '2026-09-24T00:30:00+08:00';
     assert(
@@ -268,8 +360,8 @@ async function runSmokeTests() {
         '徽章 tone 映射且未知值回退 neutral',
     );
 
-    // 13. 数据库连通性与核心表（可选：本机未起数据库时跳过）
-    console.log('\n13. 测试数据库连通性与核心数据表');
+    // 15. 数据库连通性与核心表（可选：本机未起数据库时跳过）
+    console.log('\n15. 测试数据库连通性与核心数据表');
     try {
         const { sql } = await import('drizzle-orm');
         const { db } = await import('../server/utils/db');

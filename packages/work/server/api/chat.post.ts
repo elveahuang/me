@@ -15,6 +15,7 @@ import {
 import { retrieveContext } from '../utils/embedding';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from '../utils/mcp';
 import { LOCAL_OWNER } from '../utils/owner';
+import { stripNull } from '../utils/pg-text';
 import { resolveModel } from '../utils/providers';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
@@ -89,7 +90,7 @@ function internalAttachmentId(url: string): string | null {
  */
 function sanitizeUserParts(parts: unknown): unknown[] {
     if (!Array.isArray(parts)) return [];
-    return parts.filter((part) => {
+    const kept = parts.filter((part) => {
         if (!part || typeof part !== 'object') return false;
         const candidate = part as { type?: unknown; text?: unknown; url?: unknown; mediaType?: unknown };
         if (typeof candidate.type !== 'string' || !USER_PART_TYPES.has(candidate.type)) return false;
@@ -113,6 +114,23 @@ function sanitizeUserParts(parts: unknown): unknown[] {
         }
         // data part：任意 JSON 结构，保留
         return true;
+    });
+    return stripNullInParts(kept);
+}
+
+/**
+ * 把 parts 里所有 text 字段过一遍 stripNull（jsonb 不接受 U+0000）。
+ * 用户侧与 assistant 侧共用：模型/工具输出里的 NUL 同样会在这条 INSERT 上炸掉，
+ * 而失败发生在本轮生成完之后——额度已扣、回复已流给浏览器，只有落库这一半没了，
+ * 下一轮读历史时又是干净的，界面表现为「这条回答凭空消失」。
+ */
+function stripNullInParts(parts: unknown[]): unknown[] {
+    return parts.map((part) => {
+        const candidate = part as { type?: unknown; text?: unknown };
+        if (candidate.type === 'text' && typeof candidate.text === 'string' && candidate.text.includes('\u0000')) {
+            return { ...candidate, text: stripNull(candidate.text) };
+        }
+        return part;
     });
 }
 
@@ -208,7 +226,7 @@ function partsToText(parts: unknown): string {
 }
 
 export default defineEventHandler(async (event) => {
-    await capBody(event);
+    await capBody(event, MAX_CHAT_BODY_BYTES);
 
     // 1. 分布式限流：本机单主，按整个应用计每分钟最多 30 次请求
     const limited = await rateLimit(`chat:${LOCAL_OWNER}`, 30, 60_000);
@@ -517,7 +535,7 @@ export default defineEventHandler(async (event) => {
                                 id: assistantMessage.id || crypto.randomUUID(),
                                 conversationId: conversation.id,
                                 role: 'assistant',
-                                parts: assistantMessage.parts,
+                                parts: stripNullInParts(assistantMessage.parts ?? []),
                             })
                             .onConflictDoNothing();
                         if (isAborted) {

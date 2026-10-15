@@ -1,9 +1,10 @@
 import { createError } from 'h3';
+import { stripNull } from './pg-text';
 
 /**
  * 供应商模型列表（`providers.models`）归一。
  *
- * 这份列表会被 `/api/admin/agents.get.ts`、`auto-config` 拼进提示词、以及 self-config 的
+ * 这份列表会被 `/api/settings/agents.get.ts`、`auto-config` 拼进提示词、以及 self-config 的
  * `list` 工具结果带进模型上下文，所以条数和单条长度都要有上限；jsonb 列本身不校验形状，
  * 上游 `/models` 返回非字符串 id 时若不拦，就会存下永不匹配 `models.includes(model)`、
  * 在管理端 textarea 里显示成 `[object Object]` 的脏数据。
@@ -32,7 +33,7 @@ export function normalizeProviderModels(raw: unknown, mode: 'reject' | 'skip'): 
             bad('models 必须为字符串数组');
             continue;
         }
-        const id = item.trim();
+        const id = stripNull(item).trim();
         if (!id) {
             bad('models 不能包含空项');
             continue;

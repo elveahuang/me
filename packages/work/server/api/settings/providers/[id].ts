@@ -5,6 +5,7 @@ import { normalizeProviderModels } from '../../../utils/admin-provider-input';
 import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
+import { safeTrim, stripNull } from '../../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 
 function maskKey(key: string) {
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     // 逐字段归一：非字符串/非布尔直写 text/boolean 列会被 PG 拒成 500 并透出 SQL 细节
     if (body.name !== undefined) {
-        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const name = safeTrim(body.name);
         if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
         if (name.length > 100) throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
         patch.name = name;
@@ -40,8 +41,9 @@ export default defineEventHandler(async (event) => {
     if (body.baseUrl !== undefined) patch.baseUrl = assertAbsoluteHttpUrl('baseUrl', body.baseUrl);
     if (body.models !== undefined) patch.models = normalizeProviderModels(body.models, 'reject');
     // apiKey 只有在明确传入新值时才更新（掩码回传不覆盖真实 key）
-    if (typeof body.apiKey === 'string' && body.apiKey && !body.apiKey.includes('****')) {
-        patch.apiKey = body.apiKey;
+    const incomingKey = typeof body.apiKey === 'string' ? stripNull(body.apiKey) : '';
+    if (incomingKey && !incomingKey.includes('****')) {
+        patch.apiKey = incomingKey;
     }
 
     const becomesDefault = patch.isDefault === true;

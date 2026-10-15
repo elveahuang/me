@@ -1,4 +1,5 @@
 import { requireMethod } from '../../utils/method';
+import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 import { readSystemSettings, setCurrentSystemSettings, writeSystemSettings, type SystemSettings } from '../../utils/system-settings';
 
@@ -26,7 +27,7 @@ function buildPatch(body: Record<string, unknown>): Partial<SystemSettings> {
     const patch: Partial<SystemSettings> = {};
 
     if (body.siteTitle !== undefined) {
-        const title = String(body.siteTitle).trim();
+        const title = stripNull(String(body.siteTitle)).trim();
         if (!title) badRequest('系统标题不能为空');
         if (title.length > SITE_TITLE_MAX) badRequest(`系统标题最长 ${SITE_TITLE_MAX} 个字符`);
         patch.siteTitle = title;

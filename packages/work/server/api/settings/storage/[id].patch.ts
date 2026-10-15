@@ -2,6 +2,7 @@ import { eq, ne } from 'drizzle-orm';
 import { storageConfigs } from '../../../db/schema';
 import { normalizeAdminBoolean } from '../../../utils/admin-boolean';
 import { db } from '../../../utils/db';
+import { stripNull } from '../../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, sanitizeStorageConfig } from '../../../utils/storage';
 
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const key of STRING_FIELDS) {
         if (body[key] !== undefined) {
-            const value = body[key] === null ? '' : String(body[key]);
+            const value = body[key] === null ? '' : stripNull(String(body[key]));
             if (key === 'prefix') patch.prefix = value.replace(/^\/+|\/+$/g, '') || 'uploads';
             else patch[key] = value;
         }
@@ -31,14 +32,14 @@ export default defineEventHandler(async (event) => {
         if (body[key] !== undefined) patch[key] = normalizeAdminBoolean(body[key], key, false);
     }
     if (body.allowedMimeTypes !== undefined) {
-        patch.allowedMimeTypes = Array.isArray(body.allowedMimeTypes) ? body.allowedMimeTypes.map((v: unknown) => String(v)).filter(Boolean) : [];
+        patch.allowedMimeTypes = Array.isArray(body.allowedMimeTypes) ? body.allowedMimeTypes.map((v: unknown) => stripNull(String(v))).filter(Boolean) : [];
     }
     if (body.maxFileSizeMb !== undefined) {
         const size = Number(body.maxFileSizeMb);
         patch.maxFileSizeMb = Number.isFinite(size) && size > 0 ? Math.min(Math.round(size), MAX_FILE_SIZE_MB_LIMIT) : 20;
     }
     if (typeof body.secretAccessKey === 'string' && body.secretAccessKey && body.secretAccessKey !== SECRET_PLACEHOLDER) {
-        patch.secretAccessKey = body.secretAccessKey;
+        patch.secretAccessKey = stripNull(body.secretAccessKey);
     }
 
     if (patch.name !== undefined && !String(patch.name).trim()) {

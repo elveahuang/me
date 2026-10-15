@@ -29,7 +29,10 @@ import {
  * 超过 RELAY_UPLOAD_HARD_LIMIT_MB 的文件应改用 POST /api/attachments/presign 直传。
  */
 export default defineEventHandler(async (event) => {
-    await capBody(event);
+    // multipart 的封顶值取决于「这条配置允许的 MB 数 + 协议开销」，而配置要查库才知道，
+    // 所以不能在这里套公共 256KB 闸门——那会把 1MB 以上的正常上传提前 413，
+    // 且读过之后流就没了，下面按配置上限的那次读只能拿到缓存。非 multipart 请求仍走公共闸门。
+    if (!(getHeader(event, 'content-type') ?? '').startsWith('multipart/form-data')) await capBody(event);
 
     // 中转上传每次都会真实 putObject 到对象存储；体积闸门只挡单请求大小、挡不住频率，
     // 放在读体之前让超限请求连正文都不必读（正文最大 64MB+64KB 协议开销）

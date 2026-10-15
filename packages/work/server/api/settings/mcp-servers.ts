@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
         // 表上没有唯一约束，先查再插存在并发双写窗口：以 name 哈希取事务级咨询锁串行化「查重 + 插入」，
         // 锁随事务提交/回滚自动释放，不影响不同 name 的并发创建。
         await db.transaction(async (tx) => {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${name})::bigint)`);
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`);
             const existing = await tx.select({ id: mcpServers.id }).from(mcpServers).where(eq(mcpServers.name, name));
             if (existing.length) {
                 throw createError({ statusCode: 409, statusMessage: `同名 MCP Server「${name}」已存在` });

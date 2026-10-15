@@ -1,4 +1,5 @@
 import { createError } from 'h3';
+import { stripNull } from './pg-text';
 
 /**
  * 管理端 tools 资源的入参归一。
@@ -6,14 +7,14 @@ import { createError } from 'h3';
  * 所以在写入前统一校验/截断（name 规则对齐 skills：trim 后非空、限长 100）。
  */
 export function normalizeToolName(raw: unknown): string {
-    const name = typeof raw === 'string' ? raw.trim() : '';
+    const name = typeof raw === 'string' ? stripNull(raw).trim() : '';
     if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
     if (name.length > 100) throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
     return name;
 }
 
 export function normalizeToolDescription(raw: unknown): string {
-    return typeof raw === 'string' ? raw.slice(0, 500) : '';
+    return typeof raw === 'string' ? stripNull(raw).slice(0, 500) : '';
 }
 
 const AVAILABLE_TOOL_TYPES = ['builtin_time', 'http'];
@@ -86,7 +87,12 @@ function normalizeToolHeaders(raw: unknown): void {
 export function normalizeToolConfig(raw: unknown): Record<string, unknown> {
     if (raw === undefined || raw === null) return {};
     if (typeof raw !== 'object' || Array.isArray(raw)) throw createError({ statusCode: 400, statusMessage: 'config 必须为对象' });
-    const config = raw as Record<string, unknown>;
+    // config 整段进 jsonb：JSON 里裸的 U+0000 会被 PostgreSQL 判成非法输入，
+    // 所以先把字符串字段过一遍再校验，校验的与落库的才是同一个值。
+    const config: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+    for (const key of ['url', 'method', 'bodyTemplate']) {
+        if (typeof config[key] === 'string') config[key] = stripNull(config[key] as string);
+    }
     // 执行期对 parameters 做 for...of、对 headers 做展开：存下非数组/非对象会让该工具每轮对话都抛错
     if (config.parameters !== undefined && !Array.isArray(config.parameters)) {
         throw createError({ statusCode: 400, statusMessage: 'config.parameters 必须为数组' });

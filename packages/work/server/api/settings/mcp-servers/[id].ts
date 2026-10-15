@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
         // server 名用作运行时工具前缀（mcp_<name>_<tool>），重名会导致工具集合并时静默覆盖。
         // 与新建一样按新 name 取事务级咨询锁，串行化「查重 + 改名」，关闭先查后改的并发窗口。
         await db.transaction(async (tx) => {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${newName})::bigint)`);
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${newName}, 0))`);
             const conflict = await tx
                 .select({ id: mcpServers.id })
                 .from(mcpServers)

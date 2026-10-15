@@ -18,8 +18,25 @@ function formatByteLimit(bytes: number): string {
     return `${Math.floor(bytes / 1024)}KB`;
 }
 
+/** h3 在 `node.req` 上缓存原始请求体用的 symbol（`Symbol.for('h3RawBody')`，跨模块实例同键）。 */
+const H3_RAW_BODY = Symbol.for('h3RawBody');
+
+/**
+ * 按字节封顶读完请求体。
+ *
+ * 两个必须一起记住的性质：
+ * 1. `node.req` 是**一次性**的流。第二次 `for await` 不会报错，只会立刻结束并给出空 Buffer——
+ *    于是 `capBody()` + `readCappedJsonBody()` 这种「先闸门、后取体」的写法会把请求体读成 undefined，
+ *    表现是接口静默忽略入参（附件登记收不到 objectKey、chat 收不到 messages）而不是报错。
+ *    所以读完必须写进 h3 自己的缓存位，后续任何一次读取都复用那段字节。
+ * 2. 缓存位里已经有 Buffer 时（capBody 读过、或 h3 的 readBody 读过）直接返回：闸门已经在第一次
+ *    读取时按当次上限执行过，重复读只会拿到空体。
+ */
 export async function readCappedBodyBytes(event: H3Event, maxBytes: number): Promise<Buffer> {
     const req = event.node.req;
+    const cached = (req as unknown as Record<symbol, unknown>)[H3_RAW_BODY];
+    if (Buffer.isBuffer(cached)) return cached;
+
     const chunks: Buffer[] = [];
     let size = 0;
     let exceeded = false;
@@ -41,32 +58,22 @@ export async function readCappedBodyBytes(event: H3Event, maxBytes: number): Pro
         throw createError({ statusCode: 413, statusMessage: `请求体过大（上限 ${formatByteLimit(maxBytes)}）` });
     }
 
-    return Buffer.concat(chunks);
+    const bytes = Buffer.concat(chunks);
+    (req as unknown as Record<symbol, Buffer>)[H3_RAW_BODY] = bytes;
+    return bytes;
 }
 
-/** h3 在 `node.req` 上缓存原始请求体用的 symbol（`Symbol.for('h3RawBody')`，跨模块实例同键）。 */
-const H3_RAW_BODY = Symbol.for('h3RawBody');
-
 /**
- * 按字节封顶读完请求体，并把结果塞回 h3 自己的缓存位，让后续的 `readMultipartFormData`/`readBody`
- * 复用这段已校验过的字节，而不是再消费一次流。
- *
- * multipart 必须这样收口：h3 的解析器只吃「已经全部读完的 Buffer」，
- * 所以真正的内存上界只能在读取阶段设，解析后再量 `part.data.length` 已经晚了。
- * h3 内部用的正是 `Symbol.for('h3RawBody')`（不是私有 symbol），且命中的值若是 Buffer 会**原样返回**
- * （不做二次编码），二进制正文因此保持逐字节一致。
+ * 语义化别名：multipart 解析器只吃「已经全部读完的 Buffer」，所以真正的内存上界只能在读取阶段设。
+ * 读到的字节就是写在 h3 缓存位里的那段，`readMultipartFormData`/`readBody` 随后会复用它，
+ * 二进制正文因此保持逐字节一致（探针用真实 h3 1.15.11 解析器验证过）。
  *
  * 前提是 `event` 由 Node 请求构造（本项目 `tools/deploy/dockerfile` 跑的是 nitro node preset）：
  * h3 取 raw body 的优先级是 `event._requestBody → event.web.request.body → req[Symbol]`，
- * 只有在以 Web Request 构造事件的 preset 下前两项才非空，那种情况下这里写入的缓存位会被忽略（闸门失效，但不会读错数据）。
+ * 只有在以 Web Request 构造事件的 preset 下前两项才非空，那种情况下缓存位会被忽略（闸门失效，但不会读错数据）。
  */
 export async function readCappedBodyIntoH3Cache(event: H3Event, maxBytes: number): Promise<Buffer> {
-    // 已经封顶读过一次就直接复用：流此时已经结束，再读会把缓存位覆盖成空 Buffer
-    const cached = (event.node.req as unknown as Record<symbol, unknown>)[H3_RAW_BODY];
-    if (Buffer.isBuffer(cached)) return cached;
-    const bytes = await readCappedBodyBytes(event, maxBytes);
-    (event.node.req as unknown as Record<symbol, Buffer>)[H3_RAW_BODY] = bytes;
-    return bytes;
+    return readCappedBodyBytes(event, maxBytes);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { createError } from 'h3';
+import { stripNull } from './pg-text';
 
 /**
  * 管理端 skills 资源的入参归一（POST 与 PATCH 共用一份规则）。
@@ -12,7 +13,7 @@ export const SKILL_DESCRIPTION_MAX = 500;
 export const SKILL_INSTRUCTIONS_MAX = 20_000;
 
 export function normalizeSkillName(raw: unknown): string {
-    const name = typeof raw === 'string' ? raw.trim() : '';
+    const name = typeof raw === 'string' ? stripNull(raw).trim() : '';
     if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
     if (name.length > SKILL_NAME_MAX) throw createError({ statusCode: 400, statusMessage: `name 过长（最多 ${SKILL_NAME_MAX} 字符）` });
     return name;
@@ -21,6 +22,7 @@ export function normalizeSkillName(raw: unknown): string {
 /** 文本列：非字符串拒绝（静默转空串等于覆盖掉原有内容），超长拒绝而不是截断 */
 export function normalizeSkillText(raw: unknown, label: string, maxChars: number): string {
     if (typeof raw !== 'string') throw createError({ statusCode: 400, statusMessage: `${label} 必须为字符串` });
-    if (raw.length > maxChars) throw createError({ statusCode: 400, statusMessage: `${label} 过长（最多 ${maxChars} 字符）` });
-    return raw;
+    const value = stripNull(raw);
+    if (value.length > maxChars) throw createError({ statusCode: 400, statusMessage: `${label} 过长（最多 ${maxChars} 字符）` });
+    return value;
 }

@@ -1,4 +1,5 @@
 import { createError } from 'h3';
+import { stripNull } from './pg-text';
 
 /**
  * 管理端 agents 资源的入参归一。
@@ -8,7 +9,7 @@ import { createError } from 'h3';
  */
 
 export function normalizeAgentName(raw: unknown): string {
-    const name = typeof raw === 'string' ? raw.trim() : '';
+    const name = typeof raw === 'string' ? stripNull(raw).trim() : '';
     if (!name) throw createError({ statusCode: 400, statusMessage: 'name 必填' });
     if (name.length > 100) throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
     return name;
@@ -18,12 +19,13 @@ export function normalizeAgentName(raw: unknown): string {
 export function normalizeAgentText(raw: unknown, label: string, maxChars: number): string | null {
     if (raw === undefined || raw === null) return null;
     if (typeof raw !== 'string') throw createError({ statusCode: 400, statusMessage: `${label} 必须为字符串` });
-    if (raw.length > maxChars) throw createError({ statusCode: 400, statusMessage: `${label} 过长（最多 ${maxChars} 字符）` });
-    return raw;
+    const value = stripNull(raw);
+    if (value.length > maxChars) throw createError({ statusCode: 400, statusMessage: `${label} 过长（最多 ${maxChars} 字符）` });
+    return value;
 }
 
 export function normalizeAgentModel(raw: unknown): string {
-    const model = typeof raw === 'string' ? raw.trim() : raw === undefined || raw === null ? '' : null;
+    const model = typeof raw === 'string' ? stripNull(raw).trim() : raw === undefined || raw === null ? '' : null;
     if (model === null) throw createError({ statusCode: 400, statusMessage: 'model 必须为字符串' });
     if (!model) return 'deepseek-chat';
     if (model.length > 100) throw createError({ statusCode: 400, statusMessage: 'model 过长（最多 100 字符）' });
@@ -67,7 +69,7 @@ export function normalizeAgentIdList(raw: unknown, label: string): string[] {
     for (const item of raw) {
         // 而不是静默丢弃：客户端把 id 传错类型应当当场报错，静默丢会留下「以为绑上了」的空绑定
         if (typeof item !== 'string') throw createError({ statusCode: 400, statusMessage: `${label} 只能包含字符串` });
-        const id = item.trim();
+        const id = stripNull(item).trim();
         if (id) ids.add(id);
     }
     return [...ids];

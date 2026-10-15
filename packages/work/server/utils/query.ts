@@ -20,7 +20,29 @@ export function likePattern(keyword: string): string {
  * PostgreSQL 拒绝并把 SQL 细节透出响应体，超大 page/offset 还会让 offset 溢出 int8。
  * 同一段 `Math.min(Math.max(min, Math.floor(Number(x)) || fallback), max)` 表达式此前
  * 在 10+ 个 handler 里整段复制，谁抄漏一个 `Math.floor` 或改错边界都不会被发现，收敛到这里。
+ *
+ * 只把「缺省/空白/非数字」折到 fallback，`0` 走 min 而不是 fallback：`?limit=0` 与 `?page=0`
+ * 原写法会被 `|| fallback` 当成缺省，于是「只要 0 条」这种点击换来整页 500 条——
+ * 越想要越少反而拿到越多，是把闸门反着用了。
  */
 export function intParam(raw: unknown, fallback: number, min: number, max: number): number {
-    return Math.min(Math.max(min, Math.floor(Number(raw)) || fallback), max);
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value === undefined || value === null || value === '') return fallback;
+    const num = Math.floor(Number(value));
+    if (Number.isNaN(num)) return fallback;
+    return Math.min(Math.max(min, num), max);
+}
+
+/**
+ * 字符串查询参数取单值。
+ *
+ * `?status=todo&status=doing` 会让 h3 给出数组，而数组进 `eq()` 会被 postgres-js 展开成标量参数
+ * → 500 并把 SQL 细节透出响应体（conversations.get.ts 已踩过一次）。重复参数按「取第一个」处理：
+ * 语义上是客户端自己写错了，静默降级比报错更贴近「筛选条件照第一个走」。
+ */
+export function stringParam(raw: unknown, max = 128): string | undefined {
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim().slice(0, max);
+    return trimmed || undefined;
 }

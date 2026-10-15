@@ -62,7 +62,10 @@ export async function ensureDefaultProvider() {
     // （两路首聊、或列表页与聊天同时触发）会各插一行默认供应商，之后每行都会被回填成同样的 key，
     // 管理端出现两个「默认」而 resolveModel 只会认其中一行。
     await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('providers-default'))::bigint`);
+        // hashtext() 返回 integer，而 pg_advisory_xact_lock 只吃 bigint：
+        // 尾上的 `::bigint`  cast 的是函数的 void 返回值（PG 直接报 cannot cast type void to bigint），
+        // 于是整个 GET /api/settings/providers 会 500。要用哈希取锁就换成返回 bigint 的 hashtextextended。
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('providers-default', 0))`);
         const [row] = await tx.select({ id: providers.id }).from(providers).orderBy(asc(providers.createdAt)).limit(1);
         if (row) return;
         await tx.insert(providers).values({

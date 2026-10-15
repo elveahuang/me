@@ -3,6 +3,7 @@ import { attachments, storageConfigs } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
+import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, sanitizeStorageConfig } from '../../utils/storage';
 
@@ -31,23 +32,26 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
             continue;
         }
         if (key === 'prefix') {
-            patch.prefix = String(body.prefix ?? '').replace(/^\/+|\/+$/g, '') || 'uploads';
+            patch.prefix = stripNull(String(body.prefix ?? '')).replace(/^\/+|\/+$/g, '') || 'uploads';
             continue;
         }
-        patch[key] = body[key] === null ? '' : String(body[key]);
+        // 全部文本列统一剔 NUL：name/region/accessKeyId/secretAccessKey/publicBaseUrl 任一带 U+0000
+        // 都会让 INSERT 失败并把 SQL 原文回给界面
+        patch[key] = body[key] === null ? '' : stripNull(String(body[key]));
     }
     for (const key of BOOLEAN_FIELDS) {
         if (body[key] !== undefined) patch[key] = normalizeAdminBoolean(body[key], key, false);
     }
     if (body.allowedMimeTypes !== undefined) {
-        patch.allowedMimeTypes = Array.isArray(body.allowedMimeTypes) ? body.allowedMimeTypes.map((v: unknown) => String(v)).filter(Boolean) : [];
+        // allowedMimeTypes 落 jsonb：裸 NUL 会让 PostgreSQL 判整段 JSON 非法
+        patch.allowedMimeTypes = Array.isArray(body.allowedMimeTypes) ? body.allowedMimeTypes.map((v: unknown) => stripNull(String(v))).filter(Boolean) : [];
     }
     if (body.maxFileSizeMb !== undefined) {
         const size = Number(body.maxFileSizeMb);
         patch.maxFileSizeMb = Number.isFinite(size) && size > 0 ? Math.min(Math.round(size), MAX_FILE_SIZE_MB_LIMIT) : 20;
     }
     if (typeof body.secretAccessKey === 'string' && body.secretAccessKey && body.secretAccessKey !== SECRET_PLACEHOLDER) {
-        patch.secretAccessKey = body.secretAccessKey;
+        patch.secretAccessKey = stripNull(body.secretAccessKey);
     }
     return patch;
 }
