@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatTime } from '@commons/contract';
+import { extractApiError, formatDateTime, formatTime } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { dayInputValue, monthLabel, safeProjectColor, todayInputValue, type WorkEvent, type WorkProject } from '../utils/work';
 
@@ -185,6 +185,7 @@ async function saveEvent(payload: {
     allDay: boolean;
     location: string;
     projectId: string | null;
+    reminderAt: string | null;
 }) {
     saving.value = true;
     actionError.value = '';
@@ -319,6 +320,13 @@ function isDimmed(date: Date): boolean {
                                     :style="{ backgroundColor: event.projectId ? safeProjectColor(projectMap.get(event.projectId)?.color) : 'var(--muted-2)' }"
                                 />
                                 <span v-if="!event.allDay" class="text-faint mr-1">{{ formatTime(event.startsAt) }}</span>
+                                <span
+                                    v-if="event.reminderAt"
+                                    class="text-faint mr-1 inline-flex align-middle"
+                                    :title="t('work.reminderAt', { time: formatDateTime(event.reminderAt, locale) })"
+                                >
+                                    <AppIcon name="bell-outline" :size="11" />
+                                </span>
                                 {{ event.title }}
                             </button>
                         </li>
@@ -350,6 +358,13 @@ function isDimmed(date: Date): boolean {
                                     :style="{ backgroundColor: event.projectId ? safeProjectColor(projectMap.get(event.projectId)?.color) : 'var(--muted-2)' }"
                                 />
                                 <span class="min-w-0 flex-1 truncate text-xs font-bold">{{ event.title }}</span>
+                                <span
+                                    v-if="event.reminderAt"
+                                    class="text-faint shrink-0"
+                                    :title="t('work.reminderAt', { time: formatDateTime(event.reminderAt, locale) })"
+                                >
+                                    <AppIcon name="bell-outline" :size="12" />
+                                </span>
                                 <span class="text-faint shrink-0 text-[11px]">{{ event.allDay ? t('work.allDay') : formatTime(event.startsAt) }}</span>
                             </button>
                         </li>

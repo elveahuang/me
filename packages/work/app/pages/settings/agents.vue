@@ -284,6 +284,7 @@ async function remove(id: string) {
 
 <template>
     <div>
+        <WorkSettingsNav class="mb-5" />
         <div v-if="listError" class="app-alert app-alert-danger mb-4">
             {{ listError }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>

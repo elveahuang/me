@@ -240,6 +240,8 @@ async function runSmokeTests() {
     // 11. 工作台写入归一与北京日口径（projects/tasks/notes/events 各 handler 共用的同一套规则）
     console.log('\n11. 测试工作台写入归一与北京日口径');
     const {
+        REMINDER_MINUTES_MAX,
+        normalizeReminderMinutes,
         WORK_TITLE_MAX,
         normalizeWorkDate,
         normalizeWorkDateRange,
@@ -285,6 +287,15 @@ async function runSmokeTests() {
     assert(
         threw400(() => normalizeWorkDateRange('2026-10-15T05:00:00+08:00', dayStart)),
         'endsAt 早于 startsAt 拒绝',
+    );
+    assert(
+        normalizeReminderMinutes(undefined) === null &&
+            normalizeReminderMinutes(15) === 15 &&
+            normalizeReminderMinutes(90.7) === 90 &&
+            threw400(() => normalizeReminderMinutes('15')) &&
+            threw400(() => normalizeReminderMinutes(-1)) &&
+            threw400(() => normalizeReminderMinutes(REMINDER_MINUTES_MAX + 1)),
+        '提醒提前量：缺失归一为不设提醒、小数取整、字符串/负数/超 30 天拒绝（相对量换算成绝对时刻前必须先收口）',
     );
     assert(
         'completedAt' in taskCompletionPatch('done', null) && !('completedAt' in taskCompletionPatch('done', new Date())),
@@ -437,8 +448,132 @@ async function runSmokeTests() {
         `同名键的插值参数成对一致（不一致时切换语言会在界面上露出裸 {n}）：${placeholderDiff.slice(0, 3).join(', ') || '无差异'}`,
     );
 
-    // 18. 数据库连通性与核心表（可选：本机未起数据库时跳过）
-    console.log('\n18. 测试数据库连通性与核心数据表');
+    // 18. 后台生成的回放缓冲（chat-runs）：切页面/刷新不打断生成，靠的就是这份内存副本
+    console.log('\n18. 测试对话后台运行的回放缓冲');
+    const {
+        beginChatRun,
+        appendChatChunk,
+        endChatRun,
+        getChatRun,
+        subscribeChatRun,
+        createChatRunStream,
+        tapChatRun,
+        runningConversationIds,
+        dropChatRun,
+        abortChatRun,
+    } = await import('../server/utils/chat-runs');
+    const runA = beginChatRun('11111111-1111-4111-8111-111111111111');
+    appendChatChunk(runA, { type: 'text-start', id: '0' } as never);
+    appendChatChunk(runA, { type: 'text-delta', id: '0', delta: '前半' } as never);
+    assert(getChatRun(runA.conversationId) === runA, '未结束的轮次可被重连接口取到');
+    assert(runningConversationIds().includes(runA.conversationId), '在途轮次出现在 /api/chat/runs 的口径里');
+
+    // 迟到的订阅者必须先从头追上已缓冲的分片，再收实时分片——这是「刷新后接着看逐字流」的实现
+    const seenLate: string[] = [];
+    let lateEnded = 0;
+    const unsubscribeLate = subscribeChatRun(
+        runA,
+        (line) => seenLate.push(JSON.parse(line).delta ?? JSON.parse(line).type),
+        () => lateEnded++,
+    );
+    appendChatChunk(runA, { type: 'text-delta', id: '0', delta: '后半' } as never);
+    assert(seenLate.join('') === 'text-start前半后半', '重连侧先回放缓冲分片、再继续收新分片');
+
+    endChatRun(runA);
+    assert(lateEnded === 1, '轮次收尾时通知订阅者关流');
+    assert(seenLate.length === 3 && lateEnded === 1, '收尾不会重复吐分片');
+    assert(!runningConversationIds().includes(runA.conversationId), '已结束的轮次不再算作在途');
+
+    // 收尾之后立刻切回页面的重连仍然要能拿到整轮（宽限期内缓冲还在）
+    const afterFinish: string[] = [];
+    let afterEnded = 0;
+    subscribeChatRun(
+        runA,
+        (line) => afterFinish.push(line),
+        () => afterEnded++,
+    );
+    assert(afterFinish.length === 3 && afterEnded === 1, '结束后仍完整回放并立即关流');
+
+    // 缓冲必须有上限：越限的那一轮不再供回放，但原响应流一个字都不能少
+    const runBig = beginChatRun('22222222-2222-4222-8222-222222222222');
+    const huge = { type: 'text-delta', id: '0', delta: 'x'.repeat(160 * 1024) } as never;
+    for (let i = 0; i < 6; i += 1) appendChatChunk(runBig, huge);
+    assert(runBig.overflow === true, '超过字节上限后标记为溢出并放弃缓冲');
+    assert(getChatRun(runBig.conversationId) === null, '溢出的轮次回 204，让客户端走数据库历史回源');
+
+    const runTap = beginChatRun('33333333-3333-4333-8333-333333333333');
+    const tapped = tapChatRun(
+        new ReadableStream({
+            start(controller) {
+                controller.enqueue({ type: 'text-start', id: '0' });
+                controller.enqueue({ type: 'text-fin', id: '0' });
+                controller.close();
+            },
+        }),
+        runTap,
+    );
+    const drained: string[] = [];
+    const tapReader = tapped.getReader();
+    for (;;) {
+        const next = await tapReader.read();
+        if (next.done) break;
+        drained.push(JSON.stringify(next.value));
+    }
+    assert(drained.length === 2 && runTap.lines.length === 2, '打流是旁路：透传的分片数与缓冲记录一致');
+    assert(runTap.finished, '源流读完即收尾，缓冲不会一直挂在在途列表里');
+
+    // 重连接口给出的就是这条流：构造时先吐缓冲、实时分片继续跟，收尾后读到底即 done
+    const runReplay = beginChatRun('55555555-5555-5555-8555-555555555555');
+    appendChatChunk(runReplay, { type: 'text-start', id: '0' } as never);
+    const replayReader = createChatRunStream(runReplay).getReader();
+    appendChatChunk(runReplay, { type: 'text-delta', id: '0', delta: '重连' } as never);
+    endChatRun(runReplay);
+    const replayed: string[] = [];
+    for (;;) {
+        const next = await replayReader.read();
+        if (next.done) break;
+        replayed.push(JSON.stringify(next.value));
+    }
+    assert(
+        replayed.length === 2 && replayed[0]?.includes('text-start') === true && replayed[1]?.includes('重连') === true,
+        '重连流回放缓冲分片后再实时续读，收尾会正常关流',
+    );
+
+    // 同一段会话连开两轮（并发护栏被绕过时）不能让两条回放互相覆盖；删会话要连带丢掉回放
+    const firstRun = beginChatRun('44444444-4444-4444-8444-444444444444');
+    const secondRun = beginChatRun('44444444-4444-4444-8444-444444444444');
+    assert(
+        firstRun.finished && firstRun.controller.signal.aborted === true && getChatRun(secondRun.conversationId) === secondRun,
+        '同会话重开一轮会先掐掉上一轮的模型调用并收尾，回放只有一份',
+    );
+    dropChatRun(secondRun.conversationId);
+    assert(getChatRun(secondRun.conversationId) === null, '删除会话后不再回放它的那一轮');
+    let doubleUnsubscribe = '';
+    try {
+        unsubscribeLate();
+        unsubscribeLate();
+    } catch (e) {
+        doubleUnsubscribe = String(e);
+    }
+    assert(doubleUnsubscribe === '', '退订可重复调用而不抛错（订阅者会在回调里注销自己）');
+
+    // 「停止」必须真的能掐住那一轮：客户端 stop() 只断开浏览器读取，服务端照跑照落库
+    const runStop = beginChatRun('66666666-6666-6666-8666-666666666666');
+    assert(runStop.controller.signal.aborted === false, '新轮次的中止闸门初始是关着的');
+    assert(abortChatRun(runStop.conversationId) === true, '在途轮次可被中断');
+    assert(runStop.controller.signal.aborted === true, '中断即 abort，streamText 收到信号才停得下来');
+    assert(abortChatRun(runStop.conversationId) === false, '已中断的轮次再点是空操作（幂等，界面不该报「停止失败」）');
+    assert(abortChatRun('77777777-7777-7777-8777-777777777777') === false, '没有这一轮时回 false 而不是抛错');
+    endChatRun(runStop);
+    const runDone = beginChatRun('88888888-8888-8888-8888-888888888888');
+    endChatRun(runDone);
+    assert(runDone.controller.signal.aborted === false, '正常跑完的轮次不会被中止信号误伤（部分回复不该被当成中断落库）');
+    const runDelete = beginChatRun('99999999-9999-9999-8999-999999999999');
+    dropChatRun(runDelete.conversationId);
+    assert(runDelete.controller.signal.aborted === true, '删除会话连带掐掉仍在跑的模型调用');
+
+    // 19. 数据库连通性与核心表（可选：本机未起数据库时跳过）
+    console.log('\n19. 测试数据库连通性与核心数据表');
     try {
         const { sql } = await import('drizzle-orm');
         const { db } = await import('../server/utils/db');

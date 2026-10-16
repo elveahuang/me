@@ -29,12 +29,18 @@ const emit = defineEmits<{
             allDay: boolean;
             location: string;
             projectId: string | null;
+            reminderAt: string | null;
         },
     ): void;
     (e: 'remove', event: WorkEvent): void;
 }>();
 
 const { t } = useI18n();
+
+/** 提醒预设（提前多少分钟）。库里存的是绝对时刻，这些只是常用档位；对不上的原值走「自定义」保留 */
+const REMINDER_PRESETS = [5, 15, 60, 1440] as const;
+type ReminderPreset = (typeof REMINDER_PRESETS)[number];
+const REMINDER_LABELS: Record<ReminderPreset, string> = { 5: 'work.remind5', 15: 'work.remind15', 60: 'work.remind60', 1440: 'work.remind1440' };
 
 const title = ref('');
 const detail = ref('');
@@ -45,8 +51,34 @@ const endTime = ref('');
 const allDay = ref(false);
 const location = ref('');
 const projectId = ref('');
+const reminderChoice = ref('');
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
+/** 编辑对象原本的提醒时刻；只在「自定义」档位下原样回传 */
+let originalReminderAt: string | null = null;
+
+/** 回填：与 startsAt 恰好差某个预设分钟数就选中该档，否则算「自定义」——不能因为读不出档位就把用户设好的提醒清掉 */
+function reminderChoiceFor(item: WorkEvent | null): string {
+    const at = item?.reminderAt;
+    if (!at) return '';
+    const start = Date.parse(item?.startsAt ?? '');
+    const moment = Date.parse(at);
+    if (Number.isNaN(start) || Number.isNaN(moment)) return 'custom';
+    const minutes = Math.round((start - moment) / 60_000);
+    return REMINDER_PRESETS.includes(minutes as (typeof REMINDER_PRESETS)[number]) ? String(minutes) : 'custom';
+}
+
+/** 提醒按「这次最终确定的开始时间」重算：改了时间还留着旧提醒，就会提醒到昨天 */
+function reminderValue(starts: Date): string | null {
+    if (reminderChoice.value === '') return null;
+    if (reminderChoice.value === 'custom') return originalReminderAt;
+    return new Date(starts.getTime() - Number(reminderChoice.value) * 60_000).toISOString();
+}
+
+watch(allDay, (on) => {
+    // 全天日程没有「几点」，偏移量算出来会落到前一天夜里，不如不设
+    if (on) reminderChoice.value = '';
+});
 
 watch(
     () => [props.open, props.event?.id] as const,
@@ -61,6 +93,8 @@ watch(
         endTime.value = timeInputValue(item?.endsAt);
         allDay.value = item?.allDay ?? false;
         location.value = item?.location ?? '';
+        originalReminderAt = item?.reminderAt ?? null;
+        reminderChoice.value = allDay.value ? '' : reminderChoiceFor(item);
         // 新建时继承日历页当前选中的项目；编辑已有日程则以日程自身的归属为准
         projectId.value = item?.projectId ?? props.defaultProjectId ?? '';
         error.value = '';
@@ -99,6 +133,7 @@ function submit() {
         allDay: allDay.value,
         location: location.value.trim(),
         projectId: projectId.value || null,
+        reminderAt: reminderValue(starts),
     });
 }
 </script>
@@ -136,6 +171,39 @@ function submit() {
                     <input id="work-event-end-day" v-model="endDate" type="date" class="app-input" :disabled="allDay" />
                     <input v-model="endTime" type="time" class="app-input mt-2" :disabled="allDay" :aria-label="t('work.fieldEndTime')" />
                 </div>
+            </div>
+
+            <div>
+                <p class="app-label">{{ t('work.fieldReminder') }}</p>
+                <div class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t('work.fieldReminder')">
+                    <AppIcon name="bell-outline" :size="14" class="text-faint" />
+                    <button
+                        type="button"
+                        class="app-chip"
+                        :class="reminderChoice === '' ? 'app-chip-brand' : ''"
+                        :aria-pressed="reminderChoice === ''"
+                        :disabled="allDay"
+                        @click="reminderChoice = ''"
+                    >
+                        {{ t('work.remindNone') }}
+                    </button>
+                    <button
+                        v-for="minutes in REMINDER_PRESETS"
+                        :key="minutes"
+                        type="button"
+                        class="app-chip"
+                        :class="reminderChoice === String(minutes) ? 'app-chip-brand' : ''"
+                        :aria-pressed="reminderChoice === String(minutes)"
+                        :disabled="allDay"
+                        @click="reminderChoice = String(minutes)"
+                    >
+                        {{ t(REMINDER_LABELS[minutes]) }}
+                    </button>
+                    <button v-if="reminderChoice === 'custom'" type="button" class="app-chip app-chip-brand" aria-pressed="true" :disabled="allDay">
+                        {{ t('work.remindCustom') }}
+                    </button>
+                </div>
+                <p v-if="allDay" class="text-faint mt-1 text-[11px]">{{ t('work.remindAllDayHint') }}</p>
             </div>
 
             <div>

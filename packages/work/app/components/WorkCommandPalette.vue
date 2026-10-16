@@ -60,22 +60,78 @@ const today = todayInputValue();
 interface Command {
     id: string;
     label: string;
+    /** 分组标题；同组条目必须相邻，分组标题按「与上一条不同」渲染 */
+    group: string;
     hint?: string;
     icon: string;
     run: () => void;
 }
 
+/**
+ * 设置区的子页面。
+ *
+ * 侧栏里它们收在「系统设置」一项之下，要两步才够得着；命令面板是这条路径上唯一的单步入口，
+ * 少了它就等于「页面存在，但只能靠点侧栏发现」。
+ */
+const SETTINGS_PAGES = [
+    { id: 'go-settings', labelKey: 'settings.navGeneral', path: '/settings', icon: 'cog-outline' },
+    { id: 'go-settings-agents', labelKey: 'settings.navAgents', path: '/settings/agents', icon: 'robot-outline' },
+    { id: 'go-settings-providers', labelKey: 'settings.navProviders', path: '/settings/providers', icon: 'brain' },
+    { id: 'go-settings-storage', labelKey: 'settings.navStorage', path: '/settings/storage', icon: 'database-outline' },
+    { id: 'go-settings-skills', labelKey: 'settings.navSkills', path: '/settings/skills', icon: 'lightning-bolt-outline' },
+    { id: 'go-settings-tools', labelKey: 'settings.navTools', path: '/settings/tools', icon: 'wrench-outline' },
+    { id: 'go-settings-mcp', labelKey: 'settings.navMcp', path: '/settings/mcp', icon: 'power-plug-outline' },
+    { id: 'go-settings-knowledge', labelKey: 'settings.navKnowledge', path: '/settings/knowledge', icon: 'book-open-page-variant-outline' },
+] as const;
+
 const commands = computed<Command[]>(() => [
-    { id: 'go-today', label: t('work.cmdGoToday'), icon: 'view-dashboard-outline', run: () => go('/today') },
-    { id: 'go-tasks', label: t('work.cmdGoTasks'), icon: 'check-all', run: () => go('/tasks') },
-    { id: 'go-calendar', label: t('work.cmdGoCalendar'), icon: 'calendar-check-outline', run: () => go('/calendar') },
-    { id: 'go-notes', label: t('work.cmdGoNotes'), icon: 'book-open-page-variant-outline', run: () => go('/notes') },
-    { id: 'go-projects', label: t('work.cmdGoProjects'), icon: 'folder-outline', run: () => go('/projects') },
-    { id: 'go-chat', label: t('work.cmdGoChat'), icon: 'chat-outline', run: () => go('/') },
-    { id: 'new-task', label: t('work.cmdNewTask'), hint: t('nav.tasks'), icon: 'plus-circle-outline', run: () => go('/tasks?new=1') },
-    { id: 'new-note', label: t('work.cmdNewNote'), hint: t('nav.notes'), icon: 'plus-circle-outline', run: () => go('/notes?new=1') },
-    { id: 'new-event', label: t('work.cmdNewEvent'), hint: t('nav.calendar'), icon: 'plus-circle-outline', run: () => go('/calendar?new=1') },
-    { id: 'new-project', label: t('work.cmdNewProject'), hint: t('nav.projects'), icon: 'plus-circle-outline', run: () => go('/projects?new=1') },
+    { id: 'go-today', group: t('work.cmdGroupGo'), label: t('work.cmdGoToday'), icon: 'view-dashboard-outline', run: () => go('/today') },
+    { id: 'go-tasks', group: t('work.cmdGroupGo'), label: t('work.cmdGoTasks'), icon: 'check-all', run: () => go('/tasks') },
+    { id: 'go-calendar', group: t('work.cmdGroupGo'), label: t('work.cmdGoCalendar'), icon: 'calendar-check-outline', run: () => go('/calendar') },
+    { id: 'go-notes', group: t('work.cmdGroupGo'), label: t('work.cmdGoNotes'), icon: 'book-open-page-variant-outline', run: () => go('/notes') },
+    { id: 'go-projects', group: t('work.cmdGroupGo'), label: t('work.cmdGoProjects'), icon: 'folder-outline', run: () => go('/projects') },
+    { id: 'go-chat', group: t('work.cmdGroupGo'), label: t('work.cmdGoChat'), icon: 'chat-outline', run: () => go('/') },
+    { id: 'go-attachments', group: t('work.cmdGroupGo'), label: t('nav.attachments'), icon: 'file-document-outline', run: () => go('/attachments') },
+    ...SETTINGS_PAGES.map((page) => ({
+        id: page.id,
+        group: t('work.cmdGroupSettings'),
+        label: t(page.labelKey),
+        hint: t('nav.systemSettings'),
+        icon: page.icon,
+        run: () => go(page.path),
+    })),
+    {
+        id: 'new-task',
+        group: t('work.cmdGroupActions'),
+        label: t('work.cmdNewTask'),
+        hint: t('nav.tasks'),
+        icon: 'plus-circle-outline',
+        run: () => go('/tasks?new=1'),
+    },
+    {
+        id: 'new-note',
+        group: t('work.cmdGroupActions'),
+        label: t('work.cmdNewNote'),
+        hint: t('nav.notes'),
+        icon: 'plus-circle-outline',
+        run: () => go('/notes?new=1'),
+    },
+    {
+        id: 'new-event',
+        group: t('work.cmdGroupActions'),
+        label: t('work.cmdNewEvent'),
+        hint: t('nav.calendar'),
+        icon: 'plus-circle-outline',
+        run: () => go('/calendar?new=1'),
+    },
+    {
+        id: 'new-project',
+        group: t('work.cmdGroupActions'),
+        label: t('work.cmdNewProject'),
+        hint: t('nav.projects'),
+        icon: 'plus-circle-outline',
+        run: () => go('/projects?new=1'),
+    },
 ]);
 
 function go(path: string) {
@@ -142,7 +198,7 @@ const items = computed<PaletteItem[]>(() => {
         .filter((command) => !q || command.label.toLowerCase().includes(q.toLowerCase()))
         .map((command) => ({
             id: command.id,
-            group: t('work.cmdGroupActions'),
+            group: command.group,
             label: command.label,
             sub: command.hint,
             icon: command.icon,

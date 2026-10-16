@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
  * 会话历史区：布局左栏（桌面）与抽屉（窄屏）的「中间」区块。
  *
  * 组件是展示型 + 自身的重命名/删除动作，列表数据由 `useChatSidebar` 共享状态提供
- * （布局拉取、页面消费），删除与重命名成功后 emit('changed')，由布局统一刷新。
+ * （布局拉取、页面消费），删除与重命名成功后 emit('changed'|'deleted', id)，由布局统一刷新。
  */
 const props = withDefaults(
     defineProps<{
@@ -25,8 +25,8 @@ const props = withDefaults(
 const emit = defineEmits<{
     select: [payload: { id: string; agentId: string }];
     create: [];
-    /** 重命名成功：布局需要刷新列表 */
-    changed: [];
+    /** 重命名成功：布局需要刷新列表（带着 id，好把这条重新记为已读） */
+    changed: [id: string];
     /** 删除成功：布局刷新列表；若删的正是当前打开的会话，还需切到下一个或复位 */
     deleted: [id: string];
 }>();
@@ -61,6 +61,11 @@ function startRename(c: ConversationSummary) {
 /** 改名/删除失败的就地提示：列表常驻，靠 showTransient 的超时自动清除 */
 const { error: actionError, show: showActionError } = useTransientError();
 
+/** 后台仍在生成的会话：列表项前挂一个呼吸点，用户离开这一轮也认得它跑到哪段了 */
+const { isRunning } = useChatRuns();
+/** 有回复但还没看过：完成浮层只停 12 秒，没赶上的人靠这个点，打开会话即清除 */
+const { isUnread } = useChatReadState();
+
 async function saveRename(id: string) {
     // Enter 提交会把输入框整个卸载（editingTitleId 置空），而卸载焦点元素还会补发一次 blur，
     // 于是同一次改名发出两条一模一样的 PATCH——第二条还会再 emit('changed')，让布局并发重载会话列表。
@@ -76,7 +81,7 @@ async function saveRename(id: string) {
     try {
         await $fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: { title: newTitle } });
         renamedConversation.value = { id, title: newTitle };
-        emit('changed');
+        emit('changed', id);
     } catch (e) {
         showActionError(extractApiError(e, t('common.error')));
     }
@@ -86,6 +91,9 @@ async function removeConversation(id: string) {
     if (!confirm(t('chat.deleteConfirm'))) return;
     try {
         await $fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        // 会话已经不存在，持有它的那一轮（可能正在后台生成）必须一起掐掉：
+        // 留着实例会让角标一直亮着，回到这段会话也只会拿到一条已删历史的回放。
+        cancelChatRun(id);
         emit('deleted', id);
     } catch (e) {
         showActionError(extractApiError(e, t('common.error')));
@@ -134,7 +142,19 @@ async function removeConversation(id: string) {
                         :aria-current="c.id === activeId ? 'true' : undefined"
                         @click="emit('select', { id: c.id, agentId: c.agentId })"
                     >
-                        {{ c.title }}
+                        <span class="flex items-center gap-1.5">
+                            <span
+                                v-if="isRunning(c.id)"
+                                class="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[color:var(--warning)]"
+                                :title="t('chat.runningInBackground')"
+                            />
+                            <span
+                                v-else-if="isUnread(c)"
+                                class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--brand-500)]"
+                                :title="t('chat.unreadReply')"
+                            />
+                            <span class="truncate" :class="isUnread(c) && !isRunning(c.id) ? 'font-semibold' : ''">{{ c.title }}</span>
+                        </span>
                         <span v-if="showAgentName" class="text-faint mt-0.5 block truncate text-[10px]">{{ c.agentName }}</span>
                     </button>
                     <div class="app-hover-reveal absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">

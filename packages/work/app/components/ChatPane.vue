@@ -120,6 +120,15 @@ async function ensureAgentDetail(id: string) {
 
 /* ---------------- 会话加载 ---------------- */
 
+/**
+ * 切会话/切页面**不再**中断在途生成。
+ *
+ * 旧写法是在丢弃实例前 `stop()`，理由是「实例只是 shallowRef，换掉引用不等于流停了」。
+ * 现在这个前提反过来了：实例由 `useChatRuns` 的模块级登记表持住，离开面板时它继续收流、
+ * 继续把分片写进自己的 messages，回到这段会话时直接接管，看到的就是接着往下写的那一轮。
+ * 真正要中断只剩两个入口：用户点「停止」（模板直接调 `chat.stop()`）与删除会话（`cancelChatRun`）。
+ */
+
 let loadToken = 0;
 
 /** 历史加载失败（区别于「空会话」）与快速切换会话时的过期响应护栏 */
@@ -141,17 +150,6 @@ function buildChat(conversationId: string, agentId: string, history: UIMessage[]
 }
 
 /**
- * 丢弃 Chat 实例前必须中断在途流。
- *
- * 实例是 shallowRef，换会话/新建对话/卸载只是把引用换掉，AI SDK 的 SSE 是 fetch reader，
- * 没有 GC 会替它收尾：老会话的生成会一直跑到自然结束，并与新会话的流并发。
- */
-function stopActiveStream() {
-    const current = chat.value;
-    if (current && (current.status === 'streaming' || current.status === 'submitted')) current.stop();
-}
-
-/**
  * 错误横幅上的「重试」走 SDK 的 regenerate，完全绕开 handleSubmit 里那套并发护栏，
  * 所以自己必须把同样的门补上：活动流期间点它会并发发出第二个 /api/chat——
  * 两条流交错写同一个 Chat 实例，模型调用多烧一次，而 stop() 只切得断最后那一条。
@@ -163,13 +161,33 @@ function handleRegenerate() {
     void current.regenerate();
 }
 
+/**
+ * 打开一段会话：优先接管登记表里的实例，否则拉历史新建。
+ */
 async function loadConversation(id: string) {
     // 只在客户端拉历史：SSR 阶段 `$fetch` 不带请求 cookie，服务端渲染时拉取会 401。
     // 父级因此在 onMounted 之后才决定要打开哪个会话。
     if (import.meta.server) return;
     const agentId = props.agentId;
     if (!agentId) return;
-    stopActiveStream();
+
+    /**
+     * 登记表里有实例就直接接管：它的 messages 已经包含这一轮在途的部分，比数据库历史更新，
+     * 再发一次历史请求反而会把正在写的实例换掉（transport 里的 agentId 也要跟着换成当前这个）。
+     */
+    const cached = adoptChatRun(id);
+    if (cached) {
+        loadToken += 1;
+        loadError.value = '';
+        submitError.value = '';
+        failedConversationId.value = null;
+        chat.value = cached;
+        loadedConversationId.value = id;
+        loadedAgentId.value = agentId;
+        nextTick(scrollToBottom);
+        return;
+    }
+
     const token = ++loadToken;
     loadError.value = '';
     submitError.value = '';
@@ -178,10 +196,20 @@ async function loadConversation(id: string) {
         // 迟到的响应可能覆盖用户随后点击的会话，只有最新一次切换可以写入状态
         if (token !== loadToken) return;
         failedConversationId.value = null;
-        chat.value = buildChat(id, agentId, res.messages as UIMessage[]);
+        const next = buildChat(id, agentId, res.messages as UIMessage[]);
+        chat.value = next;
         loadedConversationId.value = id;
         loadedAgentId.value = agentId;
         conversationTitle.value = res.conversation?.title || '';
+        registerChatRun(id, next);
+        /**
+         * 这一轮可能还在服务端跑（刷新过页面，登记表是空的）。判据是历史最后一条必须是 user：
+         * 生成中的那轮回复要到 `onFinish` 才落库，所以「末尾是 user」= 还没有回复 = 可能有在途流。
+         * 反过来末尾是 assistant 就说明本轮已经答完并落库，再回放一次会让同一条回复出现两遍。
+         * 没有在途轮次时服务端回 204，SDK 把状态复位成 ready，等于免费问一句。
+         */
+        const last = (res.messages as UIMessage[])[res.messages.length - 1];
+        if (last?.role === 'user') void next.resumeStream();
         nextTick(scrollToBottom);
     } catch (e) {
         if (token !== loadToken) return;
@@ -192,7 +220,6 @@ async function loadConversation(id: string) {
 
 /** 复位成全新对话：不预建会话，等首次发送时再落库（避免误点产生空会话） */
 function resetLocal() {
-    stopActiveStream();
     loadToken += 1;
     failedConversationId.value = null;
     chat.value = null;
@@ -276,6 +303,7 @@ async function handleSubmit(overrideText?: string) {
                 const created = await $fetch<{ id: string }>('/api/conversations', { method: 'POST', body: { agentId } });
                 current = buildChat(created.id, agentId);
                 chat.value = current;
+                registerChatRun(created.id, current);
                 loadedConversationId.value = created.id;
                 loadedAgentId.value = agentId;
                 conversationTitle.value = t('chat.newChat');
@@ -335,9 +363,21 @@ watch(
     },
 );
 
-// 路由切走即销毁面板：本地状态随之消失，但在途的 SSE 不会因为组件销毁而停，
-// 不中断的话用户「离开聊天页」后浏览器仍在接收上一轮的流。
-onBeforeUnmount(stopActiveStream);
+// 面板销毁时**不**中断在途生成：实例留在 `useChatRuns` 的登记表里继续收流，
+// 用户切回这段会话时接管同一个实例（路由切走等于组件卸载，过去这里会 stop()，
+// 于是「离开聊天页」本身就把一轮已经烧掉 token 的生成掐掉了）。
+
+/**
+ * 「停止」按钮：本地断流 + 让服务端也中止这一轮。
+ *
+ * `chat.stop()` 只断开浏览器这条 fetch；服务端的模型调用照常跑完并落库（后台续跑依赖的正是这个行为），
+ * 所以只调它等于「看不见但照烧」。`stopChatRun` 会另发 `POST /api/chat/{会话 id}/stop`。
+ */
+function stopGeneration() {
+    const id = loadedConversationId.value;
+    chat.value?.stop();
+    if (id) void stopChatRun(id);
+}
 
 /* ---------------- 滚动 ---------------- */
 
@@ -742,7 +782,12 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                         ✕
                     </button>
                 </div>
-                <button v-if="chat?.status === 'streaming' || chat?.status === 'submitted'" type="button" class="app-btn app-btn-outline" @click="chat?.stop()">
+                <button
+                    v-if="chat?.status === 'streaming' || chat?.status === 'submitted'"
+                    type="button"
+                    class="app-btn app-btn-outline"
+                    @click="stopGeneration"
+                >
                     {{ t('chat.stop') }}
                 </button>
                 <button v-else type="submit" class="app-btn app-btn-primary !px-6" :disabled="submitting">

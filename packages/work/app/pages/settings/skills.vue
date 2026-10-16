@@ -122,6 +122,7 @@ async function remove(id: string) {
 
 <template>
     <div class="space-y-6">
+        <WorkSettingsNav />
         <div v-if="error" class="app-alert app-alert-danger">
             {{ error }}
             <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>

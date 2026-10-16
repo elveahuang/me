@@ -12,6 +12,7 @@ import {
     skills,
     tools as toolsTable,
 } from '../db/schema';
+import { beginChatRun, endChatRun, tapChatRun, type ChatRun } from '../utils/chat-runs';
 import { retrieveContext } from '../utils/embedding';
 import { JSONB_MAX_DEPTH, exceedsJsonDepth } from '../utils/jsonb-input';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from '../utils/mcp';
@@ -470,6 +471,7 @@ export default defineEventHandler(async (event) => {
     // buildSystemPrompt、convertToModelMessages、streamText 多处可抛错，而 onError/onFinish
     // 只有流已建立后才有机会触发。任一处抛出都会让 handler 直接 500，不先关闭就把整批
     // MCP 连接（及其子进程/长连接）永久漏在进程里。
+    let activeRun: ChatRun | null = null;
     try {
         if (mcpConnections.length) {
             toolSet = mergeMcpTools(toolSet, mcpConnections);
@@ -513,6 +515,15 @@ export default defineEventHandler(async (event) => {
         );
         const maxSteps = agent.maxSteps ?? 6;
 
+        /**
+         * 每一轮生成先开一条内存回放缓冲（`utils/chat-runs.ts`），让「切会话 / 切页面 / 刷新」后的
+         * 重连还能把这一轮逐字看完；顺带拿到这一轮的 `AbortController`。
+         *
+         * 必须在 `streamText` 之前建：abortSignal 要在调用模型时就已就位，而缓冲本身只是旁路，
+         * 真正的响应流仍是原来那条——客户端断开时该轮照常跑完并落库，`停止` 则走下面这条信号。
+         */
+        const run = beginChatRun(conversation.id);
+        activeRun = run;
         const result = streamText({
             model,
             system: system || undefined,
@@ -522,6 +533,7 @@ export default defineEventHandler(async (event) => {
             maxOutputTokens: agent.maxTokens ?? undefined,
             stopWhen: stepCountIs(maxSteps),
             timeout: { toolMs: TOOL_TIMEOUT_MS, firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: CHUNK_TIMEOUT_MS },
+            abortSignal: run.controller.signal,
         });
 
         const responseStream = createUIMessageStream({
@@ -570,11 +582,18 @@ export default defineEventHandler(async (event) => {
             },
         });
 
+        /**
+         * 缓冲只是旁路：这条响应流与改动前逐字节相同，客户端断开（切页面 / 刷新）不影响这一轮跑完并落库。
+         * 真正会中断这一轮的是 `POST /api/chat/{会话 id}/stop`——它 abort 上面那个 controller。
+         */
         return createUIMessageStreamResponse({
-            stream: responseStream,
+            stream: tapChatRun(responseStream, run),
             headers: { 'x-conversation-id': conversation.id },
         });
     } catch (error) {
+        // 流还没交出去就抛错（合并工具、拼提示词、转换历史都可能）：onFinish/onError 都还没机会跑，
+        // 不把这一轮收尾就会留一条永远「在途」的缓冲，侧栏角标一直亮到 5 分钟 stale 兜底。
+        if (activeRun) endChatRun(activeRun);
         await closeMcpOnce();
         throw error;
     }

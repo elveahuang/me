@@ -13,6 +13,7 @@ import {
     NOTE_CONTENT_MAX,
     WORK_DETAIL_MAX,
     WORK_TITLE_MAX,
+    normalizeReminderMinutes,
     normalizeTaskPriority,
     normalizeTaskStatus,
     normalizeWorkDate,
@@ -306,7 +307,7 @@ export function buildWorkbenchTools(): ToolSet {
     });
 
     set.work_create_event = tool({
-        description: '在工作台日程里创建一个事件。startsAt 必填（北京时间可懂的 ISO 时间），可给 endsAt、location、allDay。',
+        description: '在工作台日程里创建一个事件。startsAt 必填（北京时间可懂的 ISO 时间），可给 endsAt、location、allDay、reminderBeforeMinutes。',
         inputSchema: zod.object({
             title: zod.string().describe(`事件标题，最长 ${WORK_TITLE_MAX} 字`),
             startsAt: zod.string().describe('开始时间，ISO 字符串或毫秒时间戳'),
@@ -315,6 +316,7 @@ export function buildWorkbenchTools(): ToolSet {
             detail: zod.string().optional().describe('备注'),
             allDay: zod.boolean().optional().describe('是否全天'),
             project: zod.string().optional().describe('项目名或项目 id'),
+            reminderBeforeMinutes: zod.number().optional().describe('开始前多少分钟提醒，0–43200；用户说「提前 15 分钟提醒我」就填 15，全天事件不填'),
         }),
         execute: async (input) => {
             const blocked = await gateWrite('event');
@@ -324,15 +326,18 @@ export function buildWorkbenchTools(): ToolSet {
             let startsAt: Date | null;
             let title: string;
             let endsAt: Date | null;
+            let reminderMinutes: number | null;
             try {
                 startsAt = normalizeWorkDate(input.startsAt, 'startsAt');
                 if (!startsAt) return 'startsAt 必填';
                 title = normalizeWorkText(input.title, 'title', WORK_TITLE_MAX);
                 endsAt = normalizeWorkDateRange(input.endsAt, startsAt);
+                reminderMinutes = normalizeReminderMinutes(input.reminderBeforeMinutes);
             } catch (error) {
                 return `参数不合法：${(error as Error).message ?? String(error)}`;
             }
             const id = crypto.randomUUID();
+            const reminderAt = reminderMinutes === null ? null : new Date(startsAt.getTime() - reminderMinutes * 60_000);
             await db.transaction(async (tx) => {
                 await lockProjectRow(tx, ref.id);
                 await tx.insert(events).values({
@@ -344,10 +349,12 @@ export function buildWorkbenchTools(): ToolSet {
                     endsAt,
                     allDay: input.allDay === true,
                     location: normalizeWorkOptionalText(input.location, 'location', 200),
+                    reminderAt,
                     source: 'ai',
                 });
             });
-            return `已创建日程 [${id}] ${title}（${startsAt.toISOString()}）`;
+            const reminded = reminderAt ? `，将在 ${reminderAt.toISOString()} 提醒` : '';
+            return `已创建日程 [${id}] ${title}（${startsAt.toISOString()}）${reminded}`;
         },
     });
 
@@ -405,6 +412,6 @@ export const WORKBENCH_TOOL_SUMMARY = [
     '- work_today：今日概览（逾期/今天到期/未来 7 天日程/任务计数）',
     '- work_list_tasks / work_create_task / work_update_task：查、建、改任务（状态、优先级、到期）',
     '- work_create_note：记笔记（Markdown）',
-    '- work_create_event：创建日程',
+    '- work_create_event：创建日程（可带开始前多少分钟的提醒）',
     '- work_search：跨任务/笔记/日程/项目检索',
 ].join('\n');

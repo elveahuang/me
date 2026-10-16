@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { dayInputValue } from '../utils/work';
 
 /**
  * 工作台外壳（主流 AI 工作台布局：固定左栏 + 无顶部导航）。
@@ -17,7 +18,8 @@ import { useI18n } from 'vue-i18n';
  */
 const { t, locale } = useI18n();
 const { $setLocale } = useNuxtApp();
-const siteTitle = useRuntimeConfig().public.siteSettings.siteTitle;
+/** 名称可被通用设置页改名，所以走 useState 镜像而不是直接读非响应式的 runtimeConfig */
+const siteTitle = useSiteTitle();
 
 const route = useRoute();
 /** 抽屉开关：布局持有，ChatPane 头部的历史按钮（窄屏）也开同一个抽屉 */
@@ -42,6 +44,129 @@ const {
 const conversationError = computed(() => (conversationsError.value ? t('common.loadFailed') : ''));
 
 /**
+ * 后台生成轮次的可见性。
+ *
+ * 布局常驻、且是侧栏数据的唯一持有者，所以「哪条会话还在跑」的两条口径都在这里收敛：
+ * - 本地登记的实例（切页面时不销毁，见 `useChatRuns`）
+ * - 服务端在途轮次（刷新页面后本地一个实例都没有，只能问 `/api/chat/runs`）
+ *
+ * 某一轮从「在跑」变成「跑完」时必须刷新列表：服务端在这时回填自动标题、`updatedAt` 也随之变化，
+ * 不刷新就是「角标消失了，但那条会话还挂在列表中间且顶着旧名字」。
+ */
+const { runningIds, refreshRemoteRuns } = useChatRuns();
+onMounted(refreshRemoteRuns);
+
+/**
+ * 正在展示对话的页面：首页与 `/chat/:agentId`。
+ *
+ * `/chat` 是智能体广场，屏幕上没有任何会话，所以它不算——广场也会给 `effectiveConversationId`
+ * 算出一条会话来，把它当「正在看」会让完成提示被吞掉、阅读记录被误写。
+ */
+const isChatSurface = computed(() => route.path === '/' || /^\/chat\/[^/]+/.test(route.path));
+
+/**
+ * 后台那一轮跑完时的提示。
+ *
+ * 用户切走（甚至刷新过页面）之后，回复只是安静地落进侧栏，而生成动辄几十秒——
+ * 「完成」这件事必须自己冒出来一次，否则后台运行等于把结果藏起来。
+ * 正在看这一段会话时不打扰：流就在屏幕上，用户已经跟着看完了。
+ */
+const finishedNotice = ref<{ id: string; title: string; path: string } | null>(null);
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearFinishedNotice() {
+    if (noticeTimer) {
+        clearTimeout(noticeTimer);
+        noticeTimer = null;
+    }
+    finishedNotice.value = null;
+}
+
+watch(runningIds, async (next, prev) => {
+    const finished = (prev ?? []).filter((id) => !next.includes(id));
+    if (!finished.length) return;
+    // 标题与排序是这一轮收尾时服务端才回填的，先刷新再读，否则提示里还是「新对话」
+    await refreshConversations();
+    const id = finished[0];
+    if (!id) return;
+    const conversation = visibleConversations.value.find((c) => c.id === id);
+    if (!conversation) return;
+    if (isChatSurface.value && activeConversationId.value === id) return;
+    clearFinishedNotice();
+    finishedNotice.value = {
+        id,
+        title: conversation.title,
+        path: `/chat/${encodeURIComponent(conversation.agentId)}?c=${encodeURIComponent(id)}`,
+    };
+    noticeTimer = setTimeout(clearFinishedNotice, 12_000);
+});
+
+/**
+ * 阅读进度：「正在看」才算已读。
+ *
+ * 只在这两个值同时成立时写记录——聊天页面上、且这条会话就是打开的那条。
+ * 于是后台跑完而用户此刻在 /tasks 的那条会留下未读点，等浮层自己消失也不会漏。
+ */
+const { ensureSeeded, markRead, forgetConversation } = useChatReadState();
+
+const readTarget = computed(() => {
+    if (!isChatSurface.value) return null;
+    const id = effectiveConversationId.value;
+    if (!id) return null;
+    const conversation = visibleConversations.value.find((c) => c.id === id);
+    return conversation ? { id: conversation.id, updatedAt: conversation.updatedAt } : null;
+});
+
+watch(
+    readTarget,
+    (target) => {
+        if (target) markRead(target.id, target.updatedAt);
+    },
+    { immediate: true },
+);
+// 第一次使用（这份浏览器还没有任何记录）时整表播种为已读，避免一装上就看到满屏未读点
+watch(visibleConversations, (list) => ensureSeeded(list), { immediate: true });
+
+/**
+ * 日程提醒到点。
+ *
+ * 提醒过去只是抽屉里一个写进库的时间，界面不会因此发生任何事——这一层才是它的作用时刻。
+ * 只在布局挂载期间轮询（工作台没有后台守护、也没有推送），所以浮层刻意驻留得比会话完成提示更久：
+ * 用户回到屏幕前得来得及读完「该做什么」，而不只是看见它闪了一下。
+ */
+const { due: dueReminder, dismiss: dismissReminder, startPolling, stopPolling } = useEventReminders();
+const REMINDER_NOTICE_MS = 45_000;
+let reminderTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearReminderTimer() {
+    if (reminderTimer) {
+        clearTimeout(reminderTimer);
+        reminderTimer = null;
+    }
+}
+
+function closeReminder() {
+    clearReminderTimer();
+    dismissReminder();
+}
+
+watch(dueReminder, (event) => {
+    clearReminderTimer();
+    if (!event) return;
+    reminderTimer = setTimeout(closeReminder, REMINDER_NOTICE_MS);
+});
+
+/** 提醒深链到那一天：`?day=` 是日历页锚定的本机日，点开就能直接落在这条日程所在的格子上 */
+const reminderPath = computed(() => {
+    const event = dueReminder.value;
+    if (!event) return '';
+    const day = dayInputValue(event.startsAt);
+    return `/calendar${day ? `?day=${encodeURIComponent(day)}` : ''}`;
+});
+
+onMounted(startPolling);
+
+/**
  * 侧栏分组导航（Linear / Notion 的写法：条目多了靠分组标题保持可扫读）。
  *
  * `match` 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由）。
@@ -64,7 +189,7 @@ const navGroups = computed(() => [
             { to: '/', label: t('nav.chat'), icon: 'chat-outline', match: '/' },
             { to: '/chat', label: t('nav.agents'), icon: 'robot-outline', match: '/chat' },
             { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
-            { to: '/settings/agents', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
+            { to: '/settings', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
         ],
     },
 ]);
@@ -95,8 +220,17 @@ function onCreateConversation() {
     if (route.path !== '/') return navigateTo('/');
 }
 
+/** 会话被就地改名后刷新列表，并把这条重新记为已读（PATCH 会顶动 updatedAt，但它不该亮未读点） */
+async function onConversationsChanged(id: string) {
+    await refreshConversations();
+    const conversation = visibleConversations.value.find((c) => c.id === id);
+    if (conversation) markRead(conversation.id, conversation.updatedAt);
+}
+
 /** 删掉的正是当前会话时，切到同列表里剩下最近的一条，没有则回到新对话 */
 function onConversationDeleted(id: string) {
+    if (finishedNotice.value?.id === id) clearFinishedNotice();
+    forgetConversation(id);
     if (activeConversationId.value === id) {
         activeConversationId.value = visibleConversations.value.find((c) => c.id !== id)?.id ?? null;
         if (activeConversationId.value) selectConversation('', activeConversationId.value);
@@ -159,6 +293,9 @@ watch(
 useCloseDrawerOnWide(drawerOpen);
 
 onBeforeUnmount(() => {
+    clearFinishedNotice();
+    clearReminderTimer();
+    stopPolling();
     if (import.meta.client) {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onKeydown);
@@ -217,7 +354,7 @@ if (import.meta.client) {
                 :show-agent-name="!agentIdParam"
                 @select="onSelectConversation"
                 @create="onCreateConversation"
-                @changed="refreshConversations()"
+                @changed="onConversationsChanged"
                 @deleted="onConversationDeleted"
             />
 
@@ -275,6 +412,47 @@ if (import.meta.client) {
         <!-- 命令面板：全局快捷键在组件内部注册（布局常驻，切页不会重复挂载） -->
         <WorkCommandPalette ref="palette" />
 
+        <!--
+            后台那一轮跑完的提示：右下角浮层而不是弹窗。用户可能正在别的页面输入，
+            `role="status"`（polite）只播报一次、不打断输入；12 秒自动收起，也可手动关。
+            放在布局而不是 ChatPane：切走之后 ChatPane 已经不在那段会话上了。
+        -->
+        <Teleport to="body">
+            <div
+                v-if="finishedNotice"
+                role="status"
+                class="app-card fixed inset-x-3 bottom-3 z-50 flex items-center gap-2 py-2.5 pr-2 pl-3 !shadow-lg sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[22rem]"
+            >
+                <AppIcon name="check-circle-outline" :size="18" class="shrink-0 text-[color:var(--success)]" />
+                <p class="min-w-0 flex-1 truncate text-sm">{{ t('work.backgroundDone', { title: finishedNotice.title }) }}</p>
+                <NuxtLink :to="finishedNotice.path" class="app-btn app-btn-soft app-btn-sm shrink-0" @click="clearFinishedNotice()">
+                    {{ t('work.backgroundOpen') }}
+                </NuxtLink>
+                <button type="button" class="app-btn app-btn-ghost app-btn-icon shrink-0" :aria-label="t('common.close')" @click="clearFinishedNotice()">
+                    <AppIcon name="close" :size="16" />
+                </button>
+            </div>
+        </Teleport>
+
+        <!--
+            日程提醒到点。与上面那条完成提示分处对角（窄屏在上、桌面在左下）：
+            两条浮层可能同时在，叠在一起就谁都读不到。
+        -->
+        <Teleport to="body">
+            <div
+                v-if="dueReminder"
+                role="status"
+                class="app-card fixed inset-x-3 top-16 z-50 flex items-center gap-2 py-2.5 pr-2 pl-3 !shadow-lg sm:inset-x-auto sm:top-auto sm:bottom-6 sm:left-72 sm:w-[22rem]"
+            >
+                <AppIcon name="bell-outline" :size="18" class="shrink-0 text-[color:var(--warning)]" />
+                <p class="min-w-0 flex-1 truncate text-sm">{{ t('work.reminderDue', { title: dueReminder.title }) }}</p>
+                <NuxtLink :to="reminderPath" class="app-btn app-btn-soft app-btn-sm shrink-0" @click="closeReminder">{{ t('common.viewDetail') }}</NuxtLink>
+                <button type="button" class="app-btn app-btn-ghost app-btn-icon shrink-0" :aria-label="t('common.close')" @click="closeReminder">
+                    <AppIcon name="close" :size="16" />
+                </button>
+            </div>
+        </Teleport>
+
         <Teleport to="body">
             <div v-if="drawerOpen" class="lg:hidden">
                 <div class="app-drawer-backdrop" @click="drawerOpen = false" />
@@ -330,7 +508,7 @@ if (import.meta.client) {
                             :show-agent-name="!agentIdParam"
                             @select="onSelectConversation"
                             @create="onCreateConversation"
-                            @changed="refreshConversations()"
+                            @changed="onConversationsChanged"
                             @deleted="onConversationDeleted"
                         />
 

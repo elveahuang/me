@@ -21,6 +21,8 @@ export const NOTE_CONTENT_MAX = 200_000;
 export const EVENT_LOCATION_MAX = 200;
 export const WORK_TAG_MAX = 40;
 export const WORK_TAG_COUNT_MAX = 20;
+/** 提醒最多提前 30 天：再远就与「记一条日程」无异，界面上的档位也排不到。 */
+export const REMINDER_MINUTES_MAX = 30 * 24 * 60;
 
 /** 时间戳列的合法区间：1970 年前与 2100 年后一律当作脏数据。 */
 const MIN_TIMESTAMP_MS = Date.UTC(1970, 0, 1);
@@ -96,6 +98,21 @@ export function normalizeWorkDate(raw: unknown, label: string): Date | null {
     if (Number.isNaN(ms)) fail(400, `${label}不是合法时间`);
     if (ms < MIN_TIMESTAMP_MS || ms > MAX_TIMESTAMP_MS) fail(400, `${label}超出允许的时间范围`);
     return date;
+}
+
+/**
+ * 提醒提前量（分钟）：模型说的是「提前 15 分钟」这种相对量，绝对时刻由调用方按最终 startsAt 换算，
+ * 这样改了开始时间不会连带留下一个算在昨天的旧提醒。
+ *
+ * 只接受整数分钟：`1.5` 会落到秒级，而提醒列的展示口径是分钟，存进去就再也对不上界面上的档位。
+ */
+export function normalizeReminderMinutes(raw: unknown): number | null {
+    if (raw === undefined || raw === null) return null;
+    const value = typeof raw === 'number' ? Math.floor(raw) : Number.NaN;
+    if (!Number.isInteger(value) || value < 0 || value > REMINDER_MINUTES_MAX) {
+        fail(400, `reminderBeforeMinutes 必须是 0–${REMINDER_MINUTES_MAX} 之间的整数`);
+    }
+    return value;
 }
 
 /**

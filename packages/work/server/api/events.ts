@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, lt, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, isNotNull, lt, type SQL } from 'drizzle-orm';
 import { events } from '../db/schema';
 import { normalizeAdminBoolean } from '../utils/admin-boolean';
 import { db } from '../utils/db';
@@ -71,6 +71,9 @@ export default defineEventHandler(async (event) => {
 
     const projectId = stringParam(query.projectId);
     if (projectId) where.push(eq(events.projectId, projectId));
+
+    // 提醒轮询只要「设了提醒」的那些：默认窗口是今天起 90 天，不过滤的话每分钟拉一遍全量日程
+    if (stringParam(query.reminder) === '1') where.push(isNotNull(events.reminderAt));
 
     const keyword = stringParam(query.keyword);
     if (keyword) where.push(ilike(events.title, likePattern(keyword)));

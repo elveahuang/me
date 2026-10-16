@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { conversations, messages } from '../../db/schema';
+import { dropChatRun } from '../../utils/chat-runs';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { stripNull } from '../../utils/pg-text';
@@ -28,6 +29,8 @@ export default defineEventHandler(async (event) => {
 
     if (method === 'DELETE') {
         await db.delete(conversations).where(eq(conversations.id, id));
+        // 会话没了，它那轮的回放缓冲也就没有意义；留着会让重连接口把分片喂给一段不存在的历史
+        dropChatRun(id);
         return { ok: true };
     }
 
