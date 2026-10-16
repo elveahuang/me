@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import { WORK_SETTINGS_PAGES } from '../utils/work-settings';
 
 /**
  * 设置区的子导航（通用 / 智能体 / 模型 / 存储 / 技能 / 工具 / MCP / 知识库）。
@@ -14,16 +15,7 @@ import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 const route = useRoute();
 
-const items = computed(() => [
-    { to: '/settings', label: t('settings.navGeneral'), icon: 'cog-outline' },
-    { to: '/settings/agents', label: t('settings.navAgents'), icon: 'robot-outline' },
-    { to: '/settings/providers', label: t('settings.navProviders'), icon: 'brain' },
-    { to: '/settings/storage', label: t('settings.navStorage'), icon: 'database-outline' },
-    { to: '/settings/skills', label: t('settings.navSkills'), icon: 'lightning-bolt-outline' },
-    { to: '/settings/tools', label: t('settings.navTools'), icon: 'wrench-outline' },
-    { to: '/settings/mcp', label: t('settings.navMcp'), icon: 'power-plug-outline' },
-    { to: '/settings/knowledge', label: t('settings.navKnowledge'), icon: 'book-open-page-variant-outline' },
-]);
+const items = computed(() => WORK_SETTINGS_PAGES.map((page) => ({ to: page.to, label: t(page.labelKey), icon: page.icon })));
 
 /** `/settings` 必须精确匹配，否则前缀匹配会把 8 个条目全点亮；子页面按 `to + '/'` 前缀命中 */
 function isActive(to: string) {

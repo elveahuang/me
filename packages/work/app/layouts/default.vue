@@ -6,18 +6,19 @@ import { dayInputValue } from '../utils/work';
 /**
  * 工作台外壳（主流 AI 工作台布局：固定左栏 + 无顶部导航）。
  *
- * 左栏自上而下三段：功能导航 / 会话列表（新建对话 + 对话记录）/ 设置（外观、语言、版权）。
+ * 左栏自上而下：品牌 / 命令面板入口 / 功能导航 / 会话列表。
+ * 会话列表只在对话面（`/chat`、`/chat/:agentId`）展开——它属于对话，其余页面把这列的空间还给导航。
+ * 外观、语言与站点名称都只有一处入口（`/settings` 通用页），底栏不再摆第二套。
  *
  * - ≥ lg：固定左侧栏占满高度；主内容区 `lg:pl-64`，没有顶部导航栏与页脚。
- * - < lg：左栏收成左侧抽屉，只留一条极窄顶栏（汉堡 + Logo）作为抽屉入口。
+ * - < lg：左栏收成左侧抽屉，只留一条极窄顶栏（汉堡 + Logo + 面板入口）作为抽屉入口。
  * - 会话列表与选中态由 `useChatSidebar` 提供：布局拉数据、渲染左栏，聊天页只消费，
  *   避免侧栏与页面各拉一份、选中态分叉。
  * - 主题 CSS 未分层：.app-btn 的 display 会压掉 utilities 层的响应式隐藏，
  *   所以顶栏上的汉堡按钮必须包在外层 lg:hidden 容器里（顶栏自身已是 lg:hidden）。
  * - 抽屉是导航面板（不是 role=menu），布局内的 Tab 圈闭/滚动锁是唯一实现，勿另造。
  */
-const { t, locale } = useI18n();
-const { $setLocale } = useNuxtApp();
+const { t } = useI18n();
 /** 名称可被通用设置页改名，所以走 useState 镜像而不是直接读非响应式的 runtimeConfig */
 const siteTitle = useSiteTitle();
 
@@ -57,12 +58,13 @@ const { runningIds, refreshRemoteRuns } = useChatRuns();
 onMounted(refreshRemoteRuns);
 
 /**
- * 正在展示对话的页面：首页与 `/chat/:agentId`。
+ * 正在展示对话的页面：`/chat`（可切换智能体）与 `/chat/:agentId`。
  *
- * `/chat` 是智能体广场，屏幕上没有任何会话，所以它不算——广场也会给 `effectiveConversationId`
+ * `/agents` 是智能体广场，屏幕上没有任何会话，所以它不算——广场也会给 `effectiveConversationId`
  * 算出一条会话来，把它当「正在看」会让完成提示被吞掉、阅读记录被误写。
+ * 同一个判据还决定左栏要不要展开会话列表。
  */
-const isChatSurface = computed(() => route.path === '/' || /^\/chat\/[^/]+/.test(route.path));
+const isChatSurface = computed(() => route.path === '/chat' || route.path.startsWith('/chat/'));
 
 /**
  * 后台那一轮跑完时的提示。
@@ -169,6 +171,9 @@ onMounted(startPolling);
 /**
  * 侧栏分组导航（Linear / Notion 的写法：条目多了靠分组标题保持可扫读）。
  *
+ * 分组名必须穷尽组内成员，否则不分组：「工作台」是这台机器上的数据对象，「AI 与系统」是模型入口与配置。
+ * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器与命令面板。
+ *
  * `match` 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由）。
  * 桌面端与抽屉共用同一个 computed，两侧不会因某次只改一处而菜单项分叉。
  */
@@ -176,19 +181,18 @@ const navGroups = computed(() => [
     {
         title: t('nav.groupWork'),
         links: [
-            { to: '/today', label: t('nav.today'), icon: 'view-dashboard-outline', match: '/today' },
+            { to: '/', label: t('nav.today'), icon: 'view-dashboard-outline', match: '/' },
             { to: '/tasks', label: t('nav.tasks'), icon: 'check-all', match: '/tasks' },
             { to: '/calendar', label: t('nav.calendar'), icon: 'calendar-check-outline', match: '/calendar' },
             { to: '/notes', label: t('nav.notes'), icon: 'book-open-page-variant-outline', match: '/notes' },
             { to: '/projects', label: t('nav.projects'), icon: 'folder-outline', match: '/projects' },
+            { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
         ],
     },
     {
         title: t('nav.groupAi'),
         links: [
-            { to: '/', label: t('nav.chat'), icon: 'chat-outline', match: '/' },
-            { to: '/chat', label: t('nav.agents'), icon: 'robot-outline', match: '/chat' },
-            { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
+            { to: '/chat', label: t('nav.chat'), icon: 'chat-outline', match: '/chat' },
             { to: '/settings', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
         ],
     },
@@ -199,25 +203,24 @@ function isNavActive(match: string) {
     return match === '/' ? path === '/' : path === match || path.startsWith(`${match}/`);
 }
 
-const otherLocaleLabel = computed(() => (locale.value === 'zh-CN' ? 'English' : '简体中文'));
-
-function switchLocale(next: 'zh-CN' | 'en-US' = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN') {
-    $setLocale(next);
-}
-
-/** 侧栏点选会话：首页就地切换；其余页面跳到该会话所属智能体的对话页 */
+/**
+ * 侧栏点选会话：就地切换。
+ *
+ * 会话列表只在对话面（`/chat`、`/chat/:agentId`）渲染，所以这里永远不需要跳路由——
+ * `/chat` 上选到别的智能体的会话由 ChatPane 按 props 换人，`/chat/:agentId` 上列表本来就只列该智能体。
+ */
 function onSelectConversation(payload: { id: string; agentId: string }) {
+    // 就地切换不改 URL，route 监听不会关抽屉；窄屏下用户点完会话是要看对话，不是看抽屉
+    drawerOpen.value = false;
     selectConversation(payload.agentId, payload.id);
-    const agentPath = `/chat/${encodeURIComponent(payload.agentId)}`;
-    if (route.path === '/' || route.path === agentPath) return;
-    return navigateTo(`${agentPath}?c=${encodeURIComponent(payload.id)}`);
 }
 
-/** 新建对话：清掉选中态；对话页回到该智能体无 ?c= 的页面，其余页面回首页 */
+/** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
 function onCreateConversation() {
+    drawerOpen.value = false;
     startNewChat();
     if (agentIdParam.value) return navigateTo(`/chat/${encodeURIComponent(agentIdParam.value)}`);
-    if (route.path !== '/') return navigateTo('/');
+    if (route.path !== '/chat') return navigateTo('/chat');
 }
 
 /** 会话被就地改名后刷新列表，并把这条重新记为已读（PATCH 会顶动 updatedAt，但它不该亮未读点） */
@@ -311,14 +314,23 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：功能导航 + 会话列表 + 设置区 -->
+        <!-- 桌面左侧栏：品牌 + 命令面板入口 + 功能导航（对话面再往下展开会话列表） -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
             <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
 
-            <nav class="min-h-0 shrink space-y-1 overflow-y-auto px-3 py-2">
+            <!-- 命令面板入口放在导航之上：它是这列导航的键盘版，快捷键是隐性的，看得见的路径（带 ⌘K 角标的按钮）才是发现方式 -->
+            <div class="shrink-0 px-3 pb-2">
+                <button type="button" class="app-btn app-btn-outline app-btn-block !justify-start gap-2 !text-xs" @click="palette?.openPalette()">
+                    <AppIcon name="magnify" :size="15" class="text-faint" />
+                    <span>{{ t('work.paletteTitle') }}</span>
+                    <kbd class="text-faint ml-auto rounded border border-[color:var(--line)] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+                </button>
+            </div>
+
+            <nav class="min-h-0 space-y-1 overflow-y-auto px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'flex-1'">
                 <template v-for="group in navGroups" :key="group.title">
                     <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
                     <NuxtLink
@@ -335,17 +347,9 @@ if (import.meta.client) {
                 </template>
             </nav>
 
-            <!-- 命令面板入口：快捷键是隐性的，看得见的路径（带 ⌘K 角标的按钮）才是发现方式 -->
-            <div class="shrink-0 px-3 pb-1">
-                <button type="button" class="app-btn app-btn-outline app-btn-block !justify-start gap-2 !text-xs" @click="palette?.openPalette()">
-                    <AppIcon name="magnify" :size="15" class="text-faint" />
-                    <span>{{ t('work.paletteTitle') }}</span>
-                    <kbd class="text-faint ml-auto rounded border border-[color:var(--line)] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-                </button>
-            </div>
-
-            <!-- 中间段：新建对话 + 对话记录 -->
+            <!-- 会话列表属于对话：只在对话面展开，其余页面不占这列的高度 -->
             <ConversationList
+                v-if="isChatSurface"
                 class="border-line min-h-0 flex-1 border-t"
                 :conversations="visibleConversations"
                 :active-id="activeConversationId"
@@ -357,19 +361,6 @@ if (import.meta.client) {
                 @changed="onConversationsChanged"
                 @deleted="onConversationDeleted"
             />
-
-            <!-- 底部设置区：外观、语言、版权；设置项全部落在这里而不是顶部 -->
-            <div class="border-line shrink-0 space-y-3 border-t p-3">
-                <ThemeSwitcher variant="panel" />
-
-                <!-- 抽屉是导航面板而非 role=menu，这里不能标 menuitem -->
-                <button type="button" class="app-dropdown-item" @click="switchLocale()">
-                    <AppIcon name="translate" :size="17" />
-                    <span>{{ otherLocaleLabel }}</span>
-                </button>
-
-                <p class="text-faint px-1 text-xs">© {{ new Date().getFullYear() }} {{ siteTitle }}</p>
-            </div>
         </aside>
 
         <!-- 窄屏顶栏：只有抽屉入口与品牌，导航/会话/外观/语言都在抽屉里 -->
@@ -480,9 +471,9 @@ if (import.meta.client) {
                         </button>
                     </div>
 
-                    <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由三段各自控制内边距 -->
+                    <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由两段各自控制内边距 -->
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
-                        <nav class="shrink-0 space-y-1 px-3 py-2">
+                        <nav class="space-y-1 px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'min-h-0 flex-1 overflow-y-auto'">
                             <template v-for="group in navGroups" :key="group.title">
                                 <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
                                 <NuxtLink
@@ -500,6 +491,7 @@ if (import.meta.client) {
                         </nav>
 
                         <ConversationList
+                            v-if="isChatSurface"
                             class="border-line min-h-0 flex-1 border-t"
                             :conversations="visibleConversations"
                             :active-id="activeConversationId"
@@ -511,17 +503,6 @@ if (import.meta.client) {
                             @changed="onConversationsChanged"
                             @deleted="onConversationDeleted"
                         />
-
-                        <div class="border-line shrink-0 space-y-3 border-t p-3">
-                            <ThemeSwitcher variant="panel" />
-
-                            <button type="button" class="app-dropdown-item" @click="switchLocale()">
-                                <AppIcon name="translate" :size="17" />
-                                <span>{{ otherLocaleLabel }}</span>
-                            </button>
-
-                            <p class="text-faint px-1 text-xs">© {{ new Date().getFullYear() }} {{ siteTitle }}</p>
-                        </div>
                     </div>
                 </aside>
             </div>

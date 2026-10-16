@@ -7,19 +7,19 @@ import { useI18n } from 'vue-i18n';
 import { downloadMarkdownFile, formatConversationMarkdown } from '@commons/markdown-export';
 
 /**
- * 对话主视窗：首页（`/`）与智能体对话页（`/chat/:agentId`）共用。
+ * 对话主视窗：`/chat`（可切换智能体）与 `/chat/:agentId`（固定智能体）共用。
  *
  * 受控设计：智能体（agentId）与当前会话（conversationId）都由父级持有，本组件只负责渲染与交互。
  * - agentId 变化 → 重新取详情（能力徽标 / 导出头部）
  * - conversationId 变成具体 id → 拉历史并重建 Chat 实例；变成 null → 复位成全新对话
  * - 首次发送才会真正落库建会话，然后通过 update:conversationId 交回父级
  *
- * 首页比对话页多一处：传入完整 agentList 时头部出现智能体切换器（切换交回父级决定，
+ * `/chat` 比 `/chat/:agentId` 多一处：传入完整 agentList 时头部出现智能体切换器（切换交回父级决定，
  * 通常意味着开一段新对话）。
  */
 const props = withDefaults(
     defineProps<{
-        /** 当前绑定的智能体；null 表示首页尚未选择 */
+        /** 当前绑定的智能体；null 表示`/chat`尚未选择 */
         agentId: string | null;
         /** 当前打开的会话；null 表示全新对话（尚未落库） */
         conversationId?: string | null;
@@ -64,7 +64,7 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
 
 /**
- * 外部草稿（`/?ask=`）：放进输入框并聚焦，让用户改两个字再发。
+ * 外部草稿（`/chat?ask=`）：放进输入框并聚焦，让用户改两个字再发。
  * 这里只负责「给我文本我就填」，要不要清掉 URL 由父级决定——它才是深链的消费方。
  */
 watch(
@@ -102,7 +102,7 @@ async function ensureAgentDetail(id: string) {
         agent.value = props.initialAgent;
         return;
     }
-    // 与 loadConversation 同一套护栏：首页切换器连点时，前一个智能体的迟到响应
+    // 与 loadConversation 同一套护栏：`/chat`切换器连点时，前一个智能体的迟到响应
     // 会把名称/模型/能力徽标盖到刚选中的那个上面（移动端 loadAgentInfo 已有等价逻辑）
     const token = ++agentDetailToken;
     agent.value = null;
@@ -575,7 +575,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
 
 <template>
     <section class="app-card relative flex min-w-0 flex-1 flex-col overflow-hidden !rounded-2xl">
-        <!-- 顶部信息条：智能体（首页可切换）+ 导出 / 新对话 -->
+        <!-- 顶部信息条：智能体（`/chat`可切换）+ 导出 / 新对话 -->
         <div class="flex items-center justify-between gap-2 px-4 py-3" style="border-bottom: 1px solid var(--line); background-color: var(--surface-2)">
             <div class="flex min-w-0 items-center gap-3">
                 <!-- 移动端会话历史入口：侧栏 < md 隐藏，抽屉由父级摆放。
@@ -854,7 +854,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
             </div>
         </Teleport>
 
-        <!-- 智能体选择弹层（首页）：切换即开一段新对话 -->
+        <!-- 智能体选择弹层（`/chat`）：切换即开一段新对话 -->
         <Teleport to="body">
             <div
                 v-if="agentPickerOpen"

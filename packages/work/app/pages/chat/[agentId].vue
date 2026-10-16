@@ -3,8 +3,8 @@ import type { AgentDetail } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 /**
- * 指定智能体的对话页：会话列表已上移到布局左栏（只列该智能体的会话），头部不提供智能体切换器。
- * 对话主体与首页共用 ChatPane；首页多一个切换器，这里固定由路由参数决定。
+ * 指定智能体的对话页（`/chat/:agentId`）：会话列表由布局左栏渲染（只列该智能体的会话），头部不提供智能体切换器。
+ * 对话主体与 `/chat` 共用 ChatPane；`/chat` 多一个切换器，这里固定由路由参数决定。
  *
  * agentId 用 computed 包住 route.params：/chat/A 与 /chat/B 是同一个页面组件，
  * 直接解构出静态字符串会在路由参数变化后继续用旧值。
@@ -77,7 +77,7 @@ const { open: openDrawer } = useShellDrawer();
         <!-- 智能体不存在或已停用：给出返回广场的出口，否则页面只剩一个空对话壳 -->
         <div v-if="agentError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
             <span>{{ t('agents.notFound') }}</span>
-            <NuxtLink to="/chat" class="app-btn app-btn-soft shrink-0 !py-1.5">{{ t('nav.agents') }} →</NuxtLink>
+            <NuxtLink to="/agents" class="app-btn app-btn-soft shrink-0 !py-1.5">{{ t('agents.title') }} →</NuxtLink>
         </div>
 
         <!-- dvh：移动浏览器地址栏收展时 100vh 大于可视高度，会把输入栏顶出屏幕。

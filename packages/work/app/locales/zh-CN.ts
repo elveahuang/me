@@ -41,21 +41,16 @@ export default {
         viewDetail: '查看详情',
         add: '添加',
     },
-    home: {
-        seoDescription: 'ME 智能体平台：多模型流式对话、知识库问答与工具增强，网页与移动端同一账号通行，多阶会员按需选择。',
-    },
     nav: {
         groupWork: '工作台',
-        groupAi: 'AI 与资料',
+        groupAi: 'AI 与系统',
         today: '今日',
         tasks: '任务',
         calendar: '日历',
         notes: '笔记',
         projects: '项目',
         chat: '对话',
-        agents: '智能体广场',
-        conversations: '会话管理',
-        attachments: '附件管理',
+        attachments: '附件',
         systemSettings: '系统设置',
     },
     settings: {
@@ -68,7 +63,6 @@ export default {
         navTools: '工具',
         navMcp: 'MCP 服务',
         navKnowledge: '知识库',
-        generalTitle: '通用',
         generalSubtitle: '外观、语言与工作台名称',
         basicHint: '显示模式、品牌色与语言即时生效，并记为本机默认；换浏览器或清理存储后仍是这一套外观',
         languageTitle: '界面语言',
@@ -176,7 +170,6 @@ export default {
         deleteFailed: '删除失败',
         needUrl: '接口 URL 必填',
         // 智能体页
-        agentTitle: '智能体管理',
         agentNew: '新建智能体',
         agentSubtitle: '配置智能体的人设、模型与能力绑定（Skills / Tools / 知识库 / MCP）',
         agentEmojiPlaceholder: '头像 emoji，如 🤖',
@@ -208,7 +201,6 @@ export default {
         selectMethod: '请求方法',
         builtinTag: '内置',
         // 供应商页
-        providerTitle: '模型供应商',
         providerSubtitle: '所有供应商按 OpenAI 兼容协议接入（DeepSeek / 通义 / OpenAI / 自建网关，改 Base URL 即可）。',
         providerNew: '新建供应商',
         providerNamePlaceholder: '名称，如 DeepSeek',
@@ -228,7 +220,6 @@ export default {
         providerDeleteConfirm: '确认删除该供应商？',
         providerToggleFailed: '切换状态失败',
         // Skill 页
-        skillTitle: 'Skill 管理',
         skillSubtitle: 'Skill 是可复用的指令块（不可执行）。挂载到智能体后，其指令会注入系统提示词。需要调用外部能力请使用 Tool。',
         skillNew: '新建 Skill',
         skillNamePlaceholder: '名称，如：结构化输出规范',
@@ -241,7 +232,6 @@ export default {
         skillLoadFailed: '加载 Skill 列表失败',
         skillToggleFailed: '切换状态失败',
         // MCP 服务器页
-        mcpTitle: 'MCP 服务器',
         mcpSubtitle: '通过 Model Context Protocol 接入外部工具服务（Streamable HTTP / SSE）。',
         mcpNew: '新建 MCP Server',
         mcpNamePlaceholder: '名称（用作工具前缀）',
@@ -261,7 +251,6 @@ export default {
         savedOk: '已保存',
         deletedOk: '已删除',
         // 知识库页
-        kbTitle: '知识库',
         kbSubtitle: '文档自动分块并向量化；把知识库绑定到智能体后，对话时自动检索注入。',
         kbNamePlaceholder: '知识库名称',
         kbEmbeddingModel: 'Embedding 模型',
@@ -300,7 +289,6 @@ export default {
         kbSearchScore: '相关度 {score}',
         kbSearchEmpty: '无结果',
         // Tool 页
-        toolTitle: 'Tool 管理',
         toolSubtitle: 'Tool 是可执行的 AI SDK 工具，挂载到智能体后进入 ReAct 循环。内置工具开箱即用，HTTP 工具的 URL / 方法 / 参数全部后台可配。',
         toolNew: '新建 Tool',
         toolNamePlaceholder: '名称，如：当前时间',
@@ -429,6 +417,7 @@ export default {
         daysAgo: '{n} 天前',
         // 今日页
         quickPlaceholder: '记一条任务，回车即建…',
+        quickMore: '更多选项',
         statOverdue: '逾期',
         statDueToday: '今天到期',
         statOpen: '未完成',
@@ -447,6 +436,7 @@ export default {
         // 简报
         brief: '今日简报',
         briefEmpty: '还没有生成今天的简报。简报会汇总逾期、今天到期与接下来的日程，并给出建议的下一步。',
+        briefCollapsedHint: '简报已收起，点上面的标题展开阅读。',
         briefGenerate: '生成简报',
         briefRegenerate: '重新生成',
         briefGenerating: '生成中…',
@@ -625,6 +615,8 @@ export default {
         cmdGoNotes: '前往笔记',
         cmdGoProjects: '前往项目',
         cmdGoChat: '前往对话',
+        cmdGoAgents: '前往智能体广场',
+        cmdGoAttachments: '前往附件',
         cmdNewTask: '新建任务',
         cmdNewNote: '新建笔记',
         cmdNewEvent: '新建日程',

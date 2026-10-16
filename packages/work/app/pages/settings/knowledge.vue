@@ -298,7 +298,7 @@ async function search() {
             <div class="w-full lg:w-1/2">
                 <div class="app-page-header">
                     <div>
-                        <h1 class="app-page-title text-strong">{{ t('adminForm.kbTitle') }}</h1>
+                        <h1 class="app-page-title text-strong">{{ t('settings.navKnowledge') }}</h1>
                         <p class="app-page-subtitle">{{ t('adminForm.kbSubtitle') }}</p>
                     </div>
                     <div class="app-page-actions">

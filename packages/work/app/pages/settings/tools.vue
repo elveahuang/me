@@ -181,7 +181,7 @@ async function remove(id: string) {
         </div>
         <div class="app-page-header">
             <div>
-                <h1 class="app-page-title text-strong">{{ t('adminForm.toolTitle') }}</h1>
+                <h1 class="app-page-title text-strong">{{ t('settings.navTools') }}</h1>
                 <p class="app-page-subtitle">
                     {{ t('adminForm.toolSubtitle') }}
                 </p>

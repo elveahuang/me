@@ -173,7 +173,7 @@ async function remove(id: string) {
         </div>
         <div class="app-page-header">
             <div>
-                <h1 class="app-page-title text-strong">{{ t('adminForm.mcpTitle') }}</h1>
+                <h1 class="app-page-title text-strong">{{ t('settings.navMcp') }}</h1>
                 <p class="app-page-subtitle">{{ t('adminForm.mcpSubtitle') }}</p>
             </div>
             <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">{{ t('adminForm.mcpNew') }}</button>

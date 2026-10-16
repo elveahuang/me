@@ -244,12 +244,12 @@ function iconFor(mime: string): string {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="app-page-header">
             <div>
-                <h1 class="text-2xl font-black tracking-tight">{{ t('attachments.title') }}</h1>
-                <p class="text-faint mt-1 text-xs">{{ t('attachments.subtitle') }}</p>
+                <h1 class="app-page-title text-strong">{{ t('attachments.title') }}</h1>
+                <p class="app-page-subtitle">{{ t('attachments.subtitle') }}</p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="app-page-actions">
                 <select v-model="uploadCategory" class="app-input !w-auto !text-xs" :aria-label="t('attachments.categorySelect')">
                     <option v-for="c in ATTACHMENT_CATEGORIES" :key="c.value" :value="c.value">{{ presetText(c, locale) }}</option>
                 </select>

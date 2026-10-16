@@ -2,6 +2,7 @@
 import { extractApiError, formatDate } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { relativeDayLabel, todayInputValue, type WorkTaskStatus } from '../utils/work';
+import { WORK_SETTINGS_PAGES } from '../utils/work-settings';
 
 /**
  * 全局命令面板（⌘/Ctrl + K）。
@@ -68,37 +69,27 @@ interface Command {
 }
 
 /**
- * 设置区的子页面。
+ * 设置区的子页面（清单见 utils/work-settings，与子导航、通用页入口卡片同一份）。
  *
  * 侧栏里它们收在「系统设置」一项之下，要两步才够得着；命令面板是这条路径上唯一的单步入口，
  * 少了它就等于「页面存在，但只能靠点侧栏发现」。
  */
-const SETTINGS_PAGES = [
-    { id: 'go-settings', labelKey: 'settings.navGeneral', path: '/settings', icon: 'cog-outline' },
-    { id: 'go-settings-agents', labelKey: 'settings.navAgents', path: '/settings/agents', icon: 'robot-outline' },
-    { id: 'go-settings-providers', labelKey: 'settings.navProviders', path: '/settings/providers', icon: 'brain' },
-    { id: 'go-settings-storage', labelKey: 'settings.navStorage', path: '/settings/storage', icon: 'database-outline' },
-    { id: 'go-settings-skills', labelKey: 'settings.navSkills', path: '/settings/skills', icon: 'lightning-bolt-outline' },
-    { id: 'go-settings-tools', labelKey: 'settings.navTools', path: '/settings/tools', icon: 'wrench-outline' },
-    { id: 'go-settings-mcp', labelKey: 'settings.navMcp', path: '/settings/mcp', icon: 'power-plug-outline' },
-    { id: 'go-settings-knowledge', labelKey: 'settings.navKnowledge', path: '/settings/knowledge', icon: 'book-open-page-variant-outline' },
-] as const;
-
 const commands = computed<Command[]>(() => [
-    { id: 'go-today', group: t('work.cmdGroupGo'), label: t('work.cmdGoToday'), icon: 'view-dashboard-outline', run: () => go('/today') },
+    { id: 'go-today', group: t('work.cmdGroupGo'), label: t('work.cmdGoToday'), icon: 'view-dashboard-outline', run: () => go('/') },
     { id: 'go-tasks', group: t('work.cmdGroupGo'), label: t('work.cmdGoTasks'), icon: 'check-all', run: () => go('/tasks') },
     { id: 'go-calendar', group: t('work.cmdGroupGo'), label: t('work.cmdGoCalendar'), icon: 'calendar-check-outline', run: () => go('/calendar') },
     { id: 'go-notes', group: t('work.cmdGroupGo'), label: t('work.cmdGoNotes'), icon: 'book-open-page-variant-outline', run: () => go('/notes') },
     { id: 'go-projects', group: t('work.cmdGroupGo'), label: t('work.cmdGoProjects'), icon: 'folder-outline', run: () => go('/projects') },
-    { id: 'go-chat', group: t('work.cmdGroupGo'), label: t('work.cmdGoChat'), icon: 'chat-outline', run: () => go('/') },
-    { id: 'go-attachments', group: t('work.cmdGroupGo'), label: t('nav.attachments'), icon: 'file-document-outline', run: () => go('/attachments') },
-    ...SETTINGS_PAGES.map((page) => ({
-        id: page.id,
+    { id: 'go-chat', group: t('work.cmdGroupGo'), label: t('work.cmdGoChat'), icon: 'chat-outline', run: () => go('/chat') },
+    { id: 'go-agents', group: t('work.cmdGroupGo'), label: t('work.cmdGoAgents'), icon: 'robot-outline', run: () => go('/agents') },
+    { id: 'go-attachments', group: t('work.cmdGroupGo'), label: t('work.cmdGoAttachments'), icon: 'file-document-outline', run: () => go('/attachments') },
+    ...WORK_SETTINGS_PAGES.map((page) => ({
+        id: `go-settings-${page.id}`,
         group: t('work.cmdGroupSettings'),
         label: t(page.labelKey),
         hint: t('nav.systemSettings'),
         icon: page.icon,
-        run: () => go(page.path),
+        run: () => go(page.to),
     })),
     {
         id: 'new-task',

@@ -165,7 +165,7 @@ async function remove(id: string) {
         <div v-if="success" class="app-alert app-alert-success mb-4">{{ success }}</div>
         <div class="app-page-header">
             <div>
-                <h1 class="app-page-title text-strong">{{ t('adminForm.providerTitle') }}</h1>
+                <h1 class="app-page-title text-strong">{{ t('settings.navProviders') }}</h1>
                 <p class="app-page-subtitle">{{ t('adminForm.providerSubtitle') }}</p>
             </div>
             <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">

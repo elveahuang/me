@@ -137,7 +137,7 @@ async function askAiAboutThis() {
     const excerpt = (content.value || title.value).slice(0, 400);
     if (!excerpt.trim()) return;
     await save();
-    await navigateTo(`/?ask=${encodeURIComponent(`${t('work.askAboutNote')}\n${excerpt}`)}`);
+    await navigateTo(`/chat?ask=${encodeURIComponent(`${t('work.askAboutNote')}\n${excerpt}`)}`);
 }
 
 /** Ctrl/Cmd+S 立刻保存（不等防抖）；在输入框里也不该被浏览器「保存网页」抢走 */
