@@ -5,7 +5,7 @@
  * 所以它集中在这里：桌面侧栏与窄屏抽屉各渲染一次，两处不会因某次只改一处而菜单项分叉。
  *
  * 顶部那一段现在是「新建对话」（由布局渲染的按钮，它不是路由）加上这一张表。
- * 条目按工作流排列：今日 → 对话 → 工作空间 → 运行记录 → 自动化。
+ * 条目按工作流排列：今日 → 对话 → 工作空间 → 运行记录 → 资料库 → 自动化。
  *
  * `match` 决定侧栏高亮前缀。两个刻意不在表里的入口：系统设置固定在底部（它是「配置这台机器」而不是
  * 「工作台的一个页面」）、智能体广场（`/agents`）不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器。
@@ -22,5 +22,6 @@ export const WORK_NAV_LINKS: WorkNavLink[] = [
     { to: '/chat', labelKey: 'nav.conversations', icon: 'chat-outline', match: '/chat' },
     { to: '/spaces', labelKey: 'nav.spaces', icon: 'folder-outline', match: '/spaces' },
     { to: '/runs', labelKey: 'nav.runs', icon: 'history', match: '/runs' },
+    { to: '/library', labelKey: 'nav.library', icon: 'bookshelf', match: '/library' },
     { to: '/tasks', labelKey: 'nav.schedules', icon: 'timer-outline', match: '/tasks' },
 ];

@@ -41,6 +41,7 @@ const NAMES = [
     'chat-outline',
     'folder-outline',
     'history',
+    'bookshelf',
     'playlist-play',
     // 外观
     'white-balance-sunny',
