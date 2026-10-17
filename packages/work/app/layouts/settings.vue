@@ -41,18 +41,20 @@ function isActive(to: string) {
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('settings.navTitle')">
-            <div class="shrink-0 px-3 pt-3">
-                <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs">
-                    <AppIcon name="arrow-left" :size="15" />
-                    <span>{{ t('settings.backToWorkbench') }}</span>
-                </NuxtLink>
-            </div>
-
             <div class="border-line flex shrink-0 items-center gap-2.5 border-b px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs">W</span>
                 <div class="min-w-0">
                     <p class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</p>
                     <p class="text-faint text-[10px]">{{ t('nav.systemSettings') }}</p>
+                </div>
+            </div>
+
+            <div class="shrink-0 px-3 pt-3 pb-2">
+                <div class="px-2 pb-1.5">
+                    <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs">
+                        <AppIcon name="arrow-left" :size="15" />
+                        <span>{{ t('settings.backToWorkbench') }}</span>
+                    </NuxtLink>
                 </div>
             </div>
 
@@ -106,10 +108,10 @@ function isActive(to: string) {
                     :aria-label="t('settings.navTitle')"
                 >
                     <div class="border-line flex shrink-0 items-center justify-between border-b px-4 py-3">
-                        <NuxtLink to="/" class="app-btn app-btn-primary app-btn-sm gap-1.5" @click="drawerOpen = false">
-                            <AppIcon name="arrow-left" :size="15" />
-                            <span>{{ t('settings.backToWorkbench') }}</span>
-                        </NuxtLink>
+                        <span class="flex min-w-0 items-center gap-2.5">
+                            <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
+                            <span class="text-brand truncate text-sm font-black">{{ siteTitle }}</span>
+                        </span>
                         <button
                             type="button"
                             data-drawer-close
@@ -119,6 +121,14 @@ function isActive(to: string) {
                         >
                             <AppIcon name="close" :size="18" />
                         </button>
+                    </div>
+                    <div class="shrink-0 px-3 pt-3 pb-2">
+                        <div class="px-2 pb-1.5">
+                            <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="drawerOpen = false">
+                                <AppIcon name="arrow-left" :size="15" />
+                                <span>{{ t('settings.backToWorkbench') }}</span>
+                            </NuxtLink>
+                        </div>
                     </div>
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-3">
                         <nav class="min-h-0 flex-1 overflow-y-auto" :aria-label="t('settings.navTitle')">
