@@ -13,15 +13,17 @@ export interface WorkSettingsPage {
     /** 一句话说明，即该子页面自己的页头副标题 */
     descKey: string;
     icon: string;
+    /** 左侧设置导航的分组 */
+    groupKey: 'workspace' | 'capabilities' | 'data';
 }
 
 export const WORK_SETTINGS_PAGES: WorkSettingsPage[] = [
-    { id: 'general', to: '/settings', labelKey: 'settings.navGeneral', descKey: 'settings.generalSubtitle', icon: 'cog-outline' },
-    { id: 'agents', to: '/settings/agents', labelKey: 'settings.navAgents', descKey: 'adminForm.agentSubtitle', icon: 'robot-outline' },
-    { id: 'providers', to: '/settings/providers', labelKey: 'settings.navProviders', descKey: 'adminForm.providerSubtitle', icon: 'brain' },
-    { id: 'storage', to: '/settings/storage', labelKey: 'settings.navStorage', descKey: 'settings.storageSubtitle', icon: 'database-outline' },
-    { id: 'skills', to: '/settings/skills', labelKey: 'settings.navSkills', descKey: 'adminForm.skillSubtitle', icon: 'lightning-bolt-outline' },
-    { id: 'tools', to: '/settings/tools', labelKey: 'settings.navTools', descKey: 'adminForm.toolSubtitle', icon: 'wrench-outline' },
-    { id: 'mcp', to: '/settings/mcp', labelKey: 'settings.navMcp', descKey: 'adminForm.mcpSubtitle', icon: 'power-plug-outline' },
-    { id: 'knowledge', to: '/settings/knowledge', labelKey: 'settings.navKnowledge', descKey: 'adminForm.kbSubtitle', icon: 'book-open-page-variant-outline' },
+    { id: 'general', to: '/settings', labelKey: 'settings.navGeneral', descKey: 'settings.generalSubtitle', icon: 'cog-outline', groupKey: 'workspace' },
+    { id: 'agents', to: '/settings/agents', labelKey: 'settings.navAgents', descKey: 'adminForm.agentSubtitle', icon: 'robot-outline', groupKey: 'capabilities' },
+    { id: 'providers', to: '/settings/providers', labelKey: 'settings.navProviders', descKey: 'adminForm.providerSubtitle', icon: 'brain', groupKey: 'capabilities' },
+    { id: 'storage', to: '/settings/storage', labelKey: 'settings.navStorage', descKey: 'settings.storageSubtitle', icon: 'database-outline', groupKey: 'data' },
+    { id: 'skills', to: '/settings/skills', labelKey: 'settings.navSkills', descKey: 'adminForm.skillSubtitle', icon: 'lightning-bolt-outline', groupKey: 'capabilities' },
+    { id: 'tools', to: '/settings/tools', labelKey: 'settings.navTools', descKey: 'adminForm.toolSubtitle', icon: 'wrench-outline', groupKey: 'capabilities' },
+    { id: 'mcp', to: '/settings/mcp', labelKey: 'settings.navMcp', descKey: 'adminForm.mcpSubtitle', icon: 'power-plug-outline', groupKey: 'capabilities' },
+    { id: 'knowledge', to: '/settings/knowledge', labelKey: 'settings.navKnowledge', descKey: 'adminForm.kbSubtitle', icon: 'book-open-page-variant-outline', groupKey: 'capabilities' },
 ];

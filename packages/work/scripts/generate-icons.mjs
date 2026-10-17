@@ -33,6 +33,7 @@ const NAMES = [
     'menu',
     'close',
     'chevron-down',
+    'arrow-left',
     'chevron-right',
     'plus',
     'magnify',

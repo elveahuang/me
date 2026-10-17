@@ -197,6 +197,10 @@ export default {
     },
     settings: {
         navTitle: '设置分区',
+        backToWorkbench: '返回工作台',
+        groupWorkspace: '工作台',
+        groupCapabilities: '能力',
+        groupData: '数据与存储',
         navGeneral: '通用',
         navAgents: '智能体',
         navProviders: '模型',

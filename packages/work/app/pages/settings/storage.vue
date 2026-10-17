@@ -1,6 +1,8 @@
 <script setup lang="ts">
+
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
+definePageMeta({ layout: 'settings' });
 
 /**
  * 存储配置子页：附件上传用的 S3 协议对象桶（RustFS / MinIO / AWS S3）。
@@ -63,8 +65,6 @@ async function onImportFile(event: Event) {
 
 <template>
     <div class="space-y-5">
-        <WorkSettingsNav />
-
         <div class="app-page-header">
             <div>
                 <h1 class="app-page-title text-strong">{{ t('settings.navStorage') }}</h1>

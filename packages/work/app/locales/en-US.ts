@@ -196,6 +196,10 @@ export default {
     },
     settings: {
         navTitle: 'Settings sections',
+        backToWorkbench: 'Back to workspace',
+        groupWorkspace: 'Workspace',
+        groupCapabilities: 'Capabilities',
+        groupData: 'Data & storage',
         navGeneral: 'General',
         navAgents: 'Agents',
         navProviders: 'Models',

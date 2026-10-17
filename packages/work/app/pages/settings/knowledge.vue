@@ -1,6 +1,8 @@
 <script setup lang="ts">
+
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
+definePageMeta({ layout: 'settings' });
 
 const { t } = useI18n();
 const { spaces } = useChatSidebar();
@@ -376,7 +378,6 @@ async function search() {
 
 <template>
     <div class="space-y-5">
-        <WorkSettingsNav />
         <div class="flex flex-col gap-6 lg:flex-row">
             <div class="w-full lg:w-1/2">
                 <div class="app-page-header">

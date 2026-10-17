@@ -1,7 +1,8 @@
 <script setup lang="ts">
+
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import { WORK_SETTINGS_PAGES } from '../../utils/work-settings';
+definePageMeta({ layout: 'settings' });
 
 /**
  * 通用设置：外观（显示模式 + 品牌色）、界面语言、工作台名称。
@@ -184,19 +185,10 @@ async function saveName() {
 
 const saveStateLabel = computed(() => (saveState.value === 'saving' ? t('settings.preferenceSaving') : t('settings.preferenceFailed')));
 
-/**
- * 其余七个设置子页的入口卡片。
- *
- * 侧栏只有「系统设置」一项，子页面原本要靠顶部那条横向子导航才能发现——
- * 窄屏上它要左右滑才看得全，所以在本页再给一组能一眼扫到的入口。清单与顶部子导航共用同一份。
- */
-const sectionPages = computed(() => WORK_SETTINGS_PAGES.filter((page) => page.to !== '/settings'));
 </script>
 
 <template>
     <div class="space-y-5">
-        <WorkSettingsNav />
-
         <div class="app-page-header">
             <div>
                 <h1 class="app-page-title text-strong">{{ t('settings.navGeneral') }}</h1>
@@ -281,18 +273,5 @@ const sectionPages = computed(() => WORK_SETTINGS_PAGES.filter((page) => page.to
             </p>
         </section>
 
-        <section class="space-y-2">
-            <h2 class="text-sm font-black">{{ t('settings.navTitle') }}</h2>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <NuxtLink v-for="page in sectionPages" :key="page.id" :to="page.to" class="app-card app-card-hover flex items-start gap-3 p-4">
-                    <AppIcon :name="page.icon" :size="18" class="mt-0.5 shrink-0 text-[color:var(--brand-500)]" />
-                    <span class="min-w-0 flex-1">
-                        <span class="text-strong block text-sm font-bold">{{ t(page.labelKey) }}</span>
-                        <span class="text-faint mt-1 line-clamp-2 block text-[11px]">{{ t(page.descKey) }}</span>
-                    </span>
-                    <AppIcon name="chevron-right" :size="14" class="text-faint mt-0.5 shrink-0" />
-                </NuxtLink>
-            </div>
-        </section>
     </div>
 </template>
