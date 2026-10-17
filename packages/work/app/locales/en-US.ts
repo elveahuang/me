@@ -192,6 +192,14 @@ export default {
             'Writes scheduled tasks, conversations and messages, plus agents and their capability bindings, into a single JSON file for a new machine or an archive copy',
         dataBackupNote:
             'The export omits model and storage keys, attachment binaries and vector indexes — after restoring, re-enter the keys on the Models and Storage pages and rebuild the knowledge base index',
+        dataImportAction: 'Import JSON',
+        dataImporting: 'Importing…',
+        dataImportHint: 'Merge import: rows with the same primary key are skipped; existing data is not overwritten',
+        dataImportConfirm: 'Import this backup? Existing rows with the same primary key stay untouched, but new rows will be written to this database.',
+        dataImportDone: 'Imported {n} rows',
+        dataImportFailed: 'Could not import the backup',
+        dataImportInvalidJson: 'The file is not valid JSON',
+        dataImportTooLarge: 'The backup exceeds the 20MB limit',
     },
     chat: {
         newChat: 'New Chat',

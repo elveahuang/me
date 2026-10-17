@@ -17,6 +17,7 @@ import {
 } from '../db/schema';
 import { db } from './db';
 import { retrieveContext } from './embedding';
+import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from './local-tools';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from './mcp';
 import { resolveModel } from './providers';
 import { lockAgentRow } from './ref-lock';
@@ -239,10 +240,17 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
         const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, row.spaceId));
         const { model } = await resolveModel(agent.providerId, agent.model);
 
-        let toolSet = { ...buildWorkbenchTools(row.agentId, row.spaceId), ...buildToolSet(boundToolRows.map((r) => r.tool)) };
-        const toolSummary = [WORKBENCH_TOOL_SUMMARY, ...boundToolRows.filter((r) => r.tool.enabled).map((r) => `- ${r.tool.name}：${r.tool.description}`)].join(
-            '\n',
-        );
+        const localTools = buildLocalFileTools();
+        let toolSet = {
+            ...buildWorkbenchTools(row.agentId, row.spaceId),
+            ...localTools,
+            ...buildToolSet(boundToolRows.map((r) => r.tool)),
+        };
+        const toolSummary = [
+            WORKBENCH_TOOL_SUMMARY,
+            ...(Object.keys(localTools).length ? [LOCAL_TOOL_SUMMARY] : []),
+            ...boundToolRows.filter((r) => r.tool.enabled).map((r) => `- ${r.tool.name}：${r.tool.description}`),
+        ].join('\n');
         mcpConnections = await connectEnabledMcpServers(boundMcpIds);
         if (mcpConnections.length) toolSet = mergeMcpTools(toolSet, mcpConnections);
 

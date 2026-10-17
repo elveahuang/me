@@ -262,6 +262,28 @@ async function runSmokeTests() {
         '存储配置脱敏：只回前缀与是否有密钥，响应里没有密钥原文',
     );
 
+    // 9.1 本地文件只读边界
+    console.log('\n9.1 测试本地文件只读边界');
+    const { parseLocalRoots, isPathInside, listLocalFiles, readLocalFile, searchLocalFiles } = await import('../server/utils/local-files');
+    const localRoot = resolve(HERE, '..');
+    const parsedRoots = parseLocalRoots(`${localRoot}; ${localRoot}`);
+    assert(parsedRoots.length === 1 && parsedRoots[0] === localRoot, '本地目录白名单去重并解析为绝对路径');
+    assert(isPathInside(localRoot, resolve(localRoot, 'server')) && isPathInside(localRoot, localRoot), '白名单根目录及其子路径放行');
+    assert(!isPathInside(localRoot, resolve(localRoot, '..')) && !isPathInside(localRoot, resolve(localRoot, '..', 'other')), '父目录与相邻目录不会越出白名单');
+    const previousRoots = process.env.WORK_FILE_ROOTS;
+    process.env.WORK_FILE_ROOTS = localRoot;
+    try {
+        const entries = await listLocalFiles(localRoot, 1);
+        assert(entries.some((entry) => entry.path.endsWith('package.json')), '白名单目录可以列出 package.json');
+        const packageText = await readLocalFile(resolve(localRoot, 'package.json'), 10_000);
+        assert(packageText.includes('"name"'), '白名单目录可以读取文本文件');
+        const hits = await searchLocalFiles('@repo/work', localRoot, 5);
+        assert(hits.length > 0, '白名单目录可以按正文搜索');
+    } finally {
+        if (previousRoots === undefined) delete process.env.WORK_FILE_ROOTS;
+        else process.env.WORK_FILE_ROOTS = previousRoots;
+    }
+
     // 10. 本机来源闸门（work 唯一的跨站写防护）
     console.log('\n10. 测试本机来源闸门');
     const { blocksWrite, isLocalOrigin } = await import('../server/utils/local-origin');

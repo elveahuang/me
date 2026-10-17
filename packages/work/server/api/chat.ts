@@ -26,6 +26,7 @@ import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
 import { resolveSpaceId } from '../utils/spaces';
+import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { buildSystemPrompt } from '../utils/system-prompt';
 import { buildToolSet } from '../utils/tools';
 import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from '../utils/workbench-tools';
@@ -470,7 +471,12 @@ export default defineEventHandler(async (event) => {
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
     //     用户说「每天九点跑一遍」「今天有什么安排」时不该取决于所选智能体恰好绑了哪几行工具。
     //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
-    let toolSet = { ...buildWorkbenchTools(agentId, conversation.spaceId), ...buildToolSet(boundTools.map((row) => row.tool)) };
+    const localTools = buildLocalFileTools();
+    let toolSet = {
+        ...buildWorkbenchTools(agentId, conversation.spaceId),
+        ...localTools,
+        ...buildToolSet(boundTools.map((row) => row.tool)),
+    };
     if (agent.selfConfig) {
         toolSet['self-config'] = buildSelfConfigTool(agentId);
     }
@@ -498,6 +504,7 @@ export default defineEventHandler(async (event) => {
         // 11. 组装系统提示词
         const toolSummary = [
             WORKBENCH_TOOL_SUMMARY,
+            ...(Object.keys(localTools).length ? [LOCAL_TOOL_SUMMARY] : []),
             ...boundTools.map((row) => `- ${row.tool.name}（${row.tool.type === 'http' ? 'HTTP 工具' : '内置工具'}）：${row.tool.description}`),
             ...mcpConnections.map((c) => `- [MCP] ${c.serverName}`),
         ].join('\n');
