@@ -78,22 +78,6 @@ let requestToken = 0;
 
 useDrawerFocus(() => open.value, panelRef, hide);
 
-const actions = computed<PaletteItem[]>(() => [
-    { key: 'new-chat', group: t('commandPalette.actions'), label: t('commandPalette.newChat'), icon: 'plus', to: '/chat' },
-    { key: 'today', group: t('commandPalette.actions'), label: t('nav.today'), icon: 'view-dashboard-outline', to: '/' },
-    { key: 'spaces', group: t('commandPalette.actions'), label: t('nav.spaces'), icon: 'folder-outline', to: '/spaces' },
-    { key: 'runs', group: t('commandPalette.actions'), label: t('nav.runs'), icon: 'history', to: '/runs' },
-    { key: 'automations', group: t('commandPalette.actions'), label: t('nav.schedules'), icon: 'timer-outline', to: '/tasks' },
-    { key: 'library', group: t('commandPalette.actions'), label: t('nav.library'), icon: 'bookshelf', to: '/library' },
-    { key: 'settings', group: t('commandPalette.actions'), label: t('nav.systemSettings'), icon: 'cog-outline', to: '/settings' },
-]);
-
-const actionItems = computed(() => {
-    const q = query.value.trim().toLowerCase();
-    if (!q) return actions.value;
-    return actions.value.filter((item) => item.label.toLowerCase().includes(q));
-});
-
 const searchItems = computed<PaletteItem[]>(() => {
     const data = results.value;
     if (!data) return [];
@@ -128,7 +112,7 @@ const searchItems = computed<PaletteItem[]>(() => {
             label: `${hit.icon} ${hit.name}`,
             description: hit.description,
             icon: 'folder-outline',
-            to: '/spaces',
+            to: `/spaces/${encodeURIComponent(hit.id)}`,
         })),
         ...data.attachments.map((hit) => ({
             key: `attachment-${hit.id}`,
@@ -157,7 +141,7 @@ const searchItems = computed<PaletteItem[]>(() => {
     ];
 });
 
-const items = computed(() => (query.value.trim() ? searchItems.value : actionItems.value));
+const items = computed(() => searchItems.value);
 const groupedItems = computed(() => {
     const groups = new Map<string, PaletteItem[]>();
     for (const item of items.value) {
@@ -290,6 +274,11 @@ onBeforeUnmount(() => {
                         <AppIcon name="magnify" :size="28" class="app-empty-icon" />
                         <p class="app-empty-title">{{ t('commandPalette.noResults') }}</p>
                         <p class="app-empty-desc">{{ t('commandPalette.noResultsHint') }}</p>
+                    </div>
+                    <div v-else class="app-empty py-12">
+                        <AppIcon name="magnify" :size="28" class="app-empty-icon" />
+                        <p class="app-empty-title">{{ t('commandPalette.emptyTitle') }}</p>
+                        <p class="app-empty-desc">{{ t('commandPalette.emptyHint') }}</p>
                     </div>
                 </div>
 

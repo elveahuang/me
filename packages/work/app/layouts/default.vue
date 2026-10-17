@@ -279,20 +279,6 @@ if (import.meta.client) {
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
 
-            <div class="shrink-0 px-3 pb-2">
-                <button
-                    type="button"
-                    class="app-btn app-btn-outline app-btn-block justify-between !px-3 !py-2 !text-xs"
-                    @click="showCommandPalette"
-                >
-                    <span class="flex min-w-0 items-center gap-2">
-                        <AppIcon name="magnify" :size="15" />
-                        <span class="truncate">{{ t('commandPalette.searchButton') }}</span>
-                    </span>
-                    <span class="app-chip shrink-0 !px-1.5 !py-0.5 font-mono !text-[9px]">⌘K</span>
-                </button>
-            </div>
-
             <!-- 第一段：工作台。新建对话与功能导航同级——它是「开始一件事」，不是历史列表的一个操作 -->
             <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
                 <div v-if="!isSettingsSurface" class="px-2 pb-1.5">
