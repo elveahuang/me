@@ -6,9 +6,9 @@ import { WORK_NAV_LINKS } from '../utils/work-nav';
 /**
  * 工作台外壳：固定左栏的三段式布局。
  *
- * 左栏自上而下 **工作台 / 空间筛选 + 对话历史 / 系统设置** 三段：
- * - 顶部是「新建对话」+ 五项功能导航（今日、对话、工作空间、运行记录、自动化）。
- * - 中间先放空间筛选，再放对话历史。设置区 (`/settings*`) 不渲染这两块，避免配置页被会话上下文干扰。
+ * 左栏自上而下 **首页 / 空间 / 最近对话 / 工作台工具 + 系统设置**：
+ * - 顶部是「新建对话」+ 首页导航；空间作为独立列表；运行/资料/自动化收进底部「工作台工具」。
+ * - 中间先放空间列表，再放全局最近对话。设置区使用独立 layout，不会进入这里。
  * - 对话历史仍常驻工作台页面；任何工作台页面都能就地切会话。
  * - 底部是系统设置单一入口（外观、语言与八个子页都从那里进），底栏不再摆第二套主题/语言开关。
  *
@@ -144,6 +144,8 @@ watch(conversations, (list) => ensureSeeded(list), { immediate: true });
  * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器。
  */
 const navLinks = WORK_NAV_LINKS;
+const primaryLinks = navLinks.filter((link) => link.to === '/');
+const workbenchLinks = navLinks.filter((link) => ['/runs', '/library', '/tasks'].includes(link.to));
 
 function isNavActive(match: string) {
     const path = route.path;
@@ -272,9 +274,9 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：三段——五项导航 / 空间筛选 + 对话历史 / 系统设置 -->
+        <!-- 桌面左侧栏：首页 / 空间 / 最近对话 / 工作台工具 + 系统设置 -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
-            <NuxtLink to="/chat" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
+            <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
@@ -316,9 +318,13 @@ if (import.meta.client) {
                     <span class="truncate">{{ space.name }}</span>
                 </NuxtLink>
             </div>
+            <div v-if="!isSettingsSurface" class="flex shrink-0 items-center justify-between px-5 pt-3 pb-1">
+                <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.recentChats') }}</span>
+                <span class="text-faint text-[10px]">{{ visibleConversations.length }}</span>
+            </div>
             <ConversationList
                 v-if="!isSettingsSurface"
-                class="border-line min-h-0 flex-1 border-t"
+                class="min-h-0 flex-1"
                 :conversations="visibleConversations"
                 :active-id="activeConversationId"
                 :loading="conversationsPending"
@@ -330,11 +336,23 @@ if (import.meta.client) {
             />
             <div v-else class="min-h-0 flex-1" />
 
-            <!-- 第三段：系统设置。外观、语言与八个子页都只从这一个入口进 -->
+            <!-- 第三段：工作台工具 + 系统设置。 -->
             <div class="border-line shrink-0 border-t px-3 py-2">
+                <p class="text-faint px-2 pb-1 text-[10px] font-bold uppercase tracking-wide">{{ t('nav.workbench') }}</p>
+                <NuxtLink
+                    v-for="link in workbenchLinks"
+                    :key="link.to"
+                    :to="link.to"
+                    class="app-sidebar-link !py-1.5"
+                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                >
+                    <AppIcon :name="link.icon" :size="16" />
+                    <span>{{ t(link.labelKey) }}</span>
+                </NuxtLink>
                 <NuxtLink
                     to="/settings"
-                    class="app-sidebar-link"
+                    class="app-sidebar-link !py-1.5"
                     :class="isNavActive('/settings') ? 'app-sidebar-link-active' : ''"
                     :aria-current="isNavActive('/settings') ? 'page' : undefined"
                 >
@@ -360,7 +378,7 @@ if (import.meta.client) {
             >
                 <AppIcon name="menu" :size="20" />
             </button>
-            <NuxtLink to="/chat" class="flex min-w-0 items-center gap-2.5">
+            <NuxtLink to="/" class="flex min-w-0 items-center gap-2.5">
                 <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
                 <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
@@ -471,9 +489,13 @@ if (import.meta.client) {
                                 <span class="truncate">{{ space.name }}</span>
                             </NuxtLink>
                         </div>
+                        <div v-if="!isSettingsSurface" class="flex shrink-0 items-center justify-between px-5 pt-3 pb-1">
+                            <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.recentChats') }}</span>
+                            <span class="text-faint text-[10px]">{{ visibleConversations.length }}</span>
+                        </div>
                         <ConversationList
                             v-if="!isSettingsSurface"
-                            class="border-line min-h-0 flex-1 border-t"
+                            class="min-h-0 flex-1"
                             :conversations="visibleConversations"
                             :active-id="activeConversationId"
                             :loading="conversationsPending"
@@ -486,9 +508,21 @@ if (import.meta.client) {
                         <div v-else class="min-h-0 flex-1" />
 
                         <div class="border-line shrink-0 border-t px-3 py-2">
+                            <p class="text-faint px-2 pb-1 text-[10px] font-bold uppercase tracking-wide">{{ t('nav.workbench') }}</p>
+                            <NuxtLink
+                                v-for="link in workbenchLinks"
+                                :key="link.to"
+                                :to="link.to"
+                                class="app-sidebar-link !py-1.5"
+                                :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                                :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                            >
+                                <AppIcon :name="link.icon" :size="16" />
+                                <span>{{ t(link.labelKey) }}</span>
+                            </NuxtLink>
                             <NuxtLink
                                 to="/settings"
-                                class="app-sidebar-link"
+                                class="app-sidebar-link !py-1.5"
                                 :class="isNavActive('/settings') ? 'app-sidebar-link-active' : ''"
                                 :aria-current="isNavActive('/settings') ? 'page' : undefined"
                             >
