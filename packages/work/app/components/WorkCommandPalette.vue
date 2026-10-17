@@ -2,6 +2,7 @@
 import { extractApiError, formatDate } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import { relativeDayLabel, todayInputValue, type WorkTaskStatus } from '../utils/work';
+import { WORK_NAV_GROUPS } from '../utils/work-nav';
 import { WORK_SETTINGS_PAGES } from '../utils/work-settings';
 
 /**
@@ -69,20 +70,39 @@ interface Command {
 }
 
 /**
- * 设置区的子页面（清单见 utils/work-settings，与子导航、通用页入口卡片同一份）。
+ * 前往 / 设置 / 新建三组命令。
  *
+ * 「前往」直接展开侧栏那张表（`utils/work-nav`），所以面板里的名字与侧栏永远一致；
+ * `hint` 放分组名，让「任务」这类两字条目在面板里也知道自己属于哪一组。
+ * 表里的「系统设置」被剔掉——它指向 `/settings`，而下面的设置组第一项（通用）就是同一个目标，
+ * 留两条等于让人在两个分组里各点一次才能确定哪条是想要的。
+ * 智能体广场反过来：它不占侧栏一项，面板是它除对话头部切换器之外的唯一入口，所以在这里补一条。
+ *
+ * 设置区的子页面（清单见 utils/work-settings，与子导航、通用页入口卡片同一份）：
  * 侧栏里它们收在「系统设置」一项之下，要两步才够得着；命令面板是这条路径上唯一的单步入口，
  * 少了它就等于「页面存在，但只能靠点侧栏发现」。
  */
 const commands = computed<Command[]>(() => [
-    { id: 'go-today', group: t('work.cmdGroupGo'), label: t('work.cmdGoToday'), icon: 'view-dashboard-outline', run: () => go('/') },
-    { id: 'go-tasks', group: t('work.cmdGroupGo'), label: t('work.cmdGoTasks'), icon: 'check-all', run: () => go('/tasks') },
-    { id: 'go-calendar', group: t('work.cmdGroupGo'), label: t('work.cmdGoCalendar'), icon: 'calendar-check-outline', run: () => go('/calendar') },
-    { id: 'go-notes', group: t('work.cmdGroupGo'), label: t('work.cmdGoNotes'), icon: 'book-open-page-variant-outline', run: () => go('/notes') },
-    { id: 'go-projects', group: t('work.cmdGroupGo'), label: t('work.cmdGoProjects'), icon: 'folder-outline', run: () => go('/projects') },
-    { id: 'go-chat', group: t('work.cmdGroupGo'), label: t('work.cmdGoChat'), icon: 'chat-outline', run: () => go('/chat') },
-    { id: 'go-agents', group: t('work.cmdGroupGo'), label: t('work.cmdGoAgents'), icon: 'robot-outline', run: () => go('/agents') },
-    { id: 'go-attachments', group: t('work.cmdGroupGo'), label: t('work.cmdGoAttachments'), icon: 'file-document-outline', run: () => go('/attachments') },
+    ...WORK_NAV_GROUPS.flatMap((group) =>
+        group.links
+            .filter((link) => link.to !== '/settings')
+            .map((link) => ({
+                id: `go-${link.match === '/' ? 'today' : link.to.slice(1)}`,
+                group: t('work.cmdGroupGo'),
+                label: t(link.labelKey),
+                hint: t(group.titleKey),
+                icon: link.icon,
+                run: () => go(link.to),
+            })),
+    ),
+    {
+        id: 'go-agents',
+        group: t('work.cmdGroupGo'),
+        label: t('agents.title'),
+        hint: t('nav.groupAi'),
+        icon: 'robot-outline',
+        run: () => go('/agents'),
+    },
     ...WORK_SETTINGS_PAGES.map((page) => ({
         id: `go-settings-${page.id}`,
         group: t('work.cmdGroupSettings'),

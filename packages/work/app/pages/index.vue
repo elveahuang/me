@@ -18,8 +18,13 @@ import {
  * 一次 `/api/overview` 拿到逾期、今天到期、未来 7 天日程、任务计数、最近笔记与当天简报，
  * 六个区块读的是同一时刻——分开发请求会出现「上面说还有 3 条逾期、下面清单是空的」。
  *
- * 区块次序按「今天该做什么」排：两张任务清单在最上面，统计条其次，日程与笔记再次，
- * 简报收在末尾并默认折起——它是一份读物而不是待办，原先整行摊开会把清单顶到第二屏。
+ * 版式只按「要不要动手」分层，不按数据种类平铺：
+ * 页头 → 一行概览 chip → 快捷添加 → 今天要做（逾期与今天到期是同一张卡里的两组）→ 日程与笔记 → 简报。
+ * 新建任务在整页只有一个入口（快捷添加那一行），页头不再放第二颗绿色大按钮：
+ * 两颗按钮语义还不一样（一颗开抽屉、一颗直接建），三个加号同屏时用户无法判断点哪个。
+ * 概览数字降级成一行 chip 而不是四张卡：逾期/今天到期两个数就是下面清单标题里的同一个数，
+ * 各占一张与清单同重量的卡，等于让摘要比正文更响。
+ * 空掉的区块收成一行而不是整张卡：两个空态各占一屏三分之一时，真正要办的两条任务会被顶出首屏。
  *
  * 行内动作（完成 / 推迟）直接 PATCH 后刷新总览：本机数据量小，
  * 整块刷新比逐条本地改状态更可信（状态、计数、简报口径不会分叉）。
@@ -136,11 +141,6 @@ function openEdit(task: WorkTask) {
     drawerOpen.value = true;
 }
 
-function openNew() {
-    editing.value = null;
-    drawerOpen.value = true;
-}
-
 async function saveTask(payload: {
     id?: string;
     title: string;
@@ -192,13 +192,27 @@ async function generateBrief() {
     }
 }
 
+const overdueTasks = computed(() => overview.value?.overdue ?? []);
+const dueTodayTasks = computed(() => overview.value?.dueToday ?? []);
+/** 两组都空才整块收成一行空态；只空一组时那一组的小标题直接不渲染 */
+const hasTodayTasks = computed(() => overdueTasks.value.length + dueTodayTasks.value.length > 0);
+
+/** 卡内两组：空的那组整组不渲染，所以「逾期在前」这条顺序只在它真的有内容时才成立 */
+const todayGroups = computed(() =>
+    [
+        { key: 'overdue', title: t('work.overdue'), tasks: overdueTasks.value, danger: true },
+        { key: 'today', title: t('work.dueToday'), tasks: dueTodayTasks.value, danger: false },
+    ].filter((group) => group.tasks.length > 0),
+);
+
+/** 概览 chip：逾期与今天到期是下面清单标题里的同一个数，这里只补「未完成 / 已完成」两个增量 */
 const stats = computed(() => {
     const counts = overview.value?.counts ?? {};
     return [
-        { key: 'overdue', label: t('work.statOverdue'), value: overview.value?.overdue.length ?? 0, icon: 'alert-circle-outline' },
-        { key: 'today', label: t('work.statDueToday'), value: overview.value?.dueToday.length ?? 0, icon: 'calendar-outline' },
-        { key: 'open', label: t('work.statOpen'), value: (counts.todo ?? 0) + (counts.doing ?? 0), icon: 'view-list-outline' },
-        { key: 'done', label: t('work.statDone'), value: counts.done ?? 0, icon: 'check-circle-outline' },
+        { key: 'overdue', label: t('work.statOverdue'), value: overdueTasks.value.length, hot: overdueTasks.value.length > 0 },
+        { key: 'today', label: t('work.statDueToday'), value: dueTodayTasks.value.length, hot: false },
+        { key: 'open', label: t('work.statOpen'), value: (counts.todo ?? 0) + (counts.doing ?? 0), hot: false },
+        { key: 'done', label: t('work.statDone'), value: counts.done ?? 0, hot: false },
     ];
 });
 
@@ -212,12 +226,7 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
                 <h1 class="app-page-title text-strong">{{ t('work.todayTitle') }}</h1>
                 <p class="app-page-subtitle">{{ overview?.date ?? today }} · {{ t('work.todaySubtitle') }}</p>
             </div>
-            <div class="app-page-actions">
-                <button type="button" class="app-btn app-btn-primary" @click="openNew">
-                    <AppIcon name="plus" :size="16" />
-                    <span>{{ t('work.newTask') }}</span>
-                </button>
-            </div>
+            <!-- 页头刻意不放按钮：新建只有快捷添加一条路径，抽屉留给编辑已有任务 -->
         </div>
 
         <!-- 单一提示槽：加载失败给重试，操作失败给关闭，成功自己会消失 -->
@@ -243,10 +252,17 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
             </button>
         </div>
 
-        <!-- 快速添加：标题 + 日期档位，回车即建；优先级与项目收在下面 -->
+        <!-- 概览：一行 chip 说完四个数，逾期不为 0 时才染成危险色 -->
+        <div v-if="!loadFailed" class="flex flex-wrap items-center gap-1.5">
+            <span v-for="s in stats" :key="s.key" class="app-chip" :class="s.hot ? '!text-[color:var(--danger)]' : ''">
+                {{ s.label }}
+                <b class="font-black">{{ pending && !overview ? '…' : s.value }}</b>
+            </span>
+        </div>
+
+        <!-- 快速添加：整页唯一的新建入口。标题 + 日期档位就在首屏，回车即建；优先级与项目收在下面 -->
         <form class="app-card space-y-2 p-3" @submit.prevent="addQuickTask">
             <div class="flex flex-wrap items-center gap-2">
-                <AppIcon name="plus-circle-outline" :size="18" class="text-faint shrink-0" />
                 <input
                     v-model="quickTitle"
                     class="app-input min-w-0 flex-1 !text-sm"
@@ -271,9 +287,8 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
                     <AppIcon name="chevron-down" :size="14" :class="quickMore ? 'rotate-180' : ''" />
                     <span>{{ t('work.quickMore') }}</span>
                 </button>
-                <button type="submit" class="app-btn app-btn-primary !px-3" :disabled="quickSaving">
-                    <AppIcon name="plus" :size="15" />
-                    <span hidden class="sm:inline">{{ t('common.add') }}</span>
+                <button type="submit" class="app-btn app-btn-primary shrink-0 !px-3.5 !text-xs" :disabled="quickSaving">
+                    <span>{{ t('common.add') }}</span>
                 </button>
             </div>
 
@@ -293,68 +308,45 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
         </form>
         <p v-if="quickError" class="app-help-error -mt-3">{{ quickError }}</p>
 
-        <!-- 首屏两张清单：今天真正要动手的东西 -->
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <section class="app-card p-4">
-                <h2 class="mb-2 flex items-center gap-1.5 text-sm font-black">
-                    <AppIcon name="alert-circle-outline" :size="15" class="text-[color:var(--danger)]" />
-                    {{ t('work.overdue') }}
-                    <span class="text-faint font-normal">({{ overview?.overdue.length ?? 0 }})</span>
+        <!-- 今天要做：逾期与今天到期是同一件事的两段，合成一张卡；组内小标题只在有内容时出现 -->
+        <section class="app-card p-4">
+            <div class="mb-2 flex items-center gap-1.5">
+                <h2 class="flex min-w-0 items-center gap-1.5 text-sm font-black">
+                    <AppIcon name="check-all" :size="15" class="shrink-0 text-[color:var(--brand-500)]" />
+                    {{ t('work.todayListTitle') }}
+                    <span class="text-faint font-normal">({{ pending && !overview ? '…' : overdueTasks.length + dueTodayTasks.length }})</span>
                 </h2>
-                <ul v-if="overview?.overdue.length" class="space-y-2">
-                    <WorkTaskRow
-                        v-for="task in overview.overdue"
-                        :key="task.id"
-                        :task="task"
-                        :today="today"
-                        :project-name="task.projectId ? projectMap.get(task.projectId)?.name : ''"
-                        :project-color="task.projectId ? projectMap.get(task.projectId)?.color : ''"
-                        @toggle="toggleTask"
-                        @edit="openEdit"
-                        @snooze="snoozeTask"
-                    />
-                </ul>
-                <div v-else-if="pending" class="space-y-2">
-                    <div v-for="i in 3" :key="i" class="app-skeleton h-12" />
-                </div>
-                <p v-else class="text-faint py-4 text-center text-xs">{{ t('work.noOverdue') }}</p>
-            </section>
-
-            <section class="app-card p-4">
-                <h2 class="mb-2 flex items-center gap-1.5 text-sm font-black">
-                    <AppIcon name="calendar-check-outline" :size="15" class="text-[color:var(--brand-500)]" />
-                    {{ t('work.dueToday') }}
-                    <span class="text-faint font-normal">({{ overview?.dueToday.length ?? 0 }})</span>
-                </h2>
-                <ul v-if="overview?.dueToday.length" class="space-y-2">
-                    <WorkTaskRow
-                        v-for="task in overview.dueToday"
-                        :key="task.id"
-                        :task="task"
-                        :today="today"
-                        :project-name="task.projectId ? projectMap.get(task.projectId)?.name : ''"
-                        :project-color="task.projectId ? projectMap.get(task.projectId)?.color : ''"
-                        @toggle="toggleTask"
-                        @edit="openEdit"
-                        @snooze="snoozeTask"
-                    />
-                </ul>
-                <div v-else-if="pending" class="space-y-2">
-                    <div v-for="i in 3" :key="i" class="app-skeleton h-12" />
-                </div>
-                <p v-else class="text-faint py-4 text-center text-xs">{{ t('work.noDueToday') }}</p>
-            </section>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div v-for="s in stats" :key="s.key" class="app-stat">
-                <span class="app-stat-icon"><AppIcon :name="s.icon" :size="16" /></span>
-                <div>
-                    <p class="app-stat-value">{{ pending ? '…' : s.value }}</p>
-                    <p class="app-stat-label">{{ s.label }}</p>
-                </div>
+                <NuxtLink to="/tasks" class="text-hover-muted ml-auto shrink-0 text-[11px]">{{ t('work.openTasks') }}</NuxtLink>
             </div>
-        </div>
+            <div v-if="pending && !overview" class="space-y-2">
+                <div v-for="i in 3" :key="i" class="app-skeleton h-12" />
+            </div>
+            <template v-else-if="todayGroups.length">
+                <template v-for="(group, groupIndex) in todayGroups" :key="group.key">
+                    <p
+                        class="text-faint mb-1.5 flex items-center gap-1 text-[11px] font-bold"
+                        :class="[groupIndex === 0 ? 'mt-0' : 'mt-4', group.danger ? '!text-[color:var(--danger)]' : '']"
+                    >
+                        <AppIcon v-if="group.danger" name="alert-circle-outline" :size="12" class="shrink-0" />
+                        {{ group.title }} · {{ group.tasks.length }}
+                    </p>
+                    <ul class="space-y-2">
+                        <WorkTaskRow
+                            v-for="task in group.tasks"
+                            :key="task.id"
+                            :task="task"
+                            :today="today"
+                            :project-name="task.projectId ? projectMap.get(task.projectId)?.name : ''"
+                            :project-color="task.projectId ? projectMap.get(task.projectId)?.color : ''"
+                            @toggle="toggleTask"
+                            @edit="openEdit"
+                            @snooze="snoozeTask"
+                        />
+                    </ul>
+                </template>
+            </template>
+            <p v-else class="text-faint py-2 text-xs">{{ t('work.nothingDueToday') }}</p>
+        </section>
 
         <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <section class="app-card p-4">
@@ -374,7 +366,7 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
                         <span v-if="ev.allDay" class="app-badge app-badge-neutral">{{ t('work.allDay') }}</span>
                     </li>
                 </ul>
-                <p v-else-if="!pending" class="text-faint py-4 text-center text-xs">{{ t('work.noUpcoming') }}</p>
+                <p v-else-if="!pending" class="text-faint py-2 text-xs">{{ t('work.noUpcoming') }}</p>
             </section>
 
             <section class="app-card p-4">
@@ -392,7 +384,7 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
                         <span v-if="note.pinned" class="app-badge app-badge-info"><AppIcon name="pin-outline" :size="11" /></span>
                     </li>
                 </ul>
-                <p v-else-if="!pending" class="text-faint py-4 text-center text-xs">{{ t('work.noNotes') }}</p>
+                <p v-else-if="!pending" class="text-faint py-2 text-xs">{{ t('work.noNotes') }}</p>
             </section>
         </div>
 
@@ -412,8 +404,8 @@ const briefTitle = computed(() => (overview.value?.brief ? formatDateTime(overvi
                     <span>{{ briefBusy ? t('work.briefGenerating') : overview?.brief ? t('work.briefRegenerate') : t('work.briefGenerate') }}</span>
                 </button>
             </div>
-            <p v-if="!briefOpen && overview?.brief" class="text-faint mt-2 text-[11px]">{{ t('work.briefCollapsedHint') }}</p>
-            <template v-else-if="briefOpen">
+            <!-- 收起时不再额外解释一行：标题右侧的箭头方向就是展开/收起的状态 -->
+            <template v-if="briefOpen">
                 <p v-if="briefError" class="app-help-error mt-2">{{ briefError }}</p>
                 <MarkdownContent v-if="overview?.brief?.content" :value="overview.brief.content" class="mt-3" />
                 <p v-else-if="!briefBusy" class="text-faint mt-3 text-xs">{{ t('work.briefEmpty') }}</p>

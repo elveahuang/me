@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { dayInputValue } from '../utils/work';
+import { WORK_NAV_GROUPS } from '../utils/work-nav';
 
 /**
  * 工作台外壳（主流 AI 工作台布局：固定左栏 + 无顶部导航）。
@@ -171,32 +172,11 @@ onMounted(startPolling);
 /**
  * 侧栏分组导航（Linear / Notion 的写法：条目多了靠分组标题保持可扫读）。
  *
- * 分组名必须穷尽组内成员，否则不分组：「工作台」是这台机器上的数据对象，「AI 与系统」是模型入口与配置。
+ * 清单在 `utils/work-nav`，命令面板的「前往」组读同一份——两处各写一遍时，同一个页面会有两套名字。
  * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器与命令面板。
- *
- * `match` 决定高亮前缀（'/' 必须精确匹配，否则包含式匹配会命中所有路由）。
- * 桌面端与抽屉共用同一个 computed，两侧不会因某次只改一处而菜单项分叉。
+ * 桌面端与抽屉共用这里的一份，两侧不会因某次只改一处而菜单项分叉。
  */
-const navGroups = computed(() => [
-    {
-        title: t('nav.groupWork'),
-        links: [
-            { to: '/', label: t('nav.today'), icon: 'view-dashboard-outline', match: '/' },
-            { to: '/tasks', label: t('nav.tasks'), icon: 'check-all', match: '/tasks' },
-            { to: '/calendar', label: t('nav.calendar'), icon: 'calendar-check-outline', match: '/calendar' },
-            { to: '/notes', label: t('nav.notes'), icon: 'book-open-page-variant-outline', match: '/notes' },
-            { to: '/projects', label: t('nav.projects'), icon: 'folder-outline', match: '/projects' },
-            { to: '/attachments', label: t('nav.attachments'), icon: 'file-document-outline', match: '/attachments' },
-        ],
-    },
-    {
-        title: t('nav.groupAi'),
-        links: [
-            { to: '/chat', label: t('nav.chat'), icon: 'chat-outline', match: '/chat' },
-            { to: '/settings', label: t('nav.systemSettings'), icon: 'cog-outline', match: '/settings' },
-        ],
-    },
-]);
+const navGroups = WORK_NAV_GROUPS;
 
 function isNavActive(match: string) {
     const path = route.path;
@@ -331,8 +311,8 @@ if (import.meta.client) {
             </div>
 
             <nav class="min-h-0 space-y-1 overflow-y-auto px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'flex-1'">
-                <template v-for="group in navGroups" :key="group.title">
-                    <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
+                <template v-for="group in navGroups" :key="group.titleKey">
+                    <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
                     <NuxtLink
                         v-for="link in group.links"
                         :key="link.to"
@@ -342,7 +322,7 @@ if (import.meta.client) {
                         :aria-current="isNavActive(link.match) ? 'page' : undefined"
                     >
                         <AppIcon :name="link.icon" :size="17" />
-                        <span>{{ link.label }}</span>
+                        <span>{{ t(link.labelKey) }}</span>
                     </NuxtLink>
                 </template>
             </nav>
@@ -474,8 +454,8 @@ if (import.meta.client) {
                     <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由两段各自控制内边距 -->
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
                         <nav class="space-y-1 px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'min-h-0 flex-1 overflow-y-auto'">
-                            <template v-for="group in navGroups" :key="group.title">
-                                <p class="app-sidebar-group-title !px-2">{{ group.title }}</p>
+                            <template v-for="group in navGroups" :key="group.titleKey">
+                                <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
                                 <NuxtLink
                                     v-for="link in group.links"
                                     :key="link.to"
@@ -485,7 +465,7 @@ if (import.meta.client) {
                                     :aria-current="isNavActive(link.match) ? 'page' : undefined"
                                 >
                                     <AppIcon :name="link.icon" :size="17" />
-                                    <span>{{ link.label }}</span>
+                                    <span>{{ t(link.labelKey) }}</span>
                                 </NuxtLink>
                             </template>
                         </nav>
