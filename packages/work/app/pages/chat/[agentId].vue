@@ -43,6 +43,8 @@ function belongsToAnotherAgent(id: string): boolean {
 function resolveInitialConversation(): string | null {
     const requested = requestedConversationFromQuery();
     if (requested && !belongsToAnotherAgent(requested)) return requested;
+    // ?space= 是「在空间中开新对话」的明确意图，不能回落到该智能体的最近一条。
+    if (route.query.space) return null;
     return visibleConversations.value[0]?.id ?? null;
 }
 
@@ -55,7 +57,16 @@ const requestedSpaceId = computed(() => (typeof route.query.space === 'string' &
 const chatSpaceId = computed(() => (activeConversationId.value ? (activeConversation.value?.spaceId ?? null) : requestedSpaceId.value));
 const chatSpaceName = computed(() => activeConversation.value?.spaceName ?? spaces.value.find((space) => space.id === chatSpaceId.value)?.name ?? null);
 /** 还等着自动选中该智能体的最近一条会话：用户主动选会话或开新对话后就不再自动跳 */
-const autoSelectPending = ref(!initialConversationId);
+const autoSelectPending = ref(!initialConversationId && !route.query.space);
+
+watch(
+    () => route.query.space,
+    (space) => {
+        if (!space || route.query.c) return;
+        autoSelectPending.value = false;
+        activeConversationId.value = null;
+    },
+);
 
 watch(visibleConversations, (list) => {
     if (!autoSelectPending.value || !list.length) return;

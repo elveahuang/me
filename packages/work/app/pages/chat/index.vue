@@ -46,6 +46,17 @@ const chatSpaceName = computed(() => activeConversation.value?.spaceName ?? spac
  */
 const requestedConversationId = computed(() => (typeof route.query.c === 'string' && route.query.c ? route.query.c : null));
 
+// `?space=` 表示「在空间中开始一段新对话」，不能回落到该智能体的最近一条会话。
+watch(
+    [requestedSpaceId, requestedConversationId],
+    ([space, conversation]) => {
+        if (!space || conversation) return;
+        newChatRequested.value = true;
+        activeConversationId.value = null;
+    },
+    { immediate: true },
+);
+
 watch(
     [conversations, requestedConversationId],
     ([list, requested]) => {

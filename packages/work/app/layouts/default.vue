@@ -174,9 +174,11 @@ function onCreateConversation() {
     drawerOpen.value = false;
     startNewChat();
     if (agentIdParam.value) return navigateTo(`/chat/${encodeURIComponent(agentIdParam.value)}`);
-    if (route.path === '/chat' && !route.query.c) return;
+    if (route.path === '/chat' && !route.query.c && !route.query.space) return;
     const query = { ...route.query };
     delete query.c;
+    // 侧栏的「新建对话」是独立对话；空间里的新对话必须从空间主页进入并带 ?space=。
+    delete query.space;
     return navigateTo({ path: '/chat', query });
 }
 

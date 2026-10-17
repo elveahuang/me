@@ -319,7 +319,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   ③ 文件名可以自己改（`0002_public_meteorite.sql` → `0002_drop_notes_briefs.sql`），但 **`meta/_journal.json` 的 `tag` 必须跟着改**，而 `meta/<idx>_snapshot.json`
   的 **idx 命名不能动**（drizzle 按 `${idx}_snapshot.json` 找快照，改成描述性名字会让下一次 generate 读不到前一份状态）。
 - **路由口径**：`/` 是 **今日页**（`app/pages/index.vue`，读 `/api/overview`，不再 302）；对话入口是 `/chat`（独立对话或带 `?space=` 的空间新对话）与 `/chat/:agentId`；
-  `/spaces` 是工作空间列表，`/spaces/{id}` 是空间主页；`/runs` 与 `/runs/{id}` 是运行中心；`/library` 是统一资料库；`/tasks` 仍是自动化编辑页。
+  `/spaces` 是工作空间列表，`/spaces/{id}` 是空间主页；空间主页的「在空间中新建对话」必须走 `/chat?space={id}`，且 `?space=` 不能被最近会话回落覆盖；侧栏「新建对话」会清掉 `?space=`，创建独立对话。`/runs` 与 `/runs/{id}` 是运行中心；`/library` 是统一资料库；`/tasks` 仍是自动化编辑页。
   `conversations/schedules/attachments/knowledge_bases.space_id` 均可空：`null` 表示独立对话、全局自动化、全局资料或全局知识库；新建对话默认不落空间。
   `/api/spaces` 默认隐藏归档空间，空间页用 `?includeArchived=1` 展示归档项；归档默认空间返回 400。删除空间前检查会话、自动化、附件、知识库四类引用，有引用时回 409。
   聊天与定时任务的 RAG 规则：空间对话加载「该空间知识库 + 全局知识库」，独立对话只加载全局知识库；智能体绑定仍然生效。
@@ -339,6 +339,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   桌面是固定左侧设置导航，左上角「返回工作台」；窄屏是顶部返回按钮 + 左侧设置抽屉。**八个页面的路由表只有一份**，在 `app/utils/work-settings.ts` 的 `WORK_SETTINGS_PAGES`
   （`id/to/labelKey/descKey/icon/groupKey`），layout 按 `workspace / capabilities / data` 分组渲染；旧的水平子导航 `WorkSettingsNav.vue` 已删除，通用页也不再重复入口卡片。
   `/settings` 的高亮必须精确匹配，否则前缀匹配会把所有条目都点亮（`isActive` 里已处理）。
+  知识库已拆成三层：`/settings/knowledge` 列表、`/settings/knowledge/{kbId}` 详情、`/settings/knowledge/{kbId}/documents` 文档管理；单库详情走 `GET /api/settings/knowledge-bases/{kbId}`，共享类型在 `app/utils/knowledge.ts`。
   各子页 h1 用 `settings.nav*`（与子导航同名），不再用 `adminForm.*Title` 那套「XX 管理」——一个页面一套名字。
 - 每个页面的状态都必须能用 URL 表示（`/tasks` 用 `?q=&enabled=&id=&new=1`，会话用 `?c=`，`/chat` 的草稿用 `?ask=`），深链才不是装饰；
   `?new=1`、`?id=`、`?ask=` 这类一次性标志只能在 `onMounted` 里消费后 `router.replace` 掉——写在 setup 顶层会让 SSR 首屏 HTML 带一个不该存在的弹层，或者刷新即重复建数据。

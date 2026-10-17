@@ -1,5 +1,5 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { kbChunks, knowledgeBases } from '../../../db/schema';
+import { kbChunks, kbDocuments, knowledgeBases, providers, spaces } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
@@ -11,11 +11,31 @@ import { routeId } from '../../../utils/route-id';
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
     // GET 曾会落进下面的更新分支（readBody 得空对象 → 只推进 updatedAt），读一次就改一次数据
-    const method = requireMethod(event, ['PATCH', 'DELETE']);
+    const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
     // 文件名与这里读的段名必须同为 kbId：radix3（h3 1.15 的路由匹配）在同一位置遇到
     // `:id` 与 `:kbId` 两个不同名的参数节点时，五段路径匹配不到任何路由，
     // `documents/[documentId].delete.ts` 会永远落进 SSR 兜底（设置页删除文档按钮 500）。
     const id = routeId(event, 'kbId', '知识库');
+
+    if (method === 'GET') {
+        const [kb] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
+        if (!kb) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });
+        const [[docCount], [chunkCount], [provider], [space]] = await Promise.all([
+            db.select({ count: sql<number>`count(*)::int` }).from(kbDocuments).where(eq(kbDocuments.kbId, id)),
+            db.select({ count: sql<number>`count(*)::int` }).from(kbChunks).where(eq(kbChunks.kbId, id)),
+            kb.embeddingProviderId
+                ? db.select({ name: providers.name }).from(providers).where(eq(providers.id, kb.embeddingProviderId))
+                : Promise.resolve([]),
+            kb.spaceId ? db.select({ name: spaces.name }).from(spaces).where(eq(spaces.id, kb.spaceId)) : Promise.resolve([]),
+        ]);
+        return {
+            ...kb,
+            providerName: provider?.name,
+            spaceName: space?.name,
+            documentCount: Number(docCount?.count ?? 0),
+            chunkCount: Number(chunkCount?.count ?? 0),
+        };
+    }
 
     if (method === 'DELETE') {
         // 文档与分块跟着级联消失，所以「删了个不存在的库」绝不能被报成成功
