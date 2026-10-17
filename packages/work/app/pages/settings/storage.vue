@@ -36,8 +36,6 @@ async function onImportFile(event: Event) {
         importError.value = t('settings.dataImportTooLarge');
         return;
     }
-    if (!confirm(t('settings.dataImportConfirm'))) return;
-
     importing.value = true;
     try {
         const text = await file.text();
@@ -48,6 +46,12 @@ async function onImportFile(event: Event) {
             importError.value = t('settings.dataImportInvalidJson');
             return;
         }
+        const data = payload.data;
+        const totalRows =
+            data && typeof data === 'object' && !Array.isArray(data)
+                ? Object.values(data as Record<string, unknown>).reduce<number>((sum, value) => sum + (Array.isArray(value) ? value.length : value ? 1 : 0), 0)
+                : 0;
+        if (!confirm(t('settings.dataImportConfirmRows', { n: totalRows }))) return;
         importResult.value = await $fetch<BackupImportResult>('/api/import', { method: 'POST', body: payload });
     } catch (e) {
         importError.value = extractApiError(e, t('settings.dataImportFailed'));

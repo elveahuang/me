@@ -15,6 +15,9 @@ export interface WorkSpace {
     conversationCount: number;
     scheduleCount: number;
     enabledScheduleCount?: number;
+    attachmentCount: number;
+    knowledgeBaseCount: number;
+    documentCount: number;
     lastConversationAt?: string | null;
 }
 

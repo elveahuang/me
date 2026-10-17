@@ -68,7 +68,10 @@ interface OverviewData {
 }
 
 const { t } = useI18n();
-const { data, pending, error, refresh } = await useFetch<OverviewData>('/api/overview', { lazy: true });
+const { activeSpaceId, spaces: sidebarSpaces } = useChatSidebar();
+const overviewQuery = computed(() => ({ spaceId: activeSpaceId.value || undefined }));
+const { data, pending, error, refresh } = await useFetch<OverviewData>('/api/overview', { query: overviewQuery, lazy: true });
+const currentSpaceName = computed(() => sidebarSpaces.value.find((space) => space.id === activeSpaceId.value)?.name ?? null);
 
 const counts = computed<OverviewCounts>(
     () =>
@@ -112,6 +115,7 @@ function durationLabel(ms: number | null) {
             <div>
                 <h1 class="app-page-title text-strong">{{ t('overview.title') }}</h1>
                 <p class="app-page-subtitle">{{ t('overview.subtitle', { date: data?.date ?? '' }) }}</p>
+                <span v-if="currentSpaceName" class="app-chip app-chip-brand mt-2 !text-[10px]">🗂️ {{ currentSpaceName }}</span>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <NuxtLink to="/chat" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">

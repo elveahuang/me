@@ -7,6 +7,8 @@ import type { WorkConversationSummary, WorkSpace } from '../utils/work';
  * `activeSpaceId` 为 null 表示「全部空间」；新建对话会把当前筛选空间带进 POST /api/conversations，
  * 聊天页的 transport 也带同一个 spaceId，于是服务端自动建会话时不会落回默认空间。
  */
+const ACTIVE_SPACE_KEY = 'work_active_space';
+
 export function useChatSidebar() {
     const route = useRoute();
 
@@ -34,6 +36,34 @@ export function useChatSidebar() {
     const activeSpaceId = useState<string | null>('chat-active-space', () => null);
     /** `/chat` 的「新建对话」意图：为 true 时该页保持空白，不再自动落到最近一条会话 */
     const newChatRequested = useState<boolean>('chat-new-chat-requested', () => false);
+    const spacePreferenceLoaded = useState<boolean>('chat-space-preference-loaded', () => false);
+
+    onMounted(() => {
+        if (spacePreferenceLoaded.value || !import.meta.client) return;
+        spacePreferenceLoaded.value = true;
+        try {
+            const stored = localStorage.getItem(ACTIVE_SPACE_KEY);
+            if (stored) activeSpaceId.value = stored;
+        } catch {
+            // localStorage 不可用时保持“全部空间”。
+        }
+    });
+
+    watch(activeSpaceId, (value) => {
+        if (!import.meta.client) return;
+        try {
+            if (value) localStorage.setItem(ACTIVE_SPACE_KEY, value);
+            else localStorage.removeItem(ACTIVE_SPACE_KEY);
+        } catch {
+            // 忽略隐私模式下的写入失败。
+        }
+    });
+
+    // 空间被归档/删除后，本地偏好不能在下次加载时指向一个不存在的 id。
+    watch(spaces, (list) => {
+        if (!list.length || !activeSpaceId.value) return;
+        if (!list.some((space) => space.id === activeSpaceId.value)) activeSpaceId.value = null;
+    });
 
     const agentIdParam = computed(() => (route.params.agentId as string | undefined) ?? null);
     const visibleConversations = computed(() => {

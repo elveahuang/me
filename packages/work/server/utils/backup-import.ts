@@ -109,7 +109,7 @@ export async function importWorkBackup(payload: unknown): Promise<BackupImportRe
     }
     const body = payload as Record<string, unknown>;
     if (body.format !== 'work.backup') throw createError({ statusCode: 400, statusMessage: '不是 work 备份文件' });
-    if (body.version !== 1) throw createError({ statusCode: 400, statusMessage: '不支持的备份版本' });
+    if (body.version !== 1 && body.version !== 2) throw createError({ statusCode: 400, statusMessage: '不支持的备份版本' });
     if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
         throw createError({ statusCode: 400, statusMessage: '备份缺少 data 对象' });
     }

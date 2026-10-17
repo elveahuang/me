@@ -123,7 +123,7 @@ export default defineEventHandler(async (event) => {
 
     return {
         format: 'work.backup',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         redacted: REDACTED,
         skipped: SKIPPED,

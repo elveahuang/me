@@ -438,6 +438,18 @@ useDrawerFocus(
 const attachOptions = ref<AttachmentRecord[]>([]);
 const attachLoading = ref(false);
 const attachError = ref('');
+
+// 切换空间后，旧空间的待发送附件不能跟着进入新空间的会话。
+watch(
+    () => props.spaceId,
+    (next, previous) => {
+        if (next === previous) return;
+        pendingAttachments.value = [];
+        attachOptions.value = [];
+        attachError.value = '';
+        if (loadedConversationId.value) emit('update:conversationId', null);
+    },
+);
 const chatFileInput = ref<HTMLInputElement | null>(null);
 const uploadingInChat = ref(false);
 

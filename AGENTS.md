@@ -266,7 +266,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   objectKey，**对象存储里的二进制不在文件里**。因此恢复不是导入这个文件就能完事：知识库要逐库调 `/api/settings/knowledge-bases/{kbId}/reindex` 重建向量，
   供应商与存储的密钥要手填，桶要另行备份。新增表时记得补进 `builders`（每张表一个键，加表就加一个键），漏表不会有报错，只会静默少一份数据——
   冒烟测试第 13 节把这件事从「记得」变成断言：从 schema 里枚举出所有 `PgTable` 与 export 里 `.from(x)` 出现过的表名对账，漏一张直接测红。
-  恢复入口是 `POST /api/import`（`server/api/import.post.ts` + `server/utils/backup-import.ts`）：最大 20MB，合并导入、同主键行跳过，按外键依赖顺序在单个事务里执行；
+  恢复入口是 `POST /api/import`（`server/api/import.post.ts` + `server/utils/backup-import.ts`）：导出版本为 2、导入兼容 1/2，最大 20MB，合并导入、同主键行跳过，按外键依赖顺序在单个事务里执行；
   `messages.seq` 由序列重新生成，timestamp 字符串在导入前转成 Date。密钥、附件二进制与向量索引仍不在备份里，导入后要重新填密钥并重建索引。
 - **本地文件工具默认关闭**：只有 `.env` 配置 `WORK_FILE_ROOTS`（多个目录用英文分号分隔）时才向模型注入 `local_roots / local_list_files / local_read_file / local_search_files`。
   全部只读；路径必须绝对路径，`local-files.ts` 会先 `realpath` 再判断是否位于白名单内，符号链接不能越界。聊天与定时任务共用 `buildLocalFileTools()`；未配置时这些工具完全不出现。
@@ -320,6 +320,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **路由口径**：`/` 是 **今日页**（`app/pages/index.vue`，读 `/api/overview`，不再 302）；对话入口是 `/chat`（可切换智能体）与 `/chat/:agentId`（固定智能体）；
   `/spaces` 是工作空间；`/runs` 与 `/runs/{id}` 是运行中心；`/library` 是统一资料库（聊天附件 + 知识库入口）；`/tasks` 仍是自动化编辑页——沿用这个地址、不做 `/schedules`；
   附件与知识库都带 `space_id`：聊天上传、资料库筛选、知识库列表与检索都按当前工作空间收窄，切换侧栏空间后这三处使用同一个 `activeSpaceId`。
+  今日页与运行记录也接收同一个 `spaceId`；侧栏选择会写入 localStorage `work_active_space`，刷新后保留。`/api/spaces` 默认隐藏归档空间，空间页用 `?includeArchived=1` 展示归档项；归档默认空间返回 400。
+  删除空间前会检查会话、自动化、附件、知识库四类引用，有引用时回 409，不再让外键错误变成 500。聊天与定时任务的 RAG 只加载当前空间内、且被智能体绑定的知识库。
   智能体广场在 **`/agents`**，刻意不占侧栏一项——入口是 `/chat` 头部的智能体切换器与 `[agentId]` 页找不到智能体时的返回链接。
   旧日历、项目、笔记（`notes`、`notes/[id]`）仍保持删除；附件总览不再是单独一套后台页面，而是 `/library` 的用户入口，聊天附件链路（`attachments` 表、presign/complete、
   `chat-parts`、`[id]/url`、`[id]/raw`、ImagePicker 与 ChatPane 的 📎）完整保留。

@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from 'ai';
-import { and, asc, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import {
     agentKnowledgeBases,
     agentMcpServers,
@@ -8,6 +8,7 @@ import {
     agents,
     automationRuns,
     conversations,
+    knowledgeBases,
     messages,
     schedules,
     skills,
@@ -226,10 +227,19 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
                 .then((rows) => rows.map((r) => r.mcpServerId)),
         ]);
 
+        const spaceKbIds = boundKbIds.length
+            ? (
+                  await db
+                      .select({ id: knowledgeBases.id })
+                      .from(knowledgeBases)
+                      .where(and(eq(knowledgeBases.spaceId, row.spaceId), inArray(knowledgeBases.id, boundKbIds)))
+              ).map((item) => item.id)
+            : [];
+
         let knowledgeContext: string | null = null;
-        if (boundKbIds.length && row.prompt.trim()) {
+        if (spaceKbIds.length && row.prompt.trim()) {
             try {
-                const { context, hits } = await retrieveContext(boundKbIds, row.prompt.trim());
+                const { context, hits } = await retrieveContext(spaceKbIds, row.prompt.trim());
                 if (context && hits.length) knowledgeContext = context;
             } catch (error) {
                 // 检索失败与聊天同口径：降级成「没有参考资料」继续跑，而不是把这一轮判成失败

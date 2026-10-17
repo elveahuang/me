@@ -121,7 +121,15 @@ async function load() {
 }
 
 onMounted(load);
-watch(activeSpaceId, () => void load());
+watch(activeSpaceId, () => {
+    current.value = null;
+    docs.value = [];
+    docsError.value = '';
+    searchHits.value = [];
+    searchRan.value = false;
+    message.value = '';
+    void load();
+});
 
 /** 打开新建抽屉：清空上次输入与错误 */
 function openCreateKb() {
@@ -154,19 +162,21 @@ async function createKb() {
     }
     creatingKb.value = true;
     const token = kbCreateToken;
+    const targetSpaceId = newKb.spaceId;
     try {
         await $fetch('/api/settings/knowledge-bases', { method: 'POST', body: { ...newKb } });
         // 创建期间用户可能已关掉抽屉并重新打开：清空与关闭只对发起这次创建的那张表单生效
         if (token === kbCreateToken) {
             Object.assign(newKb, {
-        spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
-        name: '',
-        description: '',
-        embeddingModel: 'text-embedding-3-small',
-    });
+                spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
+                name: '',
+                description: '',
+                embeddingModel: 'text-embedding-3-small',
+            });
             createOpen.value = false;
         }
-        await load();
+        if (activeSpaceId.value && targetSpaceId && activeSpaceId.value !== targetSpaceId) activeSpaceId.value = targetSpaceId;
+        else await load();
     } catch (e) {
         const failure = extractApiError(e, t('adminForm.saveFailed'));
         // 抽屉已关或已换成新的一张：这条失败属于上一次创建，改挂到页面级提示
@@ -248,6 +258,7 @@ async function saveKb() {
     editError.value = '';
     savingKb.value = true;
     const token = kbEditToken;
+    const targetSpaceId = editForm.spaceId;
     try {
         const { vectorsInvalidated, ...updated } = await $fetch<KbItem & { vectorsInvalidated?: number }>(
             `/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`,
@@ -266,7 +277,8 @@ async function saveKb() {
             if (current.value?.id === updated.id) message.value = note;
             else listMessage.value = note;
         }
-        await load();
+        if (activeSpaceId.value && targetSpaceId && activeSpaceId.value !== targetSpaceId) activeSpaceId.value = targetSpaceId;
+        else await load();
     } catch (e) {
         const failure = extractApiError(e, t('adminForm.saveFailed'));
         // 抽屉已换成另一条知识库时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题

@@ -33,7 +33,7 @@ async function load() {
     loading.value = true;
     listError.value = '';
     try {
-        spaces.value = await $fetch<WorkSpace[]>('/api/spaces');
+        spaces.value = await $fetch<WorkSpace[]>('/api/spaces?includeArchived=1');
     } catch (e) {
         spaces.value = [];
         listError.value = extractApiError(e, t('spaces.loadFailed'));
@@ -95,6 +95,7 @@ async function remove(space: WorkSpace) {
     actionError.value = '';
     try {
         await $fetch(`/api/spaces/${encodeURIComponent(space.id)}`, { method: 'DELETE' });
+        if (activeSpaceId.value === space.id) activeSpaceId.value = null;
         success.value = t('spaces.deleted');
         await load();
         await refreshSpaces();
@@ -104,8 +105,22 @@ async function remove(space: WorkSpace) {
 }
 
 async function openChat(space: WorkSpace) {
+    if (space.archived) return;
     activeSpaceId.value = space.id;
     await navigateTo('/chat');
+}
+
+async function toggleArchive(space: WorkSpace) {
+    actionError.value = '';
+    try {
+        await $fetch(`/api/spaces/${encodeURIComponent(space.id)}`, { method: 'PATCH', body: { archived: !space.archived } });
+        if (!space.archived && activeSpaceId.value === space.id) activeSpaceId.value = null;
+        success.value = space.archived ? t('spaces.restored') : t('spaces.archivedMessage');
+        await load();
+        await refreshSpaces();
+    } catch (e) {
+        actionError.value = extractApiError(e, t('common.error'));
+    }
 }
 </script>
 
@@ -144,6 +159,7 @@ async function openChat(space: WorkSpace) {
                         <div class="flex items-center gap-2">
                             <h2 class="text-strong truncate text-sm font-black">{{ space.name }}</h2>
                             <span v-if="space.id === 'default'" class="app-chip app-chip-brand !text-[9px]">{{ t('spaces.defaultBadge') }}</span>
+                            <span v-if="space.archived" class="app-badge app-badge-neutral !text-[9px]">{{ t('spaces.archived') }}</span>
                         </div>
                         <p class="text-faint mt-1 line-clamp-2 text-xs">{{ space.description || t('common.none') }}</p>
                     </div>
@@ -152,11 +168,18 @@ async function openChat(space: WorkSpace) {
                 <div class="text-faint mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
                     <span>{{ t('spaces.conversations', { n: space.conversationCount }) }}</span>
                     <span>{{ t('spaces.schedules', { n: space.scheduleCount }) }}</span>
+                    <span>{{ t('spaces.files', { n: space.attachmentCount }) }}</span>
+                    <span>{{ t('spaces.knowledgeBases', { n: space.knowledgeBaseCount }) }}</span>
+                    <span>{{ t('spaces.documents', { n: space.documentCount }) }}</span>
                 </div>
 
-                <div class="mt-auto flex items-center gap-2 pt-5">
-                    <button type="button" class="app-btn app-btn-primary app-btn-sm" @click="openChat(space)">{{ t('spaces.openChat') }}</button>
+                <div class="mt-auto flex flex-wrap items-center gap-2 pt-5">
+                    <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openChat(space)">{{ t('spaces.openChat') }}</button>
+                    <button v-else type="button" class="app-btn app-btn-primary app-btn-sm" @click="toggleArchive(space)">{{ t('spaces.restore') }}</button>
                     <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="openEdit(space)">{{ t('common.edit') }}</button>
+                    <button v-if="!space.archived && space.id !== 'default'" type="button" class="app-btn app-btn-ghost app-btn-sm" @click="toggleArchive(space)">
+                        {{ t('spaces.archive') }}
+                    </button>
                     <button
                         v-if="space.id !== 'default'"
                         type="button"

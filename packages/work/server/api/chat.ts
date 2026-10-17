@@ -8,6 +8,7 @@ import {
     agents,
     attachments as attachmentsTable,
     conversations,
+    knowledgeBases,
     messages as messagesTable,
     skills,
     spaces,
@@ -386,6 +387,14 @@ export default defineEventHandler(async (event) => {
     }
     const conversation = row!;
     const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, conversation.spaceId));
+    const spaceKbIds = boundKbIds.length
+        ? (
+              await db
+                  .select({ id: knowledgeBases.id })
+                  .from(knowledgeBases)
+                  .where(and(inArray(knowledgeBases.id, boundKbIds), eq(knowledgeBases.spaceId, conversation.spaceId)))
+          ).map((item) => item.id)
+        : [];
 
     // 6. 落库客户端消息（按消息 id 幂等）
     //    清洗、附件存在性过滤与「本轮无可落库内容」的判定都在建会话之前完成（见步骤 1.5），
@@ -440,7 +449,7 @@ export default defineEventHandler(async (event) => {
 
     // 8. RAG 知识库检索（结合上下文增强检索）
     let knowledgeContext: string | null = null;
-    if (boundKbIds.length && lastUserText.trim()) {
+    if (spaceKbIds.length && lastUserText.trim()) {
         try {
             let searchKeyword = lastUserText.trim();
             const isShortOrAnaphoric = searchKeyword.length < 15 || /(它|他|她|这|那|其|上面|前面|上述|这个|那个)/.test(searchKeyword);
@@ -455,7 +464,7 @@ export default defineEventHandler(async (event) => {
                 }
             }
 
-            const { context, hits } = await retrieveContext(boundKbIds, searchKeyword);
+            const { context, hits } = await retrieveContext(spaceKbIds, searchKeyword);
             if (context && hits.length > 0) {
                 knowledgeContext = context;
             }

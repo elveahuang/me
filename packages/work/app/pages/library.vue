@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatBytes, formatDateTime, type AttachmentsResponse } from '@commons/contract';
+import { extractApiError, formatBytes, formatDateTime, type AttachmentsResponse } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 interface KbItem {
@@ -23,10 +23,16 @@ interface KbItem {
 const { t } = useI18n();
 const { activeSpaceId, spaces } = useChatSidebar();
 const keyword = ref('');
+const page = ref(1);
+const pageSize = 24;
+const fileInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const uploadError = ref('');
 const tab = ref<'all' | 'files' | 'knowledge'>('all');
 
 const attachmentQuery = computed(() => ({
-    pageSize: 60,
+    page: page.value,
+    pageSize,
     keyword: keyword.value.trim() || undefined,
     spaceId: activeSpaceId.value || undefined,
 }));
@@ -38,7 +44,7 @@ const {
 } = await useFetch<AttachmentsResponse>('/api/attachments', {
     query: attachmentQuery,
     lazy: true,
-    default: () => ({ attachments: [], total: 0, page: 1, pageSize: 60 }),
+    default: () => ({ attachments: [], total: 0, page: 1, pageSize }),
 });
 const {
     data: kbRows,
@@ -59,6 +65,11 @@ const kbs = computed(() => {
 const totalDocs = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.documentCount, 0));
 const totalChunks = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.chunkCount, 0));
 const currentSpaceName = computed(() => spaces.value.find((space) => space.id === activeSpaceId.value)?.name ?? null);
+const totalPages = computed(() => Math.max(1, Math.ceil((attachmentData.value?.total ?? 0) / pageSize)));
+
+watch([keyword, activeSpaceId], () => {
+    page.value = 1;
+});
 const loading = computed(() => attachmentsPending.value || kbsPending.value);
 const hasError = computed(() => Boolean(attachmentsError.value || kbsError.value));
 const showFiles = computed(() => tab.value !== 'knowledge');
@@ -73,6 +84,41 @@ function refreshAll() {
     void refreshAttachments();
     void refreshKbs();
 }
+
+async function uploadFile(event: Event) {
+    const el = event.target as HTMLInputElement;
+    const file = el.files?.[0];
+    el.value = '';
+    if (!file) return;
+    uploading.value = true;
+    uploadError.value = '';
+    try {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('category', 'other');
+        if (activeSpaceId.value) form.append('spaceId', activeSpaceId.value);
+        await $fetch('/api/attachments', { method: 'POST', body: form });
+        page.value = 1;
+        await refreshAttachments();
+        await refreshKbs();
+    } catch (e) {
+        uploadError.value = extractApiError(e, t('library.uploadFailed'));
+    } finally {
+        uploading.value = false;
+    }
+}
+
+async function removeFile(file: { id: string; filename: string }) {
+    if (!confirm(t('library.deleteConfirm', { name: file.filename }))) return;
+    uploadError.value = '';
+    try {
+        await $fetch(`/api/attachments/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+        if (attachments.value.length === 1 && page.value > 1) page.value -= 1;
+        await refreshAttachments();
+    } catch (e) {
+        uploadError.value = extractApiError(e, t('library.deleteFailed'));
+    }
+}
 </script>
 
 <template>
@@ -83,8 +129,13 @@ function refreshAll() {
                 <p class="app-page-subtitle">{{ t('library.subtitle') }}</p>
                 <span v-if="currentSpaceName" class="app-chip app-chip-brand mt-2 !text-[10px]">🗂️ {{ currentSpaceName }}</span>
             </div>
-            <div class="flex items-center gap-2">
-                <NuxtLink to="/chat" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" :disabled="uploading" @click="fileInput?.click()">
+                    <AppIcon name="tray-arrow-up" :size="14" />
+                    <span>{{ uploading ? t('library.uploading') : t('library.upload') }}</span>
+                </button>
+                <input ref="fileInput" type="file" class="hidden" @change="uploadFile" />
+                <NuxtLink to="/chat" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs">
                     <AppIcon name="paperclip" :size="14" />
                     <span>{{ t('library.uploadFromChat') }}</span>
                 </NuxtLink>
@@ -93,6 +144,11 @@ function refreshAll() {
                     <span>{{ t('common.retry') }}</span>
                 </button>
             </div>
+        </div>
+
+        <div v-if="uploadError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
+            <span>{{ uploadError }}</span>
+            <button type="button" class="app-btn app-btn-ghost !px-2 !py-1" @click="uploadError = ''">✕</button>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-3">
@@ -151,30 +207,38 @@ function refreshAll() {
                     <span class="text-faint text-[11px]">{{ attachments.length }} / {{ attachmentData?.total ?? 0 }}</span>
                 </div>
                 <div v-if="attachments.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    <a
-                        v-for="file in attachments"
-                        :key="file.id"
-                        :href="file.url || undefined"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="app-card app-card-hover flex flex-col gap-3 p-4"
-                        :class="!file.url ? 'pointer-events-none opacity-70' : ''"
-                    >
-                        <div class="flex items-start gap-3">
-                            <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--surface-3)]">
-                                <img v-if="file.isImage && file.url" :src="file.url" :alt="file.filename" class="h-full w-full object-cover" />
-                                <AppIcon v-else :name="file.isImage ? 'file-image-outline' : 'file-outline'" :size="21" />
-                            </span>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-strong truncate text-xs font-bold" :title="file.filename">{{ file.filename }}</p>
-                                <p class="text-faint mt-1 text-[10px]">{{ file.mimeType || t('common.none') }}</p>
+                    <div v-for="file in attachments" :key="file.id" class="app-card flex flex-col gap-3 p-4">
+                        <a
+                            :href="file.url || undefined"
+                            target="_blank"
+                            rel="noreferrer"
+                            class="flex flex-col gap-3"
+                            :class="!file.url ? 'pointer-events-none opacity-70' : ''"
+                        >
+                            <div class="flex items-start gap-3">
+                                <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--surface-3)]">
+                                    <img v-if="file.isImage && file.url" :src="file.url" :alt="file.filename" class="h-full w-full object-cover" />
+                                    <AppIcon v-else :name="file.isImage ? 'file-image-outline' : 'file-outline'" :size="21" />
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-strong truncate text-xs font-bold" :title="file.filename">{{ file.filename }}</p>
+                                    <p class="text-faint mt-1 text-[10px]">{{ file.mimeType || t('common.none') }}</p>
+                                </div>
                             </div>
-                        </div>
-                        <div class="text-faint mt-auto flex items-center justify-between gap-2 text-[10px]">
-                            <span>{{ formatBytes(file.size) }}</span>
-                            <span>{{ formatDateTime(file.createdAt) }}</span>
-                        </div>
-                    </a>
+                            <div class="text-faint flex items-center justify-between gap-2 text-[10px]">
+                                <span>{{ formatBytes(file.size) }}</span>
+                                <span>{{ formatDateTime(file.createdAt) }}</span>
+                            </div>
+                        </a>
+                        <button type="button" class="app-btn app-btn-ghost app-btn-sm self-start !px-2 !py-1 !text-[10px] !text-[color:var(--danger)]" @click="removeFile(file)">
+                            {{ t('common.delete') }}
+                        </button>
+                    </div>
+                </div>
+                <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
+                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page <= 1" @click="page--">←</button>
+                    <span class="text-faint text-[11px]">{{ page }} / {{ totalPages }}</span>
+                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page >= totalPages" @click="page++">→</button>
                 </div>
                 <div v-else class="app-empty">
                     <AppIcon name="file-outline" :size="28" class="app-empty-icon" />
