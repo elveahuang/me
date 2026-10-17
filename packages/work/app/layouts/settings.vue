@@ -42,8 +42,8 @@ function isActive(to: string) {
 
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('settings.navTitle')">
             <div class="shrink-0 px-3 pt-3">
-                <NuxtLink to="/" class="app-btn app-btn-ghost app-btn-block justify-start gap-2 !px-2.5 !py-2 !text-xs">
-                    <AppIcon name="arrow-left" :size="16" />
+                <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs">
+                    <AppIcon name="arrow-left" :size="15" />
                     <span>{{ t('settings.backToWorkbench') }}</span>
                 </NuxtLink>
             </div>
@@ -106,7 +106,7 @@ function isActive(to: string) {
                     :aria-label="t('settings.navTitle')"
                 >
                     <div class="border-line flex shrink-0 items-center justify-between border-b px-4 py-3">
-                        <NuxtLink to="/" class="app-btn app-btn-ghost app-btn-sm gap-1.5" @click="drawerOpen = false">
+                        <NuxtLink to="/" class="app-btn app-btn-primary app-btn-sm gap-1.5" @click="drawerOpen = false">
                             <AppIcon name="arrow-left" :size="15" />
                             <span>{{ t('settings.backToWorkbench') }}</span>
                         </NuxtLink>
