@@ -24,6 +24,8 @@ const testing = ref<Record<string, boolean>>({});
 const error = ref('');
 const { success, flashSuccess } = useFlashSuccess();
 const saving = ref(false);
+/** 启停在途标记：PATCH 发的是绝对值，列表刷新前的第二次点击会再发同一个值（与 tasks.vue 同口径） */
+const toggling = ref<Set<string>>(new Set());
 
 const form = reactive({
     name: '',
@@ -54,14 +56,28 @@ async function load() {
 
 onMounted(load);
 
+/** 打开编辑时输入框里的掩码：保存时仍是它说明用户没改密钥，不能把它当真实 key 发回去 */
+let initialMask = '';
+/**
+ * 表单归属令牌：保存是网络往返，而抽屉的 ✕/取消不随请求禁用。
+ * 期间关掉 A 再打开 B，迟到的保存成功会无条件 editing = null，把 B 的表单一起关掉。
+ */
+let formToken = 0;
+
 function openCreate() {
+    formToken += 1;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    saving.value = false;
     editing.value = {};
     Object.assign(form, { name: '', baseUrl: 'https://api.deepseek.com/v1', apiKey: '', enabled: true, isDefault: false });
+    initialMask = '';
     modelsText.value = '';
     error.value = '';
 }
 
 function openEdit(p: ProviderItem) {
+    formToken += 1;
+    saving.value = false;
     editing.value = p;
     Object.assign(form, {
         name: p.name,
@@ -70,6 +86,7 @@ function openEdit(p: ProviderItem) {
         enabled: p.enabled,
         isDefault: p.isDefault,
     });
+    initialMask = p.apiKey;
     modelsText.value = (p.models ?? []).join('\n');
     error.value = '';
 }
@@ -86,8 +103,9 @@ async function save() {
     }
     saving.value = true;
     error.value = '';
+    const token = formToken;
     try {
-        const body = {
+        const body: Record<string, unknown> = {
             ...form,
             name: form.name.trim(),
             baseUrl: form.baseUrl.trim(),
@@ -97,17 +115,21 @@ async function save() {
                 .filter(Boolean),
         };
         if (editing.value?.id) {
+            // 掩码原样没动 = 用户没改密钥：直接不发这个字段，免得把一串星号当新 key 写进库
+            if (body.apiKey === initialMask) delete body.apiKey;
             await $fetch(`/api/settings/providers/${encodeURIComponent(editing.value.id)}`, { method: 'PATCH', body });
         } else {
             await $fetch('/api/settings/providers', { method: 'POST', body });
         }
-        editing.value = null;
+        // 保存期间用户可能已关掉抽屉或改开另一条供应商：不能代他把当前这张表单关掉
+        if (token === formToken) editing.value = null;
         flashSuccess(t('adminForm.savedOk'));
         await load();
     } catch (e) {
         fail(e, t('adminForm.saveFailed'));
     } finally {
-        saving.value = false;
+        // 令牌已换说明这一轮早已结束、当前是新表单：不能在这里动它的 saving
+        if (token === formToken) saving.value = false;
     }
 }
 
@@ -133,12 +155,18 @@ async function test(p: ProviderItem) {
 }
 
 async function toggle(p: ProviderItem) {
+    if (toggling.value.has(p.id)) return;
+    toggling.value = new Set(toggling.value).add(p.id);
     error.value = '';
     try {
         await $fetch(`/api/settings/providers/${encodeURIComponent(p.id)}`, { method: 'PATCH', body: { enabled: !p.enabled } });
         await load();
     } catch (e) {
         fail(e, t('adminForm.providerToggleFailed'));
+    } finally {
+        const next = new Set(toggling.value);
+        next.delete(p.id);
+        toggling.value = next;
     }
 }
 
@@ -258,6 +286,7 @@ async function remove(id: string) {
                                 :aria-checked="p.enabled"
                                 :aria-label="t('adminForm.enable')"
                                 :title="p.enabled ? t('common.enabled') : t('common.disabled')"
+                                :disabled="toggling.has(p.id)"
                                 @click="toggle(p)"
                             />
                         </td>

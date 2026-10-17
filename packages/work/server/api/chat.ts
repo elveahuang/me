@@ -20,6 +20,7 @@ import { requireMethod } from '../utils/method';
 import { LOCAL_OWNER } from '../utils/owner';
 import { stripNull, stripNullDeep } from '../utils/pg-text';
 import { resolveModel } from '../utils/providers';
+import { lockAgentRow } from '../utils/ref-lock';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
@@ -346,10 +347,17 @@ export default defineEventHandler(async (event) => {
 
     if (!row) {
         const newId = crypto.randomUUID();
-        await db.insert(conversations).values({
-            id: newId,
-            agentId,
-            title: lastUserText.slice(0, 30) || '新对话',
+        // 第 2 步那次读只是快路径（顺带把「已停用」挡在前面）。从它到这里之间，另一个标签页可以完整地
+        // 删掉这个智能体（`settings/agents/[id].ts` 的 DELETE 在事务里对该行取 FOR UPDATE），
+        // 于是这条裸 INSERT 撞 23503：响应变成 500 + drizzle 的整张列清单，用户刚打的那句话没有任何地方落库。
+        // 锁内重读父行，没了就回可读的 404——与 POST /api/conversations 同一口径。
+        await db.transaction(async (tx) => {
+            await lockAgentRow(tx, agentId);
+            await tx.insert(conversations).values({
+                id: newId,
+                agentId,
+                title: lastUserText.slice(0, 30) || '新对话',
+            });
         });
         row = (await db.select().from(conversations).where(eq(conversations.id, newId)))[0];
     } else if (row.agentId !== agentId) {
@@ -451,7 +459,7 @@ export default defineEventHandler(async (event) => {
 
     // 10. 工具集与 MCP 连接
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
-    //     用户说「帮我记个笔记」「每天九点跑一遍」时不该取决于所选智能体恰好绑了哪几行工具。
+    //     用户说「每天九点跑一遍」「今天有什么安排」时不该取决于所选智能体恰好绑了哪几行工具。
     //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
     let toolSet = { ...buildWorkbenchTools(agentId), ...buildToolSet(boundTools.map((row) => row.tool)) };
     if (agent.selfConfig) {

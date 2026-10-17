@@ -34,10 +34,8 @@ const NAMES = [
     'close',
     'chevron-down',
     'chevron-right',
-    'arrow-left',
     'plus',
     'magnify',
-    'close-circle-outline',
     'check-circle-outline',
     // 外观
     'white-balance-sunny',
@@ -57,25 +55,19 @@ const NAMES = [
     // 对话
     'robot-outline',
     'brain',
-    'creation-outline',
     // AI 能力与设置子页
     'wrench-outline',
     'lightning-bolt-outline',
     'power-plug-outline',
     'book-open-page-variant-outline',
     'database-outline',
-    'view-dashboard-outline',
     'autorenew',
-    // 定时任务 / 今日页
-    'clock-outline',
+    // 定时任务
     'timer-outline',
     'play-circle-outline',
-    'newspaper-variant-outline',
     // 状态与标记
     'alert-circle-outline',
     'alert-outline',
-    'tag-outline',
-    'pin-outline',
 ].sort();
 
 const collection = JSON.parse(readFileSync(resolve(HERE, '../../../node_modules/@iconify-json/mdi/icons.json'), 'utf8'));

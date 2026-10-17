@@ -47,6 +47,8 @@ async function load() {
         // 只列出图片类，避免在封面/配图场景选到 pdf 等非图片
         items.value = res.attachments.filter((a) => a.isImage);
     } catch (e) {
+        // 失败时清空：保留上一次打开时的列表会让「接口挂了」显示成「这些图片还能选」
+        items.value = [];
         error.value = extractApiError(e, t('common.loadFailed'));
     } finally {
         loading.value = false;

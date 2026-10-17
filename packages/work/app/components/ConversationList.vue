@@ -8,10 +8,10 @@ import { useI18n } from 'vue-i18n';
  * 组件是展示型 + 自身的重命名/删除动作，列表数据由 `useChatSidebar` 共享状态提供
  * （布局拉取、页面消费），删除与重命名成功后 emit('changed'|'deleted', id)，由布局统一刷新。
  *
- * 「新建对话」不在这里：它是「开始一件事」，与今日/定时任务/笔记同级，所以由布局的工作台段持有，
- * 本组件只负责历史本身（三段式布局的中段）。
+ * 这一段没有标题也没有搜索框：侧栏三段里它是「中间那堆东西」，再套一层文字只是把清单往下推一屏；
+ * 「新建对话」由布局的顶部段持有（它是「开始一件事」，不是历史列表的一个操作）。
  */
-const props = withDefaults(
+withDefaults(
     defineProps<{
         conversations: ConversationSummary[];
         /** 当前打开的会话 id，用于高亮 */
@@ -35,7 +35,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const searchQuery = ref('');
 const editingTitleId = ref<string | null>(null);
 const editTitleInput = ref('');
 /** 进入改名态时的原标题，用来认出「打开了但没改」 */
@@ -47,12 +46,6 @@ let editTitleOriginal = '';
  * 组件是兄弟关系（列表与面板都由布局/页面摆放，谁都不是谁的 parent），所以走共享状态而不是 props。
  */
 const renamedConversation = useState<{ id: string; title: string } | null>('conversation-renamed', () => null);
-
-const filteredConversations = computed(() => {
-    const q = searchQuery.value.trim().toLowerCase();
-    if (!q) return props.conversations;
-    return props.conversations.filter((c) => c.title.toLowerCase().includes(q));
-});
 
 function startRename(c: ConversationSummary) {
     editingTitleId.value = c.id;
@@ -89,8 +82,15 @@ async function saveRename(id: string) {
     }
 }
 
+/** 正在删除的会话：DELETE 在途时忽略同一条的再次点击，按钮同时置灰 */
+const deletingId = ref<string | null>(null);
+
 async function removeConversation(id: string) {
+    // 第二次点击会在第一次成功之后命中「已经不是 404 就是已删」，把一次成功的删除显示成失败；
+    // confirm 是同步的，挡不住「确认后、响应前」这段时间里的再次点击。
+    if (deletingId.value) return;
     if (!confirm(t('chat.deleteConfirm'))) return;
+    deletingId.value = id;
     try {
         await $fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
         // 会话已经不存在，持有它的那一轮（可能正在后台生成）必须一起掐掉：
@@ -99,27 +99,23 @@ async function removeConversation(id: string) {
         emit('deleted', id);
     } catch (e) {
         showActionError(extractApiError(e, t('common.error')));
+    } finally {
+        deletingId.value = null;
     }
 }
 </script>
 
 <template>
     <aside class="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-        <p class="app-sidebar-group-title shrink-0 pt-3">{{ t('chat.recentConversations') }}</p>
-
-        <div class="shrink-0 px-2.5 pb-2">
-            <input v-model="searchQuery" :placeholder="t('chat.searchChat')" :aria-label="t('chat.searchChat')" class="app-input !px-2.5 !py-1 !text-xs" />
-        </div>
-
         <div v-if="error" class="app-alert app-alert-danger mx-2.5 mb-2 shrink-0 !text-[11px]">{{ error }}</div>
         <div v-if="actionError" class="app-alert app-alert-danger mx-2.5 mb-2 shrink-0 !text-[11px]">{{ actionError }}</div>
 
-        <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-3">
+        <ul class="flex-1 space-y-1 overflow-y-auto px-2 pt-3 pb-3">
             <li v-if="loading" class="space-y-1.5">
                 <div v-for="n in 4" :key="n" class="app-skeleton h-9 !rounded-xl" />
             </li>
 
-            <li v-for="c in filteredConversations" :key="c.id" class="group relative flex items-center">
+            <li v-for="c in conversations" :key="c.id" class="group relative flex items-center">
                 <template v-if="editingTitleId === c.id">
                     <input
                         v-model="editTitleInput"
@@ -141,16 +137,15 @@ async function removeConversation(id: string) {
                         @click="emit('select', { id: c.id, agentId: c.agentId })"
                     >
                         <span class="flex items-center gap-1.5">
+                            <!-- 圆点只是视觉：`title` 不保证被读屏念出来，状态另给一段只读文本，
+                                 否则「后台还在生成」这件事对读屏用户完全不存在 -->
                             <span
                                 v-if="isRunning(c.id)"
                                 class="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[color:var(--warning)]"
-                                :title="t('chat.runningInBackground')"
+                                aria-hidden="true"
                             />
-                            <span
-                                v-else-if="isUnread(c)"
-                                class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--brand-500)]"
-                                :title="t('chat.unreadReply')"
-                            />
+                            <span v-else-if="isUnread(c)" class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--brand-500)]" aria-hidden="true" />
+                            <span class="sr-only">{{ isRunning(c.id) ? t('chat.runningInBackground') : isUnread(c) ? t('chat.unreadReply') : '' }}</span>
                             <span class="truncate" :class="isUnread(c) && !isRunning(c.id) ? 'font-semibold' : ''">{{ c.title }}</span>
                         </span>
                         <span v-if="showAgentName" class="text-faint mt-0.5 block truncate text-[10px]">{{ c.agentName }}</span>
@@ -167,9 +162,10 @@ async function removeConversation(id: string) {
                         </button>
                         <button
                             type="button"
-                            class="text-faint text-hover-danger rounded p-2 transition-colors"
+                            class="text-faint text-hover-danger rounded p-2 transition-colors disabled:opacity-40"
                             :title="t('chat.deleteChat')"
                             :aria-label="t('chat.deleteChat')"
+                            :disabled="deletingId === c.id"
                             @click.stop="removeConversation(c.id)"
                         >
                             🗑
@@ -178,8 +174,8 @@ async function removeConversation(id: string) {
                 </template>
             </li>
 
-            <li v-if="!filteredConversations.length && !loading && !error" class="text-faint px-3 py-4 text-center text-xs">
-                {{ searchQuery ? t('admin.noData') : t('chat.noMessages') }}
+            <li v-if="!conversations.length && !loading && !error" class="text-faint px-3 py-4 text-center text-xs">
+                {{ t('chat.noMessages') }}
             </li>
         </ul>
     </aside>

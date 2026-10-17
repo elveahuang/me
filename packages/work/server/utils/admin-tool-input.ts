@@ -36,6 +36,10 @@ const TOOL_URL_MAX = 2000;
 const TOOL_BODY_TEMPLATE_MAX = 20_000;
 /** 单个工具的请求头条数上限：正常配置只有个位数，超大数量只会把请求头撑到对端拒绝 */
 const TOOL_HEADER_MAX = 32;
+const TOOL_PARAMETER_MAX = 32;
+const TOOL_PARAM_NAME_MAX = 64;
+const TOOL_PARAM_DESCRIPTION_MAX = 200;
+const TOOL_PARAM_TYPES = ['string', 'number', 'boolean'];
 /** 执行期把 method 直接交给 http.request，非标准动词落库等于把该工具变成每次调用都抛错的死配置 */
 const TOOL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 
@@ -85,6 +89,46 @@ function normalizeToolHeaders(raw: unknown): void {
     }
 }
 
+/**
+ * parameters 的每一项都会经 buildInputSchema 变成 zod 字段，name 还要与 bodyTemplate 占位符对应：
+ * 数组/数字/null 元素会在 `param.name` 处直接抛错（该工具此后每次被加载都失败），重名参数则让 zod shape
+ * 后写覆盖前写、占位符也只填得到其中一个值。类型未知时运行期会静默当 string，required 非布尔则按真假判断
+ * 反向（`'false'` 是 truthy）——都与「未知工具类型」同一类静默错配，因此逐项拒绝而不是丢项。
+ * name 回写 trim 后的值，保证落库的正是运行期与占位符共同使用的那一份。
+ */
+function normalizeToolParameters(raw: unknown[]): void {
+    if (raw.length > TOOL_PARAMETER_MAX) {
+        throw createError({ statusCode: 400, statusMessage: `config.parameters 过多（最多 ${TOOL_PARAMETER_MAX} 项）` });
+    }
+    const seen = new Set<string>();
+    for (const [index, item] of raw.entries()) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}] 必须为对象` });
+        }
+        const param = item as Record<string, unknown>;
+        const name = typeof param.name === 'string' ? param.name.trim() : '';
+        if (!name) throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].name 必填` });
+        if (name.length > TOOL_PARAM_NAME_MAX) {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].name 过长（最多 ${TOOL_PARAM_NAME_MAX} 字符）` });
+        }
+        if (seen.has(name)) throw createError({ statusCode: 400, statusMessage: `config.parameters 中存在重复的参数名「${name}」` });
+        seen.add(name);
+        param.name = name;
+        if (param.type !== undefined && (typeof param.type !== 'string' || !TOOL_PARAM_TYPES.includes(param.type))) {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].type 仅支持 ${TOOL_PARAM_TYPES.join(' / ')}` });
+        }
+        if (param.description !== undefined && typeof param.description !== 'string') {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].description 必须为字符串` });
+        }
+        if (typeof param.description === 'string' && param.description.length > TOOL_PARAM_DESCRIPTION_MAX) {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].description 过长（最多 ${TOOL_PARAM_DESCRIPTION_MAX} 字符）` });
+        }
+        if (param.required !== undefined && typeof param.required !== 'boolean') {
+            throw createError({ statusCode: 400, statusMessage: `config.parameters[${index}].required 必须为布尔值` });
+        }
+    }
+}
+
 export function normalizeToolConfig(raw: unknown): Record<string, unknown> {
     if (raw === undefined || raw === null) return {};
     if (typeof raw !== 'object' || Array.isArray(raw)) throw createError({ statusCode: 400, statusMessage: 'config 必须为对象' });
@@ -95,8 +139,9 @@ export function normalizeToolConfig(raw: unknown): Record<string, unknown> {
     assertJsonDepth('config', raw);
     const config = stripNullDeep(raw as Record<string, unknown>);
     // 执行期对 parameters 做 for...of、对 headers 做展开：存下非数组/非对象会让该工具每轮对话都抛错
-    if (config.parameters !== undefined && !Array.isArray(config.parameters)) {
-        throw createError({ statusCode: 400, statusMessage: 'config.parameters 必须为数组' });
+    if (config.parameters !== undefined) {
+        if (!Array.isArray(config.parameters)) throw createError({ statusCode: 400, statusMessage: 'config.parameters 必须为数组' });
+        normalizeToolParameters(config.parameters);
     }
     if (config.headers !== undefined) normalizeToolHeaders(config.headers);
     if (config.url !== undefined) assertToolUrl(config.url);

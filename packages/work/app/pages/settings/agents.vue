@@ -68,6 +68,10 @@ useDrawerFocus(
         autoConfigModalOpen.value = false;
     },
 );
+// 关闭时清掉上一次的错误：留着的话下次打开弹窗会先看到一条与本次输入无关的失败原因
+watch(autoConfigModalOpen, (open) => {
+    if (!open) autoConfigError.value = '';
+});
 /**
  * 「这次生成的结果还归这个表单吗」的令牌。
  *
@@ -78,6 +82,13 @@ useDrawerFocus(
  * 每次改写表单的动作换发新令牌，生成结果落地前比对即可作废。
  */
 let formOwner = 0;
+
+/** 关闭表单抽屉：令牌一并作废——在途保存的失败提示不能写进一个已经关掉的抽屉 */
+function closeAgentDrawer() {
+    formOwner += 1;
+    saving.value = false;
+    editing.value = null;
+}
 
 const form = reactive({
     name: '',
@@ -101,6 +112,22 @@ const selectedProviderModels = computed(() => {
     const p = providerList.value.find((x) => x.id === form.providerId);
     return p?.models?.length ? p.models : ['deepseek-chat', 'deepseek-reasoner'];
 });
+
+/**
+ * 换供应商时把模型换成新供应商名下的一个。
+ *
+ * 模型 id 只在所属供应商内有效：从 A 切到 B 却留着 A 的 id，表单看起来一切正常，保存后这个智能体
+ * 每轮都报「模型不可用」。只在模型不属于新供应商的候选时才替换——用户手填的自定义模型不动。
+ */
+function onProviderChange() {
+    const models = providerList.value.find((x) => x.id === form.providerId)?.models ?? [];
+    if (!models.length) return;
+    if (form.model && models.includes(form.model)) return;
+    form.model = models[0]!;
+}
+
+/** 表单一动，上一次保存失败的原因就不再成立；留着会让用户以为这次的改动也被拒了 */
+watch(form, () => (formError.value = ''), { deep: true });
 
 async function load() {
     loading.value = true;
@@ -133,6 +160,8 @@ onMounted(load);
 
 function openCreate() {
     formOwner++;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    saving.value = false;
     editing.value = {};
     Object.assign(form, {
         name: '',
@@ -155,6 +184,7 @@ function openCreate() {
 
 function openEdit(agent: AgentItem) {
     formOwner++;
+    saving.value = false;
     editing.value = agent;
     Object.assign(form, {
         name: agent.name,
@@ -226,6 +256,8 @@ async function handleAutoConfig() {
         autoConfigModalOpen.value = false;
         autoConfigPrompt.value = '';
     } catch (e) {
+        // 与成功分支同一道归属比对：弹窗已关或表单已归另一次编辑时，这条错误不属于当前界面
+        if (!autoConfigModalOpen.value || owner !== formOwner) return;
         autoConfigError.value = extractApiError(e, t('adminForm.agentAutoFailed'));
     } finally {
         autoConfigLoading.value = false;
@@ -240,6 +272,7 @@ async function save() {
     }
     formError.value = '';
     saving.value = true;
+    const owner = formOwner;
     try {
         const body = { ...form, providerId: form.providerId || null };
         if (editing.value?.id) {
@@ -248,12 +281,19 @@ async function save() {
             await $fetch('/api/settings/agents', { method: 'POST', body });
         }
     } catch (e) {
-        formError.value = extractApiError(e, t('adminForm.saveFailed'));
+        const message = extractApiError(e, t('adminForm.saveFailed'));
+        // 保存期间已经改开另一张表单：把这条失败原因写进那张抽屉会被读成本次编辑的问题，
+        // 但也不能吞掉——这次保存确实没成功，改挂到页面级错误条上。
+        if (owner === formOwner) formError.value = message;
+        else listError.value = message;
         return;
     } finally {
-        saving.value = false;
+        // 令牌已换说明这一轮早已结束、当前是新表单：不能在这里动它的 saving
+        if (owner === formOwner) saving.value = false;
     }
-    editing.value = null;
+    // 保存期间用户可能已关掉抽屉或改开另一条智能体：无条件清空会把他正在填的表单一起关掉。
+    // 列表仍要刷新——刚保存的那条已经落库了。
+    if (owner === formOwner) editing.value = null;
     await load();
 }
 
@@ -306,7 +346,7 @@ async function remove(id: string) {
             :open="editing !== null"
             :title="editing?.id ? t('common.edit') : t('adminForm.agentNew')"
             width-class="sm:max-w-2xl"
-            @close="editing = null"
+            @close="closeAgentDrawer"
         >
             <div class="space-y-3">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -329,7 +369,7 @@ async function remove(id: string) {
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                         <label class="app-label">{{ t('adminForm.provider') }}</label>
-                        <select :aria-label="t('adminForm.provider')" v-model="form.providerId" class="app-input">
+                        <select :aria-label="t('adminForm.provider')" v-model="form.providerId" class="app-input" @change="onProviderChange">
                             <option value="">{{ t('adminForm.defaultProvider') }}</option>
                             <option v-for="p in providerList" :key="p.id" :value="p.id">{{ p.name }}</option>
                         </select>
@@ -445,7 +485,7 @@ async function remove(id: string) {
                 <p v-if="formError" class="app-help-error text-sm">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="closeAgentDrawer">{{ t('adminForm.cancel') }}</button>
                 <button class="app-btn app-btn-primary" :disabled="saving" @click="save">{{ t('adminForm.save') }}</button>
             </template>
         </AdminDrawer>

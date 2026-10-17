@@ -27,10 +27,12 @@ const props = withDefaults(
         agentList?: AgentSummary[];
         /** 父级已取回的详情（SSR），命中时不再重复请求 */
         initialAgent?: AgentDetail | null;
-        /** 外部带进来的草稿（笔记页「问问 AI」把正文片段拼成问题）：非空即填入输入框并聚焦 */
+        /** 外部带进来的草稿（`?ask=`）：非空即填入输入框并聚焦，不自动发送 */
         draft?: string | null;
+        /** 侧栏已知的当前会话标题：接管在途实例时不会回源历史，标题只能由父级给 */
+        conversationTitle?: string | null;
     }>(),
-    { conversationId: null, agentList: () => [], initialAgent: null, draft: null },
+    { conversationId: null, agentList: () => [], initialAgent: null, draft: null, conversationTitle: null },
 );
 
 const emit = defineEmits<{
@@ -59,6 +61,17 @@ const renamedConversation = useState<{ id: string; title: string } | null>('conv
 watch(renamedConversation, (renamed) => {
     if (renamed && renamed.id === loadedConversationId.value) conversationTitle.value = renamed.title;
 });
+/**
+ * 侧栏标题是当前会话标题的权威来源：接管在途实例时本组件不回源历史，只能从这里取。
+ * 它还会在后台那一轮跑完、服务端回填自动标题后刷新，导出的文件名因此不会停在上一次加载时的旧名字。
+ */
+watch(
+    () => props.conversationTitle,
+    (value) => {
+        if (!value || loadedConversationId.value !== props.conversationId) return;
+        conversationTitle.value = value;
+    },
+);
 const input = ref('');
 const inputRef = ref<HTMLInputElement | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
@@ -184,6 +197,8 @@ async function loadConversation(id: string) {
         chat.value = cached;
         loadedConversationId.value = id;
         loadedAgentId.value = agentId;
+        // 接管实例不拉历史，标题得从父级拿；留空会让导出把上一段会话的名字写进文件名
+        conversationTitle.value = props.conversationTitle || '';
         nextTick(scrollToBottom);
         return;
     }
@@ -485,6 +500,12 @@ async function onChatFileChange(event: Event) {
     const file = el.files?.[0];
     el.value = '';
     if (!file) return;
+    // 已经挂满 5 个时先拦下：继续上传会把整份文件写进桶与附件表，最后却只换来一句「已达上限」，
+    // 而那个对象从此只存在于附件总览里（聊天这一轮并没有用它）。
+    if (pendingAttachments.value.length >= 5) {
+        attachError.value = t('chat.attachLimit');
+        return;
+    }
     uploadingInChat.value = true;
     attachError.value = '';
     try {
@@ -492,6 +513,7 @@ async function onChatFileChange(event: Event) {
         form.append('file', file);
         form.append('category', 'chat');
         const created = await $fetch<AttachmentRecord>('/api/attachments', { method: 'POST', body: form });
+        // 上传期间用户可能已挂上别的附件：到上限就只提示，不再塞进待发送区
         if (pendingAttachments.value.length >= 5) {
             attachError.value = t('chat.attachLimit');
         } else {
@@ -549,7 +571,7 @@ function exportMarkdown() {
     const md = formatConversationMarkdown({
         title,
         agentName: agentName.value,
-        model: agent.value?.model || 'default',
+        model: agent.value?.model || '',
         exportTime: formatDateTime(new Date().toISOString(), locale.value),
         messages: messages as any,
         labels: {
@@ -618,7 +640,9 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                         </button>
                         <h2 v-else class="truncate text-sm font-bold">{{ agentName }}</h2>
 
-                        <span class="app-chip font-mono">{{ agent?.model || 'deepseek-chat' }}</span>
+                        <!-- 模型名只在真知道时展示：此前回退成 'deepseek-chat'，详情还没到或该智能体没填模型时
+                             会向用户宣称一个它并不在用的模型 -->
+                        <span v-if="agent?.model" class="app-chip font-mono">{{ agent.model }}</span>
                         <span v-if="agent?.temperature !== null && agent?.temperature !== undefined" class="app-chip app-chip-brand">
                             Temp {{ agent.temperature }}
                         </span>
@@ -656,13 +680,14 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
         <div ref="scrollRef" class="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" style="background-color: var(--surface-2)" @scroll="onScroll">
             <template v-if="chat && chat.messages.length > 0">
                 <ChatMessage v-for="m in chat.messages" :key="m.id" :message="m" />
-                <div v-if="chat.status === 'submitted'" class="text-faint flex items-center gap-2 py-2 text-xs">
-                    <span class="inline-block animate-spin">🌀</span>
+                <div v-if="chat.status === 'submitted'" class="text-faint flex items-center gap-2 py-2 text-xs" role="status">
+                    <span class="inline-block animate-spin" aria-hidden="true">🌀</span>
                     <span>{{ t('chat.thinking') }}</span>
                 </div>
 
-                <!-- 生成失败：给出可读原因与重试入口 -->
-                <div v-if="chat.error" class="app-alert-danger rounded-2xl border p-4 text-xs">
+                <!-- 生成失败：给出可读原因与重试入口。role="alert" 让读屏立刻念出原因，
+                     否则右上角的流式样式变化是唯一反馈，视觉之外无从得知这一轮已经失败 -->
+                <div v-if="chat.error" class="app-alert-danger rounded-2xl border p-4 text-xs" role="alert">
                     <div class="flex items-center justify-between">
                         <span>{{ errorText }}</span>
                         <button class="font-bold underline" @click="handleRegenerate">{{ t('common.retry') }}</button>
@@ -724,7 +749,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
         </div>
 
         <!-- 发送前本地错误（建会话失败）与会话历史加载失败：不渲染就会被误当成空会话 -->
-        <div v-if="submitError || loadError" class="app-alert app-alert-danger">
+        <div v-if="submitError || loadError" class="app-alert app-alert-danger" role="alert">
             <div class="flex items-center justify-between gap-3">
                 <span>{{ submitError || loadError }}</span>
                 <button
@@ -749,7 +774,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                     <button type="button" class="text-faint text-hover-strong -m-1 p-1.5" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
                 </span>
             </div>
-            <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]">{{ attachError }}</div>
+            <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]" role="alert">{{ attachError }}</div>
 
             <div class="relative flex items-center gap-2.5">
                 <!-- 附件入口：选择已有附件或直接上传 -->
@@ -823,6 +848,10 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                             <span>{{ uploadingInChat ? t('attachments.uploading') : t('chat.uploadAndAttach') }}</span>
                         </button>
                     </div>
+
+                    <!-- 弹层是 Teleport 到 body 的：输入栏那条 attachError 被遮罩盖在身后，
+                         从弹层里上传失败时用户眼前没有任何反馈，看起来像按钮没反应 -->
+                    <div v-if="attachError" class="app-alert app-alert-danger mt-3 !text-[11px]" role="alert">{{ attachError }}</div>
 
                     <div v-if="attachLoading" class="mt-3 space-y-2">
                         <div v-for="i in 3" :key="i" class="app-skeleton h-10" />

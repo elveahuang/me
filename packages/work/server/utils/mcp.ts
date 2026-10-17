@@ -196,14 +196,25 @@ export function normalizeMcpTransport(raw: unknown): string {
     return value;
 }
 
+/** 正常 MCP 配置只有个位数 header；超大数量只会把每次连接的请求头撑到对端拒绝（对齐 HTTP 工具的上限） */
+const MCP_HEADER_MAX = 32;
+const MCP_HEADER_KEY_MAX = 200;
+const MCP_HEADER_VALUE_MAX = 4000;
+
 export function normalizeMcpHeaders(raw: unknown): Record<string, string> {
     if (raw === undefined || raw === null) return {};
     if (typeof raw !== 'object' || Array.isArray(raw)) throw createError({ statusCode: 400, statusMessage: 'headers 必须为对象' });
+    const entries = Object.entries(raw as Record<string, unknown>);
+    if (entries.length > MCP_HEADER_MAX) throw createError({ statusCode: 400, statusMessage: `headers 过多（最多 ${MCP_HEADER_MAX} 项）` });
     const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    for (const [key, value] of entries) {
         // 列类型是 Record<string,string>，而连接层会把这些值直接塞进请求头：
         // 数字/对象虽然能进 jsonb，运行时要不出错要么被静默 stringify 成 "[object Object]"
         if (typeof value !== 'string') throw createError({ statusCode: 400, statusMessage: `header「${key}」的值必须为字符串` });
+        // 键名里带空格/冒号/换行会在运行期由 fetch 拒绝：该服务器此后每次连接都失败，而保存时毫无提示
+        if (!/^[a-zA-Z0-9!#$%&'*+\-.^_|~]+$/.test(key)) throw createError({ statusCode: 400, statusMessage: `header 名「${key}」含非法字符` });
+        if (key.length > MCP_HEADER_KEY_MAX) throw createError({ statusCode: 400, statusMessage: `header 名过长（最多 ${MCP_HEADER_KEY_MAX} 字符）` });
+        if (value.length > MCP_HEADER_VALUE_MAX) throw createError({ statusCode: 400, statusMessage: `header「${key}」的值过长（最多 ${MCP_HEADER_VALUE_MAX} 字符）` });
         // headers 整段落 jsonb，键或值里的 NUL 会让 PostgreSQL 判整段 JSON 非法
         headers[stripNull(key)] = stripNull(value);
     }

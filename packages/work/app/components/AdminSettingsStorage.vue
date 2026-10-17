@@ -53,6 +53,13 @@ const form = reactive({
     isDefault: false,
 });
 
+/**
+ * 表单归属令牌：保存与连通测试都是网络往返，而抽屉的 ✕/取消不随请求禁用。
+ * 期间关掉 A 再打开 B 时，迟到的响应会把 A 的测试结果写进 B 的面板，A 的保存成功再把 B 的抽屉关掉。
+ * 每次打开表单换发令牌，响应落地前比对。
+ */
+let formToken = 0;
+
 async function load() {
     loading.value = true;
     error.value = '';
@@ -83,6 +90,10 @@ function fillRustFsPreset() {
 }
 
 function openCreate() {
+    formToken += 1;
+    // 上一张表单的在途保存/测试已经不属于这里：不复位就会让新表单的按钮一直停在「保存中/测试中」
+    saving.value = false;
+    testing.value = false;
     editing.value = {};
     Object.assign(form, {
         name: '',
@@ -107,6 +118,9 @@ function openCreate() {
 }
 
 function openEdit(item: StorageConfigItem) {
+    formToken += 1;
+    saving.value = false;
+    testing.value = false;
     editing.value = item;
     Object.assign(form, {
         name: item.name,
@@ -165,6 +179,7 @@ async function save() {
         return;
     }
     saving.value = true;
+    const token = formToken;
     try {
         const body = buildBody();
         if (editing.value?.id) {
@@ -173,12 +188,16 @@ async function save() {
             await $fetch('/api/settings/storage', { method: 'POST', body });
         }
         flashSuccess(t('common.saved'));
-        editing.value = null;
+        // 保存期间用户可能已关掉抽屉或改开另一条配置：无条件 editing = null 会把那张表单一起关掉，
+        // 用户填到一半的内容就此消失（还以为是自己的操作关的）
+        if (token === formToken) editing.value = null;
         await load();
     } catch (e) {
+        // 失败照常写页面级错误：即使这张表单已被替换，这次保存没成功也必须让人知道
         error.value = extractApiError(e, t('common.error'));
     } finally {
-        saving.value = false;
+        // 令牌已换说明这一轮早已结束、当前是新表单：不能在这里动它的 saving
+        if (token === formToken) saving.value = false;
     }
 }
 
@@ -187,6 +206,7 @@ async function testConnection() {
         error.value = t('adminForm.saveBeforeTest');
         return;
     }
+    const token = formToken;
     testing.value = true;
     testResult.value = null;
     try {
@@ -195,11 +215,12 @@ async function testConnection() {
             method: 'POST',
             body,
         });
-        testResult.value = res;
+        // 测试期间切到了另一条配置：这是 A 的连通结果，写进 B 的面板会把 B 的地址读成不可用
+        if (token === formToken) testResult.value = res;
     } catch (e) {
-        testResult.value = { ok: false, message: extractApiError(e, t('common.error')) };
+        if (token === formToken) testResult.value = { ok: false, message: extractApiError(e, t('common.error')) };
     } finally {
-        testing.value = false;
+        if (token === formToken) testing.value = false;
     }
 }
 

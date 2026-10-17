@@ -143,6 +143,7 @@ export function normalizeMimeType(value: unknown, fallback = 'application/octet-
 export function normalizeStorageEndpoint(raw: unknown): string {
     const value = String(raw ?? '').trim();
     if (!value) throw createError({ statusCode: 400, statusMessage: 'endpoint 必填（如 http://127.0.0.1:9000）' });
+    if (value.length > 2000) throw createError({ statusCode: 400, statusMessage: 'endpoint 过长（最多 2000 字符）' });
     let parsed: URL;
     try {
         parsed = new URL(value);
@@ -151,6 +152,30 @@ export function normalizeStorageEndpoint(raw: unknown): string {
     }
     if (!['http:', 'https:'].includes(parsed.protocol)) {
         throw createError({ statusCode: 400, statusMessage: 'endpoint 仅允许 http/https 协议' });
+    }
+    return value.replace(/\/+$/, '');
+}
+
+/**
+ * 公共访问地址的归一：可留空（私有桶），非空时必须是绝对 http(s) 地址。
+ *
+ * 这个值不只用于「给用户一个更好看的 URL」：`buildPublicUrl()` 的结果会被写进 `messages.parts`
+ * 成为历史数据，聊天界面再把它渲染成 `<a href>`。此前只按普通文本落库，一条
+ * `javascript:alert(1)//` 就能变成持久化的脚本链接，`data:` 也能把几 MB 内容塞进历史。
+ * 与 endpoint 同一口径（绝对地址 + 仅 http/https），去掉尾斜杠后再拼 objectKey。
+ */
+export function normalizeStoragePublicBaseUrl(raw: unknown): string {
+    const value = String(raw ?? '').trim();
+    if (!value) return '';
+    if (value.length > 2000) throw createError({ statusCode: 400, statusMessage: 'publicBaseUrl 过长（最多 2000 字符）' });
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw createError({ statusCode: 400, statusMessage: 'publicBaseUrl 不是合法 URL' });
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw createError({ statusCode: 400, statusMessage: 'publicBaseUrl 仅允许 http/https 协议' });
     }
     return value.replace(/\/+$/, '');
 }

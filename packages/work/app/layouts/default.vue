@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { WORK_NAV_GROUPS } from '../utils/work-nav';
+import { WORK_NAV_LINKS } from '../utils/work-nav';
 
 /**
  * 工作台外壳：固定左栏的三段式布局。
  *
  * 左栏自上而下 **工作台 / 对话历史 / 系统设置** 三段：
- * - 顶部是功能导航（今日、定时任务、笔记）加上「新建对话」——新建属于「要做一件事」，
+ * - 顶部是「新建对话」+ 功能导航（现在只剩定时任务），没有分组标题——新建属于「要做一件事」，
  *   所以它跟导航放在一起，而不是藏在中间那段历史列表的头部（那里原本还有个 +）。
- * - 中间是对话历史，**常驻**：它以前只在 `/chat*` 展开，于是在今日页看到「有 3 条会话」却点不进去；
+ *   今日页已随「新建对话即首页」退场，所以这一段的清单只有一项。
+ * - 中间是对话历史，**常驻**：它以前只在 `/chat*` 展开，于是在别的页面看到「有 3 条会话」却点不进去；
  *   现在任何页面都能就地切会话。
  * - 底部是系统设置单一入口（外观、语言与八个子页都从那里进），底栏不再摆第二套主题/语言开关。
  *
@@ -32,6 +33,7 @@ const drawerRef = ref<HTMLElement | null>(null);
 
 /** 会话列表与选中态：左栏渲染，聊天页消费 */
 const {
+    conversations,
     visibleConversations,
     activeConversationId,
     agentIdParam,
@@ -127,8 +129,10 @@ watch(
     },
     { immediate: true },
 );
-// 第一次使用（这份浏览器还没有任何记录）时整表播种为已读，避免一装上就看到满屏未读点
-watch(visibleConversations, (list) => ensureSeeded(list), { immediate: true });
+// 第一次使用（这份浏览器还没有任何记录）时整表播种为已读，避免一装上就看到满屏未读点。
+// 必须用**完整列表**：`/chat/:agentId` 下 visibleConversations 只剩当前智能体的会话，
+// 首次使用若恰好从该页进来，其它智能体的历史永远进不了 seen，之后回到 /chat 会满屏未读点。
+watch(conversations, (list) => ensureSeeded(list), { immediate: true });
 
 /**
  * 侧栏顶部那一段功能导航。
@@ -136,11 +140,11 @@ watch(visibleConversations, (list) => ensureSeeded(list), { immediate: true });
  * 清单在 `utils/work-nav`，桌面与抽屉各渲染一次同一份——之前两处各写一遍时，同一个页面会有两套名字。
  * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器。
  */
-const navGroups = WORK_NAV_GROUPS;
+const navLinks = WORK_NAV_LINKS;
 
 function isNavActive(match: string) {
     const path = route.path;
-    return match === '/' ? path === '/' : path === match || path.startsWith(`${match}/`);
+    return path === match || path.startsWith(`${match}/`);
 }
 
 /**
@@ -150,10 +154,14 @@ function isNavActive(match: string) {
  * 只改共享选中态而不换路由，屏幕上还是任务表，用户会以为点击没生效。
  */
 function onSelectConversation(payload: { id: string; agentId: string }) {
-    // 就地切换不改 URL，route 监听不会关抽屉；窄屏下用户点完会话是要看对话，不是看抽屉
+    // 就地切换不改路由，route 监听不会关抽屉；窄屏下用户点完会话是要看对话，不是看抽屉
     drawerOpen.value = false;
     selectConversation(payload.agentId, payload.id);
     if (!isChatSurface.value) return navigateTo(`/chat/${encodeURIComponent(payload.agentId)}?c=${encodeURIComponent(payload.id)}`);
+    // 对话页就地切会话：把选中的 id 写回 URL（replace，不往浏览器历史里塞一串会话）。
+    // 不写的话刷新会回到 URL 里那条旧会话，从完成提示/侧栏复制出去的链接也永远停在进入本页时那一条。
+    if (route.query.c === payload.id) return;
+    return navigateTo({ path: route.path, query: { ...route.query, c: payload.id } }, { replace: true });
 }
 
 /** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
@@ -161,7 +169,10 @@ function onCreateConversation() {
     drawerOpen.value = false;
     startNewChat();
     if (agentIdParam.value) return navigateTo(`/chat/${encodeURIComponent(agentIdParam.value)}`);
-    if (route.path !== '/chat') return navigateTo('/chat');
+    if (route.path === '/chat' && !route.query.c) return;
+    const query = { ...route.query };
+    delete query.c;
+    return navigateTo({ path: '/chat', query });
 }
 
 /** 会话被就地改名后刷新列表，并把这条重新记为已读（PATCH 会顶动 updatedAt，但它不该亮未读点） */
@@ -176,8 +187,12 @@ function onConversationDeleted(id: string) {
     if (finishedNotice.value?.id === id) clearFinishedNotice();
     forgetConversation(id);
     if (activeConversationId.value === id) {
-        activeConversationId.value = visibleConversations.value.find((c) => c.id !== id)?.id ?? null;
-        if (activeConversationId.value) selectConversation('', activeConversationId.value);
+        // 必须把这条会话真实的 agentId 一起交回去：`/chat` 的列表是跨智能体的，
+        // 传空串会让 effectiveAgentId 退回「列表第一条的智能体」，而选中项可能是另一条，
+        // 于是 ChatPane 拿到「A 的 transport + B 的会话」，下一次发送被服务端 400。
+        const next = visibleConversations.value.find((c) => c.id !== id);
+        if (next) selectConversation(next.agentId, next.id);
+        else activeConversationId.value = null;
     }
     refreshConversations();
 }
@@ -253,9 +268,9 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：三段——工作台导航（含新建对话）/ 对话历史 / 系统设置 -->
+        <!-- 桌面左侧栏：三段——新建对话 + 定时任务 / 对话历史 / 系统设置 -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
-            <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
+            <NuxtLink to="/chat" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
@@ -268,20 +283,17 @@ if (import.meta.client) {
                         <span>{{ t('chat.newChat') }}</span>
                     </button>
                 </div>
-                <template v-for="group in navGroups" :key="group.titleKey">
-                    <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
-                    <NuxtLink
-                        v-for="link in group.links"
-                        :key="link.to"
-                        :to="link.to"
-                        class="app-sidebar-link"
-                        :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                        :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                    >
-                        <AppIcon :name="link.icon" :size="17" />
-                        <span>{{ t(link.labelKey) }}</span>
-                    </NuxtLink>
-                </template>
+                <NuxtLink
+                    v-for="link in navLinks"
+                    :key="link.to"
+                    :to="link.to"
+                    class="app-sidebar-link"
+                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                >
+                    <AppIcon :name="link.icon" :size="17" />
+                    <span>{{ t(link.labelKey) }}</span>
+                </NuxtLink>
             </nav>
 
             <!-- 第二段：对话历史，常驻 -->
@@ -327,7 +339,7 @@ if (import.meta.client) {
             >
                 <AppIcon name="menu" :size="20" />
             </button>
-            <NuxtLink to="/" class="flex min-w-0 items-center gap-2.5">
+            <NuxtLink to="/chat" class="flex min-w-0 items-center gap-2.5">
                 <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
                 <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
@@ -402,20 +414,17 @@ if (import.meta.client) {
                                     <span>{{ t('chat.newChat') }}</span>
                                 </button>
                             </div>
-                            <template v-for="group in navGroups" :key="group.titleKey">
-                                <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
-                                <NuxtLink
-                                    v-for="link in group.links"
-                                    :key="link.to"
-                                    :to="link.to"
-                                    class="app-sidebar-link"
-                                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                                >
-                                    <AppIcon :name="link.icon" :size="17" />
-                                    <span>{{ t(link.labelKey) }}</span>
-                                </NuxtLink>
-                            </template>
+                            <NuxtLink
+                                v-for="link in navLinks"
+                                :key="link.to"
+                                :to="link.to"
+                                class="app-sidebar-link"
+                                :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
+                                :aria-current="isNavActive(link.match) ? 'page' : undefined"
+                            >
+                                <AppIcon :name="link.icon" :size="17" />
+                                <span>{{ t(link.labelKey) }}</span>
+                            </NuxtLink>
                         </nav>
 
                         <ConversationList

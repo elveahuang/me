@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { bigserial, boolean, date, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp } from 'drizzle-orm/pg-core';
 
 // ==========================================
 // MODEL PROVIDERS（自定义供应商，OpenAI 兼容）
@@ -300,20 +300,19 @@ export const systemSettings = pgTable('system_settings', {
 });
 
 // ==========================================
-// 工作台：笔记 / 定时任务 / 每日简报
+// 工作台：定时任务
 // ==========================================
 // work 是单主的本机应用，这些表刻意没有归属列。
 //
-// 待办（tasks）、项目（projects）与日程（events）已整体退场：工作台只剩「记东西」和
-// 「到点自动跑智能体」两种能力，`schedules` 取代的就是原来「任务 + 日历」的位置。
-
-export const NOTE_KINDS = ['note', 'daily'] as const;
+// 待办（tasks）、项目（projects）、日程（events）已整体退场；笔记（notes）与每日简报（briefs）
+// 紧随其后一起删除——侧栏收成「新建对话 + 定时任务」之后，这两块既没有展示位，
+// 也不该留一个每天定时叫模型、结果没人看的生成任务。`schedules` 就是工作台唯一的「自动做的事」。
 
 /**
  * 定时任务的重复口径。
  *
  * 刻意不做 cron 表达式：croner 按**进程本地时区**解释表达式，容器几乎都是 UTC，
- * 于是「每天 09:00」会在北京时间 17:00 跑（`brief:daily` 为此每小时自判北京日，见 nuxt.config）。
+ * 于是「每天 09:00」会在北京时间 17:00 跑。
  * 这里把「北京时间几点 / 星期几」存成结构化字段，下一次时刻由 `work-schedule.ts` 自己按北京日算，
  * 用户看到的是「每天 09:00」而不是一个需要查表的表达式。
  */
@@ -323,27 +322,6 @@ export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
 /** `lastStatus` 的空串是「还没跑过」，与界面显示 `-` 对应；`running` 只在那一轮真正在途时出现。 */
 export const SCHEDULE_STATUSES = ['running', 'success', 'failed'] as const;
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
-
-export const notes = pgTable(
-    'notes',
-    {
-        id: text('id').primaryKey(),
-        title: text('title').notNull().default(''),
-        // Markdown 正文，与编辑器/导出同一套
-        content: text('content').notNull().default(''),
-        kind: text('kind').notNull().default('note'),
-        pinned: boolean('pinned').notNull().default(false),
-        tags: jsonb('tags').$type<string[]>().notNull().default([]),
-        // AI 摘要：检索命中后用于回喂上下文，避免整篇塞进提示词
-        summary: text('summary').notNull().default(''),
-        embedding: jsonb('embedding').$type<number[]>(),
-        embeddingModel: text('embedding_model'),
-        embeddingDim: integer('embedding_dim'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at').notNull().defaultNow(),
-    },
-    (t) => [index('notes_updated_at_idx').on(t.updatedAt), index('notes_kind_idx').on(t.kind)],
-);
 
 /**
  * 定时任务：到点自动跑一轮智能体，并把结果落成一条会话。
@@ -386,20 +364,6 @@ export const schedules = pgTable(
     (t) => [index('schedules_enabled_next_idx').on(t.enabled, t.nextRunAt)],
 );
 
-/**
- * 每日简报。主键就是日期：定时任务重复触发时靠 upsert 天然幂等，
- * 多实例各跑一次也只是重写同一天。
- */
-export const briefs = pgTable('briefs', {
-    briefDate: date('brief_date').primaryKey(),
-    // 模型产出的 Markdown 正文
-    content: text('content').notNull().default(''),
-    // 生成时的结构化快照（今天到期/今天跑过/未来 7 天/最近笔记 + 四个计数），正文丢了也能重建
-    data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
-    model: text('model').notNull().default(''),
-    generatedAt: timestamp('generated_at').notNull().defaultNow(),
-});
-
 export const schedulesRelations = relations(schedules, ({ one }) => ({
     agent: one(agents, { fields: [schedules.agentId], references: [agents.id] }),
 }));
@@ -420,6 +384,4 @@ export type Message = typeof messages.$inferSelect;
 export type StorageConfig = typeof storageConfigs.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type SystemSetting = typeof systemSettings.$inferSelect;
-export type Note = typeof notes.$inferSelect;
 export type Schedule = typeof schedules.$inferSelect;
-export type Brief = typeof briefs.$inferSelect;

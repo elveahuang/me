@@ -30,6 +30,12 @@ const docs = ref<DocItem[]>([]);
 const message = ref('');
 /** 列表级错误（与操作提示 message 分开，避免互相覆盖） */
 const listError = ref('');
+/**
+ * 表格行级操作的提示（重建索引、删除知识库、跨库导入/删除的迟到结果）。
+ * `message` 只在右侧文档面板里渲染，而重建索引/删除是左侧表格上的按钮——
+ * 没有选中知识库时写进 message 等于什么都没提示。
+ */
+const listMessage = ref('');
 const loading = ref(true); // 首帧即加载态：数据要等挂载后的请求，初值 false 会让「暂无…」空态先闪一帧，SSR 首屏更是直接把空态发给用户
 /** 右侧文档列表同理：open() 后要等 documents 请求返回，期间不能把「暂无文档」当空态显示 */
 const docsLoading = ref(false);
@@ -47,19 +53,32 @@ const editForm = reactive({ name: '', description: '', embeddingModel: '' });
 const docForm = reactive({ title: '', content: '' });
 const searchQuery = ref('');
 const searchHits = ref<HitItem[]>([]);
+/**
+ * 是否真的跑过一次检索。
+ * 此前空态判据是「有关键词且没有命中」——刚在输入框敲一个字就会显示「没有命中」，
+ * 而那次检索根本没发出；切换知识库后同样会带着旧关键词误报。
+ */
+const searchRan = ref(false);
 const uploading = ref(false);
 /** 新建/编辑知识库的提交中标记：原本没有 disabled，双击会建出两条同名知识库 */
 const creatingKb = ref(false);
 const savingKb = ref(false);
 const fileRef = ref<HTMLInputElement | null>(null);
 const reindexing = ref(false);
+/** 新建抽屉归属令牌：与编辑抽屉同理，创建期间关掉再打开时，迟到的响应不能清空新表单 */
+let kbCreateToken = 0;
+/**
+ * 编辑抽屉归属令牌：保存期间用 ✕/Esc 关掉 A 再打开 B，迟到的成功会无条件把 B 的抽屉关掉，
+ * 用户正在改的内容看不到也存不下。每次打开编辑换发令牌，响应落地前比对。
+ */
+let kbEditToken = 0;
 
 /** 重建向量索引：修复嵌入接口故障期间入库的空向量分块 */
 async function reindex(kb: KbItem) {
     if (reindexing.value) return;
     if (!confirm(t('adminForm.kbReindexConfirm', { name: kb.name, chunks: kb.chunkCount }))) return;
     reindexing.value = true;
-    message.value = t('adminForm.kbReindexing');
+    listMessage.value = t('adminForm.kbReindexing');
     try {
         const res = await $fetch<{
             ok: boolean;
@@ -69,7 +88,7 @@ async function reindex(kb: KbItem) {
             lastError?: string | null;
             knowledgeBase: { provider: string };
         }>(`/api/settings/knowledge-bases/${encodeURIComponent(kb.id)}/reindex`, { method: 'POST' });
-        message.value =
+        listMessage.value =
             t('adminForm.kbReindexDone', {
                 updated: res.updated,
                 total: res.total,
@@ -77,7 +96,7 @@ async function reindex(kb: KbItem) {
                 provider: res.knowledgeBase.provider,
             }) + (res.lastError ? t('adminForm.kbReindexReason', { reason: res.lastError.slice(0, 160) }) : '');
     } catch (e) {
-        message.value = extractApiError(e, t('adminForm.kbReindexFailed'));
+        listMessage.value = extractApiError(e, t('adminForm.kbReindexFailed'));
     } finally {
         reindexing.value = false;
         await load();
@@ -102,9 +121,19 @@ onMounted(load);
 
 /** 打开新建抽屉：清空上次输入与错误 */
 function openCreateKb() {
+    kbCreateToken += 1;
+    // 上一张表单的在途创建已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    creatingKb.value = false;
     Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
     createError.value = '';
     createOpen.value = true;
+}
+
+/** 关闭新建抽屉：令牌一并作废，在途创建的失败提示不能写进一个已经关掉的抽屉 */
+function closeCreateKb() {
+    kbCreateToken += 1;
+    createOpen.value = false;
+    creatingKb.value = false;
 }
 
 async function createKb() {
@@ -115,15 +144,22 @@ async function createKb() {
         return;
     }
     creatingKb.value = true;
+    const token = kbCreateToken;
     try {
         await $fetch('/api/settings/knowledge-bases', { method: 'POST', body: { ...newKb } });
-        Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
-        createOpen.value = false;
+        // 创建期间用户可能已关掉抽屉并重新打开：清空与关闭只对发起这次创建的那张表单生效
+        if (token === kbCreateToken) {
+            Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+            createOpen.value = false;
+        }
         await load();
     } catch (e) {
-        createError.value = extractApiError(e, t('adminForm.saveFailed'));
+        const failure = extractApiError(e, t('adminForm.saveFailed'));
+        // 抽屉已关或已换成新的一张：这条失败属于上一次创建，改挂到页面级提示
+        if (token === kbCreateToken) createError.value = failure;
+        else listMessage.value = failure;
     } finally {
-        creatingKb.value = false;
+        if (token === kbCreateToken) creatingKb.value = false;
     }
 }
 
@@ -137,6 +173,7 @@ async function open(kb: KbItem) {
     searchToken++;
     current.value = kb;
     searchHits.value = [];
+    searchRan.value = false;
     message.value = '';
     // 先清空：否则请求失败或返回慢时，界面上会挂着上一条知识库的文档
     docs.value = [];
@@ -164,13 +201,25 @@ async function reloadDocs(kbId: string) {
         docs.value = [];
         docsError.value = extractApiError(e, t('adminForm.loadFailed'));
     } finally {
-        // 只有最新一次请求可以收尾：迟到的旧响应不能把新一轮的加载态提前掐掉
-        if (token === docsToken) docsLoading.value = false;
+        // 只有最新一次请求可以收尾，且必须仍停在同一个知识库：切换后 addDoc/removeDoc
+        // 还会拿着旧 kbId 回来刷新，此时 docsToken 已是新一轮的值，
+        // 只比 token 会让旧库的 finally 把新面板的骨架屏提前摘掉（界面上直接变成「暂无文档」）。
+        if (token === docsToken && current.value?.id === kbId) docsLoading.value = false;
     }
 }
 
 /** 打开编辑：改名 / 描述 / embedding 模型（服务端 PATCH 已支持） */
+/** 关闭编辑抽屉：令牌一并作废——在途保存的失败提示不能写进一个已经关掉的抽屉 */
+function closeEditKb() {
+    kbEditToken += 1;
+    editingKb.value = null;
+    savingKb.value = false;
+}
+
 function openEditKb(kb: KbItem) {
+    kbEditToken += 1;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    savingKb.value = false;
     editingKb.value = kb;
     Object.assign(editForm, { name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
     editError.value = '';
@@ -184,6 +233,7 @@ async function saveKb() {
     }
     editError.value = '';
     savingKb.value = true;
+    const token = kbEditToken;
     try {
         const { vectorsInvalidated, ...updated } = await $fetch<KbItem & { vectorsInvalidated?: number }>(
             `/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`,
@@ -191,33 +241,41 @@ async function saveKb() {
         );
         // 同步当前面板标题，避免改名后仍显示旧名
         if (current.value?.id === updated.id) current.value = { ...current.value, ...updated };
-        editingKb.value = null;
+        // 保存期间用户可能已改开另一条知识库：无条件清空会把他正在填的表单一起关掉
+        if (token === kbEditToken) editingKb.value = null;
         // 服务端在换了嵌入模型/供应商时会连带作废旧向量，必须当场说破：
         // 否则用户只看到「保存成功」，之后才发现这个库的检索质量莫名变差，
         // 而界面上既没有「向量已空」的标记、日志里也什么都没有。
+        // 提示要落到当前看得见的位置：没有打开文档面板时 message 无处渲染。
         if (vectorsInvalidated !== undefined) {
-            message.value = vectorsInvalidated ? t('adminForm.kbEmbeddingStale', { chunks: vectorsInvalidated }) : t('adminForm.kbEmbeddingStaleNone');
+            const note = vectorsInvalidated ? t('adminForm.kbEmbeddingStale', { chunks: vectorsInvalidated }) : t('adminForm.kbEmbeddingStaleNone');
+            if (current.value?.id === updated.id) message.value = note;
+            else listMessage.value = note;
         }
         await load();
     } catch (e) {
-        editError.value = extractApiError(e, t('adminForm.saveFailed'));
+        const failure = extractApiError(e, t('adminForm.saveFailed'));
+        // 抽屉已换成另一条知识库时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题
+        if (token === kbEditToken) editError.value = failure;
+        else listMessage.value = failure;
     } finally {
-        savingKb.value = false;
+        if (token === kbEditToken) savingKb.value = false;
     }
 }
 
 async function removeKb(id: string) {
     if (!confirm(t('adminForm.kbDeleteConfirm'))) return;
-    message.value = '';
+    listMessage.value = '';
     try {
         await $fetch(`/api/settings/knowledge-bases/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        listMessage.value = t('common.deleted');
         if (current.value?.id === id) {
             current.value = null;
             docs.value = [];
         }
         await load();
     } catch (e) {
-        message.value = extractApiError(e, t('adminForm.deleteFailed'));
+        listMessage.value = extractApiError(e, t('adminForm.deleteFailed'));
     }
 }
 
@@ -247,14 +305,21 @@ async function addDoc() {
                 body: { title: docForm.title || undefined, content: docForm.content },
             });
         }
-        message.value = t('adminForm.kbDocImported');
         docForm.title = '';
         docForm.content = '';
         if (fileRef.value) fileRef.value.value = '';
-        await reloadDocs(kbId);
+        // 导入期间用户可能已切到另一个库：文档列表与成功提示都属于被导入的那个库，
+        // 旧库的刷新写进新面板会变成「B 的文档区列着 A 的导入结果」。
+        if (current.value?.id === kbId) {
+            message.value = t('adminForm.kbDocImported');
+            await reloadDocs(kbId);
+        }
         await load();
     } catch (error) {
-        message.value = extractApiError(error, t('adminForm.kbDocImportFailed'));
+        const failure = extractApiError(error, t('adminForm.kbDocImportFailed'));
+        // 导入期间切到了另一个库：这条失败属于被导入的那个库，写进当前面板会被读成本库导入失败
+        if (current.value?.id === kbId) message.value = failure;
+        else listMessage.value = failure;
     } finally {
         uploading.value = false;
     }
@@ -268,7 +333,10 @@ async function removeDoc(id: string) {
         await reloadDocs(kbId);
         await load();
     } catch (e) {
-        message.value = extractApiError(e, t('adminForm.deleteFailed'));
+        const failure = extractApiError(e, t('adminForm.deleteFailed'));
+        // 删除期间切到了另一个库：失败提示不能写进新面板（那里列的是 B 的文档）
+        if (current.value?.id === kbId) message.value = failure;
+        else listMessage.value = failure;
     }
 }
 
@@ -278,12 +346,14 @@ async function search() {
     message.value = '';
     // 先清空旧命中：慢响应期间界面不挂着上一次（可能是别的知识库/关键词）的结果
     searchHits.value = [];
+    searchRan.value = false;
     try {
         const res = await $fetch<{ hits: HitItem[] }>(`/api/settings/knowledge-bases/${encodeURIComponent(current.value.id)}/search`, {
             query: { q: searchQuery.value },
         });
         if (token !== searchToken) return;
         searchHits.value = res.hits;
+        searchRan.value = true;
     } catch (e) {
         if (token !== searchToken) return;
         message.value = extractApiError(e, t('adminForm.operationFailed'));
@@ -310,6 +380,8 @@ async function search() {
                     {{ listError }}
                     <button type="button" class="ml-2 underline hover:no-underline" @click="load">{{ t('common.retry') }}</button>
                 </div>
+                <!-- 行级操作的反馈：重建索引/删除等按钮在左侧表格上，不能依赖右侧文档面板来显示结果 -->
+                <div v-if="listMessage" class="app-alert app-alert-info mb-4 text-xs">{{ listMessage }}</div>
 
                 <div class="app-table-wrap">
                     <table class="app-table">
@@ -435,13 +507,13 @@ async function search() {
                             </p>
                             <p class="text-soft text-xs whitespace-pre-wrap">{{ hit.content }}</p>
                         </div>
-                        <p v-if="searchQuery && !searchHits.length" class="text-faint text-center text-sm">{{ t('adminForm.kbSearchEmpty') }}</p>
+                        <p v-if="searchRan && !searchHits.length" class="text-faint text-center text-sm">{{ t('adminForm.kbSearchEmpty') }}</p>
                     </div>
                 </div>
             </div>
 
             <!-- 新建知识库：名称/描述/embedding 模型 -->
-            <AdminDrawer :open="createOpen" :title="t('adminForm.kbCreate')" @close="createOpen = false">
+            <AdminDrawer :open="createOpen" :title="t('adminForm.kbCreate')" @close="closeCreateKb">
                 <div class="space-y-3">
                     <input
                         :aria-label="t('adminForm.kbNamePlaceholder')"
@@ -459,13 +531,13 @@ async function search() {
                     <p v-if="createError" class="app-help-error">{{ createError }}</p>
                 </div>
                 <template #footer>
-                    <button class="app-btn app-btn-ghost" :disabled="creatingKb" @click="createOpen = false">{{ t('adminForm.cancel') }}</button>
+                    <button class="app-btn app-btn-ghost" :disabled="creatingKb" @click="closeCreateKb">{{ t('adminForm.cancel') }}</button>
                     <button class="app-btn app-btn-primary" :disabled="creatingKb" @click="createKb">{{ t('adminForm.save') }}</button>
                 </template>
             </AdminDrawer>
 
             <!-- 编辑知识库：改名/描述/embedding 模型（此前只能删库重建） -->
-            <AdminDrawer :open="Boolean(editingKb)" :title="t('adminForm.kbEditTitle')" @close="editingKb = null">
+            <AdminDrawer :open="Boolean(editingKb)" :title="t('adminForm.kbEditTitle')" @close="closeEditKb">
                 <div class="space-y-3">
                     <input
                         :aria-label="t('adminForm.kbNamePlaceholder')"
@@ -488,7 +560,7 @@ async function search() {
                     <p v-if="editError" class="app-help-error">{{ editError }}</p>
                 </div>
                 <template #footer>
-                    <button class="app-btn app-btn-ghost" :disabled="savingKb" @click="editingKb = null">{{ t('adminForm.cancel') }}</button>
+                    <button class="app-btn app-btn-ghost" :disabled="savingKb" @click="closeEditKb">{{ t('adminForm.cancel') }}</button>
                     <button class="app-btn app-btn-primary" :disabled="savingKb" @click="saveKb">{{ t('adminForm.save') }}</button>
                 </template>
             </AdminDrawer>

@@ -76,8 +76,10 @@ export default defineEventHandler(async (event) => {
         }
 
         // 两条通道的标题都要归一：multipart 分支此前连 trim 都没做，
-        // 长度不受限的标题会整条进列表接口与检索片段头部
-        title = assertTitleLen(stripNull(title).trim());
+        // 长度不受限的标题会整条进列表接口与检索片段头部。
+        // 纯空白的 title 字段在 `||` 那一步是「真值」，trim 之后却会变成空标题；
+        // 这里必须补回与 JSON 分支一致的默认名，否则列表里出现一条没有标题的文档。
+        title = assertTitleLen(stripNull(title).trim()) || '未命名文档';
         // 按 UTF-8 解码上传的字节很可能带 NUL（选到二进制文件时整篇都是），
         // 而 PostgreSQL 的 text 列一律拒绝它——不剔除就是一条 500 把 insert 语句原文带回界面
         content = stripNull(content);

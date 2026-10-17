@@ -8,14 +8,11 @@ interface Props {
     title?: string;
     /** 面板宽度类，简单表单可留空，字段多的表单传 'sm:max-w-2xl' 等 */
     widthClass?: string;
-    /** 展开内容较大时禁止 footer 换行等，保留默认即可 */
-    bodyClass?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     title: '',
     widthClass: 'sm:max-w-xl',
-    bodyClass: '',
 });
 
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -61,7 +58,7 @@ useDrawerFocus(
                         </button>
                     </div>
 
-                    <div class="flex-1 overflow-y-auto px-6 py-5" :class="bodyClass">
+                    <div class="flex-1 overflow-y-auto px-6 py-5">
                         <slot />
                     </div>
 

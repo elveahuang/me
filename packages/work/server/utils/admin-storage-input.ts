@@ -14,8 +14,42 @@ import { stripNull } from './pg-text';
  *
  * `null` 仍然表示「清空这一列」（列都是 notNull default ''），`undefined` 由调用方挡在外面。
  */
+const STORAGE_TEXT_LIMITS: Record<string, number> = {
+    name: 100,
+    provider: 32,
+    region: 64,
+    bucket: 255,
+    accessKeyId: 256,
+    secretAccessKey: 512,
+    publicBaseUrl: 2000,
+    prefix: 200,
+};
+const STORAGE_TEXT_DEFAULT_MAX = 1000;
+
+/**
+ * publicBaseUrl 会被原样拼成附件的展示/下载地址（storage.ts 的 buildPublicUrl）。
+ * 存成相对路径或 `javascript:` 不会在保存时报错，只会在每次打开附件时悄悄失效——
+ * 前端把它当 href/src 用的那一侧，`javascript:` 还会被执行。留空表示回退预签名，
+ * 非空时必须是绝对 http/https 地址。
+ */
+function assertPublicBaseUrl(value: string): void {
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw createError({ statusCode: 400, statusMessage: 'publicBaseUrl 不是合法 URL' });
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw createError({ statusCode: 400, statusMessage: 'publicBaseUrl 仅允许 http/https 协议' });
+    }
+}
+
 export function normalizeStorageText(raw: unknown, label: string): string {
     if (raw === null) return '';
     if (typeof raw !== 'string') throw createError({ statusCode: 400, statusMessage: `${label} 必须为字符串` });
-    return stripNull(raw);
+    const value = stripNull(raw);
+    const max = STORAGE_TEXT_LIMITS[label] ?? STORAGE_TEXT_DEFAULT_MAX;
+    if (value.length > max) throw createError({ statusCode: 400, statusMessage: `${label} 过长（最多 ${max} 字符）` });
+    if (label === 'publicBaseUrl' && value) assertPublicBaseUrl(value);
+    return value;
 }

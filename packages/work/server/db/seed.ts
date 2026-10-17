@@ -18,7 +18,9 @@ for (const envPath of ['.env', '.env.local', '../../.env', '../../.env.local']) 
 async function main() {
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../utils/db');
-    const { agentSkills, agentTools, agents, notes, schedules, skills, systemSettings, tools } = await import('./schema');
+    const { fromShanghaiParts, shanghaiParts } = await import('../utils/work-day');
+    const { computeNextRunAt, normalizeSchedulePlan } = await import('../utils/work-schedule');
+    const { agentSkills, agentTools, agents, schedules, skills, systemSettings, tools } = await import('./schema');
 
     console.log('🌱 开始初始化 work 的 Seed 数据…');
 
@@ -50,7 +52,7 @@ async function main() {
             name: '工作台行动规范',
             description: '要求助手用工具落地，而不是嘴上答应',
             instructions:
-                '涉及笔记、定时任务的增删改时，必须调用对应工作台工具完成，不允许只在回答里声称「已记下」；写入前确认标题与时间齐全，缺信息就先追问。改动完成后用一行说明落到了哪条对象上。',
+                '涉及定时任务的增删改时，必须调用对应工作台工具完成，不允许只在回答里声称「已经排好了」；写入前确认标题与时间齐全，缺信息就先追问。改动完成后用一行说明落到了哪条具体对象上。',
             enabled: true,
         },
     ];
@@ -91,9 +93,9 @@ async function main() {
         {
             name: '工作台助手',
             emoji: '🧭',
-            description: '管理你的笔记与定时任务，每天给一份简报',
+            description: '管理你的定时任务，随时说清今天有什么安排',
             systemPrompt: [
-                '你是这台个人工作台里的助手。除了回答问题，你还能读写用户的笔记与定时任务，遇到「帮我记一下 / 每天九点跑一遍 / 今天有什么」这类诉求时直接调用工具完成。',
+                '你是这台个人工作台里的助手。除了回答问题，你还能读写用户的定时任务，遇到「每天九点跑一遍 / 今天有什么安排 / 把这条暂停」这类诉求时直接调用工具完成。',
                 '不确定当前时间或日期时先查「当前时间」工具，不要凭猜测写入执行时间。回答保持简短，并说清落到了哪条具体对象上。',
             ].join('\n'),
             model: 'deepseek-chat',
@@ -169,45 +171,32 @@ async function main() {
     if (existingSchedule) {
         console.log('✓ 工作台已有数据，跳过示例内容');
     } else {
-        await db.insert(notes).values({
-            id: randomUUID(),
-            title: '这台工作台怎么用',
-            kind: 'note',
-            pinned: true,
-            tags: ['指南'],
-            content: [
-                '# 这台工作台怎么用',
-                '',
-                '- **今日**：今天要跑的定时任务、今天跑出的结果、最近笔记与每日简报。',
-                '- **定时任务**：到点自动跑选定的智能体，结果落成一条会话；可以暂停，也可以「立即运行」试一次。',
-                '- **笔记**：Markdown 编辑，检索与摘要走同一套嵌入配置。',
-                '- **对话**：助手能直接读写笔记与定时任务，说「每天九点帮我总结一下昨天」就会建出一条排期。',
-                '',
-                '配置入口在左下角「设置」：模型供应商、智能体、技能、工具、MCP、知识库与存储。',
-            ].join('\n'),
-        });
-
         // 示例排期挂在「工作台助手」上：seed 刚建的智能体一定存在，且它是唯一默认带写工具的那一个
         const [helperAgent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.name, '工作台助手'));
         if (helperAgent) {
-            const tomorrowNine = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            tomorrowNine.setHours(9, 0, 0, 0);
+            // 「明天 09:00（北京时间）」的绝对时刻。不能用 `new Date().setHours(9,0,0,0)`：
+            // 那是主机时区的九点，而 timeText 存的是北京钟点，两者在非 +08 的主机上会直接分歧，
+            // 用户看到「每天 09:00」却在 UTC 主机上于北京 17:00 触发。
+            const dayAfter = shanghaiParts(new Date(Date.now() + 24 * 60 * 60 * 1000));
+            const startsAt = fromShanghaiParts(dayAfter.year, dayAfter.month, dayAfter.day, 9, 0);
+            // nextRunAt 交给周期语义的唯一实现现算，和接口/工具/runner 走同一条口径
+            const plan = normalizeSchedulePlan({ kind: 'daily', time: '09:00', intervalMinutes: null, days: [], startsAt });
+            const nextRunAt = computeNextRunAt(plan, new Date()) ?? startsAt;
             await db.insert(schedules).values({
                 id: randomUUID(),
                 title: '示例：每天 09:00 的今日安排',
-                prompt: '用三行以内说清我今天该跑哪些定时任务、最近记了什么，以及有没有需要我决定的事。',
+                prompt: '用三行以内说清我今天该跑哪些定时任务、已经跑出的结果里有什么值得注意的，以及有没有需要我决定的事。',
                 agentId: helperAgent.id,
-                kind: 'daily',
-                timeText: '09:00',
-                intervalMinutes: null,
-                days: [],
-                startsAt: tomorrowNine,
-                nextRunAt: tomorrowNine,
+                kind: plan.kind,
+                timeText: plan.timeText,
+                intervalMinutes: plan.intervalMinutes,
+                days: plan.days,
+                startsAt: plan.startsAt,
+                nextRunAt,
                 enabled: false,
             });
+            console.log('✓ 已创建示例定时任务');
         }
-
-        console.log('✓ 已创建示例笔记与定时任务');
     }
 
     console.log('✨ work 的 Seed 初始化完成！');

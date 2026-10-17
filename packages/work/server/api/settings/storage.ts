@@ -6,7 +6,7 @@ import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
-import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, sanitizeStorageConfig } from '../../utils/storage';
+import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, normalizeStoragePublicBaseUrl, sanitizeStorageConfig } from '../../utils/storage';
 import { lockDefaultSlot } from '../../utils/unique-default';
 
 /**
@@ -37,6 +37,11 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
             patch.prefix = normalizeStorageText(body.prefix, key).replace(/^\/+|\/+$/g, '') || 'uploads';
             continue;
         }
+        if (key === 'publicBaseUrl') {
+            // 它会经 buildPublicUrl 写进聊天历史并渲染成链接：非空时必须是绝对 http(s)
+            patch.publicBaseUrl = normalizeStoragePublicBaseUrl(body.publicBaseUrl);
+            continue;
+        }
         // 全部文本列统一走 normalizeStorageText（剔 NUL + 拒绝非字符串）：name/region/accessKeyId/publicBaseUrl
         // 任一带 U+0000 都会让 INSERT 失败并把 SQL 原文回给界面，而对象/数组会被 String() 折成
         // '[object Object]' 静默落库，症状要到拼下载地址或连桶时才出现
@@ -53,8 +58,10 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
         const size = Number(body.maxFileSizeMb);
         patch.maxFileSizeMb = Number.isFinite(size) && size > 0 ? Math.min(Math.round(size), MAX_FILE_SIZE_MB_LIMIT) : 20;
     }
-    if (typeof body.secretAccessKey === 'string' && body.secretAccessKey && body.secretAccessKey !== SECRET_PLACEHOLDER) {
-        patch.secretAccessKey = stripNull(body.secretAccessKey);
+    // 非字符串同样要 400（原样忽略等于把一次字段名/类型写错存成「密钥没变」），空串与掩码占位符保留原值
+    if (body.secretAccessKey !== undefined && body.secretAccessKey !== null) {
+        const secret = normalizeStorageText(body.secretAccessKey, 'secretAccessKey');
+        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = secret;
     }
     return patch;
 }

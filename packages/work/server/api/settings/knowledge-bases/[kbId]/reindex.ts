@@ -141,7 +141,9 @@ export default defineEventHandler(async (event) => {
             } catch (error) {
                 console.error(`[reindex] 批次失败（kb=${kbId} after=${batch[batch.length - 1]?.id}）:`, error);
                 failed += batch.length;
-                lastError = error instanceof Error ? error.message : String(error);
+                // 上游错误正文可能是一整页 HTML 或带端点细节的超长串，界面只展示一行摘要，
+                // 与 schedule-runner 的 lastError 同一上限
+                lastError = (error instanceof Error ? error.message : String(error)).slice(0, 500);
             }
         }
 

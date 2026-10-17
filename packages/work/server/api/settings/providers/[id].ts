@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
         // - 它是默认供应商：`ensureDefaultProvider()` 只在整个表为空时才补默认行，删掉唯一那个默认之后
         //   平台就再也没有默认位，`resolveModel()` 会静默退到「第一个启用的供应商」——
         //   所有没显式指定供应商的智能体连同嵌入模型一起换了服务，用户只看到回答风格突变，
-        //   而既有笔记/知识库分块的向量与新模型不可比，检索静默降级成 Bigram。
+        //   而既有知识库分块的向量与新模型不可比，检索静默降级成 Bigram。
         // - 还有智能体或知识库指向它：两处外键都是 `onDelete: 'set null'`，PostgreSQL 不会拦，
         //   删完那些行就「不知道自己原本用哪个供应商」，知识库的嵌入端点尤其会被换成默认档。
         // 行上的 FOR UPDATE 同时挡住并发把别的行设成默认、以及并发新建指向它的智能体。
@@ -56,10 +56,14 @@ export default defineEventHandler(async (event) => {
     if (body.isDefault !== undefined) patch.isDefault = normalizeAdminBoolean(body.isDefault, 'isDefault', false);
     if (body.baseUrl !== undefined) patch.baseUrl = assertAbsoluteHttpUrl('baseUrl', body.baseUrl);
     if (body.models !== undefined) patch.models = normalizeProviderModels(body.models, 'reject');
-    // apiKey 只有在明确传入新值时才更新（掩码回传不覆盖真实 key）
+    // apiKey 只有在明确传入新值时才更新。客户端会把 GET 回来的掩码原样发回来表示「不改」，
+    // 这里只认「与当前密钥的掩码逐字相等」这一种情况：早先用 includes('****') 判断，
+    // 真实密钥里恰好带这四个字符就会被静默跳过——用户以为换了 key，实际还在用旧的。
     const incomingKey = typeof body.apiKey === 'string' ? stripNull(body.apiKey) : '';
-    if (incomingKey && !incomingKey.includes('****')) {
-        patch.apiKey = incomingKey;
+    if (incomingKey) {
+        const [current] = await db.select({ apiKey: providers.apiKey }).from(providers).where(eq(providers.id, id));
+        if (!current) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
+        if (incomingKey !== maskKey(current.apiKey)) patch.apiKey = incomingKey;
     }
 
     const becomesDefault = patch.isDefault === true;

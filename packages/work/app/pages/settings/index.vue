@@ -72,6 +72,12 @@ onMounted(load);
 
 const pending: Partial<WorkspaceDefaults> = {};
 let prefTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * 并发 flush 的代人牌：一次 PATCH 还在飞时用户又改了偏好，防抖会再发一次。
+ * 两个响应回来的顺序不保证，旧的那份若后到，会把 saved 覆盖成不含最新改动的行，
+ * 并把「已保存」提示重新亮一遍。
+ */
+let flushToken = 0;
 
 function clearPrefTimer() {
     if (prefTimer) {
@@ -108,13 +114,18 @@ async function flushPreferences() {
     const patch = { ...pending };
     if (!Object.keys(patch).length) return;
     for (const key of PREFERENCE_KEYS) delete pending[key];
+    const token = ++flushToken;
     saveState.value = 'saving';
     try {
         const next = await $fetch<WorkspaceDefaults>('/api/settings/system-settings', { method: 'PATCH', body: patch });
-        saved.value = next;
-        saveState.value = 'idle';
-        flashSuccess(t('settings.preferenceSaved'));
+        // 更新的一次已经回来（它拿着更新的值）：旧响应的 saved/提示都不能再覆盖
+        if (token === flushToken) {
+            saved.value = next;
+            saveState.value = 'idle';
+            flashSuccess(t('settings.preferenceSaved'));
+        }
     } catch {
+        if (token !== flushToken) return;
         // 失败时把字段放回 pending，重试按钮直接重放这一次；本机偏好已经生效，只是默认值没存住
         Object.assign(pending, patch);
         saveState.value = 'failed';
@@ -129,7 +140,17 @@ watch(mode, (value) => schedulePreferences({ themeMode: value }));
 watch(brand, (value) => schedulePreferences({ themeBrand: value }));
 watch(locale, (value) => schedulePreferences({ defaultLocale: value }));
 
-onBeforeUnmount(clearPrefTimer);
+/**
+ * 离开本页时把还压在防抖窗口里的改动发出去。
+ *
+ * 只清定时器会把这次改动丢掉：本机偏好（cookie/localStorage）已经生效，但「下次冷启动的默认值」
+ * 还是旧的——用户改完语言立刻切走，重启后又变回去，而且界面不会有任何提示。
+ */
+onBeforeUnmount(() => {
+    if (!prefTimer) return;
+    clearPrefTimer();
+    void flushPreferences();
+});
 
 /* ---------------- 工作台名称 ---------------- */
 
@@ -209,6 +230,12 @@ const sectionPages = computed(() => WORK_SETTINGS_PAGES.filter((page) => page.to
                             <span>{{ item === 'zh-CN' ? '简体中文' : 'English' }}</span>
                         </button>
                     </div>
+                </div>
+
+                <div v-if="!loading && !saved" class="border-line border-t pt-3">
+                    <!-- 读取失败时 saved=null，schedulePreferences 会静默丢弃每一笔改动：
+                         本机偏好照常生效，但「下次启动的默认值」并不会变，不说明就会被当成已保存 -->
+                    <p class="text-faint text-[11px]">{{ t('settings.preferencesOffline') }}</p>
                 </div>
 
                 <div v-if="saveState !== 'idle' || savedHint" class="border-line flex items-center gap-2 border-t pt-3">

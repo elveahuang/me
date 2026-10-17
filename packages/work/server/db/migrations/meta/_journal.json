@@ -15,6 +15,13 @@
             "when": 1792212049468,
             "tag": "0001_schedules",
             "breakpoints": true
+        },
+        {
+            "idx": 2,
+            "version": "7",
+            "when": 1792221842029,
+            "tag": "0002_drop_notes_briefs",
+            "breakpoints": true
         }
     ]
 }

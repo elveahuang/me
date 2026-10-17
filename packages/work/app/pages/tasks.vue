@@ -18,8 +18,8 @@ import { composeStartsAt, dayInputValue, timeTextInputValue, todayInputValue } f
 /**
  * 定时任务（`/tasks`）：到点自动跑一轮智能体、结果落成一条会话的那些排期。
  *
- * 状态全部写进 URL（`?q=&enabled=&id=&new=1`）：今日页的每一行「今天要跑」都深链到这里
- * （`?id=` 打开那条的表单），书签也要能回到同一个筛选结果，把条件只存在 ref 里就等于让深链失效。
+ * 状态全部写进 URL（`?q=&enabled=&id=&new=1`）：列表每一行点开表单都会把 `?id=` 带回地址，
+ * 书签也要能回到同一个筛选结果，把条件只存在 ref 里就等于让深链失效。
  *
  * 列表里的 `prompt` 是服务端截到 240 字的摘要，所以点「编辑」要再取一次整行——
  * 拿摘要回填表单会把用户写的正文当场砍断，保存之后就真没了。
@@ -28,7 +28,23 @@ const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-const today = todayInputValue();
+/**
+ * 北京「今天」。
+ *
+ * 工作台是常驻的桌面应用，页面可能跨过午夜一直开着：写成 setup 时的常量会让「明天」的默认开始日
+ * 停在昨天（`once` 排到过去的时刻会被服务端 400 拒绝），列表里的「今天/明天」标签也会整体错一天。
+ * 每分钟对一次日期即可，不必更密。
+ */
+const today = ref(todayInputValue());
+let todayTimer: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+    todayTimer = setInterval(() => {
+        today.value = todayInputValue();
+    }, 60_000);
+});
+onBeforeUnmount(() => {
+    if (todayTimer) clearInterval(todayTimer);
+});
 const weekdayName = makeWeekdayName(String(locale.value));
 
 const readQuery = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : '');
@@ -58,6 +74,14 @@ const { success, flashSuccess } = useFlashSuccess();
 
 /** 手动运行的在途标记：接口立刻返回，但刷新列表前那一行还写着旧状态，先按「正在跑」压住按钮 */
 const running = ref<Set<string>>(new Set());
+/**
+ * 启停在途标记。
+ *
+ * PATCH 发的是绝对值（`enabled: !row.enabled`），而 `row` 要等 `refresh()` 回来才会变：
+ * 连点两下时第二次读到的仍是旧值，两次请求发的是同一个值，用户看到的「开了又关」实际只改了一次。
+ * 在途期间直接吞掉重复点击（与 `runNow` 同一口径），服务端语义与界面就不会分叉。
+ */
+const toggling = ref<Set<string>>(new Set());
 
 const agents = computed(() => agentList.value ?? []);
 const { data: agentList } = useFetch<{ id: string; name: string; emoji: string }[]>('/api/agents', { lazy: true, default: () => [] });
@@ -66,6 +90,8 @@ const { data: agentList } = useFetch<{ id: string; name: string; emoji: string }
 
 const drawerOpen = ref(false);
 const editingId = ref<string | null>(null);
+/** 表单加载的代人牌：只让最后一次「点行」写入表单（详见 openEdit） */
+let editToken = 0;
 const saving = ref(false);
 const formError = ref('');
 
@@ -77,8 +103,17 @@ const form = reactive({
     time: '09:00',
     intervalMinutes: 60,
     days: [] as number[],
-    startDay: today,
+    startDay: today.value,
     enabled: true,
+});
+
+/**
+ * `?new=1` 深链时 onMounted 早于 /api/agents 返回（两个请求都在页面上并行走），resetForm 那一刻
+ * agents 还是空数组，于是表单的智能体选择停在「什么都没有」——用户填完标题正文点保存才发现必填。
+ * 列表到达后补默认值；编辑表单已经带着 agentId 时不动。
+ */
+watch(agents, (list) => {
+    if (!form.agentId && list.length) form.agentId = list[0]!.id;
 });
 
 function resetForm() {
@@ -89,13 +124,17 @@ function resetForm() {
     form.time = '09:00';
     form.intervalMinutes = 60;
     form.days = [];
-    form.startDay = today;
+    form.startDay = today.value;
     form.enabled = true;
     formError.value = '';
 }
 
 function openNew() {
+    // 让在途的 openEdit 作废：否则它的响应回来时会把抽屉重新打开，并盖上「新建」的空表单
+    editToken += 1;
+    saving.value = false;
     editingId.value = null;
+    void router.replace({ query: { ...route.query, id: undefined } });
     resetForm();
     drawerOpen.value = true;
 }
@@ -106,11 +145,20 @@ function openNew() {
  * 整行必须再取一次——列表里的 `prompt` 只有前 240 字，拿摘要回填表单会把用户写的正文当场砍断，
  * 保存之后就真没了。也正因如此，`?id=` 深链不能靠 `(schedules ?? []).find(...)`：
  * 列表是 `lazy` 请求，`onMounted` 那一刻它多半还是空数组，于是「先清掉标志、再什么也没打开」，
- * 用户从今日页点过来只看到列表，以为自己没点中。
+ * 用户点过来只看到列表，以为自己没点中。
+ *
+ * 取到了才把 id 写回 URL（见下方 `drawerOpen` 的同步），所以点行 = 地址变成 `?id=那条`：
+ * 刷新能回到同一张表单，链接也发得出去；取失败就不写，否则会留下一个刷新即复现的错误深链。
  */
 async function openEdit(id: string) {
+    const token = ++editToken;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    saving.value = false;
     try {
         const full = await $fetch<WorkSchedule>(`/api/schedules/${encodeURIComponent(id)}`);
+        // 两次点行的响应顺序不保证：先点 A 后点 B，A 的响应晚到会把 B 的表单和 ?id= 一起换回去
+        // （用户随后保存的就是自己没在看的那个任务）。只让最后一次点击写入。
+        if (token !== editToken) return;
         editingId.value = full.id;
         form.title = full.title;
         form.prompt = full.prompt;
@@ -119,15 +167,22 @@ async function openEdit(id: string) {
         form.time = timeTextInputValue(full.timeText) || '09:00';
         form.intervalMinutes = full.intervalMinutes ?? 60;
         form.days = [...(full.days ?? [])];
-        form.startDay = dayInputValue(full.startsAt) || today;
+        form.startDay = dayInputValue(full.startsAt) || today.value;
         form.enabled = full.enabled;
         formError.value = '';
         drawerOpen.value = true;
+        void router.replace({ query: { ...route.query, id: full.id } });
     } catch (e) {
+        if (token !== editToken) return;
         // 只报「取不到」这一件事：抽屉里的字段全为空，用户会读成「我的任务被清空了」
         actionError.value = extractApiError(e, t('work.scheduleLoadFailed'));
     }
 }
+
+/** 表单关掉，`?id=` 就跟着走——留在地址里等于「刷新后再一次打开这条的表单」，而用户已经关掉了。 */
+watch(drawerOpen, (open) => {
+    if (!open && route.query.id) void router.replace({ query: { ...route.query, id: undefined } });
+});
 
 /** `once` 的钟点也来自 `startDay + time`，其余类型的 `time` 就是重复的钟点；两种都要填 */
 const showClock = computed(() => form.kind !== 'interval');
@@ -153,6 +208,8 @@ async function save() {
 
     saving.value = true;
     formError.value = '';
+    const token = editToken;
+    const wasEditing = Boolean(editingId.value);
     const body = {
         title,
         prompt,
@@ -167,22 +224,33 @@ async function save() {
     try {
         if (editingId.value) await $fetch(`/api/schedules/${encodeURIComponent(editingId.value)}`, { method: 'PATCH', body });
         else await $fetch('/api/schedules', { method: 'POST', body });
-        drawerOpen.value = false;
-        flashSuccess(editingId.value ? t('common.saved') : t('work.scheduleAdded'));
+        // 保存期间用户可能已关掉抽屉或改开另一条任务：无条件 drawerOpen = false 会把那张表单一起关掉
+        if (token === editToken) drawerOpen.value = false;
+        flashSuccess(wasEditing ? t('common.saved') : t('work.scheduleAdded'));
         await refresh();
     } catch (e) {
-        formError.value = extractApiError(e, t('common.error'));
+        const failure = extractApiError(e, t('common.error'));
+        // 抽屉已换成另一条任务时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题
+        if (token === editToken) formError.value = failure;
+        else actionError.value = failure;
     } finally {
-        saving.value = false;
+        // 令牌已换说明这一轮早已结束、当前是新表单：不能在这里动它的 saving
+        if (token === editToken) saving.value = false;
     }
 }
 
 async function toggleEnabled(row: WorkSchedule) {
+    if (toggling.value.has(row.id)) return;
+    toggling.value = new Set(toggling.value).add(row.id);
     try {
         await $fetch(`/api/schedules/${encodeURIComponent(row.id)}`, { method: 'PATCH', body: { enabled: !row.enabled } });
         await refresh();
     } catch (e) {
         actionError.value = extractApiError(e, t('common.error'));
+    } finally {
+        const next = new Set(toggling.value);
+        next.delete(row.id);
+        toggling.value = next;
     }
 }
 
@@ -228,8 +296,10 @@ function removeCurrent() {
 /**
  * 深链：`?new=1` 开新建表单，`?id=` 开那条的表单。
  *
- * 只在 `onMounted` 里消费，并且**先清掉标志再动作**——写在 setup 顶层会让 SSR 首屏 HTML
- * 就带一个弹层，刷新还会重复打开；`?id=` 是今日页那行「今天要跑」递过来的，点过去要能看到它的时间配置。
+ * 只在 `onMounted` 里消费：抽屉的开关状态是客户端 ref，写在 setup 顶层会让 SSR 首屏 HTML
+ * 直接带一个弹层。`?new=1` 用完必须 `router.replace` 掉，否则刷新即重复打开一张空表单；
+ * `?id=` 这里也先清掉，再由 `openEdit` 在取到整行之后写回——取不到时地址就干净地回到没有深链的状态，
+ * 不会留下一个「每次刷新都报取不到」的链接。
  * 那条按 id 现取（见 `openEdit`）：此刻 lazy 列表通常还没回来，从 `schedules` 里 find 等于静默失败。
  */
 onMounted(() => {
@@ -317,6 +387,8 @@ onMounted(() => {
                         class="app-switch mt-0.5 shrink-0"
                         :aria-checked="row.enabled"
                         :aria-label="t('adminForm.enable')"
+                        :aria-busy="toggling.has(row.id)"
+                        :disabled="toggling.has(row.id)"
                         :title="row.enabled ? t('common.enabled') : t('common.disabled')"
                         @click="toggleEnabled(row)"
                     />

@@ -9,7 +9,7 @@ import { stripNull } from '../../../utils/pg-text';
 import { flagParam } from '../../../utils/query';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { routeId } from '../../../utils/route-id';
-import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, sanitizeStorageConfig } from '../../../utils/storage';
+import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, normalizeStoragePublicBaseUrl, sanitizeStorageConfig } from '../../../utils/storage';
 import { lockDefaultSlot } from '../../../utils/unique-default';
 
 const BOOLEAN_FIELDS = ['forcePathStyle', 'enabled', 'isDefault'] as const;
@@ -29,12 +29,15 @@ async function patchStorageConfig(event: H3Event, id: string) {
             // 与 POST 的 buildPatch 同一口径：非字符串不再被 String() 折成 '[object Object]' 静默落库
             const value = normalizeStorageText(body[key], key);
             if (key === 'prefix') patch.prefix = value.replace(/^\/+|\/+$/g, '') || 'uploads';
+            else if (key === 'publicBaseUrl') patch.publicBaseUrl = normalizeStoragePublicBaseUrl(value);
             else patch[key] = value;
         }
     }
     if (body.endpoint !== undefined) patch.endpoint = normalizeStorageEndpoint(body.endpoint);
     for (const key of BOOLEAN_FIELDS) {
-        if (body[key] !== undefined) patch[key] = normalizeAdminBoolean(body[key], key, false);
+        // 回退值取该行现值而不是 false：请求里出现 `null` 时，`forcePathStyle: false` 会把已有对象的
+        // 寻址方式翻过来（S3 虚拟主机 vs 路径风格），旧附件全部 404；`enabled: false` 则会悄悄停用桶。
+        if (body[key] !== undefined) patch[key] = normalizeAdminBoolean(body[key], key, existing[key]);
     }
     if (body.allowedMimeTypes !== undefined) {
         patch.allowedMimeTypes = Array.isArray(body.allowedMimeTypes) ? body.allowedMimeTypes.map((v: unknown) => stripNull(String(v))).filter(Boolean) : [];
@@ -43,8 +46,10 @@ async function patchStorageConfig(event: H3Event, id: string) {
         const size = Number(body.maxFileSizeMb);
         patch.maxFileSizeMb = Number.isFinite(size) && size > 0 ? Math.min(Math.round(size), MAX_FILE_SIZE_MB_LIMIT) : 20;
     }
-    if (typeof body.secretAccessKey === 'string' && body.secretAccessKey && body.secretAccessKey !== SECRET_PLACEHOLDER) {
-        patch.secretAccessKey = stripNull(body.secretAccessKey);
+    // 与 POST 同口径：非字符串 400；空串与掩码占位符保留原密钥
+    if (body.secretAccessKey !== undefined && body.secretAccessKey !== null) {
+        const secret = normalizeStorageText(body.secretAccessKey, 'secretAccessKey');
+        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = secret;
     }
 
     if (patch.name !== undefined && !String(patch.name).trim()) {

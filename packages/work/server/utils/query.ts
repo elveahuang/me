@@ -1,3 +1,5 @@
+import { stripNull } from './pg-text';
+
 /** 关键词进入 ILIKE 前的最大字符数。 */
 const KEYWORD_MAX = 128;
 
@@ -9,9 +11,15 @@ const KEYWORD_MAX = 128;
  * 一整串 `%`，让本就用不上索引的 `ilike '%…%'` 扫描更贵，所以先夹长度。
  * 值是以参数形式送进 PostgreSQL 的（drizzle 的参数化 / sql 模板），
  * 因此这里只需按 LIKE 模式转义，不需要考虑 SQL 文本转义。
+ *
+ * NUL 也在这里收掉：模式串是**读路径**里唯一进 SQL 的用户文本，而带 U+0000 的参数
+ * 会让 PostgreSQL 在驱动层直接失败（`invalid byte sequence for encoding "UTF8": 0x00`），
+ * drizzle 把整条 `Failed query: select … from "schedules" …` 连同列清单写进响应体。
+ * 写入侧早就经 `stripNull` 归一了，读侧漏一步是因为「搜索框里没人能打进 NUL」——
+ * 但 URL 查询串算得出（`?keyword=%00bad`），粘贴带 NUL 的关键词经前端也会送上来。
  */
 export function likePattern(keyword: string): string {
-    const trimmed = keyword.trim().slice(0, KEYWORD_MAX);
+    const trimmed = stripNull(keyword).trim().slice(0, KEYWORD_MAX);
     return `%${trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
@@ -39,11 +47,14 @@ export function intParam(raw: unknown, fallback: number, min: number, max: numbe
  * `?status=todo&status=doing` 会让 h3 给出数组，而数组进 `eq()` 会被 postgres-js 展开成标量参数
  * → 500 并把 SQL 细节透出响应体（conversations.get.ts 已踩过一次）。重复参数按「取第一个」处理：
  * 语义上是客户端自己写错了，静默降级比报错更贴近「筛选条件照第一个走」。
+ *
+ * 与 `likePattern` 同一件事：这里也剔 NUL。取出来的值不止进 ILIKE，还直接进 `eq()`
+ * （附件的 `category`、会话的 `agentId`），带 U+0000 一样是驱动层报错 + SQL 外泄。
  */
 export function stringParam(raw: unknown, max = 128): string | undefined {
     const value = Array.isArray(raw) ? raw[0] : raw;
     if (typeof value !== 'string') return undefined;
-    const trimmed = value.trim().slice(0, max);
+    const trimmed = stripNull(value).trim().slice(0, max);
     return trimmed || undefined;
 }
 

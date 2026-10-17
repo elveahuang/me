@@ -31,6 +31,9 @@ function touch(conversationId: string, chat: Chat<UIMessage>) {
     if (instances.size <= INSTANCE_LIMIT) return;
     for (const [id, held] of instances) {
         if (instances.size <= INSTANCE_LIMIT) break;
+        // 刚登记的这一条永远不参与淘汰：其它实例全都忙着时，循环会一路走到尾部，
+        // 把调用方刚交进来的空闲实例顺手删掉（它明明才被 adopt 过）
+        if (id === conversationId) continue;
         // 正在生成的那条不能丢：丢掉引用等于没人再读那条流，这一轮的界面就永远停在半截
         if (isBusy(held.status)) continue;
         releaseChatRun(id);
@@ -65,6 +68,18 @@ function stopRemotePolling() {
     remoteTimer = null;
 }
 
+function startRemotePolling() {
+    if (remoteTimer) return;
+    remoteTimer = setInterval(probeRemoteRuns, REMOTE_POLL_MS);
+}
+
+/**
+ * 探测服务端在途轮次。
+ *
+ * 探测失败时**保留上一次的列表**原样不动 —— 把它清成 `[]` 会让一次瞬时抖动（dev server 重启、
+ * 网络抖动、限流回 429）直接抹掉侧栏的「生成中」角标和后台完成提示，而且因为停轮询的判据读的就是
+ * 这个值，角标从此再也不会回来，除非用户刷新页面。
+ */
 async function probeRemoteRuns() {
     if (remoteFetching) return;
     remoteFetching = true;
@@ -72,8 +87,7 @@ async function probeRemoteRuns() {
         const res = await $fetch<{ ids: string[] }>('/api/chat/runs');
         remoteRunningIds.value = Array.isArray(res?.ids) ? res.ids : [];
     } catch {
-        // 探测失败只是少一批角标，不打断界面；下一轮再试
-        remoteRunningIds.value = [];
+        // 拿不到新信息，沿用上一次的结果；下一轮再试
     } finally {
         remoteFetching = false;
         if (remoteRunningIds.value.length === 0 && !localRunningIds.value.length) stopRemotePolling();
@@ -98,9 +112,7 @@ export function registerChatRun(conversationId: string, chat: Chat<UIMessage>) {
     touch(conversationId, chat);
     syncLocalRunning();
     // 手里还有活时保持轮询：让「用户没在看的那条会话」跑完后角标自己消失
-    if (localRunningIds.value.length || remoteRunningIds.value.length) {
-        if (!remoteTimer) remoteTimer = setInterval(probeRemoteRuns, REMOTE_POLL_MS);
-    }
+    if (localRunningIds.value.length || remoteRunningIds.value.length) startRemotePolling();
 }
 
 /** 取回仍在内存里的那段会话实例；没有则 null，调用方按「新建」处理 */
@@ -155,11 +167,19 @@ export function useChatRuns() {
         return runningIds.value.includes(conversationId);
     }
 
-    /** 侧栏挂载时探一次：有在途轮次才留下轮询，没有就一条请求用完即走 */
+    /**
+     * 侧栏挂载时探一次：有在途轮次才留下轮询，没有就一条请求用完即走。
+     *
+     * 必须等探测结果到手再决定要不要留轮询 —— 早先这里是 `void probeRemoteRuns()` 之后**同步**读
+     * `remoteRunningIds.value`，那一刻它还是探测前的 `[]`，于是刷新页面后（本地一个实例都没有、
+     * 在途轮次只存在于服务端）轮询永远 arm 不上，后台那一轮跑完也没人把角标消掉。
+     */
     function refreshRemoteRuns() {
         if (import.meta.server) return;
-        void probeRemoteRuns();
-        if (remoteRunningIds.value.length && !remoteTimer) remoteTimer = setInterval(probeRemoteRuns, REMOTE_POLL_MS);
+        void probeRemoteRuns().then(() => {
+            // 失败时读的是上一次保留下来的列表：那些轮次在服务端确实还在跑，不能因为一次抖动就停止追问
+            if (remoteRunningIds.value.length) startRemotePolling();
+        });
     }
 
     return { runningIds, isRunning, refreshRemoteRuns };

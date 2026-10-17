@@ -15,7 +15,7 @@ const connectionString = process.env.POSTGRES_URL || 'postgres://postgres:postgr
  * 库端 TimeZone 默认继承主机时区（本机 Asia/Shanghai，容器又常是 UTC），
  * 于是同一行的 `created_at`（北京墙钟）与 `updated_at`（UTC 墙钟）能差出 8 小时：
  * 「创建 9 毫秒后更新」在库里变成 updated_at 比 created_at 早 8 小时，
- * 按 updatedAt 排序的最近笔记/任务会把刚改过的排到最后，接口把创建时间报成未来 8 小时，
+ * 按 updatedAt 排序的最近会话/排期会把刚改过的排到最后，接口把创建时间报成未来 8 小时，
  * 「今天到期」这类窗口也整体偏移。把会话按 UTC 打开后两侧同框架，且不再随部署主机时区变。
  *
  * 只影响之后写入的墙钟口径：改动前落库的行仍带着当时那个时区的墙钟，

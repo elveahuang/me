@@ -35,7 +35,7 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
  * 而 nitro 的 node preset 读的是 `NITRO_HOST`/`HOST` 环境变量，**不解析 `--host` 命令行参数**
  * （实测：`node .output/server/index.mjs --host 127.0.0.1` 仍然 `TCP 0.0.0.0:3101 LISTENING`）。
  * 也就是说按「加个 --host 就行」的直觉部署，产出物默认绑到所有网卡上，
- * 私人工作台（笔记、任务、供应商密钥管理表单、聊天）对整个局域网可读写。
+ * 私人工作台（定时任务、供应商密钥管理表单、聊天）对整个局域网可读写。
  */
 function checkBindHost(env: NodeJS.ProcessEnv, problems: string[], warnings: string[]): void {
     const host = (env.NITRO_HOST || env.HOST || '').trim();

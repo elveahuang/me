@@ -8,23 +8,9 @@ import { dayInputValue } from './work-day';
  * 展示相关的规则（状态档位、排期的一句话描述、日期相对说法）集中在这里，避免各页面各写一份映射。
  */
 
-export type WorkNoteKind = 'note' | 'daily';
 export type ScheduleKind = 'once' | 'interval' | 'daily' | 'weekly';
 /** 空串是「这条排期还没跑过」，服务端用它而不是 null，好让 `lastError` 之类的伴生字段保持同形 */
 export type ScheduleStatus = '' | 'running' | 'success' | 'failed';
-
-export interface WorkNote {
-    id: string;
-    title: string;
-    kind: WorkNoteKind;
-    pinned: boolean;
-    tags: string[];
-    summary: string;
-    content?: string;
-    excerpt?: string;
-    createdAt: string;
-    updatedAt: string;
-}
 
 export interface WorkSchedule {
     id: string;
@@ -49,60 +35,6 @@ export interface WorkSchedule {
     lastConversationId: string | null;
     createdAt: string;
     updatedAt: string;
-}
-
-export interface WorkBrief {
-    briefDate: string;
-    content: string;
-    model: string;
-    generatedAt: string;
-}
-
-/** 今日页「今天要跑」只带清单要用的那几个字段，完整排期走 `/api/schedules`。 */
-export interface WorkDueSchedule {
-    id: string;
-    title: string;
-    kind: ScheduleKind;
-    timeText: string;
-    nextRunAt: string;
-}
-
-/** 今日页「今天已跑」的一行：跑完的结果，含失败原因与那条落成的会话。 */
-export interface WorkScheduleRun {
-    id: string;
-    title: string;
-    /** 打开那条形成的会话要按 `/chat/:agentId?c=` 深链，会话归属不能跨智能体续聊，所以必须带上它 */
-    agentId: string;
-    lastRunAt: string | null;
-    lastStatus: ScheduleStatus;
-    lastError: string;
-    lastConversationId: string | null;
-}
-
-export interface WorkUpcomingSchedule {
-    id: string;
-    title: string;
-    nextRunAt: string;
-}
-
-export interface WorkRecentNote {
-    id: string;
-    title: string;
-    kind: WorkNoteKind;
-    pinned: boolean;
-    tags: string[];
-    updatedAt: string;
-    excerpt: string;
-}
-
-export interface WorkOverview {
-    date: string;
-    dueToday: WorkDueSchedule[];
-    runsToday: WorkScheduleRun[];
-    upcoming: WorkUpcomingSchedule[];
-    counts: { enabled: number; paused: number; failedToday: number; notesToday: number };
-    recentNotes: WorkRecentNote[];
-    brief: WorkBrief | null;
 }
 
 /** 表单与筛选共用的排期类型顺序；顺序即下拉顺序，不要在页面里另排一次。 */

@@ -46,19 +46,15 @@ export default defineNuxtConfig({
             tasks: true,
         },
         /**
-         * 两个任务都不在 cron 里写「每天几点」：croner 按进程本地时区解释表达式，容器几乎都是 UTC，
+         * 任务不在 cron 里写「每天几点」：croner 按进程本地时区解释表达式，容器几乎都是 UTC，
          * 那样会把北京时间的钟点整体推后 8 小时。时刻口径一律落在数据库里由 `work-day.ts`/`work-schedule.ts`
          * 算成绝对时刻，cron 只管「多久醒一次」。
          *
-         * - `schedules:run-due`：每分钟认领到期的定时任务（`server/tasks/schedules/run-due.ts`）。
-         *   没有到期行的唤醒不产生任何外呼；精度就是「最多晚几十秒」，本机工作台够用。
-         * - `brief:daily`：每小时第 7 分钟补一次今日简报（`server/tasks/brief/daily.ts`）。
-         *   任务自己判断「北京时间的今天还没有简报」才外呼，所以每天实际只有一次模型调用，
-         *   多出来的 23 次是零成本空转；分针取 7 而不是 0，是为了不和同一进程里其它整点任务挤在一起。
+         * `schedules:run-due`：每分钟认领到期的定时任务（server/tasks/schedules/run-due.ts）。
+         * 没有到期行的唤醒不产生任何外呼；精度就是「最多晚几十秒」，本机工作台够用。
          */
         scheduledTasks: {
             '* * * * *': 'schedules:run-due',
-            '7 * * * *': 'brief:daily',
         },
     },
     fonts: {

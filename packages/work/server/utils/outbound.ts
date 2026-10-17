@@ -49,8 +49,14 @@ export function isPrivateAddress(ip: string): boolean {
  * 运行期出站是否放行由 assertSafeOutboundUrl（受 ALLOW_PRIVATE_OUTBOUND 控制）负责。
  * 返回去掉末尾斜杠的规范化地址。
  */
+/** 与 HTTP 工具的 config.url 同一上限：地址会原样保存并反复用于建连，超长串没有正常用途 */
+const OUTBOUND_URL_MAX = 2000;
+
 export function assertAbsoluteHttpUrl(label: string, raw: unknown): string {
     const value = String(raw ?? '').trim();
+    if (value.length > OUTBOUND_URL_MAX) {
+        throw createError({ statusCode: 400, statusMessage: `${label}过长（最多 ${OUTBOUND_URL_MAX} 字符）` });
+    }
     let url: URL;
     try {
         url = new URL(value);

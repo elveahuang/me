@@ -138,10 +138,19 @@ async function runSmokeTests() {
 
     // 6. 查询入参归一（分页与关键词）
     console.log('\n6. 测试查询入参归一');
-    const { likePattern, intParam } = await import('../server/utils/query');
+    const { likePattern, intParam, stringParam } = await import('../server/utils/query');
     assert(likePattern('100%') === '%100\\%%' && likePattern('a_b') === '%a\\_b%', 'LIKE 模式转义 % 与 _ 通配符');
     assert(likePattern('  hi  ') === '%hi%' && likePattern('x'.repeat(500)).length === 130, '关键词先 trim 再夹到 128 字符');
     assert(likePattern('C:\\work\\') === '%C:\\\\work\\\\%', '反斜杠成对转义：不转义时 LIKE 的 escape 缺失会让 PG 以 22025 炸成 500');
+    // 读路径的 NUL 与写路径同一个不变量：带 U+0000 的参数在驱动层就失败（0x00），
+    // 而 drizzle 把整条 `Failed query: select … from "schedules" …` 连同列清单写进响应体。
+    // 真实入口是查询串（`?keyword=%00bad`），不是搜索框——所以这条只能靠断言守住。
+    const NUL = String.fromCharCode(0);
+    assert(!likePattern(`bad${NUL}keyword`).includes(NUL), 'ILIKE 模式不留 NUL：查询串带 %00 时原本回 500 + SQL 细节外泄');
+    assert(
+        stringParam(`bad${NUL}keyword`) === 'badkeyword' && stringParam(['a', 'b']) === 'a',
+        '查询串取单值剔 NUL 并取第一个（category / agentId 是直接进 eq() 的，同样炸）',
+    );
     assert(
         intParam('1.7', 10, 1, 100) === 1 && intParam('-3', 10, 1, 100) === 1 && intParam('1e9', 10, 1, 100) === 100 && intParam('abc', 10, 1, 100) === 10,
         '分页参数取整、夹逼、非法值回退（小数会被 PG 拒成 22P02 → 500 + SQL 细节外泄）',
@@ -204,6 +213,7 @@ async function runSmokeTests() {
         normalizeAttachmentCategory,
         normalizeMimeType,
         normalizeStorageEndpoint,
+        normalizeStoragePublicBaseUrl,
         relayLimitBytes,
         relayReadLimitBytes,
         sanitizeFilename,
@@ -211,6 +221,16 @@ async function runSmokeTests() {
     } = await import('../server/utils/storage');
     assert(normalizeStorageEndpoint('http://127.0.0.1:9000/') === 'http://127.0.0.1:9000', 'endpoint 去尾斜杠');
     assert(threw400(() => normalizeStorageEndpoint('')) && threw400(() => normalizeStorageEndpoint('ftp://h/p')), 'endpoint 必填且只允许 http(s)');
+    // publicBaseUrl 会经 buildPublicUrl 写进 messages.parts 并最终渲染成 <a href>：
+    // 空值合法（私有桶），但非空时必须是绝对 http(s)，否则就是一条持久的脚本/数据链接
+    assert(normalizeStoragePublicBaseUrl('') === '' && normalizeStoragePublicBaseUrl(undefined) === '', 'publicBaseUrl 允许留空');
+    assert(normalizeStoragePublicBaseUrl(' https://cdn.example.com/bucket/ ') === 'https://cdn.example.com/bucket', 'publicBaseUrl 去空白与尾斜杠');
+    assert(
+        threw400(() => normalizeStoragePublicBaseUrl('javascript:alert(1)//')) &&
+            threw400(() => normalizeStoragePublicBaseUrl('data:text/html,x')) &&
+            threw400(() => normalizeStoragePublicBaseUrl('cdn.example.com/bucket')),
+        'publicBaseUrl 拒绝非 http(s) 与相对地址',
+    );
     const key = buildObjectKey({ prefix: '/uploads/' }, '../../etc/passwd', 'Image');
     assert(key.startsWith('uploads/image/') && !key.includes('..'), '对象键归一 prefix、类别小写，文件名不带走路径穿越');
     assert(sanitizeFilename('a/b\\c.pdf') === 'c.pdf' && sanitizeFilename('中文 报告.docx') === '中文 报告.docx', '文件名只取末段且保留中文名');
@@ -254,12 +274,11 @@ async function runSmokeTests() {
     );
     assert(!blocksWrite('POST', 'http://localhost:3001') && !blocksWrite('PATCH', undefined), '本机来源与非浏览器客户端放行');
 
-    // 11. 工作台写入归一与北京日口径（notes 各 handler 与定时任务共用的同一套规则）
+    // 11. 工作台写入归一与北京日口径（定时任务的写入与「今天」的算法共用同一套规则）
     console.log('\n11. 测试工作台写入归一与北京日口径');
-    const { WORK_TITLE_MAX, normalizeNoteKind, normalizeWorkDate, normalizeWorkId, normalizeWorkOptionalText, normalizeWorkTags, normalizeWorkText } =
-        await import('../server/utils/work-input');
+    const { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkId, normalizeWorkText } = await import('../server/utils/work-input');
     const { safeTrim, stripNull } = await import('../server/utils/pg-text');
-    const { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange } = await import('../server/utils/work-day');
+    const { shanghaiDateKey, shanghaiDayRange } = await import('../server/utils/work-day');
 
     assert(normalizeWorkText('  写周报  ', 'title', WORK_TITLE_MAX) === '写周报', '必填文本 trim 后返回');
     assert(
@@ -267,22 +286,13 @@ async function runSmokeTests() {
         '全空白与非字符串的必填文本回 400（非字符串会被 postgres-js 拒成 500 并透出 SQL）',
     );
     assert(
-        normalizeWorkOptionalText(undefined, 'detail', 10) === '' && normalizeWorkOptionalText(null, 'detail', 10) === '',
-        "选填文本缺失归一成空串（列是 notNull default ''）",
-    );
-    assert(
         stripNull('a\u0000b') === 'ab' && normalizeWorkText('x\u0000', 'title', 5) === 'x',
         'U+0000 一律剔除（text/jsonb 列都不接受它，带进去整条 INSERT 连 SQL 一起回显）',
     );
     assert(safeTrim({ toString: () => ' x ' }) === '' && safeTrim('  y  ') === 'y', 'safeTrim 只认字符串，对象不会被 toString 蒙混过关');
     assert(
-        normalizeNoteKind(undefined) === 'note' && threw400(() => normalizeNoteKind('one')),
-        '枚举缺失回退、未知值拒绝：静默落库的坏类型会让笔记在按 kind 筛选的列表里凭空消失',
-    );
-    assert(normalizeWorkTags(['a', 'a', '  ', 2026, {}, null, 'b']).join(',') === 'a,2026,b', '标签去重、标量字符串化、对象与空串丢弃');
-    assert(
-        threw400(() => normalizeWorkTags('a,b')) && threw400(() => normalizeWorkId('not-a-uuid', 'agentId')),
-        'tags 非数组与 id 形状不对都回 400（省一次无谓查库）',
+        threw400(() => normalizeWorkId('not-a-uuid', 'agentId')),
+        'id 形状不对回 400（省一次无谓查库）',
     );
     assert(
         threw400(() => normalizeWorkDate('2026-02-30', 'startsAt')) && threw400(() => normalizeWorkDate('2025-02-29', 'startsAt')),
@@ -292,12 +302,6 @@ async function runSmokeTests() {
         threw400(() => normalizeWorkDate(1e18, 'startsAt')) && normalizeWorkDate('', 'startsAt') === null,
         '超出 1970–2100 的脏时间戳拒绝，空串归一为 null（1e18 读回给模型是「距今约 3000 万年」）',
     );
-    assert(
-        shanghaiDateInput('2026-10-15')?.toISOString() === '2026-10-14T16:00:00.000Z' &&
-            shanghaiDateInput('2026-10-15', 'end')?.toISOString() === '2026-10-15T15:59:59.999Z',
-        '日期入参按北京日解释：起于 UTC 前一日 16:00，止于 23:59:59.999',
-    );
-    assert(shanghaiDateInput('2026-02-30') === null && shanghaiDateInput('tomorrow') === null, '假日期与非 YYYY-MM-DD 回退 null 而不是 Invalid Date');
     assert(
         shanghaiDayRange(new Date('2026-10-14T16:30:00Z')).start.toISOString() === '2026-10-14T16:00:00.000Z' &&
             shanghaiDateKey(new Date('2026-10-14T16:30:00Z')) === '2026-10-15',
@@ -453,7 +457,6 @@ async function runSmokeTests() {
             .map((c) => c.name);
     assert(!columnsOf(schema.attachments).includes('user_id') && !columnsOf(schema.conversations).includes('user_id'), '附件与会话表没有 user_id 归属列');
     assert(columnsOf(schema.messages).includes('seq'), '消息表保留全局 seq（上下文按它排序）');
-    assert(primaryOf(schema.briefs).join(',') === 'brief_date', '简报以日期为主键（定时任务重复触发靠 upsert 幂等）');
     assert(
         ['orders', 'membershipPlans', 'user', 'users'].every((k) => !(k in schema)),
         'schema 里没有订单/会员/账号表（fork 时刻意不带）',
@@ -463,7 +466,6 @@ async function runSmokeTests() {
         ['projects', 'tasks', 'events'].every((k) => !(k in schema)),
         'schema 里没有 projects/tasks/events 表（含引用它们的项目、日历与提醒代码一并删净）',
     );
-    assert(!columnsOf(schema.notes).includes('project_id'), 'notes 没有 project_id 列（笔记不再归属项目）');
     assert(
         ['agent_id', 'kind', 'time_text', 'interval_minutes', 'days', 'starts_at', 'enabled', 'next_run_at'].every((c) =>
             columnsOf(schema.schedules).includes(c),
@@ -490,8 +492,24 @@ async function runSmokeTests() {
     const SKIPPED_TABLES = new Set(['kbChunks']);
     const uncovered = schemaTables.filter((name) => !builtTables.has(name) && !SKIPPED_TABLES.has(name));
     assert(
-        schemaTables.length >= 19 && uncovered.length === 0,
+        schemaTables.length >= 17 && uncovered.length === 0,
         `export 覆盖 schema 的全部 ${schemaTables.length} 张表（未覆盖：${uncovered.join(', ') || '无'}；派生数据除外）`,
+    );
+    /*
+     * 覆盖之外还要对「脱敏口径」：备份文件是这台机器唯一会被拷走的东西，
+     * 而凭据并不只住在 providers.api_key 一列里——MCP 的鉴权是 mcp_servers.headers，
+     * HTTP 工具的凭据钉在 tools.config.headers。读接口两处都打码，导出曾经只折掉前两列，
+     * 于是「随手拷一份备份发给别人」会把活的 bearer token 一起带出去。
+     * 断言按源码形状来（这一节跑在 tsx 里，碰不到 Nitro 的 defineEventHandler），
+     * 新增藏凭据的列时把名字补进 REDACTED 并在这里加一条。
+     */
+    assert(
+        exportText.includes('dropHeaderValues(config.headers)') && exportText.includes('dropHeaderValues(row.headers)'),
+        'export 折掉 mcp_servers.headers 与 tools.config.headers（只留头名，值不进备份）',
+    );
+    assert(
+        ["'providers.api_key'", "'storage_configs.secret_access_key'", "'mcp_servers.headers'", "'tools.config.headers'"].every((field) => exportText.includes(field)),
+        'export 的 redacted 清单说全了四处凭据位（漏一处，用户以为备份可直接还原）',
     );
 
     // 14. 共享契约展示层：时区固定与徽章回退
@@ -508,35 +526,15 @@ async function runSmokeTests() {
         '徽章 tone 映射且未知值回退 neutral',
     );
 
-    // 15. 笔记摘要与 Markdown 归一（索引纯函数面，不碰库不外呼）
-    console.log('\n15. 测试笔记摘要归一');
-    const { NOTE_SUMMARY_MAX, deriveNoteSummary, markdownToPlainText } = await import('../server/utils/note-index');
-    assert(
-        markdownToPlainText('## 周报\n\n- **完成** [登录](https://x.test/a)\n- 修复 `bug`') === '周报 完成 登录 修复 bug',
-        '标题/列表/加粗/链接/行内代码都归一成可读纯文本',
-    );
-    assert(markdownToPlainText('```ts\nconst a = 1;\n```') === '', '代码围栏整段丢弃：里面是符号不是语义，进摘要只会把列表挤满乱码');
-    assert(deriveNoteSummary('# 标题\n\n正文一句', '兜底标题') === '标题 正文一句', '摘要走同一套 Markdown 归一');
-    assert(deriveNoteSummary('', '只有标题') === '只有标题', '正文为空回退标题，列表不至于两栏都空');
-    assert(deriveNoteSummary('', '') === '', '正文与标题皆空回退空串而不是 undefined');
-    const longSummary = deriveNoteSummary('内'.repeat(NOTE_SUMMARY_MAX + 50));
-    assert(longSummary.length === NOTE_SUMMARY_MAX + 1 && longSummary.endsWith('…'), `摘要封顶 ${NOTE_SUMMARY_MAX} 字符（正文可达数百 KB，摘要会进提示词）`);
-
-    // 16. 简报日期入参与 AI 工具桥口径
-    console.log('\n16. 测试简报入参与工具桥一致性');
-    const { briefDateInput } = await import('../server/utils/brief');
-    assert(briefDateInput('2026-10-15')?.toISOString() === '2026-10-14T16:00:00.000Z', '?date 按北京日解释成当天起点');
-    assert(
-        briefDateInput(undefined) === null && briefDateInput('tomorrow') === null && briefDateInput('2026-02-30') === null,
-        '缺失/非日期/假日期回退 null（= 今天）而不是 Invalid Date',
-    );
+    // 15. AI 工具桥口径（注册的工具与注入系统提示词的清单同源）
+    console.log('\n15. 测试工作台工具桥一致性');
 
     const { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } = await import('../server/utils/workbench-tools');
     const workbenchTools = buildWorkbenchTools('00000000-0000-4000-8000-000000000000');
     const toolNames = Object.keys(workbenchTools).sort();
     assert(
-        toolNames.join(',') === ['work_create_note', 'work_create_schedule', 'work_list_schedules', 'work_search', 'work_today'].sort().join(','),
-        '五个工作台动作全部注册为模型可见工具，且没有多出的（待办与日程已随表删除，留着就是模型每轮都能调一个必然失败的旧动作）',
+        toolNames.join(',') === ['work_create_schedule', 'work_list_schedules', 'work_today'].join(','),
+        '三个工作台动作全部注册为模型可见工具，且没有多出的（笔记与整机检索随页面删除，留着就是模型每轮都能调一个必然失败的旧动作）',
     );
     assert(
         toolNames.every((name) => WORKBENCH_TOOL_SUMMARY.includes(name)),
@@ -547,8 +545,8 @@ async function runSmokeTests() {
         '每个工具都带描述与入参 schema（缺描述时模型只会瞎猜参数）',
     );
 
-    // 17. locales 对齐（zh/en 键集合、空值、插值名）——一次性探针的常驻版
-    console.log('\n17. 测试两端 locales 对齐');
+    // 16. locales 对齐（zh/en 键集合、空值、插值名）——一次性探针的常驻版
+    console.log('\n16. 测试两端 locales 对齐');
     const flattenLocale = (obj: unknown, prefix = ''): [string, unknown][] =>
         Object.entries(obj as Record<string, unknown>).flatMap(([key, value]) =>
             value && typeof value === 'object' ? flattenLocale(value, `${prefix}${key}.`) : [[`${prefix}${key}`, value]],
@@ -609,22 +607,20 @@ async function runSmokeTests() {
      * 这两张表是「唯一一份」的约定所在（导航、设置路由都只此一处），也正因如此，改名只会在这里断掉：
      * 表现是侧栏某一项渲染成裸键名 `nav.foo`，或者新增一页时locales 补了、表里的 key 拼错，界面不报错只是不说人话。
      */
-    const { WORK_NAV_GROUPS } = await import('../app/utils/work-nav');
+    const { WORK_NAV_LINKS } = await import('../app/utils/work-nav');
     const { WORK_SETTINGS_PAGES } = await import('../app/utils/work-settings');
-    const navKeys = WORK_NAV_GROUPS.flatMap((group) => [group.titleKey, ...group.links.map((link) => link.labelKey)]);
+    const navKeys = WORK_NAV_LINKS.map((link) => link.labelKey);
     const settingsKeys = WORK_SETTINGS_PAGES.flatMap((page) => [page.labelKey, page.descKey]);
     const tableKeys = [...new Set([...navKeys, ...settingsKeys])];
     const missingTableKeys = tableKeys.filter((key) => !zhKeySet.has(key));
     assert(
-        tableKeys.length >= 20 && missingTableKeys.length === 0,
+        tableKeys.length >= 15 && missingTableKeys.length === 0,
         `导航与设置表引用的 ${tableKeys.length} 个动态键都在 locales 里存在（缺失：${missingTableKeys.join(', ') || '无'}）`,
     );
 
     // 图标名同样只在这两张表里写一次：名字拼错时 AppIcon 只画一个占位方框，没有任何报错
     const { APP_ICONS } = await import('../app/utils/app-icons');
-    const tableIcons = [
-        ...new Set([...WORK_NAV_GROUPS.flatMap((group) => group.links.map((link) => link.icon)), ...WORK_SETTINGS_PAGES.map((page) => page.icon)]),
-    ];
+    const tableIcons = [...new Set([...WORK_NAV_LINKS.map((link) => link.icon), ...WORK_SETTINGS_PAGES.map((page) => page.icon)])];
     const missingIcons = tableIcons.filter((name) => !(name in APP_ICONS));
     assert(
         tableIcons.length >= 8 && missingIcons.length === 0,
@@ -641,14 +637,14 @@ async function runSmokeTests() {
         const segments = to.replace(/^\//, '').split('/').filter(Boolean);
         return existsSync(resolve(pagesRoot, ...segments, 'index.vue')) || (segments.length > 0 && existsSync(`${resolve(pagesRoot, ...segments)}.vue`));
     };
-    const deadTargets = [...WORK_NAV_GROUPS.flatMap((group) => group.links), ...WORK_SETTINGS_PAGES].filter((item) => !hasPage(item.to)).map((item) => item.to);
+    const deadTargets = [...WORK_NAV_LINKS, ...WORK_SETTINGS_PAGES].filter((item) => !hasPage(item.to)).map((item) => item.to);
     assert(
         deadTargets.length === 0,
-        `导航与设置表的 ${WORK_NAV_GROUPS.reduce((n, g) => n + g.links.length, 0) + WORK_SETTINGS_PAGES.length} 个目标都有页面文件（悬空：${deadTargets.join(', ') || '无'}）`,
+        `导航与设置表的 ${WORK_NAV_LINKS.length + WORK_SETTINGS_PAGES.length} 个目标都有页面文件（悬空：${deadTargets.join(', ') || '无'}）`,
     );
 
-    // 18. 后台生成的回放缓冲（chat-runs）：切页面/刷新不打断生成，靠的就是这份内存副本
-    console.log('\n18. 测试对话后台运行的回放缓冲');
+    // 17. 后台生成的回放缓冲（chat-runs）：切页面/刷新不打断生成，靠的就是这份内存副本
+    console.log('\n17. 测试对话后台运行的回放缓冲');
     const {
         beginChatRun,
         appendChatChunk,
@@ -787,18 +783,18 @@ async function runSmokeTests() {
     assert(abortChatRun(crowded[0]!) === true, '最早开跑的那一轮越过上限后仍能被「停止」找到');
     for (const id of crowded) dropChatRun(id);
 
-    // 19. 数据库连通性与核心表（可选：本机未起数据库时跳过）
-    console.log('\n19. 测试数据库连通性与核心数据表');
+    // 18. 数据库连通性与核心表（可选：本机未起数据库时跳过）
+    console.log('\n18. 测试数据库连通性与核心数据表');
     try {
         const { sql } = await import('drizzle-orm');
         const { db } = await import('../server/utils/db');
         await db.execute(sql`SELECT 1`);
         assert(true, 'PostgreSQL 数据库连通正常');
         for (const [name, table] of [
-            ['notes', schema.notes],
             ['schedules', schema.schedules],
-            ['briefs', schema.briefs],
             ['agents', schema.agents],
+            ['conversations', schema.conversations],
+            ['messages', schema.messages],
         ] as const) {
             const [row] = await db.select({ count: sql<number>`count(*)` }).from(table);
             assert(Number(row?.count ?? 0) >= 0, `${name} 表可正常查询`);
@@ -807,9 +803,9 @@ async function runSmokeTests() {
         console.warn('  ⚠️ 数据库未运行或无法连接，跳过真实 DB 查询:', e?.message);
     }
 
-    // 20. 前后端档位对账：work 的前端不 import 服务端，表单档位是抄一份的，
+    // 19. 前后端档位对账：work 的前端不 import 服务端，表单档位是抄一份的，
     //     抄漏一次的表现是「界面填得进、保存被 400」或反过来「服务端放宽了、表单还卡在旧值」，两边都不报错。
-    console.log('\n20. 测试前后端档位常量一致');
+    console.log('\n19. 测试前后端档位常量一致');
     const feWorkText = readFileSync(resolve(HERE, '../app/utils/work.ts'), 'utf8');
     const feTasksText = readFileSync(resolve(HERE, '../app/pages/tasks.vue'), 'utf8');
     /** 取 `export const NAME = <数字或乘法式>;` 的数值（前端那份刻意写成字面量，所以能按文本取）。 */
@@ -878,6 +874,37 @@ async function runSmokeTests() {
     assert(
         composeStartsAt('', '09:00') === null && composeStartsAt('2026-3-1', '09:00') === null && composeStartsAt('2026-03-01 09:00', '09:00') === null,
         '空日期与「看着像日期但不是 YYYY-MM-DD」的形状都回 null，不猜成某一天',
+    );
+
+    console.log('\n20. 测试执行结论的对外口径（lastError 有两条出口：列表渲染与 work_today 的工具结果）');
+    const { RunFailure, describeRunError } = await import('../server/utils/schedule-runner');
+    const sqlFailure = Object.assign(new Error('Failed query: insert into "messages" ("id","conversation_id","parts") values ($1, $2, $3) - duplicate key'), {
+        name: 'QueryFailedError',
+        query: 'insert into "messages" ...',
+        parameters: ['cmsg_x', 'conv_x', [{ type: 'text', text: '这条排期的 prompt 正文' }]],
+    });
+    assert(
+        describeRunError(sqlFailure) === '数据库写入失败' && !describeRunError(sqlFailure).includes('Failed query'),
+        'drizzle 的 SQL 与绑定参数不进 lastError（那里装着用户写的正文，且会被 work_today 发给外部供应商）',
+    );
+    assert(describeRunError(new RunFailure('模型没有返回可用正文')) === '模型没有返回可用正文', '自己造的失败原样展示，不折成一句类别');
+    assert(
+        describeRunError(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })).includes('超时'),
+        '中断/超时单独成一类：供应商停摆与数据库写失败是两套排查方向',
+    );
+    assert(
+        describeRunError(Object.assign(new Error('429 Too Many Requests'), { statusCode: 429 })) === '模型或工具调用失败（上游返回了错误状态）' &&
+            describeRunError(new Error('连接被拒绝')) === '模型或工具调用失败',
+        '上游状态与未知异常各归一类，任何一条都不带原始文本',
+    );
+
+    assert(
+        describeRunError(Object.assign(new RunFailure('模型没有返回可用正文'), { statusCode: 404, statusMessage: '智能体不存在' })) === '模型没有返回可用正文',
+        'RunFailure 的判定排在 createError 之前：抛它的人手上的文案比任何分类都准',
+    );
+    assert(
+        describeRunError({ statusCode: 404, statusMessage: '智能体不存在', message: '智能体不存在' }) === '智能体不存在',
+        'h3 createError 的形状（statusCode + statusMessage）算「我们自己的结论」，不被误判成上游错误',
     );
 
     console.log(`\n========================================`);

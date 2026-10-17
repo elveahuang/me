@@ -14,7 +14,7 @@ import { normalizeWorkEnum } from './work-input';
  * 所以进程跑在 UTC 还是 +08 都不影响「每天 09:00」到底几点跑。
  */
 
-/** 到点发给智能体的正文上限：再长就该写成一条笔记，让定时任务去引用而不是内嵌。 */
+/** 到点发给智能体的正文上限：再长就该拆成几步或让智能体自己取资料，而不是内嵌进排期。 */
 export const SCHEDULE_PROMPT_MAX = 4_000;
 /** 间隔的最小/最大步长：下限防止「每 1 分钟跑一次模型」把预算烧穿，上限让 interval 至少覆盖到一周。 */
 export const INTERVAL_MINUTES_MIN = 5;

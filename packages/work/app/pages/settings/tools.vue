@@ -25,6 +25,8 @@ const formError = ref('');
 const listError = ref('');
 /** 保存中标记：防止重复提交并在请求期间禁用按钮 */
 const saving = ref(false);
+/** 启停在途标记：PATCH 发的是绝对值，列表刷新前的第二次点击会再发同一个值（与 tasks.vue 同口径） */
+const toggling = ref<Set<string>>(new Set());
 
 const form = reactive({
     name: '',
@@ -37,6 +39,19 @@ const form = reactive({
     parametersText: '[]',
     bodyTemplate: '',
 });
+
+/**
+ * 表单归属令牌：保存是网络往返，而抽屉的 ✕/取消不随请求禁用。
+ * 期间关掉 A 再打开 B，迟到的成功会把 B 的表单一起关掉、失败原因会写进 B 的表单。
+ */
+let formToken = 0;
+
+/** 关闭抽屉：令牌一并作废，在途保存的失败提示不能写进一个已经关掉的抽屉 */
+function closeDrawer() {
+    formToken += 1;
+    saving.value = false;
+    editing.value = null;
+}
 
 async function load() {
     loading.value = true;
@@ -70,6 +85,17 @@ function buildConfig(): Record<string, unknown> | null {
         formError.value = t('adminForm.toolInvalidJson');
         return null;
     }
+    // 元素级形状同样会毁掉工具：null 元素在 buildInputSchema 里当场抛错，重名参数只留下其中一个
+    const paramNames = new Set<string>();
+    for (const item of parameters) {
+        const param = item as { name?: unknown } | null;
+        const name = param && typeof param === 'object' && !Array.isArray(param) && typeof param.name === 'string' ? param.name.trim() : '';
+        if (!name || paramNames.has(name)) {
+            formError.value = t('adminForm.toolInvalidJson');
+            return null;
+        }
+        paramNames.add(name);
+    }
     return {
         url: form.url,
         method: form.method,
@@ -80,6 +106,9 @@ function buildConfig(): Record<string, unknown> | null {
 }
 
 function openCreate() {
+    formToken += 1;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    saving.value = false;
     editing.value = {};
     Object.assign(form, {
         name: '',
@@ -96,6 +125,8 @@ function openCreate() {
 }
 
 function openEdit(tool: ToolItem) {
+    formToken += 1;
+    saving.value = false;
     editing.value = tool;
     const config = (tool.config ?? {}) as {
         url?: string;
@@ -135,28 +166,39 @@ async function save() {
         config,
     };
     saving.value = true;
+    const token = formToken;
     try {
         if (editing.value?.id) {
             await $fetch(`/api/settings/tools/${encodeURIComponent(editing.value.id)}`, { method: 'PATCH', body });
         } else {
             await $fetch('/api/settings/tools', { method: 'POST', body });
         }
-        editing.value = null;
+        // 保存期间用户可能已关掉抽屉或改开另一条工具：不能代他把当前这张表单关掉
+        if (token === formToken) editing.value = null;
         await load();
     } catch (e) {
-        formError.value = extractApiError(e, t('adminForm.saveFailed'));
+        const failure = extractApiError(e, t('adminForm.saveFailed'));
+        // 抽屉已换成另一条工具时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题
+        if (token === formToken) formError.value = failure;
+        else listError.value = failure;
     } finally {
-        saving.value = false;
+        if (token === formToken) saving.value = false;
     }
 }
 
 async function toggle(tool: ToolItem) {
+    if (toggling.value.has(tool.id)) return;
+    toggling.value = new Set(toggling.value).add(tool.id);
     listError.value = '';
     try {
         await $fetch(`/api/settings/tools/${encodeURIComponent(tool.id)}`, { method: 'PATCH', body: { enabled: !tool.enabled } });
         await load();
     } catch (e) {
         listError.value = extractApiError(e, t('adminForm.operationFailed'));
+    } finally {
+        const next = new Set(toggling.value);
+        next.delete(tool.id);
+        toggling.value = next;
     }
 }
 
@@ -195,7 +237,7 @@ async function remove(id: string) {
             :open="editing !== null"
             :title="editing?.id ? t('common.edit') : t('adminForm.toolNew')"
             width-class="sm:max-w-2xl"
-            @close="editing = null"
+            @close="closeDrawer"
         >
             <div class="space-y-3">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -262,7 +304,7 @@ async function remove(id: string) {
                 <p v-if="formError" class="app-help-error">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="closeDrawer">{{ t('adminForm.cancel') }}</button>
                 <button class="app-btn app-btn-primary app-btn-sm" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
@@ -302,6 +344,7 @@ async function remove(id: string) {
                                 :aria-checked="tool.enabled"
                                 :aria-label="t('adminForm.enable')"
                                 :title="tool.enabled ? t('common.enabled') : t('common.disabled')"
+                                :disabled="toggling.has(tool.id)"
                                 @click="toggle(tool)"
                             />
                         </td>

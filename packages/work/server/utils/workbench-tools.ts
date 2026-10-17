@@ -1,24 +1,23 @@
 import { tool, type ToolSet } from 'ai';
 import { and, asc, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 import * as zod from 'zod';
-import { SCHEDULE_KINDS, notes, schedules, type ScheduleKind } from '../db/schema';
+import { SCHEDULE_KINDS, schedules, type ScheduleKind } from '../db/schema';
 import { db } from './db';
-import { scheduleNoteIndex } from './note-index';
 import { LOCAL_OWNER } from './owner';
 import { likePattern, stringParam } from './query';
 import { rateLimit } from './rate-limit';
-import { resolveSchedulePlan } from './schedule-store';
+import { assertScheduleAgent, resolveSchedulePlan } from './schedule-store';
 import { shanghaiDateKey, shanghaiDayRange, shanghaiParts, shanghaiUpcomingEnd } from './work-day';
-import { NOTE_CONTENT_MAX, WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkOptionalText, normalizeWorkTags, normalizeWorkText } from './work-input';
+import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from './work-input';
 import { SCHEDULE_PROMPT_MAX, describeSchedule, type SchedulePlan } from './work-schedule';
 
 /**
  * 工作台内置工具：让任意智能体都能读写本机的工作台数据。
  *
  * 与 `buildToolSet()`（管理端配置的工具行）分开的理由：
- * 1. 这是本机的**私人事物**，不需要运营逐个绑定；用户说「帮我记个笔记」「每天九点跑一遍」时，
+ * 1. 这是本机的**私人事物**，不需要运营逐个绑定；用户说「每天九点跑一遍」时，
  *    答案不该取决于他选的这个智能体恰好挂了哪几行工具。
- * 2. 它们直接落到与 `/api/notes`、`/api/schedules` 同一批表、同一套入参归一，
+ * 2. 它们直接落到与 `/api/schedules` 同一张表、同一套入参归一，
  *    所以模型写入的行与用户在界面上手敲的行形状完全一致。
  * 3. 工具结果会进模型上下文，也可能进日志，因此一律输出「人读得懂的紧凑清单」，
  *    不外传正文全文、向量或供应商端点。
@@ -27,7 +26,7 @@ import { SCHEDULE_PROMPT_MAX, describeSchedule, type SchedulePlan } from './work
  * 而模型在 agent 循环里可以连开 `maxSteps` 步，一次失控的提示就能刷出几十条记录。
  */
 
-/** 工具结果进入模型上下文，条数与单条长度都要封顶：一次 `work_search` 打满 50 条笔记正文会把窗口挤爆。 */
+/** 工具结果进入模型上下文，条数与单条长度都要封顶：一次清单打满 50 条正文会把窗口挤爆。 */
 const RESULT_ROWS_MAX = 20;
 const RESULT_TEXT_MAX = 400;
 /** 单次工具写入的预算：正常对话一轮最多调用一两次，阈值只为「模型自我循环」而存在。 */
@@ -54,6 +53,21 @@ function clip(value: string): string {
 function clockOf(value: Date): string {
     const p = shanghaiParts(value);
     return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+}
+
+/**
+ * 把一次写入的失败折成「可以进模型上下文」的一句话。
+ *
+ * 工具结果是原样喂回给模型的，而模型这一轮的外呼对象是外部供应商——所以只有我们自己用
+ * `createError` 造的、带 statusCode 的可读结论才允许透出。drizzle 的 `QueryError` 会把整条
+ * SQL 与绑定参数（标题、prompt 正文）放进 message，AI SDK 的错误文本会带上游地址与模型名。
+ * 认不出类别就只说「没写进去」，细节留在服务端日志里。
+ */
+function explainWriteFailure(error: unknown, context: string): string {
+    const record = error as { statusCode?: number; statusMessage?: string };
+    if (typeof record?.statusCode === 'number' && record.statusMessage) return record.statusMessage;
+    console.error(`[workbench] ${context}失败:`, error);
+    return `${context}失败，请改用「定时任务」页手动创建`;
 }
 
 /** 「今天」写成今天，其余写完整日期；只留 MM-DD 会让跨月的排期读起来像本周。 */
@@ -88,7 +102,7 @@ const scheduleColumns = {
     enabled: schedules.enabled,
 };
 
-/** 写侧统一闸门：键按动作分开，让「建了 20 条笔记」不影响「建一条排期」。 */
+/** 写侧统一闸门：键按动作分开，将来多一种写入动作也不会共用一份预算。 */
 async function gateWrite(action: string): Promise<string | null> {
     const limited = await rateLimit(`workbench-${action}:${LOCAL_OWNER}`, WRITE_LIMIT_PER_MIN, 60_000);
     return limited.ok ? null : `操作过于频繁（每分钟最多 ${WRITE_LIMIT_PER_MIN} 次），请 ${limited.retryAfterSec} 秒后再试`;
@@ -102,15 +116,15 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
     const set: Record<string, unknown> = {};
 
     set.work_today = tool({
-        description: '读取工作台今日概览：今天要跑的定时任务、今天已跑出的结果、未来 7 天的安排、最近笔记。回答「今天有什么」「跑得怎么样」之前先调用它。',
+        description: '读取工作台今日概览：今天要跑的定时任务、今天已跑出的结果、未来 7 天的安排。回答「今天有什么」「跑得怎么样」之前先调用它。',
         inputSchema: zod.object({}),
         execute: async () => {
             const now = new Date();
             const { start, end } = shanghaiDayRange(now);
-            // 与今日页、简报同一份「未来 7 天」口径（见 work-day.ts 的 shanghaiUpcomingEnd）
+            // 「未来 7 天」的口径只在 work-day.ts 的 shanghaiUpcomingEnd 有一份
             const weekEnd = shanghaiUpcomingEnd(end, 7);
 
-            const [dueToday, runsToday, upcoming, recentNotes] = await Promise.all([
+            const [dueToday, runsToday, upcoming] = await Promise.all([
                 db
                     .select(scheduleColumns)
                     .from(schedules)
@@ -135,7 +149,6 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                     .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
                     .orderBy(asc(schedules.nextRunAt))
                     .limit(RESULT_ROWS_MAX),
-                db.select({ id: notes.id, title: notes.title, updatedAt: notes.updatedAt }).from(notes).orderBy(desc(notes.updatedAt)).limit(8),
             ]);
 
             const lines = [`今日（${shanghaiDateKey(now)}，北京时间）概览`];
@@ -151,7 +164,6 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                 }`,
             );
             lines.push(`未来 7 天安排 ${upcoming.length} 条：\n${upcoming.map(scheduleLine).join('\n') || '无'}`);
-            lines.push(`最近笔记：${recentNotes.map((n) => `${n.title || '无标题'}（${formatWhen(n.updatedAt)}）`).join('、') || '无'}`);
             return lines.join('\n');
         },
     });
@@ -207,90 +219,38 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                     new Date(),
                 );
             } catch (error) {
-                return `参数不合法：${(error as Error).message ?? String(error)}`;
+                // 归一函数只会抛我们自己的 createError（可读的 400 文案）；认不出就回一句固定的话，
+                // 不能把 error.message 原样交给模型——那串文本会随这轮外呼发到供应商那边。
+                const readable = (error as { statusMessage?: string })?.statusMessage;
+                return `参数不合法：${readable || '请检查 kind / time / intervalMinutes / startsAt 的组合'}`;
             }
             const id = crypto.randomUUID();
             const { plan, nextRunAt } = resolved;
-            await db.insert(schedules).values({
-                id,
-                title,
-                prompt,
-                agentId,
-                kind: plan.kind,
-                timeText: plan.timeText,
-                intervalMinutes: plan.intervalMinutes,
-                days: plan.days,
-                startsAt: plan.startsAt,
-                nextRunAt,
-                enabled: true,
-            });
-            return `已创建定时任务 [${id}]：${title}（${describeSchedule(plan)}，下一次 ${formatWhen(nextRunAt)} ${clockOf(nextRunAt)}）`;
-        },
-    });
-
-    set.work_create_note = tool({
-        description: '在工作台记一条笔记（正文为 Markdown）。用于「帮我记一下…」这类沉淀信息；不要用它存超长文档。',
-        inputSchema: zod.object({
-            title: zod.string().describe(`标题，最长 ${WORK_TITLE_MAX} 字`),
-            content: zod.string().describe('Markdown 正文'),
-            tags: zod.array(zod.string()).optional().describe('标签列表'),
-        }),
-        execute: async (input) => {
-            const blocked = await gateWrite('note');
-            if (blocked) return blocked;
-            let title: string;
-            let content: string;
+            // 与 POST /api/schedules 同一道闸门：`schedules.agent_id` 是 onDelete: cascade，
+            // 而这句 INSERT 跑在模型的工具步里——上一轮读到「智能体还在」到这里之间可能已被删掉，
+            // 裸插会撞 23503，异常从 execute 逃出去之后由 AI SDK 折成 tool-error 原样回喂给模型
+            // （里面是整条 SQL 与标题、prompt 正文），且用户以为已经建好的任务其实一条都没有。
             try {
-                title = normalizeWorkText(input.title, 'title', WORK_TITLE_MAX);
-                content = normalizeWorkOptionalText(input.content, 'content', NOTE_CONTENT_MAX);
+                await db.transaction(async (tx) => {
+                    const ownerAgentId = await assertScheduleAgent(agentId, tx);
+                    await tx.insert(schedules).values({
+                        id,
+                        title,
+                        prompt,
+                        agentId: ownerAgentId,
+                        kind: plan.kind,
+                        timeText: plan.timeText,
+                        intervalMinutes: plan.intervalMinutes,
+                        days: plan.days,
+                        startsAt: plan.startsAt,
+                        nextRunAt,
+                        enabled: true,
+                    });
+                });
             } catch (error) {
-                return `参数不合法：${(error as Error).message ?? String(error)}`;
+                return explainWriteFailure(error, '定时任务没有创建');
             }
-            const id = crypto.randomUUID();
-            const tagList = normalizeWorkTags(input.tags);
-            await db.insert(notes).values({ id, title, content, tags: tagList });
-            // 与界面新建同口径：异步补摘要与向量，让这条笔记立刻能被 work_search 的语义路径检索到
-            scheduleNoteIndex(id);
-            return `已记录笔记 [${id}] ${title}${tagList.length ? `（标签：${tagList.join('、')}）` : ''}`;
-        },
-    });
-
-    set.work_search = tool({
-        description: '在工作台里检索：笔记与定时任务。用于回答「我之前记过…吗」「关于 X 有什么安排」这类需要历史内容的问题。',
-        inputSchema: zod.object({
-            keyword: zod.string().describe('检索关键词，命中各实体的标题与正文'),
-            limit: zod.number().optional().describe('每类最多返回条数，默认 10，最多 20'),
-        }),
-        execute: async (input) => {
-            const keyword = stringParam(input.keyword, 128) ?? '';
-            if (!keyword) return 'keyword 不能为空';
-            const pattern = likePattern(keyword);
-            const limit = Math.min(Math.max(Math.floor(Number(input.limit) || 10), 1), RESULT_ROWS_MAX);
-            const [ns, ss] = await Promise.all([
-                db
-                    .select({
-                        id: notes.id,
-                        title: notes.title,
-                        updatedAt: notes.updatedAt,
-                        // 优先用 AI 摘要（已是单段纯文本），没摘要才截正文；正文里的 Markdown 与换行会撑爆清单
-                        snippet: sql<string>`coalesce(nullif(${notes.summary}, ''), left(${notes.content}, 160))`,
-                    })
-                    .from(notes)
-                    .where(or(ilike(notes.title, pattern), ilike(notes.content, pattern), ilike(notes.summary, pattern)))
-                    .orderBy(desc(notes.updatedAt))
-                    .limit(limit),
-                db
-                    .select(scheduleColumns)
-                    .from(schedules)
-                    .where(or(ilike(schedules.title, pattern), ilike(schedules.prompt, pattern)))
-                    .orderBy(asc(schedules.nextRunAt))
-                    .limit(limit),
-            ]);
-            const blocks = [
-                `笔记 ${ns.length}：${ns.map((n) => `- [${n.id}] ${clip(n.title || '无标题')}：${clip(n.snippet)}`).join('\n') || '无'}`,
-                `定时任务 ${ss.length}：${ss.map(scheduleLine).join('\n') || '无'}`,
-            ];
-            return `「${keyword}」的检索结果：\n${blocks.join('\n')}`;
+            return `已创建定时任务 [${id}]：${title}（${describeSchedule(plan)}，下一次 ${formatWhen(nextRunAt)} ${clockOf(nextRunAt)}）`;
         },
     });
 
@@ -299,8 +259,6 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
 
 /** 供系统提示词的工具清单使用：与上面实现保持同一份口径，不在两处各写一遍。 */
 export const WORKBENCH_TOOL_SUMMARY = [
-    '- work_today：今日概览（今天要跑的定时任务 / 今天已跑出的结果 / 未来 7 天安排 / 最近笔记）',
+    '- work_today：今日概览（今天要跑的定时任务 / 今天已跑出的结果 / 未来 7 天安排）',
     '- work_list_schedules / work_create_schedule：查、建定时任务（到点自动跑智能体并把结果落成会话）',
-    '- work_create_note：记笔记（Markdown）',
-    '- work_search：跨笔记与定时任务检索',
 ].join('\n');

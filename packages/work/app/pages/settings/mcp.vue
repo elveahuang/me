@@ -29,6 +29,8 @@ const toolResult = ref<Record<string, { ok: boolean; message: string; tools: Mcp
 const saving = ref(false);
 /** 逐台服务器的工具探测在途标记 */
 const probing = ref<Record<string, boolean>>({});
+/** 启停在途标记：PATCH 发的是绝对值，列表刷新前的第二次点击会再发同一个值（与 tasks.vue 同口径） */
+const toggling = ref<Set<string>>(new Set());
 
 const form = reactive({
     name: '',
@@ -37,6 +39,19 @@ const form = reactive({
     headersText: '{}',
     enabled: true,
 });
+
+/**
+ * 表单归属令牌：保存是网络往返，而抽屉的 ✕/取消不随请求禁用。
+ * 期间关掉 A 再打开 B，迟到的保存成功会把 B 的抽屉一起关掉、失败原因会写进 B 的表单。
+ */
+let formToken = 0;
+
+/** 关闭抽屉：令牌一并作废，在途保存的失败提示不能写进一个已经关掉的抽屉 */
+function closeDrawer() {
+    formToken += 1;
+    saving.value = false;
+    editing.value = null;
+}
 
 async function load() {
     loading.value = true;
@@ -54,12 +69,17 @@ async function load() {
 onMounted(load);
 
 function openCreate() {
+    formToken += 1;
+    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
+    saving.value = false;
     editing.value = {};
     Object.assign(form, { name: '', url: '', transport: 'http', headersText: '{}', enabled: true });
     formError.value = '';
 }
 
 function openEdit(s: McpItem) {
+    formToken += 1;
+    saving.value = false;
     editing.value = s;
     Object.assign(form, {
         name: s.name,
@@ -92,6 +112,7 @@ async function save() {
     }
     formError.value = '';
     saving.value = true;
+    const token = formToken;
     try {
         // 显式列出字段：此前的 { ...form, headers } 会把编辑器原文 headersText 一起发上去
         const body = { name: form.name, url: form.url, transport: form.transport, enabled: form.enabled, headers };
@@ -100,12 +121,16 @@ async function save() {
         } else {
             await $fetch('/api/settings/mcp-servers', { method: 'POST', body });
         }
-        editing.value = null;
+        // 保存期间用户可能已关掉抽屉或改开另一台服务器：不能代他把当前这张表单关掉
+        if (token === formToken) editing.value = null;
         await load();
     } catch (e) {
-        formError.value = extractApiError(e, t('adminForm.saveFailed'));
+        const failure = extractApiError(e, t('adminForm.saveFailed'));
+        // 抽屉已换成另一台服务器时，这条失败属于上一台：写进当前表单会被读成本次编辑的问题
+        if (token === formToken) formError.value = failure;
+        else listError.value = failure;
     } finally {
-        saving.value = false;
+        if (token === formToken) saving.value = false;
     }
 }
 
@@ -143,12 +168,18 @@ function toolInfo(s: McpItem): { ok: boolean; message: string; tools: McpTool[] 
 }
 
 async function toggle(s: McpItem) {
+    if (toggling.value.has(s.id)) return;
+    toggling.value = new Set(toggling.value).add(s.id);
     listError.value = '';
     try {
         await $fetch(`/api/settings/mcp-servers/${encodeURIComponent(s.id)}`, { method: 'PATCH', body: { enabled: !s.enabled } });
         await load();
     } catch (e) {
         listError.value = extractApiError(e, t('adminForm.operationFailed'));
+    } finally {
+        const next = new Set(toggling.value);
+        next.delete(s.id);
+        toggling.value = next;
     }
 }
 
@@ -179,7 +210,7 @@ async function remove(id: string) {
             <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">{{ t('adminForm.mcpNew') }}</button>
         </div>
 
-        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.mcpNew')" @close="editing = null">
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.mcpNew')" @close="closeDrawer">
             <div class="space-y-3">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input
@@ -212,7 +243,7 @@ async function remove(id: string) {
                 <p v-if="formError" class="app-help-error">{{ formError }}</p>
             </div>
             <template #footer>
-                <button class="app-btn app-btn-ghost" :disabled="saving" @click="editing = null">{{ t('adminForm.cancel') }}</button>
+                <button class="app-btn app-btn-ghost" :disabled="saving" @click="closeDrawer">{{ t('adminForm.cancel') }}</button>
                 <button class="app-btn app-btn-primary app-btn-sm" :disabled="saving" @click="save">
                     {{ t('adminForm.save') }}
                 </button>
@@ -253,6 +284,7 @@ async function remove(id: string) {
                                     :aria-checked="s.enabled"
                                     :aria-label="t('adminForm.enable')"
                                     :title="s.enabled ? t('common.enabled') : t('common.disabled')"
+                                    :disabled="toggling.has(s.id)"
                                     @click="toggle(s)"
                                 />
                             </td>

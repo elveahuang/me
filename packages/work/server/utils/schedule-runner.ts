@@ -17,6 +17,7 @@ import { db } from './db';
 import { retrieveContext } from './embedding';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from './mcp';
 import { resolveModel } from './providers';
+import { lockAgentRow } from './ref-lock';
 import { planOf } from './schedule-store';
 import { buildSystemPrompt } from './system-prompt';
 import { buildToolSet } from './tools';
@@ -42,7 +43,7 @@ const FIRST_CHUNK_TIMEOUT_MS = 60_000;
 const CHUNK_TIMEOUT_MS = 60_000;
 /** 每分钟最多认领几条：一次认领就是一次真实外呼，积压时宁可排队也不要同时打满供应商。 */
 const RUNS_PER_TICK = 3;
-/** 落库正文上限：与笔记正文同量级，超出说明模型在复读，截断比塞满 jsonb 好。 */
+/** 落库正文上限：超出说明模型在复读，截断比塞满 jsonb 好。 */
 const RESULT_TEXT_MAX = 200_000;
 /**
  * `running` 还算「真的在跑」的时间窗：一轮最长 `RUN_TOTAL_BUDGET_MS`，再加两分钟的落库与关连接余量。
@@ -63,6 +64,43 @@ const RUNNING_STALE_MS = RUN_TOTAL_BUDGET_MS + 2 * 60_000;
 let tickInFlight = false;
 
 export type ScheduleRunResult = { ok: boolean; conversationId?: string; error?: string };
+
+/**
+ * 自己造的、可以原样展示给用户的失败。
+ *
+ * 只有这个类的实例允许把 `.message` 写进 `lastError`；其余异常一律折成类别（见 `describeRunError`）。
+ */
+export class RunFailure extends Error {}
+
+/**
+ * 把一轮执行的异常收成「能进界面、也能进模型上下文」的一句话，细节只进服务端日志。
+ *
+ * 为什么不能直接把 `error.message` 存进 `lastError`：这个字段有两条出口——
+ * `/api/schedules` 把它原样渲染在 `/tasks` 列表里，`work_today` 工具又把它拼进工具结果发给外部模型供应商。
+ * 而这一轮跑在 drizzle、AI SDK 与 MCP 建连之上，drizzle 的 `QueryError.message` 是
+ * `Failed query: insert into "messages" (…) <绑定参数>`：里面既有整张列清单，也有这条排期的 prompt 正文
+ * 和那句没能落库的回复。供应商错误文本同理（含模型名、上游地址、重试状态）。
+ * 分类不给细节不是偷懒：本机没有工单系统，日志就在同一台机器的终端里，运维看 `console.error`，
+ * 用户只需要知道「这一轮为什么没跑出来」是哪一类。
+ */
+export function describeRunError(error: unknown): string {
+    if (error instanceof RunFailure) return error.message;
+
+    const record = (error ?? {}) as Record<string, unknown>;
+    const message = typeof record.message === 'string' ? record.message : String(error);
+    // h3 的 createError 同时带 statusCode 与 statusMessage，那是我们自己写的可读结论（「智能体不存在」），
+    // 直接展示；缺这对字段的一律来自第三方，只能归类，不能转述。
+    if (typeof record.statusCode === 'number' && typeof record.statusMessage === 'string' && record.statusMessage) {
+        console.error('[schedules] 执行被拒:', record.statusMessage);
+        return record.statusMessage;
+    }
+    console.error('[schedules] 执行异常:', error);
+    // drizzle 把 SQL 挂在自有字段上，AI SDK 的调用错误带 statusCode；两者都不在 message 之外再暴露内容
+    if (typeof record.query === 'string' || message.includes('Failed query:') || record.name === 'QueryFailedError') return '数据库写入失败';
+    if (record.name === 'AbortError' || record.name === 'TimeoutError' || /timeout|abort|中断/i.test(message)) return '执行超时或被中断';
+    if (typeof record.statusCode === 'number' || typeof record.status === 'number') return '模型或工具调用失败（上游返回了错误状态）';
+    return '模型或工具调用失败';
+}
 
 type McpConnections = Awaited<ReturnType<typeof connectEnabledMcpServers>>;
 
@@ -87,9 +125,9 @@ export function runningStaleBefore(now: Date = new Date()): Date {
 /**
  * 把上一轮没留下结论的行收口成失败。
  *
- * 为什么必须自愈而不是任它停着：`running` 在今日页既不算「已跑」也挡得住手动运行（409），
+ * 为什么必须自愈而不是任它停着：`running` 在 `/tasks` 的清单里既不算「今天已跑」，也挡得住手动运行（409），
  * 用户看到的现象是「这条任务从今天起再也没跑过、点立即运行一直报错」，且库里没有任何一行说明原因。
- * 收口成带原因的失败之后，它同时出现在清单、失败计数与简报里。
+ * 收口成带原因的失败之后，它同时出现在清单、失败计数与那次运行的会话里。
  */
 async function reclaimStaleRunning(now: Date): Promise<number> {
     const reclaimed = await db
@@ -191,15 +229,28 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
         mcpConnections = await connectEnabledMcpServers(boundMcpIds);
         if (mcpConnections.length) toolSet = mergeMcpTools(toolSet, mcpConnections);
 
-        conversationId = crypto.randomUUID();
+        // 闭包里用局部 const：外层 `conversationId` 是 `string | null`（finally 里还要读它判断
+        // 「这一轮有没有留下会话」），TS 不会把回调里的赋值算作收窄，直接插会报 id 可为 null。
+        const conversationRowId = crypto.randomUUID();
         const title = `${row.title} · ${shanghaiDateKey(at)}`;
-        await db.insert(conversations).values({ id: conversationId, agentId: row.agentId, title });
-        await db.insert(messages).values({
-            id: `cmsg_${crypto.randomUUID()}`,
-            conversationId,
-            role: 'user',
-            parts: [{ type: 'text', text: row.prompt }],
+        // 会话与那句 prompt 仍在调用模型 **之前** 落库（失败的一轮也留得下现场），但两条 INSERT 必须同事务、
+        // 并对父行取锁：`conversations.agent_id` 是 cascade，上面那次读到这里之间智能体可能已被删掉，
+        // 裸插撞 23503 会让这一轮白烧一次外呼，还留下一条永远读不到归属的会话。
+        // 与 POST /api/conversations、/api/chat 同一道闸门（见 utils/ref-lock）。
+        await db.transaction(async (tx) => {
+            await lockAgentRow(tx, row.agentId);
+            await tx.insert(conversations).values({ id: conversationRowId, agentId: row.agentId, title });
+            await tx.insert(messages).values({
+                id: `cmsg_${crypto.randomUUID()}`,
+                conversationId: conversationRowId,
+                role: 'user',
+                parts: [{ type: 'text', text: row.prompt }],
+            });
         });
+        // 事务提交之后才认这条会话：插入失败（智能体被并发删除、库断连）时它并不存在，
+        // 提前赋值会让失败结论带着一个死 id 写进 lastConversationId——`/tasks` 那行的
+        // 「打开运行结果」于是永远点进一条 404。
+        conversationId = conversationRowId;
 
         const { text } = await generateText({
             model,
@@ -218,16 +269,18 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
             abortSignal: AbortSignal.timeout(RUN_TOTAL_BUDGET_MS),
         });
         const content = text.trim().slice(0, RESULT_TEXT_MAX);
-        if (!content) throw new Error('模型没有返回可用正文');
+        if (!content) throw new RunFailure('模型没有返回可用正文');
         await db.insert(messages).values({ id: `cmsg_${crypto.randomUUID()}`, conversationId, role: 'assistant', parts: [{ type: 'text', text: content }] });
         await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
         return { ok: true, conversationId };
     } catch (error) {
         // 这一条 catch 是整个执行侧的收尾保证：`resolveModel`、MCP 建连、两条 insert 都在外呼之前，
         // 以前它们抛错会把异常一路抛进 runner，那一行就永久停在 `running`——
-        // 今日页两组列表都查不到它、手动运行永远 409、下一分钟也不会再认领，而且界面上一句原因都没有。
+        // `/tasks` 的清单查不到它、手动运行永远 409、下一分钟也不会再认领，而且界面上一句原因都没有。
+        // 原因本身走 describeRunError：这个字段会被列表渲染、也会被 work_today 发给外部供应商，
+        // 原始 message 里装着 drizzle 的整条 SQL 与绑定参数（也就是这条排期的 prompt 正文）。
         const id = conversationId;
-        return { ok: false, ...(id ? { conversationId: id } : {}), error: `执行异常：${(error as Error).message ?? String(error)}` };
+        return { ok: false, ...(id ? { conversationId: id } : {}), error: describeRunError(error) };
     } finally {
         // 连接必须在任何分支下关掉：定时任务没有「请求结束」这个时刻，漏掉的 MCP 子进程会一直挂在进程里
         await closeMcpConnections(mcpConnections).catch((error) => console.error('[schedules] 关闭 MCP 连接失败:', error));
@@ -269,7 +322,7 @@ export async function runDueSchedules(now: Date = new Date()): Promise<{ ran: nu
             try {
                 result = await executeSchedule(row, now);
             } catch (error) {
-                result = { ok: false, error: `执行异常：${(error as Error).message ?? String(error)}` };
+                result = { ok: false, error: describeRunError(error) };
             }
             // 写回失败只记日志：库在那一刻断了的话，这一行会由下一次唤醒的自愈步骤收口，不该把整轮带崩
             await finishSchedule(row, now, result).catch((error) => console.error('[schedules] 写回执行结果失败:', error));

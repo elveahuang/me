@@ -59,7 +59,7 @@ export function composeStartsAt(day: string, time: string): string | null {
     const beijingDate = new Date(Date.UTC(y, m - 1, d, hh, mm));
     if (Number.isNaN(beijingDate.getTime())) return null;
     // `Date.UTC` 会把 2 月 30 日、13 月 1 日这类「日历上不存在的输入」顺延成别的一天，
-    // 回指校验才能把它挡回去（与服务端 `shanghaiDateInput` 同一规则）：否则用户选 2/30 存下的是 3/2，
+    // 回指校验才能把它挡回去（与服务端 `assertRealCalendarDay` 同一规则）：否则用户选 2/30 存下的是 3/2，
     // 界面上的排期说明也写着 3/2，看起来像「系统把我的日期改了」。
     if (beijingDate.toISOString().slice(0, 10) !== `${matchedDay[1]}-${matchedDay[2]}-${matchedDay[3]}`) return null;
     return new Date(beijingDate.getTime() - BEIJING_OFFSET_MS).toISOString();

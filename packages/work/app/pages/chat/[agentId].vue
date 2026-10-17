@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
  */
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const agentId = computed(() => route.params.agentId as string);
 
 // 路由参数已被 vue-router 解码（%2F → /），必须重新编进单个路径段：
@@ -18,20 +19,37 @@ const agentId = computed(() => route.params.agentId as string);
 const { data: agentData, error: agentError } = await useFetch<AgentDetail>(() => `/api/agents/${encodeURIComponent(agentId.value)}`);
 
 /** 会话列表与选中态由布局左栏共享：这里只按 agentId 过滤后的可见列表 */
-const { visibleConversations, activeConversationId, refreshConversations } = useChatSidebar();
+const { conversations, visibleConversations, activeConversationId, refreshConversations } = useChatSidebar();
 
 /**
- * 深链 `?c=` 只在确实属于该智能体时才生效：否则会把别的智能体的会话挂到当前 agentId 的
- * transport 上续聊（服务端同样会用 400 拒绝，这里先在客户端挑掉，避免一次注定失败的请求）。
+ * 深链 `?c=` 是「打开这一条会话」的明确意图，优先级高于「该智能体的最近一条」。
+ *
+ * 早先这里要求 id 出现在**已加载的**会话列表里才认：冷加载时列表还是空的，或者它刚好在这一轮
+ * 定时任务建出新会话之前拉过（列表已经过期），`/tasks` 的「打开运行结果」与后台完成提示生成的
+ * `?c=` 链接就会静默落到列表第一条——用户点开的是另一段对话，且此后不会再被纠正。
+ * 现在直接采用它；只有列表到货并证明它属于**别的智能体**时才放弃（那种续聊服务端会用 400 拒绝，
+ * 客户端不该把它挂到当前 agentId 的 transport 上）。
  */
+function requestedConversationFromQuery(): string | null {
+    const requested = route.query.c;
+    return typeof requested === 'string' && requested ? requested : null;
+}
+
+function belongsToAnotherAgent(id: string): boolean {
+    const hit = conversations.value.find((c) => c.id === id);
+    return Boolean(hit && hit.agentId !== agentId.value);
+}
+
 function resolveInitialConversation(): string | null {
-    const requested = route.query.c as string | undefined;
-    if (requested && visibleConversations.value.some((c) => c.id === requested)) return requested;
+    const requested = requestedConversationFromQuery();
+    if (requested && !belongsToAnotherAgent(requested)) return requested;
     return visibleConversations.value[0]?.id ?? null;
 }
 
 const initialConversationId = resolveInitialConversation();
 activeConversationId.value = initialConversationId;
+/** 当前会话标题：ChatPane 接管在途实例时不回源历史，导出用的标题由这里补上 */
+const activeConversationTitle = computed(() => visibleConversations.value.find((c) => c.id === activeConversationId.value)?.title ?? null);
 /** 还等着自动选中该智能体的最近一条会话：用户主动选会话或开新对话后就不再自动跳 */
 const autoSelectPending = ref(!initialConversationId);
 
@@ -41,18 +59,26 @@ watch(visibleConversations, (list) => {
     activeConversationId.value = list[0]!.id;
 });
 
+// 列表到货后才发现深链指向别的智能体的会话：撤销选中，改落当前智能体的最近一条
+watch(conversations, () => {
+    const requested = requestedConversationFromQuery();
+    if (!requested || activeConversationId.value !== requested || !belongsToAnotherAgent(requested)) return;
+    autoSelectPending.value = false;
+    activeConversationId.value = visibleConversations.value[0]?.id ?? null;
+});
+
 // 路由参数变化（同一页面组件被复用）：上一个智能体的会话不再适用，等新列表到达后自动选中最近一条
 watch(agentId, () => {
     activeConversationId.value = null;
     autoSelectPending.value = true;
 });
 
-// SPA 跳转可以把 ?c= 换到另一条会话（组件不会重建）：同样只在它属于当前智能体时跟随
+// SPA 跳转可以把 ?c= 换到另一条会话（组件不会重建）：同样只在它不属于别的智能体时跟随
 watch(
     () => route.query.c,
     (requested) => {
         if (typeof requested !== 'string' || !requested) return;
-        if (!visibleConversations.value.some((c) => c.id === requested)) return;
+        if (belongsToAnotherAgent(requested)) return;
         autoSelectPending.value = false;
         activeConversationId.value = requested;
     },
@@ -63,9 +89,15 @@ function onCreateConversation() {
     activeConversationId.value = null;
 }
 
+/** 选中会话写回 URL：刷新才不会落回「最近一条」，深链也才跟得上本页的当前状态 */
 function onActiveConversationChange(id: string | null) {
     if (id) autoSelectPending.value = false;
     activeConversationId.value = id;
+    if (((route.query.c as string | undefined) ?? null) === id) return;
+    const query = { ...route.query };
+    if (id) query.c = id;
+    else delete query.c;
+    void router.replace({ query });
 }
 
 /** 窄屏历史入口：会话列表就在外壳抽屉里，直接开抽屉 */
@@ -87,6 +119,7 @@ const { open: openDrawer } = useShellDrawer();
                 class="min-h-0 flex-1"
                 :agent-id="agentId"
                 :conversation-id="activeConversationId"
+                :conversation-title="activeConversationTitle"
                 :initial-agent="agentData"
                 @update:conversation-id="onActiveConversationChange"
                 @conversation-list-stale="refreshConversations()"
