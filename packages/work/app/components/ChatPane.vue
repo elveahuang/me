@@ -107,6 +107,7 @@ const submitError = ref('');
 const currentSummary = computed(() => props.agentList.find((item) => item.id === props.agentId) ?? null);
 const agentName = computed(() => agent.value?.name || currentSummary.value?.name || t('chat.welcomeTitle'));
 const agentEmoji = computed(() => agent.value?.emoji || agent.value?.avatar || currentSummary.value?.emoji || currentSummary.value?.avatar || '🤖');
+const headerDescription = computed(() => agent.value?.description || currentSummary.value?.description || '');
 
 /** 详情只用于能力徽标与导出头部，取不到不影响对话本身 */
 let agentDetailToken = 0;
@@ -612,84 +613,23 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
 
 <template>
     <section class="app-card relative flex min-w-0 flex-1 flex-col overflow-hidden !rounded-2xl">
-        <!-- 顶部信息条：智能体（`/chat`可切换）+ 导出 / 新对话 -->
-        <div class="flex items-center justify-between gap-2 px-4 py-3" style="border-bottom: 1px solid var(--line); background-color: var(--surface-2)">
-            <div class="flex min-w-0 items-center gap-3">
-                <!-- 移动端会话历史入口：侧栏 < md 隐藏，抽屉由父级摆放。
-                     按钮外层包 md:hidden 容器而非在 .app-btn 上加变体：
-                     主题 CSS 未分层，.app-btn 的 display 会压掉 utilities 层的 md:hidden。 -->
-                <div class="md:hidden">
-                    <button
-                        type="button"
-                        class="app-btn app-btn-ghost app-btn-icon"
-                        :title="t('chat.recentConversations')"
-                        :aria-label="t('chat.recentConversations')"
-                        @click="emit('open-history')"
-                    >
-                        <AppIcon name="menu" :size="18" />
-                    </button>
-                </div>
-                <button
-                    v-if="switchable"
-                    type="button"
-                    class="app-avatar-icon h-10 w-10 shrink-0 text-xl"
-                    :title="t('chat.switchAgent')"
-                    :aria-label="t('chat.switchAgent')"
-                    @click="openAgentPicker"
-                >
-                    {{ agentEmoji }}
-                </button>
-                <div v-else class="app-avatar-icon h-10 w-10 shrink-0 text-xl">{{ agentEmoji }}</div>
-
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button
-                            v-if="switchable"
-                            type="button"
-                            class="text-hover-brand flex min-w-0 items-center gap-1 text-sm font-bold transition-colors"
-                            :title="t('chat.switchAgent')"
-                            @click="openAgentPicker"
-                        >
-                            <span class="truncate">{{ agentName }}</span>
-                            <AppIcon name="chevron-down" :size="15" class="shrink-0" />
-                        </button>
-                        <h2 v-else class="truncate text-sm font-bold">{{ agentName }}</h2>
-
-                        <!-- 模型名只在真知道时展示：此前回退成 'deepseek-chat'，详情还没到或该智能体没填模型时
-                             会向用户宣称一个它并不在用的模型 -->
-                        <span v-if="agent?.model" class="app-chip font-mono">{{ agent.model }}</span>
-                        <span v-if="agent?.temperature !== null && agent?.temperature !== undefined" class="app-chip app-chip-brand">
-                            Temp {{ agent.temperature }}
-                        </span>
-                        <span v-if="agent?.tools?.length" class="app-chip"> 🛠️ {{ agent.tools.length }} </span>
-                        <span v-if="agent?.skills?.length" class="app-chip"> 🧩 {{ agent.skills.length }} </span>
-                        <span v-if="agent?.knowledgeBases?.length" class="app-chip" :title="agent.knowledgeBases.map((k) => k.name).join('、')">
-                            📚 {{ agent.knowledgeBases.length }}
-                        </span>
-                        <span v-if="agent?.mcpServers?.length" class="app-chip" :title="agent.mcpServers.map((m) => m.name).join('、')">
-                            🔌 {{ agent.mcpServers.length }}
-                        </span>
-                    </div>
-                    <p class="text-faint truncate text-[11px]">{{ agent?.description || currentSummary?.description || t('chat.welcomeDesc') }}</p>
-                </div>
-            </div>
-
-            <div class="flex shrink-0 items-center gap-2">
-                <button
-                    v-if="chat?.messages?.length"
-                    type="button"
-                    class="app-btn app-btn-outline !px-2.5 !py-1.5"
-                    :title="t('chat.exportMarkdown')"
-                    @click="exportMarkdown"
-                >
-                    <span>📥</span>
-                    <span class="hidden sm:inline">{{ t('chat.exportMarkdown') }}</span>
-                </button>
-                <button type="button" class="app-btn app-btn-ghost !px-2.5 !py-1.5" :title="t('chat.newChat')" @click="emit('update:conversationId', null)">
-                    ＋
-                </button>
-            </div>
-        </div>
+        <ChatHeader
+            :agent-emoji="agentEmoji"
+            :agent-name="agentName"
+            :description="headerDescription"
+            :model="agent?.model"
+            :temperature="agent?.temperature"
+            :tool-count="agent?.tools?.length ?? 0"
+            :skill-count="agent?.skills?.length ?? 0"
+            :knowledge-count="agent?.knowledgeBases?.length ?? 0"
+            :mcp-count="agent?.mcpServers?.length ?? 0"
+            :switchable="switchable"
+            :has-messages="Boolean(chat?.messages?.length)"
+            @open-history="emit('open-history')"
+            @open-agent-picker="openAgentPicker"
+            @export="exportMarkdown"
+            @new-chat="emit('update:conversationId', null)"
+        />
 
         <!-- 消息列表与冷启动卡片 -->
         <div ref="scrollRef" class="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" style="background-color: var(--surface-2)" @scroll="onScroll">
@@ -710,45 +650,18 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                 </div>
             </template>
 
-            <!-- 冷启动空状态：未选智能体时先选人，否则展示欢迎卡片与引导提示词 -->
-            <div v-else class="flex h-full flex-col items-center justify-center py-10 text-center">
-                <template v-if="!props.agentId">
-                    <div class="app-avatar-icon h-16 w-16 !rounded-3xl text-3xl">🤖</div>
-                    <h3 class="mt-3 text-base font-bold">{{ t('chat.pickAgentTitle') }}</h3>
-                    <p class="text-faint mt-1 max-w-sm text-xs">{{ t('chat.pickAgentDesc') }}</p>
-                    <button v-if="switchable" type="button" class="app-btn app-btn-primary mt-5" @click="openAgentPicker">
-                        {{ t('chat.selectAgent') }}
-                    </button>
-                </template>
-                <template v-else>
-                    <div class="app-avatar-icon h-16 w-16 !rounded-3xl text-3xl">{{ agentEmoji }}</div>
-                    <h3 class="mt-3 text-base font-bold">{{ t('chat.welcomeTitle') }} · {{ agentName }}</h3>
-                    <p class="text-faint mt-1 max-w-sm text-xs">
-                        {{ agent?.description || currentSummary?.description || t('chat.welcomeDesc') }}
-                    </p>
-
-                    <div class="mt-6 flex w-full max-w-md flex-col gap-2.5">
-                        <div
-                            v-for="prompt in starterPrompts"
-                            :key="prompt"
-                            class="app-card app-card-hover group flex items-center justify-between px-4 py-3 text-left text-xs transition-all"
-                        >
-                            <button type="button" class="text-soft flex-1 text-left" @click="handleSubmit(prompt)">
-                                {{ prompt }}
-                            </button>
-                            <button
-                                type="button"
-                                class="app-hover-reveal text-faint text-hover-brand ml-2 block shrink-0 rounded p-1 text-xs"
-                                :title="t('chat.usePrompt')"
-                                :aria-label="t('chat.usePrompt')"
-                                @click="fillPrompt(prompt)"
-                            >
-                                ✏️
-                            </button>
-                        </div>
-                    </div>
-                </template>
-            </div>
+            <ChatEmptyState
+                v-else
+                :agent-id="props.agentId"
+                :agent-emoji="agentEmoji"
+                :agent-name="agentName"
+                :description="headerDescription"
+                :starter-prompts="starterPrompts"
+                :switchable="switchable"
+                @open-agent-picker="openAgentPicker"
+                @send="handleSubmit"
+                @fill="fillPrompt"
+            />
         </div>
 
         <!-- 回到底部悬浮微按钮 -->
