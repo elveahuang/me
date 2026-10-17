@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { extractApiError, formatDate } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import { relativeDayLabel, todayInputValue, type WorkTaskStatus } from '../utils/work';
+import { dayInputValue, relativeDayLabel, todayInputValue, type WorkTaskStatus } from '../utils/work';
 import { WORK_NAV_GROUPS } from '../utils/work-nav';
 import { WORK_SETTINGS_PAGES } from '../utils/work-settings';
 
@@ -191,7 +191,7 @@ const items = computed<PaletteItem[]>(() => {
                 label: event.title,
                 sub: `${formatDate(event.startsAt)}${event.allDay ? ` · ${t('work.allDay')}` : ''}`,
                 icon: 'calendar-outline',
-                run: () => go(`/calendar?day=${encodeURIComponent(event.startsAt.slice(0, 10))}`),
+                run: () => go(`/calendar?day=${encodeURIComponent(dayInputValue(event.startsAt) || todayInputValue())}`),
             });
         }
         for (const project of result.value.projects) {

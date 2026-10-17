@@ -5,7 +5,7 @@ import { events, notes, projects, tasks, type TaskPriority, type TaskStatus } fr
 import { db } from './db';
 import { scheduleNoteIndex } from './note-index';
 import { LOCAL_OWNER } from './owner';
-import { likePattern, stringParam } from './query';
+import { exactLikePattern, likePattern, stringParam } from './query';
 import { rateLimit } from './rate-limit';
 import { UUID_PATTERN } from './route-id';
 import { shanghaiDateKey, shanghaiDayRange } from './work-day';
@@ -21,6 +21,7 @@ import {
     normalizeWorkOptionalText,
     normalizeWorkTags,
     normalizeWorkText,
+    taskCompletionPatch,
 } from './work-input';
 import { lockProjectRow } from './work-project';
 
@@ -72,7 +73,10 @@ async function resolveProjectRef(raw: unknown): Promise<{ id: string | null; err
         const [row] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, value));
         return row ? { id: row.id } : { id: null, error: `项目 id ${value} 不存在` };
     }
-    const rows = await db.select({ id: projects.id, name: projects.name }).from(projects).where(ilike(projects.name, value));
+    const rows = await db
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(ilike(projects.name, exactLikePattern(value)));
     if (rows.length === 1) return { id: rows[0]!.id };
     const names = await db.select({ name: projects.name }).from(projects).where(eq(projects.archived, false)).limit(30);
     if (rows.length > 1) return { id: null, error: `项目名「${value}」有歧义，现有项目：${names.map((n) => n.name).join('、')}` };
@@ -253,11 +257,11 @@ export function buildWorkbenchTools(): ToolSet {
             const found = await findTaskForPatch({ id: input.id, title: input.title });
             if (!found.ok) return found.message;
             const patch: Record<string, unknown> = {};
+            let nextStatus: TaskStatus | null = null;
             try {
                 if (input.status !== undefined) {
-                    const status = normalizeTaskStatus(input.status);
-                    patch.status = status;
-                    patch.completedAt = status === 'done' ? (found.row.completedAt ?? new Date()) : null;
+                    nextStatus = normalizeTaskStatus(input.status);
+                    patch.status = nextStatus;
                 }
                 if (input.priority !== undefined) patch.priority = normalizeTaskPriority(input.priority);
                 if (input.dueAt !== undefined) patch.dueAt = normalizeWorkDate(input.dueAt, 'dueAt');
@@ -266,7 +270,21 @@ export function buildWorkbenchTools(): ToolSet {
             }
             if (!Object.keys(patch).length) return '没有需要修改的字段（status / priority / dueAt 至少给一个）';
             patch.updatedAt = new Date();
-            await db.update(tasks).set(patch).where(eq(tasks.id, found.row.id));
+            // 改状态要连带算 completedAt，而「旧的 completedAt」必须和写落在同一个事务里、且对行取锁
+            // （与 `api/tasks/[id].ts` 同一口径）。用 `findTaskForPatch` 那次无锁读出的旧值会交错：
+            // 用户在界面上刚点「完成」（写入 T1），模型的 `status: 'done'` 若在那之前读过这一行，
+            // 就会把 completedAt 覆盖成 now，真实的完成时刻被静默改掉，今日概览与简报跟着算错一天。
+            const [updated] = await db.transaction(async (tx) => {
+                if (nextStatus === null) return tx.update(tasks).set(patch).where(eq(tasks.id, found.row.id)).returning({ id: tasks.id });
+                const [current] = await tx.select({ completedAt: tasks.completedAt }).from(tasks).where(eq(tasks.id, found.row.id)).for('update');
+                if (!current) return [];
+                return tx
+                    .update(tasks)
+                    .set({ ...patch, ...taskCompletionPatch(nextStatus, current.completedAt) })
+                    .where(eq(tasks.id, found.row.id))
+                    .returning({ id: tasks.id });
+            });
+            if (!updated) return `找不到 id 为 ${found.row.id} 的任务（可能刚被删除）`;
             return `已更新任务 ${found.row.id}：${Object.keys(patch)
                 .filter((k) => k !== 'updatedAt')
                 .join('、')}`;

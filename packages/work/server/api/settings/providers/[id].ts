@@ -1,5 +1,5 @@
 import { and, eq, ne } from 'drizzle-orm';
-import { providers } from '../../../db/schema';
+import { agents, knowledgeBases, providers } from '../../../db/schema';
 import { normalizeAdminBoolean } from '../../../utils/admin-boolean';
 import { normalizeProviderModels } from '../../../utils/admin-provider-input';
 import { db } from '../../../utils/db';
@@ -22,10 +22,24 @@ export default defineEventHandler(async (event) => {
     const id = routeId(event, 'id', '供应商');
 
     if (method === 'DELETE') {
-        // 与 agents/[id].delete.ts 同口径：0 行影响要报 404，否则 id 抄错或已被别的管理员删掉时，
-        // 界面照样提示「已删除」。
-        const deleted = await db.delete(providers).where(eq(providers.id, id)).returning({ id: providers.id });
-        if (!deleted.length) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
+        // 「读这行 → 删这行」要锁住目标行本身，而且删之前得问两件事（与 `storage/[id].ts` 的 DELETE 同一口径）：
+        // - 它是默认供应商：`ensureDefaultProvider()` 只在整个表为空时才补默认行，删掉唯一那个默认之后
+        //   平台就再也没有默认位，`resolveModel()` 会静默退到「第一个启用的供应商」——
+        //   所有没显式指定供应商的智能体连同嵌入模型一起换了服务，用户只看到回答风格突变，
+        //   而既有笔记/知识库分块的向量与新模型不可比，检索静默降级成 Bigram。
+        // - 还有智能体或知识库指向它：两处外键都是 `onDelete: 'set null'`，PostgreSQL 不会拦，
+        //   删完那些行就「不知道自己原本用哪个供应商」，知识库的嵌入端点尤其会被换成默认档。
+        // 行上的 FOR UPDATE 同时挡住并发把别的行设成默认、以及并发新建指向它的智能体。
+        await db.transaction(async (tx) => {
+            const [locked] = await tx.select().from(providers).where(eq(providers.id, id)).for('update');
+            if (!locked) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
+            if (locked.isDefault) throw createError({ statusCode: 409, statusMessage: '默认供应商不可删除，请先将其他供应商设为默认' });
+            const usedByAgent = await tx.select({ id: agents.id }).from(agents).where(eq(agents.providerId, id)).limit(1);
+            if (usedByAgent.length) throw createError({ statusCode: 409, statusMessage: '仍有智能体使用该供应商，请先改为其他供应商' });
+            const usedByKb = await tx.select({ id: knowledgeBases.id }).from(knowledgeBases).where(eq(knowledgeBases.embeddingProviderId, id)).limit(1);
+            if (usedByKb.length) throw createError({ statusCode: 409, statusMessage: '仍有知识库使用该供应商做嵌入，请先改为其他供应商' });
+            await tx.delete(providers).where(eq(providers.id, id));
+        });
         return { ok: true };
     }
 

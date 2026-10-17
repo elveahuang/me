@@ -54,24 +54,36 @@ const projectId = ref('');
 const reminderChoice = ref('');
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
-/** 编辑对象原本的提醒时刻；只在「自定义」档位下原样回传 */
+/** 编辑对象原本的提醒时刻与提前量；「自定义」档位按提前量对新开始时间反算（见 reminderValue） */
 let originalReminderAt: string | null = null;
+let originalReminderOffsetMin: number | null = null;
 
 /** 回填：与 startsAt 恰好差某个预设分钟数就选中该档，否则算「自定义」——不能因为读不出档位就把用户设好的提醒清掉 */
 function reminderChoiceFor(item: WorkEvent | null): string {
-    const at = item?.reminderAt;
-    if (!at) return '';
+    if (!item?.reminderAt) return '';
+    const minutes = reminderOffsetMinutes(item);
+    return minutes !== null && REMINDER_PRESETS.includes(minutes as (typeof REMINDER_PRESETS)[number]) ? String(minutes) : 'custom';
+}
+
+/** 这条日程原本的「提前多少分钟」；提醒或开始时间读不出来时回 null */
+function reminderOffsetMinutes(item: WorkEvent | null): number | null {
     const start = Date.parse(item?.startsAt ?? '');
-    const moment = Date.parse(at);
-    if (Number.isNaN(start) || Number.isNaN(moment)) return 'custom';
-    const minutes = Math.round((start - moment) / 60_000);
-    return REMINDER_PRESETS.includes(minutes as (typeof REMINDER_PRESETS)[number]) ? String(minutes) : 'custom';
+    const moment = Date.parse(item?.reminderAt ?? '');
+    if (Number.isNaN(start) || Number.isNaN(moment)) return null;
+    return Math.round((start - moment) / 60_000);
 }
 
 /** 提醒按「这次最终确定的开始时间」重算：改了时间还留着旧提醒，就会提醒到昨天 */
 function reminderValue(starts: Date): string | null {
     if (reminderChoice.value === '') return null;
-    if (reminderChoice.value === 'custom') return originalReminderAt;
+    if (reminderChoice.value === 'custom') {
+        // 自定义档位（智能体建的 7/10/30/90 分钟都落在这里，因为它对不上任何预设）同样只带走「提前量」，
+        // 原样回传那个绝对时刻的话，把日程挪到明天，提醒就永远停在昨天那一分钟——
+        // 而轮询有「迟到超过 5 分钟不再提示」的闸门（useEventReminders），结果是这条提醒永远不再弹，
+        // 界面上的铃铛却还挂着，用户以为设过就有效。算不出提前量时才退回原值，至少不动用户设好的时刻。
+        if (originalReminderOffsetMin === null) return originalReminderAt;
+        return new Date(starts.getTime() - originalReminderOffsetMin * 60_000).toISOString();
+    }
     return new Date(starts.getTime() - Number(reminderChoice.value) * 60_000).toISOString();
 }
 
@@ -94,6 +106,7 @@ watch(
         allDay.value = item?.allDay ?? false;
         location.value = item?.location ?? '';
         originalReminderAt = item?.reminderAt ?? null;
+        originalReminderOffsetMin = reminderOffsetMinutes(item);
         reminderChoice.value = allDay.value ? '' : reminderChoiceFor(item);
         // 新建时继承日历页当前选中的项目；编辑已有日程则以日程自身的归属为准
         projectId.value = item?.projectId ?? props.defaultProjectId ?? '';

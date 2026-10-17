@@ -170,11 +170,27 @@ function openEdit(event: WorkEvent) {
 
 /** 命令面板的「新建日程」用 `?new=1` 跳进来：消费一次就把标志清掉，避免刷新又弹一次抽屉。
  *  放在 mounted 而不是 setup 顶层：SSR 阶段就打开抽屉会让首屏 HTML 带一个不该存在的弹层。 */
-onMounted(() => {
+function consumeNewFlag(): void {
     if (route.query.new !== '1') return;
     openNew(typeof route.query.day === 'string' ? route.query.day : todayKey);
     void router.replace({ query: { ...route.query, new: undefined } });
-});
+}
+
+onMounted(consumeNewFlag);
+
+/**
+ * 深链要在「已经停在日历页」时也能生效：Nuxt 的默认 pageKey 只含路径（参数进、查询串不出），
+ * 本页又没有自定义 pageKey，所以从提醒浮层或命令面板再跳一次 `/calendar?day=…` 只是换了换地址栏——
+ * 组件不重建、`onMounted` 不再跑，日历纹丝不动，抽屉也不弹（`pages/chat/[agentId].vue` 的 `?c=` 已踩过同一个坑）。
+ * 更糟的是取数区间是照着旧的 `cursor` 算的，用户连那一天有没有日程都看不到。
+ */
+watch(
+    () => route.query.day,
+    (raw) => {
+        if (typeof raw === 'string') cursor.value = anchorDate(raw);
+    },
+);
+watch(() => route.query.new, consumeNewFlag);
 
 async function saveEvent(payload: {
     id?: string;

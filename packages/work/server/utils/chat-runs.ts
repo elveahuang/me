@@ -15,8 +15,17 @@ import type { UIMessageChunk } from 'ai';
 
 /** 单轮缓冲的上限：约等于一次长回答的量，再大就该让位给数据库回源而不是内存 */
 const RUN_BUFFER_MAX_BYTES = 512 * 1024;
-/** 同时留存的轮次；超出的按开始时间淘汰已完成的那批 */
-const RUN_MAX_COUNT = 8;
+/**
+ * 同时留存的轮次；超出的只淘汰**已完成**的那批。
+ *
+ * 必须与客户端 `useChatRuns.ts` 的 `INSTANCE_LIMIT` 成对看：客户端刻意留住 12 个 Chat 实例、
+ * 且「正在生成的那一轮永远不淘汰」，服务端若按更小的上限连活轮次一起踢掉，被踢的那条就同时
+ * 失去三样东西——`POST /api/chat/{id}/stop` 找不到目标（abort 送不到 `streamText`，模型照读完、
+ * 照烧额度，而界面已经显示「已停止」）、`GET /api/chat/runs` 不再报它在途（侧栏「生成中」消失）、
+ * `GET /api/chat/{id}/stream` 回 204（重连复位成 ready）。活轮次不需要这条闸门兜内存：
+ * `RUN_STALE_MS` 会把没有正常收尾的顶掉，缓冲本身也有 `RUN_BUFFER_MAX_BYTES` 封顶。
+ */
+const RUN_MAX_COUNT = 12;
 /** 结束后再留一会儿：给「刚跑完就切回来」的重连留回放窗口 */
 const RUN_FINISHED_GRACE_MS = 60_000;
 /** 流没有正常收尾（进程里抛错顶掉 flush）时的兜底：超过这个时长按已结束处理 */
@@ -69,10 +78,12 @@ function sweep() {
         if (run.finished && run.finishedAt && now - run.finishedAt > RUN_FINISHED_GRACE_MS) runs.delete(key);
     }
     if (runs.size <= RUN_MAX_COUNT) return;
-    const finishedFirst = [...runs.values()].sort((a, b) => {
-        if (a.finished !== b.finished) return a.finished ? -1 : 1;
-        return a.startedAt - b.startedAt;
-    });
+    // 只在「已结束」的那批里挑淘汰对象：活轮次被踢出表以后 `abortChatRun` 再也找不到它，
+    // 「停止」按钮只撕得掉浏览器那侧的 fetch，模型继续读完、额度继续烧，界面却显示已经停了；
+    // `GET /api/chat/runs` 也会漏报它，侧栏的「生成中」凭空消失。
+    // 客户端（`useChatRuns.ts` 的 `INSTANCE_LIMIT = 12`）刻意留住每一个在跑的实例，
+    // 所以这里宁可临时越过上限——活轮次自有 `RUN_STALE_MS` 收尾，不会无限堆积。
+    const finishedFirst = [...runs.values()].filter((run) => run.finished).sort((a, b) => (a.finishedAt ?? a.startedAt) - (b.finishedAt ?? b.startedAt));
     for (const run of finishedFirst.slice(0, runs.size - RUN_MAX_COUNT)) runs.delete(run.conversationId);
 }
 

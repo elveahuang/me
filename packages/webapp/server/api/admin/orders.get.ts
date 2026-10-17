@@ -99,12 +99,23 @@ export default defineEventHandler(async (event) => {
     };
 });
 
-/** 解析时间筛选边界；isEnd 为真时补到当天 23:59:59.999，否则从 00:00:00.000 起 */
+/**
+ * 解析时间筛选边界；isEnd 为真时补到北京日的 23:59:59.999，否则取当天 00:00:00.000。
+ *
+ * 必须是北京时间而不是主机本地：列表里每一行都用契约的 `formatDateTime`（固定 Asia/Shanghai）展示，
+ * 运营照着那个日期去选范围。用 `new Date('YYYY-MM-DDT00:00:00')` 会按容器时区解释，
+ * 在默认的 UTC 容器上「10-31」实际是北京时间 10-31 08:00 ~ 11-01 08:00，
+ * 北京时间 10-31 凌晨的订单被剔除、11-01 早上的被算进来，而 `stats` 是对账用的区间汇总，错在暗处。
+ */
 function parseDateBoundary(value: unknown, isEnd = false): Date | null {
     if (typeof value !== 'string' || !value.trim()) return null;
     const raw = value.trim();
     // 纯日期（YYYY-MM-DD）按当天边界补全，避免结束日期被解析成当天零点而漏掉当天订单
-    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
-    const parsed = new Date(dateOnly && isEnd ? `${raw}T23:59:59.999` : dateOnly ? `${raw}T00:00:00.000` : raw);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const dayStart = Date.parse(`${raw}T00:00:00+08:00`);
+        if (Number.isNaN(dayStart)) return null;
+        return new Date(isEnd ? dayStart + 86_400_000 - 1 : dayStart);
+    }
+    const parsed = new Date(raw);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

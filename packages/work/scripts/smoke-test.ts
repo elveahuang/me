@@ -122,9 +122,12 @@ async function runSmokeTests() {
 
     // 6. 查询入参归一（分页与关键词）
     console.log('\n6. 测试查询入参归一');
-    const { likePattern, intParam } = await import('../server/utils/query');
+    const { likePattern, exactLikePattern, intParam } = await import('../server/utils/query');
     assert(likePattern('100%') === '%100\\%%' && likePattern('a_b') === '%a\\_b%', 'LIKE 模式转义 % 与 _ 通配符');
     assert(likePattern('  hi  ') === '%hi%' && likePattern('x'.repeat(500)).length === 130, '关键词先 trim 再夹到 128 字符');
+    // 整值匹配（项目名引用走这条）：不转义时 `Q1%` 是通配符、`C:\work\` 会以 22025 炸成 500
+    assert(exactLikePattern('Q1%') === 'Q1\\%' && exactLikePattern('a_b') === 'a\\_b', '整值 LIKE 模式转义通配符而不加两侧 %');
+    assert(exactLikePattern('C:\\work\\') === 'C:\\\\work\\\\' && exactLikePattern('  hi  ') === 'hi', '反斜杠成对转义、结尾不残留孤立转义符');
     assert(
         intParam('1.7', 10, 1, 100) === 1 && intParam('-3', 10, 1, 100) === 1 && intParam('1e9', 10, 1, 100) === 100 && intParam('abc', 10, 1, 100) === 10,
         '分页参数取整、夹逼、非法值回退（小数会被 PG 拒成 22P02 → 500 + SQL 细节外泄）',
@@ -571,6 +574,22 @@ async function runSmokeTests() {
     const runDelete = beginChatRun('99999999-9999-9999-8999-999999999999');
     dropChatRun(runDelete.conversationId);
     assert(runDelete.controller.signal.aborted === true, '删除会话连带掐掉仍在跑的模型调用');
+
+    // 越过容量上限时只能淘汰**已结束**的轮次：客户端（useChatRuns 的 INSTANCE_LIMIT=12）会留住每一个在跑的实例，
+    // 服务端把活轮次踢出表，那条就同时失去「停止」（abort 送不到 streamText，模型照读完、照烧额度，界面却显示已停）
+    // 与「生成中」标记（/api/chat/runs 漏报），重连还会拿到 204 而复位成 ready。
+    const crowded: string[] = [];
+    for (let i = 0; i < 14; i += 1) {
+        const crowdedId = `cafe00${String(i).padStart(2, '0')}-0000-4000-8000-000000000000`;
+        beginChatRun(crowdedId);
+        crowded.push(crowdedId);
+    }
+    assert(
+        crowded.every((id) => getChatRun(id) !== null),
+        '超过容量上限也不会淘汰仍在生成的轮次',
+    );
+    assert(abortChatRun(crowded[0]!) === true, '最早开跑的那一轮越过上限后仍能被「停止」找到');
+    for (const id of crowded) dropChatRun(id);
 
     // 19. 数据库连通性与核心表（可选：本机未起数据库时跳过）
     console.log('\n19. 测试数据库连通性与核心数据表');
