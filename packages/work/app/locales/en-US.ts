@@ -373,6 +373,7 @@ export default {
         kbNamePlaceholder: 'Knowledge base name',
         kbEmbeddingModel: 'Embedding model',
         kbCreate: 'Create',
+        kbSpace: 'Space',
         kbColName: 'Knowledge base',
         kbColCounts: 'Docs / Chunks',
         kbManage: 'Manage',

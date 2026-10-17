@@ -1,5 +1,6 @@
 import { requireMethod } from '../../utils/method';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
+import { resolveSpaceId } from '../../utils/spaces';
 import {
     assertFileSize,
     buildObjectKey,
@@ -33,6 +34,7 @@ export default defineEventHandler(async (event) => {
     const category = normalizeAttachmentCategory(body?.category);
     const size = Number(body?.size) || 0;
     const mode = body?.mode === 'post' ? 'post' : 'put';
+    const spaceId = await resolveSpaceId(body?.spaceId);
 
     const config = await resolveStorageConfig(null);
     if (size > 0) assertFileSize(config, size);
@@ -44,9 +46,9 @@ export default defineEventHandler(async (event) => {
 
     if (mode === 'post') {
         const post = await presignUploadPolicy(config, objectKey, mimeType);
-        return { mode: 'post', ...post, objectKey, maxFileSizeMb: config.maxFileSizeMb };
+        return { mode: 'post', ...post, objectKey, spaceId, maxFileSizeMb: config.maxFileSizeMb };
     }
 
     const uploadUrl = await presignUpload(config, objectKey, mimeType);
-    return { mode: 'put', uploadUrl, objectKey, expiresIn: 900, maxFileSizeMb: config.maxFileSizeMb };
+    return { mode: 'put', uploadUrl, objectKey, spaceId, expiresIn: 900, maxFileSizeMb: config.maxFileSizeMb };
 });

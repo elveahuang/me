@@ -161,17 +161,25 @@ export const agentToolsRelations = relations(agentTools, ({ one }) => ({
 // ==========================================
 // RAG KNOWLEDGE BASES
 // ==========================================
-export const knowledgeBases = pgTable('knowledge_bases', {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
+export const knowledgeBases = pgTable(
+    'knowledge_bases',
+    {
+        id: text('id').primaryKey(),
+        spaceId: text('space_id')
+            .notNull()
+            .default(DEFAULT_SPACE_ID)
+            .references(() => spaces.id, { onDelete: 'restrict' }),
+        name: text('name').notNull(),
     description: text('description').notNull().default(''),
     embeddingProviderId: text('embedding_provider_id').references(() => providers.id, {
         onDelete: 'set null',
     }),
-    embeddingModel: text('embedding_model').notNull().default('text-embedding-3-small'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+        embeddingModel: text('embedding_model').notNull().default('text-embedding-3-small'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (t) => [index('knowledge_bases_space_idx').on(t.spaceId)],
+);
 
 export const kbDocuments = pgTable('kb_documents', {
     id: text('id').primaryKey(),
@@ -297,6 +305,10 @@ export const attachments = pgTable(
     'attachments',
     {
         id: text('id').primaryKey(),
+        spaceId: text('space_id')
+            .notNull()
+            .default(DEFAULT_SPACE_ID)
+            .references(() => spaces.id, { onDelete: 'restrict' }),
         storageConfigId: text('storage_config_id').references(() => storageConfigs.id, { onDelete: 'set null' }),
         // 对象存储中的 key（相对桶根路径）
         objectKey: text('object_key').notNull(),
@@ -307,7 +319,7 @@ export const attachments = pgTable(
         category: text('category').notNull().default('other'),
         createdAt: timestamp('created_at').notNull().defaultNow(),
     },
-    (t) => [index('attachments_created_at_idx').on(t.createdAt)],
+    (t) => [index('attachments_created_at_idx').on(t.createdAt), index('attachments_space_created_idx').on(t.spaceId, t.createdAt)],
 );
 
 // ==========================================

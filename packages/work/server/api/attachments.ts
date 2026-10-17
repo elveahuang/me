@@ -8,6 +8,7 @@ import { LOCAL_OWNER } from '../utils/owner';
 import { intParam, likePattern, stringParam } from '../utils/query';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedBodyIntoH3Cache } from '../utils/request-body';
+import { resolveSpaceId } from '../utils/spaces';
 import {
     assertRelayPayloadSize,
     assertRelayRequestAllowed,
@@ -77,6 +78,8 @@ async function relayUpload(event: H3Event) {
     }
     const categoryPart = parts.find((part) => part.name === 'category');
     const category = normalizeAttachmentCategory(categoryPart?.data.toString('utf-8'));
+    const spacePart = parts.find((part) => part.name === 'spaceId');
+    const spaceId = await resolveSpaceId(spacePart?.data.toString('utf-8'));
 
     const filename = sanitizeFilename(filePart.filename || 'file');
     const mimeType = normalizeMimeType(filePart.type);
@@ -107,6 +110,7 @@ async function relayUpload(event: H3Event) {
         // 闸门 + 落库在同一事务里持锁：并发上传时后一个请求一定读得到前一个已登记的体积
         registered = await registerAttachmentWithinQuota({
             id,
+            spaceId,
             storageConfigId: config.id,
             objectKey,
             filename,
@@ -141,6 +145,7 @@ async function relayUpload(event: H3Event) {
         mimeType,
         size,
         category,
+        spaceId,
         createdAt: new Date().toISOString(),
         url,
         isImage: mimeType.startsWith('image/'),
@@ -162,10 +167,13 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const category = stringParam(query.category);
     const keyword = stringParam(query.keyword) ?? '';
+    const requestedSpaceId = stringParam(query.spaceId);
+    const spaceId = requestedSpaceId ? await resolveSpaceId(requestedSpaceId) : null;
     const page = intParam(query.page, 1, 1, 1e6);
     const pageSize = intParam(query.pageSize, 20, 1, 100);
 
     const filters: SQL[] = [];
+    if (spaceId) filters.push(eq(attachments.spaceId, spaceId));
     // `all` 是前端「全部分类」选项的字面值，不是数据库里的分类，照旧当作不筛选
     if (category && category !== 'all') filters.push(eq(attachments.category, category));
     if (keyword) filters.push(sql`${attachments.filename} ilike ${likePattern(keyword)}`);
@@ -205,6 +213,7 @@ export default defineEventHandler(async (event) => {
                 mimeType: row.mimeType,
                 size: row.size,
                 category: row.category,
+                spaceId: row.spaceId,
                 createdAt: row.createdAt,
                 url,
                 isImage: row.mimeType.startsWith('image/'),

@@ -308,7 +308,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   改成这样的（原来带三个 `filter` 计数的 `server/api/overview.ts` 已随今日页删除，规则本身没变）。drizzle 的列条件自己会把 Date 编成 timestamp 字面量，所以 **别把三个 `count()`
   拆成三次查询**：一次条件聚合计三个数才是这里刻意保留的形状。
 - **迁移现状与「无 TTY 时怎么生成」**：`server/db/migrations` 目前是 `0000_superb_the_captain.sql`（初版表）+ `0001_schedules.sql` + `0002_drop_notes_briefs.sql`
-  + `0003_amusing_green_goblin.sql`（新增 `spaces` / `automation_runs`，并给 `conversations`、`schedules` 加 `space_id`；默认空间在迁移里先插入再建外键），**四条都已应用到本机 work 库**，被删的旧表数据是刻意丢弃的
+  + `0003_amusing_green_goblin.sql`（新增 `spaces` / `automation_runs`，并给 `conversations`、`schedules` 加 `space_id`；默认空间在迁移里先插入再建外键）
+  + `0004_equal_rumiko_fujikawa.sql`（给 `attachments`、`knowledge_bases` 加 `space_id`，旧行回填默认空间），**五条都已应用到本机 work 库**，被删的旧表数据是刻意丢弃的
   （用户确认，整机备份在仓库外）。`drizzle-kit generate` 在「同一批里既有新增表又有删除表」时必然弹交互选择（`promptNamedWithSchemasConflict`），而本机的 shell 起不了 TTY、
   `winpty` 又找不到 pnpm，所以 `0001` 是走 `drizzle-kit/api` 的 `generateDrizzleJson()` + `generateMigration(prev, cur)` **分两步**（第一步只加、第二步只删）产出 SQL
   再手工合并 `meta/0001_snapshot.json` 与 `meta/_journal.json` 条目的；`0002` 只有删除，`pnpm work:db:generate` 一次就过了，不需要走 API。**只要批次里混进新增表，就得回到那套两步法。**
@@ -318,6 +319,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   的 **idx 命名不能动**（drizzle 按 `${idx}_snapshot.json` 找快照，改成描述性名字会让下一次 generate 读不到前一份状态）。
 - **路由口径**：`/` 是 **今日页**（`app/pages/index.vue`，读 `/api/overview`，不再 302）；对话入口是 `/chat`（可切换智能体）与 `/chat/:agentId`（固定智能体）；
   `/spaces` 是工作空间；`/runs` 与 `/runs/{id}` 是运行中心；`/library` 是统一资料库（聊天附件 + 知识库入口）；`/tasks` 仍是自动化编辑页——沿用这个地址、不做 `/schedules`；
+  附件与知识库都带 `space_id`：聊天上传、资料库筛选、知识库列表与检索都按当前工作空间收窄，切换侧栏空间后这三处使用同一个 `activeSpaceId`。
   智能体广场在 **`/agents`**，刻意不占侧栏一项——入口是 `/chat` 头部的智能体切换器与 `[agentId]` 页找不到智能体时的返回链接。
   旧日历、项目、笔记（`notes`、`notes/[id]`）仍保持删除；附件总览不再是单独一套后台页面，而是 `/library` 的用户入口，聊天附件链路（`attachments` 表、presign/complete、
   `chat-parts`、`[id]/url`、`[id]/raw`、ImagePicker 与 ChatPane 的 📎）完整保留。

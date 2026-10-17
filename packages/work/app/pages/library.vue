@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 
 interface KbItem {
     id: string;
+    spaceId: string;
+    spaceName?: string | null;
     name: string;
     description: string;
     embeddingModel: string;
@@ -19,10 +21,15 @@ interface KbItem {
  * 知识库仍以 `/settings/knowledge` 为编辑面；资料库负责发现、搜索和跳转。
  */
 const { t } = useI18n();
+const { activeSpaceId, spaces } = useChatSidebar();
 const keyword = ref('');
 const tab = ref<'all' | 'files' | 'knowledge'>('all');
 
-const attachmentQuery = computed(() => ({ pageSize: 60, keyword: keyword.value.trim() || undefined }));
+const attachmentQuery = computed(() => ({
+    pageSize: 60,
+    keyword: keyword.value.trim() || undefined,
+    spaceId: activeSpaceId.value || undefined,
+}));
 const {
     data: attachmentData,
     pending: attachmentsPending,
@@ -51,6 +58,7 @@ const kbs = computed(() => {
 });
 const totalDocs = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.documentCount, 0));
 const totalChunks = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.chunkCount, 0));
+const currentSpaceName = computed(() => spaces.value.find((space) => space.id === activeSpaceId.value)?.name ?? null);
 const loading = computed(() => attachmentsPending.value || kbsPending.value);
 const hasError = computed(() => Boolean(attachmentsError.value || kbsError.value));
 const showFiles = computed(() => tab.value !== 'knowledge');
@@ -73,6 +81,7 @@ function refreshAll() {
             <div>
                 <h1 class="app-page-title text-strong">{{ t('library.title') }}</h1>
                 <p class="app-page-subtitle">{{ t('library.subtitle') }}</p>
+                <span v-if="currentSpaceName" class="app-chip app-chip-brand mt-2 !text-[10px]">🗂️ {{ currentSpaceName }}</span>
             </div>
             <div class="flex items-center gap-2">
                 <NuxtLink to="/chat" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">

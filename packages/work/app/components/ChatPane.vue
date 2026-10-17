@@ -473,7 +473,7 @@ async function openAttachPicker() {
     attachLoading.value = true;
     attachError.value = '';
     try {
-        const res = await $fetch<AttachmentsResponse>('/api/attachments', { query: { pageSize: 25 } });
+        const res = await $fetch<AttachmentsResponse>('/api/attachments', { query: { pageSize: 25, spaceId: props.spaceId || undefined } });
         attachOptions.value = res.attachments;
     } catch (e) {
         attachError.value = extractApiError(e, t('common.loadFailed'));
@@ -514,6 +514,7 @@ async function onChatFileChange(event: Event) {
         const form = new FormData();
         form.append('file', file);
         form.append('category', 'chat');
+        if (props.spaceId) form.append('spaceId', props.spaceId);
         const created = await $fetch<AttachmentRecord>('/api/attachments', { method: 'POST', body: form });
         // 上传期间用户可能已挂上别的附件：到上限就只提示，不再塞进待发送区
         if (pendingAttachments.value.length >= 5) {

@@ -3,9 +3,12 @@ import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
+const { activeSpaceId, spaces } = useChatSidebar();
 
 interface KbItem {
     id: string;
+    spaceId: string;
+    spaceName?: string | null;
     name: string;
     description: string;
     embeddingModel: string;
@@ -42,14 +45,14 @@ const docsLoading = ref(false);
 /** 文档列表自己的加载错误：与 message（成功提示位）分开，否则「读不到文档」会显示成「这个库还没有文档」 */
 const docsError = ref('');
 
-const newKb = reactive({ name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+const newKb = reactive({ spaceId: '', name: '', description: '', embeddingModel: 'text-embedding-3-small' });
 /** 新建知识库抽屉开关 */
 const createOpen = ref(false);
 const createError = ref('');
 /** 编辑中的知识库（后端支持 PATCH，此前没有入口，写错名字只能删库重建） */
 const editingKb = ref<KbItem | null>(null);
 const editError = ref('');
-const editForm = reactive({ name: '', description: '', embeddingModel: '' });
+const editForm = reactive({ spaceId: '', name: '', description: '', embeddingModel: '' });
 const docForm = reactive({ title: '', content: '' });
 const searchQuery = ref('');
 const searchHits = ref<HitItem[]>([]);
@@ -106,7 +109,7 @@ async function reindex(kb: KbItem) {
 async function load() {
     loading.value = true;
     try {
-        kbs.value = await $fetch<KbItem[]>('/api/settings/knowledge-bases');
+        kbs.value = await $fetch<KbItem[]>('/api/settings/knowledge-bases', { query: { spaceId: activeSpaceId.value || undefined } });
         listError.value = '';
     } catch (e) {
         // 失败时清空并提示：否则表格走空态，会被读成「还没有知识库」
@@ -118,13 +121,19 @@ async function load() {
 }
 
 onMounted(load);
+watch(activeSpaceId, () => void load());
 
 /** 打开新建抽屉：清空上次输入与错误 */
 function openCreateKb() {
     kbCreateToken += 1;
     // 上一张表单的在途创建已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
     creatingKb.value = false;
-    Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+    Object.assign(newKb, {
+        spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
+        name: '',
+        description: '',
+        embeddingModel: 'text-embedding-3-small',
+    });
     createError.value = '';
     createOpen.value = true;
 }
@@ -149,7 +158,12 @@ async function createKb() {
         await $fetch('/api/settings/knowledge-bases', { method: 'POST', body: { ...newKb } });
         // 创建期间用户可能已关掉抽屉并重新打开：清空与关闭只对发起这次创建的那张表单生效
         if (token === kbCreateToken) {
-            Object.assign(newKb, { name: '', description: '', embeddingModel: 'text-embedding-3-small' });
+            Object.assign(newKb, {
+        spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
+        name: '',
+        description: '',
+        embeddingModel: 'text-embedding-3-small',
+    });
             createOpen.value = false;
         }
         await load();
@@ -221,7 +235,7 @@ function openEditKb(kb: KbItem) {
     // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
     savingKb.value = false;
     editingKb.value = kb;
-    Object.assign(editForm, { name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
+    Object.assign(editForm, { spaceId: kb.spaceId, name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
     editError.value = '';
 }
 
@@ -237,7 +251,7 @@ async function saveKb() {
     try {
         const { vectorsInvalidated, ...updated } = await $fetch<KbItem & { vectorsInvalidated?: number }>(
             `/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`,
-            { method: 'PATCH', body: { name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel } },
+            { method: 'PATCH', body: { spaceId: editForm.spaceId, name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel } },
         );
         // 同步当前面板标题，避免改名后仍显示旧名
         if (current.value?.id === updated.id) current.value = { ...current.value, ...updated };
@@ -521,6 +535,9 @@ async function search() {
                         :placeholder="t('adminForm.kbNamePlaceholder')"
                         class="app-input"
                     />
+                    <select v-model="newKb.spaceId" class="app-input" :aria-label="t('adminForm.kbSpace')">
+                        <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                    </select>
                     <input :aria-label="t('adminForm.description')" v-model="newKb.description" :placeholder="t('adminForm.description')" class="app-input" />
                     <input
                         :aria-label="t('adminForm.kbEmbeddingModel')"
@@ -545,6 +562,9 @@ async function search() {
                         :placeholder="t('adminForm.kbNamePlaceholder')"
                         class="app-input"
                     />
+                    <select v-model="editForm.spaceId" class="app-input" :aria-label="t('adminForm.kbSpace')">
+                        <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                    </select>
                     <input
                         :aria-label="t('adminForm.description')"
                         v-model="editForm.description"

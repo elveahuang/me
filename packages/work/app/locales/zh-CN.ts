@@ -371,6 +371,7 @@ export default {
         kbNamePlaceholder: '知识库名称',
         kbEmbeddingModel: 'Embedding 模型',
         kbCreate: '创建',
+        kbSpace: '所属工作空间',
         kbColName: '知识库',
         kbColCounts: '文档 / 分块',
         kbManage: '管理',

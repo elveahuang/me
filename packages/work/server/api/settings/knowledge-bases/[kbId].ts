@@ -5,6 +5,7 @@ import { requireMethod } from '../../../utils/method';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
 import { assertProviderExists } from '../../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
+import { resolveSpaceId } from '../../../utils/spaces';
 import { routeId } from '../../../utils/route-id';
 
 export default defineEventHandler(async (event) => {
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
         patch.embeddingModel = model.slice(0, 100);
     }
     if (body.embeddingProviderId !== undefined) patch.embeddingProviderId = await assertProviderExists(body.embeddingProviderId, '向量模型供应商');
+    if (body.spaceId !== undefined) patch.spaceId = await resolveSpaceId(body.spaceId);
 
     const [before] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
     if (!before) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });

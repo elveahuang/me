@@ -1,10 +1,12 @@
 import { asc, eq, sql } from 'drizzle-orm';
-import { kbChunks, kbDocuments, knowledgeBases, providers } from '../../db/schema';
+import { kbChunks, kbDocuments, knowledgeBases, providers, spaces } from '../../db/schema';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { safeTrim, stripNull } from '../../utils/pg-text';
+import { stringParam } from '../../utils/query';
 import { assertProviderExists } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
+import { resolveSpaceId } from '../../utils/spaces';
 
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
@@ -23,9 +25,11 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
         }
         const embeddingProviderId = await assertProviderExists(body.embeddingProviderId, '向量模型供应商');
+        const spaceId = await resolveSpaceId(body.spaceId);
         const id = crypto.randomUUID();
         await db.insert(knowledgeBases).values({
             id,
+            spaceId,
             name,
             description: typeof body.description === 'string' ? stripNull(body.description).slice(0, 500) : '',
             embeddingProviderId,
@@ -41,8 +45,11 @@ export default defineEventHandler(async (event) => {
      * chunk 表随文档增长会到百万级，列表接口会因此变成全表扫描 + 大内存占用。
      * 四条查询互不依赖，一次并发发出。
      */
-    const [rows, docCounts, chunkCounts, providerRows] = await Promise.all([
-        db.select().from(knowledgeBases).orderBy(asc(knowledgeBases.createdAt)),
+    const requestedSpaceId = stringParam(getQuery(event).spaceId);
+    const spaceId = requestedSpaceId ? await resolveSpaceId(requestedSpaceId) : null;
+
+    const [rows, docCounts, chunkCounts, providerRows, spaceRows] = await Promise.all([
+        db.select().from(knowledgeBases).where(spaceId ? eq(knowledgeBases.spaceId, spaceId) : undefined).orderBy(asc(knowledgeBases.createdAt)),
         db
             .select({ kbId: kbDocuments.kbId, count: sql<number>`count(*)::int` })
             .from(kbDocuments)
@@ -52,15 +59,18 @@ export default defineEventHandler(async (event) => {
             .from(kbChunks)
             .groupBy(kbChunks.kbId),
         db.select({ id: providers.id, name: providers.name }).from(providers),
+        db.select({ id: spaces.id, name: spaces.name }).from(spaces),
     ]);
 
     const docMap = new Map(docCounts.map((row) => [row.kbId, row.count]));
     const chunkMap = new Map(chunkCounts.map((row) => [row.kbId, row.count]));
     const providerMap = new Map(providerRows.map((row) => [row.id, row.name]));
+    const spaceMap = new Map(spaceRows.map((row) => [row.id, row.name]));
 
     return rows.map((kb) => ({
         ...kb,
         providerName: kb.embeddingProviderId ? providerMap.get(kb.embeddingProviderId) : undefined,
+        spaceName: spaceMap.get(kb.spaceId),
         documentCount: docMap.get(kb.id) ?? 0,
         chunkCount: chunkMap.get(kb.id) ?? 0,
     }));

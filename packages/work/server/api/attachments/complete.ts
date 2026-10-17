@@ -5,6 +5,7 @@ import { requireMethod } from '../../utils/method';
 import { LOCAL_OWNER } from '../../utils/owner';
 import { rateLimit } from '../../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
+import { resolveSpaceId } from '../../utils/spaces';
 import {
     assertFileSize,
     buildPublicUrl,
@@ -36,7 +37,7 @@ function isHeadUnsupported(error: unknown): boolean {
     return e?.$metadata?.httpStatusCode === 501 || e?.name === 'NotImplemented';
 }
 
-type RegistrationRow = Pick<typeof attachments.$inferSelect, 'id' | 'objectKey' | 'filename' | 'mimeType' | 'size' | 'category' | 'createdAt'>;
+type RegistrationRow = Pick<typeof attachments.$inferSelect, 'id' | 'spaceId' | 'objectKey' | 'filename' | 'mimeType' | 'size' | 'category' | 'createdAt'>;
 
 /** 新登记与幂等命中共用一份响应形状，避免两条路径各拼一遍、拼出差别 */
 async function registrationResponse(config: Awaited<ReturnType<typeof resolveStorageConfig>>, row: RegistrationRow) {
@@ -48,6 +49,7 @@ async function registrationResponse(config: Awaited<ReturnType<typeof resolveSto
         mimeType: row.mimeType,
         size: row.size,
         category: row.category,
+        spaceId: row.spaceId,
         createdAt: row.createdAt.toISOString(),
         url,
         isImage: row.mimeType.startsWith('image/'),
@@ -73,6 +75,7 @@ export default defineEventHandler(async (event) => {
     // 体积闸门与限流各管一件事：限流挡频率，readCappedJsonBody 挡单请求体积。
     // 闸门放在这里不影响后面的 HeadObject 复核——真实体积仍以存储侧返回值为准。
     const body: Record<string, unknown> = (await readCappedJsonBody<Record<string, unknown>>(event)) ?? {};
+    const spaceId = await resolveSpaceId(body.spaceId);
 
     const objectKey = String(body.objectKey ?? '').trim();
     if (!objectKey) {
@@ -163,6 +166,7 @@ export default defineEventHandler(async (event) => {
         // 闸门与登记同事务 + 同一把锁：并发 complete 时每个请求都读到改动前的总量、全部通过的问题在这里堵掉
         registered = await registerAttachmentWithinQuota({
             id,
+            spaceId,
             storageConfigId: config.id,
             objectKey,
             filename,
@@ -188,6 +192,7 @@ export default defineEventHandler(async (event) => {
 
     return await registrationResponse(config, {
         id: registered.id,
+        spaceId,
         objectKey,
         filename,
         mimeType: actualMime,
