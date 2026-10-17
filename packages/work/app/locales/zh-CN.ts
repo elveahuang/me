@@ -35,7 +35,6 @@ export default {
     nav: {
         groupWork: '工作台',
         recentChats: '最近对话',
-        workbench: '工作台工具',
         today: '今日',
         conversations: '对话',
         spaces: '工作空间',

@@ -34,7 +34,6 @@ export default {
     nav: {
         groupWork: 'Workspace',
         recentChats: 'Recent chats',
-        workbench: 'Workbench tools',
         today: 'Today',
         conversations: 'Chats',
         spaces: 'Spaces',

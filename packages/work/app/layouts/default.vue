@@ -6,8 +6,8 @@ import { WORK_NAV_LINKS } from '../utils/work-nav';
 /**
  * 工作台外壳：固定左栏的三段式布局。
  *
- * 左栏自上而下 **首页 / 空间 / 最近对话 / 工作台工具 + 系统设置**：
- * - 顶部是「新建对话」+ 首页导航；空间作为独立列表；运行/资料/自动化收进底部「工作台工具」。
+ * 左栏自上而下 **顶部导航 / 空间 / 最近对话 / 系统设置**：
+ * - 顶部是「新建对话」+ 首页/运行/资料/自动化；空间作为独立列表；底部只保留系统设置。
  * - 中间先放空间列表，再放全局最近对话。设置区使用独立 layout，不会进入这里。
  * - 对话历史仍常驻工作台页面；任何工作台页面都能就地切会话。
  * - 底部是系统设置单一入口（外观、语言与八个子页都从那里进），底栏不再摆第二套主题/语言开关。
@@ -144,8 +144,7 @@ watch(conversations, (list) => ensureSeeded(list), { immediate: true });
  * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器。
  */
 const navLinks = WORK_NAV_LINKS;
-const primaryLinks = navLinks.filter((link) => link.to === '/');
-const workbenchLinks = navLinks.filter((link) => ['/runs', '/library', '/tasks'].includes(link.to));
+const primaryLinks = navLinks.filter((link) => link.to !== '/spaces');
 
 function isNavActive(match: string) {
     const path = route.path;
@@ -274,7 +273,7 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：首页 / 空间 / 最近对话 / 工作台工具 + 系统设置 -->
+        <!-- 桌面左侧栏：顶部导航 / 空间 / 最近对话 / 系统设置 -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
             <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
@@ -336,20 +335,8 @@ if (import.meta.client) {
             />
             <div v-else class="min-h-0 flex-1" />
 
-            <!-- 第三段：工作台工具 + 系统设置。 -->
+            <!-- 第三段：只保留系统设置；运行/资料/自动化在顶部导航。 -->
             <div class="border-line shrink-0 border-t px-3 py-2">
-                <p class="text-faint px-2 pb-1 text-[10px] font-bold uppercase tracking-wide">{{ t('nav.workbench') }}</p>
-                <NuxtLink
-                    v-for="link in workbenchLinks"
-                    :key="link.to"
-                    :to="link.to"
-                    class="app-sidebar-link !py-1.5"
-                    :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                    :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                >
-                    <AppIcon :name="link.icon" :size="16" />
-                    <span>{{ t(link.labelKey) }}</span>
-                </NuxtLink>
                 <NuxtLink
                     to="/settings"
                     class="app-sidebar-link !py-1.5"
@@ -508,18 +495,6 @@ if (import.meta.client) {
                         <div v-else class="min-h-0 flex-1" />
 
                         <div class="border-line shrink-0 border-t px-3 py-2">
-                            <p class="text-faint px-2 pb-1 text-[10px] font-bold uppercase tracking-wide">{{ t('nav.workbench') }}</p>
-                            <NuxtLink
-                                v-for="link in workbenchLinks"
-                                :key="link.to"
-                                :to="link.to"
-                                class="app-sidebar-link !py-1.5"
-                                :class="isNavActive(link.match) ? 'app-sidebar-link-active' : ''"
-                                :aria-current="isNavActive(link.match) ? 'page' : undefined"
-                            >
-                                <AppIcon :name="link.icon" :size="16" />
-                                <span>{{ t(link.labelKey) }}</span>
-                            </NuxtLink>
                             <NuxtLink
                                 to="/settings"
                                 class="app-sidebar-link !py-1.5"
