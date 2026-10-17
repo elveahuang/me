@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
-import { agents, schedules } from '../db/schema';
+import { agents, schedules, spaces } from '../db/schema';
 import { normalizeAdminBoolean } from '../utils/admin-boolean';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
@@ -8,6 +8,7 @@ import { intParam, likePattern, stringParam } from '../utils/query';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody } from '../utils/request-body';
 import { assertScheduleAgent, resolveSchedulePlan } from '../utils/schedule-store';
+import { resolveSpaceId } from '../utils/spaces';
 import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from '../utils/work-input';
 import { SCHEDULE_PROMPT_MAX } from '../utils/work-schedule';
 
@@ -22,6 +23,8 @@ const listColumns = {
     agentId: schedules.agentId,
     agentName: agents.name,
     agentEmoji: agents.emoji,
+    spaceId: schedules.spaceId,
+    spaceName: spaces.name,
     kind: schedules.kind,
     timeText: schedules.timeText,
     intervalMinutes: schedules.intervalMinutes,
@@ -60,6 +63,7 @@ export default defineEventHandler(async (event) => {
         // prompt 是「到点发给智能体的那一句话」，空正文等于到点白跑一轮外呼，所以按必填处理
         const prompt = normalizeWorkText(body.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
         const enabled = normalizeAdminBoolean(body.enabled, 'enabled', true);
+        const spaceId = await resolveSpaceId(body.spaceId);
 
         const id = crypto.randomUUID();
         await db.transaction(async (tx) => {
@@ -69,6 +73,7 @@ export default defineEventHandler(async (event) => {
                 title,
                 prompt,
                 agentId,
+                spaceId,
                 kind: plan.kind,
                 timeText: plan.timeText,
                 intervalMinutes: plan.intervalMinutes,
@@ -78,7 +83,12 @@ export default defineEventHandler(async (event) => {
                 nextRunAt,
             });
         });
-        const [row] = await db.select(listColumns).from(schedules).leftJoin(agents, eq(schedules.agentId, agents.id)).where(eq(schedules.id, id));
+        const [row] = await db
+            .select(listColumns)
+            .from(schedules)
+            .leftJoin(agents, eq(schedules.agentId, agents.id))
+            .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
+            .where(eq(schedules.id, id));
         // 提交之后这一行仍可能已经不在：`schedules.agent_id` 是 cascade，智能体恰好在这一刻被删就会把它一起带走。
         // 回 `undefined` 等于 200 + 空体，界面按「保存成功」收起表单，而用户从此在列表里找不到那条任务。
         if (!row) throw createError({ statusCode: 409, statusMessage: '这条定时任务在保存后立刻被删掉了（它指向的智能体可能刚被删除），请重新保存' });
@@ -89,6 +99,9 @@ export default defineEventHandler(async (event) => {
     const enabled = stringParam(query.enabled);
     if (enabled === '1') where.push(eq(schedules.enabled, true));
     if (enabled === '0') where.push(eq(schedules.enabled, false));
+
+    const requestedSpaceId = stringParam(query.spaceId);
+    if (requestedSpaceId) where.push(eq(schedules.spaceId, await resolveSpaceId(requestedSpaceId)));
 
     const keyword = stringParam(query.keyword);
     if (keyword) where.push(or(ilike(schedules.title, likePattern(keyword)), ilike(schedules.prompt, likePattern(keyword)))!);
@@ -102,6 +115,7 @@ export default defineEventHandler(async (event) => {
         .select(listColumns)
         .from(schedules)
         .leftJoin(agents, eq(schedules.agentId, agents.id))
+        .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
         .where(where.length ? and(...where) : undefined)
         .orderBy(desc(schedules.enabled), asc(schedules.nextRunAt))
         .limit(limit);

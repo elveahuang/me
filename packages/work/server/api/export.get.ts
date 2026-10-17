@@ -6,6 +6,7 @@ import {
     agentTools,
     agents,
     attachments,
+    automationRuns,
     conversations,
     kbDocuments,
     knowledgeBases,
@@ -14,6 +15,7 @@ import {
     providers,
     schedules,
     skills,
+    spaces,
     storageConfigs,
     systemSettings,
     tools,
@@ -69,7 +71,9 @@ function dropHeaderValues(headers: unknown): { headers: Record<string, string>; 
  */
 const builders = {
     systemSettings: async () => (await db.select().from(systemSettings))[0] ?? null,
+    spaces: () => db.select().from(spaces).orderBy(asc(spaces.createdAt)),
     schedules: () => db.select().from(schedules).orderBy(asc(schedules.createdAt)),
+    automationRuns: () => db.select().from(automationRuns).orderBy(asc(automationRuns.startedAt)),
     providers: async () => (await db.select().from(providers).orderBy(asc(providers.name))).map((row) => ({ ...row, apiKey: '' })),
     skills: () => db.select().from(skills).orderBy(asc(skills.name)),
     tools: async () =>

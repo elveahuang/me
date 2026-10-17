@@ -17,6 +17,24 @@ export const providers = pgTable('providers', {
 });
 
 // ==========================================
+// SPACES（个人工作空间）
+// ==========================================
+// 工作空间是会话、资料与自动化的长期上下文。work 是单主应用，因此没有 owner 列；
+// 默认空间固定使用 id='default'，旧会话在迁移时全部回填到这里。
+export const DEFAULT_SPACE_ID = 'default';
+
+export const spaces = pgTable('spaces', {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    icon: text('icon').notNull().default('🗂️'),
+    instructions: text('instructions').notNull().default(''),
+    archived: boolean('archived').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ==========================================
 // AGENTS & SKILLS & TOOLS
 // ==========================================
 // Skill：可复用的指令块。挂载到智能体后其 instructions 会注入系统提示词，本身不可执行。
@@ -205,10 +223,17 @@ export const conversations = pgTable(
         agentId: text('agent_id')
             .notNull()
             .references(() => agents.id, { onDelete: 'cascade' }),
+        spaceId: text('space_id')
+            .notNull()
+            .default(DEFAULT_SPACE_ID)
+            .references(() => spaces.id, { onDelete: 'restrict' }),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
-    (table) => [index('conversations_agent_id_idx').on(table.agentId)],
+    (table) => [
+        index('conversations_agent_id_idx').on(table.agentId),
+        index('conversations_space_updated_idx').on(table.spaceId, table.updatedAt),
+    ],
 );
 
 export const messages = pgTable(
@@ -341,6 +366,10 @@ export const schedules = pgTable(
         agentId: text('agent_id')
             .notNull()
             .references(() => agents.id, { onDelete: 'cascade' }),
+        spaceId: text('space_id')
+            .notNull()
+            .default(DEFAULT_SPACE_ID)
+            .references(() => spaces.id, { onDelete: 'restrict' }),
         kind: text('kind').$type<ScheduleKind>().notNull().default('daily'),
         /** 'HH:mm'（北京时间）：once/daily/weekly 的钟点；interval 不用，留空串 */
         timeText: text('time_text').notNull().default(''),
@@ -361,11 +390,53 @@ export const schedules = pgTable(
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
     // runner 每分钟按 (enabled, nextRunAt) 取到期行，这条索引就是它的查询形状
-    (t) => [index('schedules_enabled_next_idx').on(t.enabled, t.nextRunAt)],
+    (t) => [index('schedules_enabled_next_idx').on(t.enabled, t.nextRunAt), index('schedules_space_idx').on(t.spaceId)],
 );
 
 export const schedulesRelations = relations(schedules, ({ one }) => ({
     agent: one(agents, { fields: [schedules.agentId], references: [agents.id] }),
+}));
+
+// ==========================================
+// AUTOMATION RUNS（自动化运行记录）
+// ==========================================
+export const AUTOMATION_RUN_STATUSES = ['running', 'success', 'failed'] as const;
+export type AutomationRunStatus = (typeof AUTOMATION_RUN_STATUSES)[number];
+
+/**
+ * 每一轮自动化执行都留一条独立记录，`schedules.last_*` 只作为列表摘要缓存。
+ * 这样列表页能回答「昨天那次为什么失败」，而不是被下一轮覆盖。
+ */
+export const automationRuns = pgTable(
+    'automation_runs',
+    {
+        id: text('id').primaryKey(),
+        scheduleId: text('schedule_id')
+            .notNull()
+            .references(() => schedules.id, { onDelete: 'cascade' }),
+        status: text('status').$type<AutomationRunStatus>().notNull().default('running'),
+        /** schedule | manual | retry */
+        trigger: text('trigger').notNull().default('schedule'),
+        scheduledFor: timestamp('scheduled_for'),
+        startedAt: timestamp('started_at').notNull().defaultNow(),
+        finishedAt: timestamp('finished_at'),
+        durationMs: integer('duration_ms'),
+        /** 本次实际发送给智能体的正文快照，任务被改动后仍能还原当时输入 */
+        prompt: text('prompt').notNull().default(''),
+        outputConversationId: text('output_conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+        error: text('error').notNull().default(''),
+        attempt: integer('attempt').notNull().default(1),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => [
+        index('automation_runs_schedule_started_idx').on(table.scheduleId, table.startedAt),
+        index('automation_runs_status_started_idx').on(table.status, table.startedAt),
+    ],
+);
+
+export const automationRunsRelations = relations(automationRuns, ({ one }) => ({
+    schedule: one(schedules, { fields: [automationRuns.scheduleId], references: [schedules.id] }),
+    outputConversation: one(conversations, { fields: [automationRuns.outputConversationId], references: [conversations.id] }),
 }));
 
 // ==========================================
@@ -385,3 +456,5 @@ export type StorageConfig = typeof storageConfigs.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type Schedule = typeof schedules.$inferSelect;
+export type Space = typeof spaces.$inferSelect;
+export type AutomationRun = typeof automationRuns.$inferSelect;

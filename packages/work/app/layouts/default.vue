@@ -6,12 +6,10 @@ import { WORK_NAV_LINKS } from '../utils/work-nav';
 /**
  * 工作台外壳：固定左栏的三段式布局。
  *
- * 左栏自上而下 **工作台 / 对话历史 / 系统设置** 三段：
- * - 顶部是「新建对话」+ 功能导航（现在只剩定时任务），没有分组标题——新建属于「要做一件事」，
- *   所以它跟导航放在一起，而不是藏在中间那段历史列表的头部（那里原本还有个 +）。
- *   今日页已随「新建对话即首页」退场，所以这一段的清单只有一项。
- * - 中间是对话历史，**常驻**：它以前只在 `/chat*` 展开，于是在别的页面看到「有 3 条会话」却点不进去；
- *   现在任何页面都能就地切会话。
+ * 左栏自上而下 **工作台 / 空间筛选 + 对话历史 / 系统设置** 三段：
+ * - 顶部是「新建对话」+ 五项功能导航（今日、对话、工作空间、运行记录、自动化）。
+ * - 中间先放空间筛选，再放对话历史。设置区 (`/settings*`) 不渲染这两块，避免配置页被会话上下文干扰。
+ * - 对话历史仍常驻工作台页面；任何工作台页面都能就地切会话。
  * - 底部是系统设置单一入口（外观、语言与八个子页都从那里进），底栏不再摆第二套主题/语言开关。
  *
  * - ≥ lg：固定左侧栏占满高度；主内容区 `lg:pl-64`，没有顶部导航栏与页脚。
@@ -33,17 +31,23 @@ const drawerRef = ref<HTMLElement | null>(null);
 
 /** 会话列表与选中态：左栏渲染，聊天页消费 */
 const {
+    spaces,
     conversations,
     visibleConversations,
     activeConversationId,
+    activeSpaceId,
     agentIdParam,
     conversationsPending,
     conversationsError,
     refreshConversations,
     effectiveConversationId,
     selectConversation,
+    selectSpace,
     startNewChat,
 } = useChatSidebar();
+
+/** 设置区使用独立内容布局：不再把会话历史挂在每一张配置页旁边。 */
+const isSettingsSurface = computed(() => route.path === '/settings' || route.path.startsWith('/settings/'));
 
 const conversationError = computed(() => (conversationsError.value ? t('common.loadFailed') : ''));
 
@@ -164,6 +168,10 @@ function onSelectConversation(payload: { id: string; agentId: string }) {
     return navigateTo({ path: route.path, query: { ...route.query, c: payload.id } }, { replace: true });
 }
 
+function onSpaceChange(event: Event) {
+    selectSpace((event.target as HTMLSelectElement).value || null);
+}
+
 /** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
 function onCreateConversation() {
     drawerOpen.value = false;
@@ -268,7 +276,7 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：三段——新建对话 + 定时任务 / 对话历史 / 系统设置 -->
+        <!-- 桌面左侧栏：三段——五项导航 / 空间筛选 + 对话历史 / 系统设置 -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
             <NuxtLink to="/chat" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
@@ -277,7 +285,7 @@ if (import.meta.client) {
 
             <!-- 第一段：工作台。新建对话与功能导航同级——它是「开始一件事」，不是历史列表的一个操作 -->
             <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
-                <div class="px-2 pb-1.5">
+                <div v-if="!isSettingsSurface" class="px-2 pb-1.5">
                     <button type="button" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="onCreateConversation">
                         <AppIcon name="plus" :size="15" />
                         <span>{{ t('chat.newChat') }}</span>
@@ -296,8 +304,16 @@ if (import.meta.client) {
                 </NuxtLink>
             </nav>
 
-            <!-- 第二段：对话历史，常驻 -->
+            <!-- 第二段：空间筛选 + 对话历史。设置区不渲染这段，避免配置页被会话上下文干扰。 -->
+            <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
+                <label class="text-faint mb-1 block text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaceFilter') }}</label>
+                <select class="app-input !text-xs" :value="activeSpaceId ?? ''" :aria-label="t('nav.spaceFilter')" @change="onSpaceChange">
+                    <option value="">{{ t('nav.allSpaces') }}</option>
+                    <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                </select>
+            </div>
             <ConversationList
+                v-if="!isSettingsSurface"
                 class="border-line min-h-0 flex-1 border-t"
                 :conversations="visibleConversations"
                 :active-id="activeConversationId"
@@ -308,6 +324,7 @@ if (import.meta.client) {
                 @changed="onConversationsChanged"
                 @deleted="onConversationDeleted"
             />
+            <div v-else class="min-h-0 flex-1" />
 
             <!-- 第三段：系统设置。外观、语言与八个子页都只从这一个入口进 -->
             <div class="border-line shrink-0 border-t px-3 py-2">
@@ -408,7 +425,7 @@ if (import.meta.client) {
                     <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由三段各自控制内边距 -->
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
                         <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
-                            <div class="px-2 pb-1.5">
+                            <div v-if="!isSettingsSurface" class="px-2 pb-1.5">
                                 <button type="button" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="onCreateConversation">
                                     <AppIcon name="plus" :size="15" />
                                     <span>{{ t('chat.newChat') }}</span>
@@ -427,7 +444,15 @@ if (import.meta.client) {
                             </NuxtLink>
                         </nav>
 
+                        <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
+                            <label class="text-faint mb-1 block text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaceFilter') }}</label>
+                            <select class="app-input !text-xs" :value="activeSpaceId ?? ''" :aria-label="t('nav.spaceFilter')" @change="onSpaceChange">
+                                <option value="">{{ t('nav.allSpaces') }}</option>
+                                <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                            </select>
+                        </div>
                         <ConversationList
+                            v-if="!isSettingsSurface"
                             class="border-line min-h-0 flex-1 border-t"
                             :conversations="visibleConversations"
                             :active-id="activeConversationId"
@@ -438,6 +463,7 @@ if (import.meta.client) {
                             @changed="onConversationsChanged"
                             @deleted="onConversationDeleted"
                         />
+                        <div v-else class="min-h-0 flex-1" />
 
                         <div class="border-line shrink-0 border-t px-3 py-2">
                             <NuxtLink

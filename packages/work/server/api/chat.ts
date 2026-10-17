@@ -10,6 +10,7 @@ import {
     conversations,
     messages as messagesTable,
     skills,
+    spaces,
     tools as toolsTable,
 } from '../db/schema';
 import { beginChatRun, endChatRun, tapChatRun, type ChatRun } from '../utils/chat-runs';
@@ -24,6 +25,7 @@ import { lockAgentRow } from '../utils/ref-lock';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
+import { resolveSpaceId } from '../utils/spaces';
 import { buildSystemPrompt } from '../utils/system-prompt';
 import { buildToolSet } from '../utils/tools';
 import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from '../utils/workbench-tools';
@@ -241,10 +243,14 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 413, statusMessage: '请求体过大（上限 512KB 消息内容）' });
     }
 
-    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown }>(event, MAX_CHAT_BODY_BYTES);
+    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown; spaceId?: unknown }>(
+        event,
+        MAX_CHAT_BODY_BYTES,
+    );
     const incoming = normalizeIncomingMessages(body?.messages);
     const agentId = typeof body?.agentId === 'string' ? body.agentId : '';
     const conversationId = typeof body?.conversationId === 'string' ? body.conversationId : '';
+    const requestedSpaceId = typeof body?.spaceId === 'string' ? body.spaceId : undefined;
 
     // 必须带一条 user 消息（内容能否落库由 1.5 判定）：只传 assistant 消息同样会走完校验与生成，
     // 但服务端没有任何新输入可落库，等于白跑一轮模型调用。
@@ -347,6 +353,7 @@ export default defineEventHandler(async (event) => {
 
     if (!row) {
         const newId = crypto.randomUUID();
+        const spaceId = await resolveSpaceId(requestedSpaceId);
         // 第 2 步那次读只是快路径（顺带把「已停用」挡在前面）。从它到这里之间，另一个标签页可以完整地
         // 删掉这个智能体（`settings/agents/[id].ts` 的 DELETE 在事务里对该行取 FOR UPDATE），
         // 于是这条裸 INSERT 撞 23503：响应变成 500 + drizzle 的整张列清单，用户刚打的那句话没有任何地方落库。
@@ -356,6 +363,7 @@ export default defineEventHandler(async (event) => {
             await tx.insert(conversations).values({
                 id: newId,
                 agentId,
+                spaceId,
                 title: lastUserText.slice(0, 30) || '新对话',
             });
         });
@@ -376,6 +384,7 @@ export default defineEventHandler(async (event) => {
         row.title = autoTitle;
     }
     const conversation = row!;
+    const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, conversation.spaceId));
 
     // 6. 落库客户端消息（按消息 id 幂等）
     //    清洗、附件存在性过滤与「本轮无可落库内容」的判定都在建会话之前完成（见步骤 1.5），
@@ -461,7 +470,7 @@ export default defineEventHandler(async (event) => {
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
     //     用户说「每天九点跑一遍」「今天有什么安排」时不该取决于所选智能体恰好绑了哪几行工具。
     //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
-    let toolSet = { ...buildWorkbenchTools(agentId), ...buildToolSet(boundTools.map((row) => row.tool)) };
+    let toolSet = { ...buildWorkbenchTools(agentId, conversation.spaceId), ...buildToolSet(boundTools.map((row) => row.tool)) };
     if (agent.selfConfig) {
         toolSet['self-config'] = buildSelfConfigTool(agentId);
     }
@@ -493,7 +502,7 @@ export default defineEventHandler(async (event) => {
             ...mcpConnections.map((c) => `- [MCP] ${c.serverName}`),
         ].join('\n');
 
-        const system = buildSystemPrompt(agent, boundSkills as any, knowledgeContext, toolSummary.trim() ? toolSummary : null);
+        const system = buildSystemPrompt(agent, boundSkills as any, knowledgeContext, toolSummary.trim() ? toolSummary : null, undefined, space);
 
         // 12. 流式生成（带温度、Token 限制与思维链传递）
         /**

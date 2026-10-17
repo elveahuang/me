@@ -1,11 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { agents, schedules } from '../../db/schema';
+import { agents, schedules, spaces } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { capBody } from '../../utils/request-body';
 import { routeId } from '../../utils/route-id';
 import { assertScheduleAgent, resolvePlanOfRow } from '../../utils/schedule-store';
+import { resolveSpaceId } from '../../utils/spaces';
 import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from '../../utils/work-input';
 import { SCHEDULE_PROMPT_MAX } from '../../utils/work-schedule';
 
@@ -30,6 +31,8 @@ export default defineEventHandler(async (event) => {
         agentId: schedules.agentId,
         agentName: agents.name,
         agentEmoji: agents.emoji,
+        spaceId: schedules.spaceId,
+        spaceName: spaces.name,
         kind: schedules.kind,
         timeText: schedules.timeText,
         intervalMinutes: schedules.intervalMinutes,
@@ -46,7 +49,12 @@ export default defineEventHandler(async (event) => {
     };
 
     if (method === 'GET') {
-        const [row] = await db.select(columns).from(schedules).leftJoin(agents, eq(schedules.agentId, agents.id)).where(eq(schedules.id, id));
+        const [row] = await db
+            .select(columns)
+            .from(schedules)
+            .leftJoin(agents, eq(schedules.agentId, agents.id))
+            .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
+            .where(eq(schedules.id, id));
         if (!row) throw createError({ statusCode: 404, statusMessage: '定时任务不存在' });
         return row;
     }
@@ -55,6 +63,7 @@ export default defineEventHandler(async (event) => {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (body.title !== undefined) patch.title = normalizeWorkText(body.title, 'title', WORK_TITLE_MAX);
     if (body.prompt !== undefined) patch.prompt = normalizeWorkText(body.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
+    if (body.spaceId !== undefined) patch.spaceId = await resolveSpaceId(body.spaceId);
 
     let startsAtValue: Date | undefined;
     if (body.startsAt !== undefined) {
@@ -92,7 +101,12 @@ export default defineEventHandler(async (event) => {
     });
     if (!updated) throw createError({ statusCode: 404, statusMessage: '定时任务不存在' });
 
-    const [row] = await db.select(columns).from(schedules).leftJoin(agents, eq(schedules.agentId, agents.id)).where(eq(schedules.id, id));
+    const [row] = await db
+            .select(columns)
+            .from(schedules)
+            .leftJoin(agents, eq(schedules.agentId, agents.id))
+            .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
+            .where(eq(schedules.id, id));
     // 与 POST 同一道闸门：事务提交后到这次回读之间行被级联带走时，不能回 200 空体（表单会以为改成功了）
     if (!row) throw createError({ statusCode: 409, statusMessage: '这条定时任务在保存后立刻被删掉了（它指向的智能体可能刚被删除），请重新保存' });
     return row;

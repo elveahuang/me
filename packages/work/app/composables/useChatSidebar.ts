@@ -1,14 +1,11 @@
-import type { AgentSummary, ConversationSummary } from '@commons/contract';
+import type { AgentSummary } from '@commons/contract';
+import type { WorkConversationSummary, WorkSpace } from '../utils/work';
 
 /**
- * 会话侧栏共享状态：布局左栏（桌面）与抽屉（窄屏）渲染同一份会话列表，
- * 聊天页（`/chat` 与 `/chat/:agentId`）只消费、不再各自拉取，避免侧栏与页面两份数据、两套选中态。
+ * 会话侧栏共享状态：布局、对话页和空间筛选消费同一份数据。
  *
- * - 列表在布局里用 useAsyncData 拉（键固定，跨页共享同一份缓存）。
- *   不 await 是因为布局（layouts/default.vue）不支持 async setup。
- * - 只有 `/chat/:agentId` 会把列表收窄到该智能体；`/chat`、`/agents` 与设置页显示全部会话。
- * - 选中态用 `effective*` 计算属性表达，而不是在 setup 里命令式播种：
- *   布局先于页面渲染，命令式播种读到的还是默认空数组，SSR 首屏会没有高亮。
+ * `activeSpaceId` 为 null 表示「全部空间」；新建对话会把当前筛选空间带进 POST /api/conversations，
+ * 聊天页的 transport 也带同一个 spaceId，于是服务端自动建会话时不会落回默认空间。
  */
 export function useChatSidebar() {
     const route = useRoute();
@@ -18,22 +15,31 @@ export function useChatSidebar() {
         refresh: refreshAgents,
         error: agentsError,
     } = useAsyncData('chat-sidebar-agents', () => $fetch<AgentSummary[]>('/api/agents'), { default: () => [] });
+
+    const {
+        data: spaces,
+        refresh: refreshSpaces,
+        error: spacesError,
+    } = useAsyncData('chat-sidebar-spaces', () => $fetch<WorkSpace[]>('/api/spaces'), { default: () => [] });
+
     const {
         data: conversations,
         refresh: refreshConversations,
         pending: conversationsPending,
         error: conversationsError,
-    } = useAsyncData('chat-sidebar-conversations', () => $fetch<ConversationSummary[]>('/api/conversations'), { default: () => [] });
+    } = useAsyncData('chat-sidebar-conversations', () => $fetch<WorkConversationSummary[]>('/api/conversations'), { default: () => [] });
 
     const activeAgentId = useState<string | null>('chat-active-agent', () => null);
     const activeConversationId = useState<string | null>('chat-active-conversation', () => null);
+    const activeSpaceId = useState<string | null>('chat-active-space', () => null);
     /** `/chat` 的「新建对话」意图：为 true 时该页保持空白，不再自动落到最近一条会话 */
     const newChatRequested = useState<boolean>('chat-new-chat-requested', () => false);
 
     const agentIdParam = computed(() => (route.params.agentId as string | undefined) ?? null);
     const visibleConversations = computed(() => {
-        const id = agentIdParam.value;
-        return id ? conversations.value.filter((c) => c.agentId === id) : conversations.value;
+        const agentId = agentIdParam.value;
+        const spaceId = activeSpaceId.value;
+        return conversations.value.filter((conversation) => (!spaceId || conversation.spaceId === spaceId) && (!agentId || conversation.agentId === agentId));
     });
 
     /** `/chat` 未显式选择智能体时，跟随最近一条会话（没有历史则第一个智能体） */
@@ -43,46 +49,56 @@ export function useChatSidebar() {
         return visibleConversations.value[0]?.agentId ?? agents.value[0]?.id ?? null;
     });
 
-    /**
-     * `/chat` 未显式选中（且不是新建对话）时，落在当前智能体最近一条会话上，
-     * 保持「上次聊到哪」的连续性；`/chat/:agentId` 直接用页面持有的选中态。
-     */
     const effectiveConversationId = computed(() => {
         if (agentIdParam.value) return activeConversationId.value;
         if (newChatRequested.value) return null;
         if (activeConversationId.value) return activeConversationId.value;
-        return visibleConversations.value.find((c) => c.agentId === effectiveAgentId.value)?.id ?? null;
+        return visibleConversations.value.find((conversation) => conversation.agentId === effectiveAgentId.value)?.id ?? null;
     });
 
-    /** 侧栏点选会话：清掉「新建对话」意图，两个对话面都切到该会话 */
     function selectConversation(agentId: string, id: string) {
         newChatRequested.value = false;
         activeAgentId.value = agentId;
         activeConversationId.value = id;
     }
 
-    /** 新建对话：清掉选中态并标记意图，`/chat` 保持空白对话 */
     function startNewChat() {
         newChatRequested.value = true;
         activeConversationId.value = null;
+    }
+
+    /** 切换空间筛选：当前会话若不在新空间里就复位成新对话，避免显示一段不属于该空间的历史。 */
+    function selectSpace(spaceId: string | null) {
+        activeSpaceId.value = spaceId;
+        if (!activeConversationId.value) return;
+        const current = conversations.value.find((conversation) => conversation.id === activeConversationId.value);
+        if (current && spaceId && current.spaceId !== spaceId) {
+            activeConversationId.value = null;
+            newChatRequested.value = true;
+        }
     }
 
     return {
         agents,
         refreshAgents,
         agentsError,
+        spaces,
+        refreshSpaces,
+        spacesError,
         conversations,
         refreshConversations,
         conversationsPending,
         conversationsError,
         activeAgentId,
         activeConversationId,
+        activeSpaceId,
         newChatRequested,
         agentIdParam,
         visibleConversations,
         effectiveAgentId,
         effectiveConversationId,
         selectConversation,
+        selectSpace,
         startNewChat,
     };
 }

@@ -37,6 +37,11 @@ const NAMES = [
     'plus',
     'magnify',
     'check-circle-outline',
+    'view-dashboard-outline',
+    'chat-outline',
+    'folder-outline',
+    'history',
+    'playlist-play',
     // 外观
     'white-balance-sunny',
     'moon-waning-crescent',

@@ -96,6 +96,8 @@ async function runSmokeTests() {
         rendered.includes('本机用户') && rendered.includes('笔记检索到的片段') && rendered.includes('{{not_a_var}}') && !rendered.includes('{{current_date}}'),
         '变量注入、RAG 片段挂载成功，未知占位符不被吞掉',
     );
+    const withSpace = buildSystemPrompt(mockAgent, [], null, null, undefined, { name: '写作空间', instructions: '保持简洁，先给结论。' });
+    assert(withSpace.includes('# 工作空间') && withSpace.includes('写作空间') && withSpace.includes('保持简洁'), '工作空间名称与长期指令注入系统提示词');
 
     // 5. 会话导出（共享契约，两端同一份序列化）
     console.log('\n5. 测试会话 Markdown 导出序列化');

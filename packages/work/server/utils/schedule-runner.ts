@@ -6,10 +6,12 @@ import {
     agentSkills,
     agentTools,
     agents,
+    automationRuns,
     conversations,
     messages,
     schedules,
     skills,
+    spaces,
     tools as toolsTable,
     type Schedule,
 } from '../db/schema';
@@ -63,7 +65,7 @@ const RUNNING_STALE_MS = RUN_TOTAL_BUDGET_MS + 2 * 60_000;
  */
 let tickInFlight = false;
 
-export type ScheduleRunResult = { ok: boolean; conversationId?: string; error?: string };
+export type ScheduleRunResult = { ok: boolean; conversationId?: string; error?: string; runId?: string };
 
 /**
  * 自己造的、可以原样展示给用户的失败。
@@ -139,6 +141,10 @@ async function reclaimStaleRunning(now: Date): Promise<number> {
         })
         .where(and(eq(schedules.lastStatus, 'running'), lt(schedules.lastRunAt, runningStaleBefore(now))))
         .returning({ id: schedules.id });
+    await db
+        .update(automationRuns)
+        .set({ status: 'failed', finishedAt: now, error: '执行进程在收尾前退出，已按失败收口' })
+        .where(and(eq(automationRuns.status, 'running'), lt(automationRuns.startedAt, runningStaleBefore(now))));
     if (reclaimed.length) console.warn(`[schedules] ${reclaimed.length} 条排期的上一轮没有收尾，已按失败收口`);
     return reclaimed.length;
 }
@@ -177,14 +183,24 @@ async function claimDue(now: Date): Promise<Schedule[]> {
 }
 
 /** 把一轮生成写进库并回结论；任何一步失败都只影响这一条排期，绝不把异常抛给调用方。 */
-async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResult> {
+async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'manual' | 'retry' = 'schedule'): Promise<ScheduleRunResult> {
     // 连接句柄开在 try 之外：`connectEnabledMcpServers` 之后任何一步抛错，`finally` 都要关得到它已建立的连接
     let mcpConnections: McpConnections = [];
     let conversationId: string | null = null;
+    const runId = crypto.randomUUID();
     try {
+        await db.insert(automationRuns).values({
+            id: runId,
+            scheduleId: row.id,
+            status: 'running',
+            trigger,
+            scheduledFor: trigger === 'schedule' ? at : null,
+            startedAt: new Date(),
+            prompt: row.prompt,
+        });
         const [agent] = await db.select().from(agents).where(eq(agents.id, row.agentId));
-        if (!agent) return { ok: false, error: '智能体已被删除' };
-        if (!agent.enabled) return { ok: false, error: '智能体已停用' };
+        if (!agent) return { ok: false, runId, error: '智能体已被删除' };
+        if (!agent.enabled) return { ok: false, runId, error: '智能体已停用' };
 
         const [boundSkillRows, boundToolRows, boundKbIds, boundMcpIds] = await Promise.all([
             db
@@ -220,9 +236,10 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
             }
         }
 
+        const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, row.spaceId));
         const { model } = await resolveModel(agent.providerId, agent.model);
 
-        let toolSet = { ...buildWorkbenchTools(row.agentId), ...buildToolSet(boundToolRows.map((r) => r.tool)) };
+        let toolSet = { ...buildWorkbenchTools(row.agentId, row.spaceId), ...buildToolSet(boundToolRows.map((r) => r.tool)) };
         const toolSummary = [WORKBENCH_TOOL_SUMMARY, ...boundToolRows.filter((r) => r.tool.enabled).map((r) => `- ${r.tool.name}：${r.tool.description}`)].join(
             '\n',
         );
@@ -239,7 +256,7 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
         // 与 POST /api/conversations、/api/chat 同一道闸门（见 utils/ref-lock）。
         await db.transaction(async (tx) => {
             await lockAgentRow(tx, row.agentId);
-            await tx.insert(conversations).values({ id: conversationRowId, agentId: row.agentId, title });
+            await tx.insert(conversations).values({ id: conversationRowId, agentId: row.agentId, spaceId: row.spaceId, title });
             await tx.insert(messages).values({
                 id: `cmsg_${crypto.randomUUID()}`,
                 conversationId: conversationRowId,
@@ -259,6 +276,8 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
                 boundSkillRows.map((r) => r.skill),
                 knowledgeContext,
                 toolSummary,
+                undefined,
+                space,
             ),
             prompt: row.prompt,
             tools: toolSet,
@@ -272,7 +291,7 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
         if (!content) throw new RunFailure('模型没有返回可用正文');
         await db.insert(messages).values({ id: `cmsg_${crypto.randomUUID()}`, conversationId, role: 'assistant', parts: [{ type: 'text', text: content }] });
         await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
-        return { ok: true, conversationId };
+        return { ok: true, conversationId, runId };
     } catch (error) {
         // 这一条 catch 是整个执行侧的收尾保证：`resolveModel`、MCP 建连、两条 insert 都在外呼之前，
         // 以前它们抛错会把异常一路抛进 runner，那一行就永久停在 `running`——
@@ -280,7 +299,7 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
         // 原因本身走 describeRunError：这个字段会被列表渲染、也会被 work_today 发给外部供应商，
         // 原始 message 里装着 drizzle 的整条 SQL 与绑定参数（也就是这条排期的 prompt 正文）。
         const id = conversationId;
-        return { ok: false, ...(id ? { conversationId: id } : {}), error: describeRunError(error) };
+        return { ok: false, runId, ...(id ? { conversationId: id } : {}), error: describeRunError(error) };
     } finally {
         // 连接必须在任何分支下关掉：定时任务没有「请求结束」这个时刻，漏掉的 MCP 子进程会一直挂在进程里
         await closeMcpConnections(mcpConnections).catch((error) => console.error('[schedules] 关闭 MCP 连接失败:', error));
@@ -289,15 +308,28 @@ async function executeSchedule(row: Schedule, at: Date): Promise<ScheduleRunResu
 
 /** 写回这一轮的结论。`running` 只在认领与落库之间那段时间存在，任何分支都必须被它收尾。 */
 async function finishSchedule(row: Schedule, at: Date, result: ScheduleRunResult): Promise<void> {
+    const finishedAt = new Date();
     await db
         .update(schedules)
         .set({
             lastStatus: result.ok ? 'success' : 'failed',
             lastError: result.ok ? '' : (result.error ?? '未知错误').slice(0, 500),
             lastConversationId: result.conversationId ?? null,
-            updatedAt: new Date(),
+            updatedAt: finishedAt,
         })
         .where(and(eq(schedules.id, row.id), eq(schedules.lastRunAt, at)));
+    if (result.runId) {
+        await db
+            .update(automationRuns)
+            .set({
+                status: result.ok ? 'success' : 'failed',
+                finishedAt,
+                durationMs: Math.max(0, finishedAt.getTime() - at.getTime()),
+                outputConversationId: result.conversationId ?? null,
+                error: result.ok ? '' : (result.error ?? '未知错误').slice(0, 500),
+            })
+            .where(eq(automationRuns.id, result.runId));
+    }
 }
 
 /**
@@ -320,7 +352,7 @@ export async function runDueSchedules(now: Date = new Date()): Promise<{ ran: nu
             // 「没有结论地退出」正是把行钉死在 `running` 的那扇门。
             let result: ScheduleRunResult;
             try {
-                result = await executeSchedule(row, now);
+                result = await executeSchedule(row, now, 'schedule');
             } catch (error) {
                 result = { ok: false, error: describeRunError(error) };
             }
@@ -345,17 +377,9 @@ export async function runDueSchedules(now: Date = new Date()): Promise<{ ran: nu
  * 若这一轮之外有人把那行推进过（超预算后由下一次唤醒收口、再被到点认领），这一次的结果就该丢掉，
  * 而不是把更新的排期状态盖回一次几分钟前的手动运行。
  */
-export async function runScheduleNow(row: Schedule): Promise<ScheduleRunResult> {
+export async function runScheduleNow(row: Schedule, trigger: 'manual' | 'retry' = 'manual'): Promise<ScheduleRunResult> {
     const at = row.lastRunAt ?? new Date();
-    const result = await executeSchedule(row, at);
-    await db
-        .update(schedules)
-        .set({
-            lastStatus: result.ok ? 'success' : 'failed',
-            lastError: result.ok ? '' : (result.error ?? '未知错误').slice(0, 500),
-            lastConversationId: result.conversationId ?? null,
-            updatedAt: new Date(),
-        })
-        .where(and(eq(schedules.id, row.id), eq(schedules.lastRunAt, at)));
+    const result = await executeSchedule(row, at, trigger);
+    await finishSchedule(row, at, result);
     return result;
 }

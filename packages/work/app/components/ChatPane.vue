@@ -31,8 +31,10 @@ const props = withDefaults(
         draft?: string | null;
         /** 侧栏已知的当前会话标题：接管在途实例时不会回源历史，标题只能由父级给 */
         conversationTitle?: string | null;
+        /** 新建会话落到哪个工作空间；null 交给服务端落默认空间 */
+        spaceId?: string | null;
     }>(),
-    { conversationId: null, agentList: () => [], initialAgent: null, draft: null, conversationTitle: null },
+    { conversationId: null, agentList: () => [], initialAgent: null, draft: null, conversationTitle: null, spaceId: null },
 );
 
 const emit = defineEmits<{
@@ -52,14 +54,14 @@ const agent = ref<AgentDetail | null>(props.initialAgent);
 const chat = shallowRef<Chat<UIMessage> | null>(null);
 /** 已加载的会话 id：用于避免父级同步回同一个 id 时重复拉历史 */
 const loadedConversationId = ref<string | null>(null);
-const conversationTitle = ref('');
+const activeConversationTitle = ref('');
 /**
  * 侧栏改名后同步标题：面板只在载入历史时取过一次 title，PATCH 成功不会回灌，
  * 于是「改了名再导出」出来的 Markdown 文档标题与文件名还是旧的。只认当前打开的那一段。
  */
 const renamedConversation = useState<{ id: string; title: string } | null>('conversation-renamed', () => null);
 watch(renamedConversation, (renamed) => {
-    if (renamed && renamed.id === loadedConversationId.value) conversationTitle.value = renamed.title;
+    if (renamed && renamed.id === loadedConversationId.value) activeConversationTitle.value = renamed.title;
 });
 /**
  * 侧栏标题是当前会话标题的权威来源：接管在途实例时本组件不回源历史，只能从这里取。
@@ -69,7 +71,7 @@ watch(
     () => props.conversationTitle,
     (value) => {
         if (!value || loadedConversationId.value !== props.conversationId) return;
-        conversationTitle.value = value;
+        activeConversationTitle.value = value;
     },
 );
 const input = ref('');
@@ -157,7 +159,7 @@ function buildChat(conversationId: string, agentId: string, history: UIMessage[]
         messages: history,
         transport: new DefaultChatTransport({
             api: '/api/chat',
-            body: { agentId, conversationId },
+            body: { agentId, conversationId, ...(props.spaceId ? { spaceId: props.spaceId } : {}) },
         }),
     });
 }
@@ -198,7 +200,7 @@ async function loadConversation(id: string) {
         loadedConversationId.value = id;
         loadedAgentId.value = agentId;
         // 接管实例不拉历史，标题得从父级拿；留空会让导出把上一段会话的名字写进文件名
-        conversationTitle.value = props.conversationTitle || '';
+        activeConversationTitle.value = props.conversationTitle || '';
         nextTick(scrollToBottom);
         return;
     }
@@ -215,7 +217,7 @@ async function loadConversation(id: string) {
         chat.value = next;
         loadedConversationId.value = id;
         loadedAgentId.value = agentId;
-        conversationTitle.value = res.conversation?.title || '';
+        activeConversationTitle.value = res.conversation?.title || '';
         registerChatRun(id, next);
         /**
          * 这一轮可能还在服务端跑（刷新过页面，登记表是空的）。判据是历史最后一条必须是 user：
@@ -240,7 +242,7 @@ function resetLocal() {
     chat.value = null;
     loadedConversationId.value = null;
     loadedAgentId.value = null;
-    conversationTitle.value = '';
+    activeConversationTitle.value = '';
     loadError.value = '';
     submitError.value = '';
 }
@@ -315,13 +317,13 @@ async function handleSubmit(overrideText?: string) {
         let current = chat.value;
         if (!current) {
             try {
-                const created = await $fetch<{ id: string }>('/api/conversations', { method: 'POST', body: { agentId } });
+                const created = await $fetch<{ id: string }>('/api/conversations', { method: 'POST', body: { agentId, ...(props.spaceId ? { spaceId: props.spaceId } : {}) } });
                 current = buildChat(created.id, agentId);
                 chat.value = current;
                 registerChatRun(created.id, current);
                 loadedConversationId.value = created.id;
                 loadedAgentId.value = agentId;
-                conversationTitle.value = t('chat.newChat');
+                activeConversationTitle.value = t('chat.newChat');
                 emit('update:conversationId', created.id);
                 emit('conversation-list-stale');
             } catch (e) {
@@ -567,7 +569,7 @@ function exportMarkdown() {
         // 就地 return 即可，不需要再弹原生 alert
         return;
     }
-    const title = conversationTitle.value || t('chat.newChat');
+    const title = activeConversationTitle.value || t('chat.newChat');
     const md = formatConversationMarkdown({
         title,
         agentName: agentName.value,

@@ -12,6 +12,7 @@ import {
     scheduleSummary,
     type ScheduleKind,
     type WorkSchedule,
+    type WorkSpace,
 } from '../utils/work';
 import { composeStartsAt, dayInputValue, timeTextInputValue, todayInputValue } from '../utils/work-day';
 
@@ -65,7 +66,13 @@ watch([enabledFilter, keyword], () => {
     router.replace({ query: { ...route.query, enabled: enabledFilter.value || undefined, q: keyword.value || undefined } });
 });
 
-const listQuery = computed(() => ({ enabled: enabledFilter.value || undefined, keyword: keyword.value || undefined, limit: '200' }));
+const { activeSpaceId } = useChatSidebar();
+const listQuery = computed(() => ({
+    enabled: enabledFilter.value || undefined,
+    keyword: keyword.value || undefined,
+    spaceId: activeSpaceId.value || undefined,
+    limit: '200',
+}));
 const { data: schedules, pending, error, refresh } = await useFetch<WorkSchedule[]>('/api/schedules', { query: listQuery, lazy: true, default: () => [] });
 
 const loadFailed = computed(() => !!error.value);
@@ -85,6 +92,8 @@ const toggling = ref<Set<string>>(new Set());
 
 const agents = computed(() => agentList.value ?? []);
 const { data: agentList } = useFetch<{ id: string; name: string; emoji: string }[]>('/api/agents', { lazy: true, default: () => [] });
+const { data: spaceList } = useFetch<WorkSpace[]>('/api/spaces', { lazy: true, default: () => [] });
+const spaces = computed(() => spaceList.value ?? []);
 
 /* ---------------- 表单 ---------------- */
 
@@ -99,6 +108,7 @@ const form = reactive({
     title: '',
     prompt: '',
     agentId: '',
+    spaceId: '',
     kind: 'daily' as ScheduleKind,
     time: '09:00',
     intervalMinutes: 60,
@@ -115,11 +125,20 @@ const form = reactive({
 watch(agents, (list) => {
     if (!form.agentId && list.length) form.agentId = list[0]!.id;
 });
+watch(
+    spaces,
+    (list) => {
+        if (form.spaceId || !list.length) return;
+        form.spaceId = activeSpaceId.value || list.find((space) => space.id === 'default')?.id || list[0]!.id;
+    },
+    { immediate: true },
+);
 
 function resetForm() {
     form.title = '';
     form.prompt = '';
     form.agentId = agents.value[0]?.id ?? '';
+    form.spaceId = activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || '';
     form.kind = 'daily';
     form.time = '09:00';
     form.intervalMinutes = 60;
@@ -163,6 +182,7 @@ async function openEdit(id: string) {
         form.title = full.title;
         form.prompt = full.prompt;
         form.agentId = full.agentId;
+        form.spaceId = full.spaceId;
         form.kind = full.kind;
         form.time = timeTextInputValue(full.timeText) || '09:00';
         form.intervalMinutes = full.intervalMinutes ?? 60;
@@ -199,6 +219,7 @@ async function save() {
     if (!title) return (formError.value = t('common.required', { field: t('work.fieldTitle') }));
     if (!prompt) return (formError.value = t('common.required', { field: t('work.fieldPrompt') }));
     if (!form.agentId) return (formError.value = t('common.required', { field: t('work.fieldAgent') }));
+    if (!form.spaceId) return (formError.value = t('common.required', { field: t('work.fieldSpace') }));
     if (!agents.value.length) return (formError.value = t('work.noAgentToPick'));
     const startsAt = composeStartsAt(form.startDay, showClock.value ? form.time : '');
     if (!startsAt) return (formError.value = t('common.required', { field: t('work.fieldStartDay') }));
@@ -214,6 +235,7 @@ async function save() {
         title,
         prompt,
         agentId: form.agentId,
+        spaceId: form.spaceId,
         kind: form.kind,
         time: showClock.value ? form.time : '',
         intervalMinutes: showInterval.value ? form.intervalMinutes : undefined,
@@ -432,6 +454,7 @@ onMounted(() => {
                         <span class="text-lg leading-none">{{ row.agentEmoji }}</span>
                         {{ row.agentName }}
                     </span>
+                    <span v-if="row.spaceName" class="text-faint flex items-center gap-1">🗂️ {{ row.spaceName }}</span>
                     <span class="text-faint flex items-center gap-1">
                         {{ t('work.nextRun') }}
                         <b class="text-strong font-medium">{{
@@ -491,6 +514,12 @@ onMounted(() => {
                     <select v-model="form.agentId" class="app-input" :aria-label="t('work.fieldAgent')">
                         <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.emoji }} {{ agent.name }}</option>
                     </select>
+                    <select v-model="form.spaceId" class="app-input" :aria-label="t('work.fieldSpace')">
+                        <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <select v-model="form.kind" class="app-input" :aria-label="t('work.fieldRepeat')">
                         <option v-for="kind in SCHEDULE_KIND_OPTIONS" :key="kind" :value="kind">
                             {{

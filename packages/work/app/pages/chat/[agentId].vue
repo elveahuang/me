@@ -19,7 +19,7 @@ const agentId = computed(() => route.params.agentId as string);
 const { data: agentData, error: agentError } = await useFetch<AgentDetail>(() => `/api/agents/${encodeURIComponent(agentId.value)}`);
 
 /** 会话列表与选中态由布局左栏共享：这里只按 agentId 过滤后的可见列表 */
-const { conversations, visibleConversations, activeConversationId, refreshConversations } = useChatSidebar();
+const { conversations, visibleConversations, activeConversationId, activeSpaceId, refreshConversations } = useChatSidebar();
 
 /**
  * 深链 `?c=` 是「打开这一条会话」的明确意图，优先级高于「该智能体的最近一条」。
@@ -120,6 +120,7 @@ const { open: openDrawer } = useShellDrawer();
                 :agent-id="agentId"
                 :conversation-id="activeConversationId"
                 :conversation-title="activeConversationTitle"
+                :space-id="activeSpaceId"
                 :initial-agent="agentData"
                 @update:conversation-id="onActiveConversationChange"
                 @conversation-list-stale="refreshConversations()"

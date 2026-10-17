@@ -1,13 +1,14 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import { z } from 'zod';
-import { agents, conversations } from '../db/schema';
+import { agents, conversations, spaces } from '../db/schema';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
 import { stripNull } from '../utils/pg-text';
 import { intParam, stringParam } from '../utils/query';
 import { lockAgentRow } from '../utils/ref-lock';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
+import { ensureDefaultSpace, resolveSpaceId } from '../utils/spaces';
 
 // 与重命名接口 [id] 保持一致的标题约束：可选、非空时 ≤100 字符。
 // 不做校验会让数组/对象直接进入 insert 参数（postgres-js 展开成标量后 500），或写入超长标题撑爆列表展示。
@@ -15,6 +16,7 @@ import { capBody, readCappedJsonBody } from '../utils/request-body';
 const CreateConversationSchema = z.object({
     agentId: z.string().min(1).transform(stripNull),
     title: z.string().trim().max(100).transform(stripNull).optional(),
+    spaceId: z.string().trim().max(36).optional(),
 });
 
 async function createConversation(event: H3Event) {
@@ -25,6 +27,7 @@ async function createConversation(event: H3Event) {
         throw createError({ statusCode: 400, statusMessage: 'agentId 必填，会话标题不能超过 100 字符' });
     }
     const { agentId, title } = parsed.data;
+    const spaceId = await resolveSpaceId(parsed.data.spaceId);
 
     const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
     if (!agent || !agent.enabled) {
@@ -41,6 +44,7 @@ async function createConversation(event: H3Event) {
         await tx.insert(conversations).values({
             id,
             agentId,
+            spaceId,
             title: title || '新对话',
         });
     });
@@ -58,6 +62,9 @@ export default defineEventHandler(async (event) => {
     // 上一版只做了 `typeof === 'string'` 判定，于是数组形态降级成「不按智能体筛」，
     // 用户要 A 智能体的会话却拿回全部会话，且没有任何提示。stringParam 取第一个，照筛选走。
     const agentId = stringParam(query.agentId);
+    const requestedSpaceId = stringParam(query.spaceId);
+    const spaceId = requestedSpaceId ? await resolveSpaceId(requestedSpaceId) : null;
+    await ensureDefaultSpace();
     // 分页参数必须夹在合法区间并取整：负数会让 PostgreSQL 直接报错（2201W/2201X）
     // 并把 SQL 细节透出到响应体，NaN 也会让 offset 变成 NULL 语义，小数则会被拒绝（22P02）
     const limit = intParam(query.limit, 50, 1, 200);
@@ -71,11 +78,22 @@ export default defineEventHandler(async (event) => {
             title: conversations.title,
             agentId: conversations.agentId,
             agentName: agents.name,
+            spaceId: conversations.spaceId,
+            spaceName: spaces.name,
             updatedAt: conversations.updatedAt,
         })
         .from(conversations)
         .innerJoin(agents, eq(agents.id, conversations.agentId))
-        .where(agentId ? eq(conversations.agentId, agentId) : undefined)
+        .leftJoin(spaces, eq(spaces.id, conversations.spaceId))
+        .where(
+            agentId && spaceId
+                ? and(eq(conversations.agentId, agentId), eq(conversations.spaceId, spaceId))
+                : agentId
+                  ? eq(conversations.agentId, agentId)
+                  : spaceId
+                    ? eq(conversations.spaceId, spaceId)
+                    : undefined,
+        )
         .orderBy(desc(conversations.updatedAt))
         .limit(limit)
         .offset(offset);

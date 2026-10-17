@@ -248,11 +248,11 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   user_id」和「没有订单/会员表」都当不变量钉住）。唯一的跨站写防护是 `server/utils/local-origin.ts` 的 `blocksWrite(method, origin)`（外站 Origin 的写请求 403，读不拦）+
   `server/plugins/env-guard.ts` 要求回环绑定（`NITRO_HOST=127.0.0.1`；非回环绑定只有显式 `WORK_ALLOW_PUBLIC_BIND=true` 才降为告警，因为 nitro 的 node preset 只认
   `NITRO_HOST/HOST`，不解析 `--host`）。写接口另配 `rateLimit`，会外呼的再过 `gateExpensiveCalls`。 **想把 work 暴露到公网 = 必须先给它加鉴权**，只做绑定/反代那一步等于把可写库敞开。
-- 数据入口：`/api/schedules`（列表 `?keyword=&enabled=&limit=`，页面 URL 侧对应 `?q=`；新建限 30 次/分）与 `/api/schedules/{id}`（读/改/删）、
-  `/api/schedules/{id}/run`（手动跑一次，回 `started` 后立刻返回、不等模型，按排期 id 限 5 次/分）、`/api/agents`、`/api/chat*`、`/api/conversations*`。
-  两批历史入口都已整机删除，别再按旧名字找：待办/日程/项目那套（`/api/tasks`、`/api/events`、`/api/projects`、全站 `/api/search`）随页面一起没了，
-  笔记与简报那套（`/api/notes`、`/api/notes/{search,reindex}`、`/api/briefs`）连同今日总览 `/api/overview` 一起没了——侧栏顶部收成「新建对话 +
-  定时任务」之后，它们连一个展示位都不剩。日期口径一律 **北京日**（`server/utils/work-day.ts`），写入归一集中在
+- 数据入口：`/api/schedules`（列表 `?keyword=&enabled=&spaceId=&limit=`，页面 URL 侧对应 `?q=`；新建限 30 次/分）与 `/api/schedules/{id}`（读/改/删）、
+  `/api/schedules/{id}/run`（手动跑一次，回 `started` 后立刻返回、不等模型，按排期 id 限 5 次/分）、`/api/spaces` 与 `/api/spaces/{id}`（工作空间 CRUD）、
+  `/api/runs` 与 `/api/runs/{id}`（自动化运行记录）、`/api/overview`（今日页聚合）、`/api/agents`、`/api/chat*`、`/api/conversations*`。
+  待办/日程/项目/笔记/简报那几套旧入口仍不要按旧名字找；但 **`/api/overview` 已随今日页重构回归**，现在是确定性聚合接口，不是模型简报。
+  日期口径一律 **北京日**（`server/utils/work-day.ts`），写入归一集中在
   `server/utils/work-input.ts`（含 U+0000 剔除、枚举未知值直接 400），而 **周期语义只有一份实现** 在 `server/utils/work-schedule.ts`：`kind = daily / weekly / interval / once`
     - `timeText`/`days`/`intervalMinutes` + `startsAt` → `resolveSchedulePlan()` 校验并归一、`computeNextRunAt()` 按北京时区算出绝对 `nextRunAt`；接口的 PATCH、工具与 runner 都调它，
       不要在任何一侧自己算下一次时间（那样改一次周期就要同时改三处）。
@@ -260,19 +260,19 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
       两份代码的漂移由冒烟测试第 19 节常驻对账：`SCHEDULE_KINDS`/`SCHEDULE_PROMPT_MAX`/`INTERVAL_MINUTES_*`/`WORK_TITLE_MAX` 逐值比，`composeStartsAt()` 与
       服务端 `fromShanghaiParts()` 拿同一批输入（闰日、跨年、午夜、23:59）逐点比，日历上不存在的日期（2026-02-29）两侧都必须 **拒绝** 而不是顺延成别的一天。
       界面里「只跑一次」还多一条与同口径的本地预检：**过去的时刻直接不收**（`work.onceAlreadyPassed`）——`once` 存进过去等于永远不会触发，服务端同样 400，两侧都要挡。
-- **`GET /api/export` 是这台机器唯一的整机备份通道**（`server/api/export.get.ts`）：单文件 JSON、18 张表里除 `kb_chunks` 外的 17 张在内存里序列化、`content-disposition`
+- **`GET /api/export` 是这台机器唯一的整机备份通道**（`server/api/export.get.ts`）：单文件 JSON、20 张表里除 `kb_chunks` 外的 19 张在内存里序列化、`content-disposition`
   触发下载，限流 6 次/分。它刻意 **不进侧栏**，入口只有存储设置页那张「数据备份」卡。三条口径写死在这里：`providers.api_key` 与 `storage_configs.secret_access_key` **置空**
   （备份文件是要能随手拷走的，密钥漏进去等于泄露）、`kb_chunks` **整表丢弃**（向量是可再生的派生数据，换嵌入模型后老向量本就不可比）、附件只带元数据与
   objectKey，**对象存储里的二进制不在文件里**。因此恢复不是导入这个文件就能完事：知识库要逐库调 `/api/settings/knowledge-bases/{kbId}/reindex` 重建向量，
   供应商与存储的密钥要手填，桶要另行备份。新增表时记得补进 `builders`（每张表一个键，加表就加一个键），漏表不会有报错，只会静默少一份数据——
   冒烟测试第 13 节把这件事从「记得」变成断言：从 schema 里枚举出所有 `PgTable` 与 export 里 `.from(x)` 出现过的表名对账，漏一张直接测红。
-- AI 工具桥在 `server/utils/workbench-tools.ts`：`buildWorkbenchTools()` 现在只暴露三个动作 `work_today / work_list_schedules / work_create_schedule`
+- AI 工具桥在 `server/utils/workbench-tools.ts`：`buildWorkbenchTools(agentId, spaceId)` 现在只暴露三个动作 `work_today / work_list_schedules / work_create_schedule`，三者都按当前空间收窄
   （待办与日程那四个工具 `work_list_tasks / work_create_task / work_update_task / work_create_event` 随那三张表删除，`work_create_note` 与 `work_search`
   随笔记整机删除——留一个模型每轮都能调、却必然失败的旧动作比少一个工具更糟），`WORKBENCH_TOOL_SUMMARY`
   是注入系统提示词的 **同源**清单（冒烟测试第 15 节断言两边名字一一对应）。写动作各自有每分钟 20 次的 `gateWrite`。
   `work_create_schedule` 收的是「`kind` + `time`(HH:mm 北京时间) / `days` / `intervalMinutes` + `startsAt`」这种 **相对描述**，落库的 `nextRunAt` 由
-  `resolveSchedulePlan()` 现算：模型自己跨时区推「下一次」必错，而新排期一律挂在 **当前这个智能体** 名下（`buildWorkbenchTools(agentId)`），不需要它挑 agent。
-  `work_today` 的三个板块（今天要跑 / 今天已跑 / 未来 7 天）都只读 `schedules`，与今日页删除后的界面口径一致。
+  `resolveSchedulePlan()` 现算：模型自己跨时区推「下一次」必错，而新排期一律挂在 **当前这个智能体与当前工作空间** 名下，不需要它挑 agent 或 space。
+  `work_today` 的三个板块（今天要跑 / 今天已跑 / 未来 7 天）都只读当前空间的 `schedules`，与 `/api/overview` 的今日页口径一致。
 - **后台生成（切页面/切会话/刷新都不打断）**：权威在服务端，`server/utils/chat-runs.ts` 给每轮持一份内存副本（`RUN_BUFFER_MAX_BYTES=512KB`、`RUN_MAX_COUNT=12`、结束后
   `RUN_FINISHED_GRACE_MS=60s` 宽限期、无收尾 `RUN_STALE_MS=5min` 判陈旧）。三条接口：`GET /api/chat/{会话 id}/stream` 是 `Chat.resume()` 约定的重连地址（AI SDK 的
   `resumeStreamIsReplay` 默认真，客户端吃的是 **从头回放**再转实时，所以路径段必须等于实例 id＝会话 id；没有可回放时回 **204** 而不是 404，让客户端复位成 ready
@@ -284,7 +284,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   id。完成提示与未读点在布局：`finishedNotice`（12 秒瞬时浮层，正在看这一条时不打扰，判据是 `isChatSurface` + `activeConversationId`）与 `useChatReadState`
   （localStorage `work_conversation_read` 的 `{initialized, seen}` 表，`updatedAt` 不等即未读）。两个坑已踩过：`ensureSeeded` **空列表不播种**
   （否则「请求还在飞」被当成「这台机器没有历史」，满屏未读点）；改名等 `changed` 事件 **必须带 id 并回写已读**（PATCH 无条件顶 `updatedAt`，否则用户改个标题就把那条点成未读）。
-- **定时任务（到点自动跑一轮智能体，结果落成一条会话）**：这就是 work 现在的「任务」语义。`schedules` 表存 `kind = daily/weekly/interval/once` + `timeText/days/intervalMinutes`
+- **定时任务 / 自动化（到点自动跑一轮智能体，结果落成一条会话）**：`schedules` 表存 `space_id`、`kind = daily/weekly/interval/once` + `timeText/days/intervalMinutes`
     - `startsAt` + `enabled` + **绝对 `nextRunAt`**（btree `(enabled, next_run_at)` 就是给认领用的）+ `lastRunAt/lastStatus/lastError/lastConversationId`；`agent_id`
       是 `onDelete: cascade`，`last_conversation_id` 是 `set null`。唤醒是 `nuxt.config.ts` 的 `nitro.scheduledTasks` 里 `'* * * * *': 'schedules:run-due'`（
       `server/tasks/schedules/run-due.ts`，任务名由文件路径决定）：croner 按 **进程本地时区** 解释表达式，容器几乎全是 UTC，所以表达式只管「唤醒频率」，「北京时间 09:00」这条口径完全落在
@@ -293,7 +293,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
       ② **先推进 `nextRunAt` 再执行**——持续失败的那条不能变成每分钟的固定外呼；③ 进程内 `tickInFlight` 闸门（croner 不保证上一轮结束才起下一轮，两次唤醒各跑一批就是并发外呼）；
       ④ 写回结论用 `where(id 且 lastRunAt = 认领时刻)` 做 compare-and-set，跑的这一分钟里用户改了排期也不会被旧结论覆盖。执行走 `generateText`， **不是** `/api/chat` 那条 SSE 链路（后台那一轮没有接收方），
       但系统提示词、`buildWorkbenchTools`、绑定的 skill/tool/MCP/知识库与分步预算（工具 30s、首块与块间隔各 60s、外层 `AbortSignal.timeout(5min)`、正文截 200K）全与聊天同口径；
-      会话与那条 user 消息在调用模型 **之前** 落库，所以失败的一轮也留得下「用户那句 prompt」和 `lastError`，`/tasks` 列表那一行的「打开运行结果」有的可解释。手动运行（
+      每一轮执行在调用模型前先写一条 `automation_runs`（status/trigger/prompt/started_at），收尾时回填 finished_at/duration_ms/output_conversation_id/error；`schedules.last_*` 只是列表摘要缓存，
+      `/runs` 与 `/runs/{id}` 从 `automation_runs` 读完整历史。会话与那条 user 消息在调用模型 **之前** 落库，所以失败的一轮也留得下「用户那句 prompt」和 `lastError`，`/tasks` 列表那一行的「打开运行结果」有的可解释。手动运行（
       `POST /api/schedules/{id}/run`）复用同一个 `runScheduleNow()`，认领是带 `lastStatus <> 'running'` 条件的 UPDATE——两个标签页同时点不会双双通过跑出两条会话，后到的那个拿 409；
       `void` 之后 **必须自带 catch**，否则 rejection 撞上 `plugins/error-guard.ts` 就是一次整进程退出（用户点一下「立即运行」把工作台弄挂）。MCP 连接在 `finally` 里关闭：
       定时任务没有「请求结束」这个时刻，漏掉的子进程会一直挂在进程里。边界要说清——**Nitro 调度只在进程活着时跑**，本机没有守护进程，`pnpm work:start` 关着的时候什么都不会执行（旧的日程提醒链同理已删：
@@ -302,8 +303,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   string/Buffer。时间条件必须写成 drizzle 的条件对象（`and/gte/lt/eq`）再嵌进 `filter (where ${failedToday})`；`work_today` 工具与今日统计那几处「一个时间窗里数三个数」的形状就是踩过之后
   改成这样的（原来带三个 `filter` 计数的 `server/api/overview.ts` 已随今日页删除，规则本身没变）。drizzle 的列条件自己会把 Date 编成 timestamp 字面量，所以 **别把三个 `count()`
   拆成三次查询**：一次条件聚合计三个数才是这里刻意保留的形状。
-- **迁移现状与「无 TTY 时怎么生成」**：`server/db/migrations` 目前是 `0000_superb_the_captain.sql`（22 张表）+ `0001_schedules.sql`（建 `schedules`、删 `events/projects/tasks`
-  三张表、去掉 `notes.project_id` 与它的外键）+ `0002_drop_notes_briefs.sql`（`DROP TABLE briefs, notes CASCADE`），**三条都已应用到本机 work 库**，被删的五张表数据是刻意丢弃的
+- **迁移现状与「无 TTY 时怎么生成」**：`server/db/migrations` 目前是 `0000_superb_the_captain.sql`（初版表）+ `0001_schedules.sql` + `0002_drop_notes_briefs.sql`
+  + `0003_amusing_green_goblin.sql`（新增 `spaces` / `automation_runs`，并给 `conversations`、`schedules` 加 `space_id`；默认空间在迁移里先插入再建外键），**四条都已应用到本机 work 库**，被删的旧表数据是刻意丢弃的
   （用户确认，整机备份在仓库外）。`drizzle-kit generate` 在「同一批里既有新增表又有删除表」时必然弹交互选择（`promptNamedWithSchemasConflict`），而本机的 shell 起不了 TTY、
   `winpty` 又找不到 pnpm，所以 `0001` 是走 `drizzle-kit/api` 的 `generateDrizzleJson()` + `generateMigration(prev, cur)` **分两步**（第一步只加、第二步只删）产出 SQL
   再手工合并 `meta/0001_snapshot.json` 与 `meta/_journal.json` 条目的；`0002` 只有删除，`pnpm work:db:generate` 一次就过了，不需要走 API。**只要批次里混进新增表，就得回到那套两步法。**
@@ -311,20 +312,16 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   ② 新 snapshot 要照仓库基线用 prettier 格式化后再提交（`pnpm lint` 会检查 `meta/*.json`），而 `.sql` 文件本来就没有 prettier parser，不要为它加忽略规则；
   ③ 文件名可以自己改（`0002_public_meteorite.sql` → `0002_drop_notes_briefs.sql`），但 **`meta/_journal.json` 的 `tag` 必须跟着改**，而 `meta/<idx>_snapshot.json`
   的 **idx 命名不能动**（drizzle 按 `${idx}_snapshot.json` 找快照，改成描述性名字会让下一次 generate 读不到前一份状态）。
-- **路由口径（收敛后只剩五个页面，别按旧名字找）**：`/`（`app/pages/index.vue`）**只做一条 302 到 `/chat`**，自己不渲染任何东西——今日总览已经整机删掉，
-  但浏览器历史与书签里还留着 `/`，所以这条重定向要留着；原 `today.vue` 更早一步就删了。对话入口是 `/chat`（可切换智能体，`app/pages/chat/index.vue`）与
-  `/chat/:agentId`（固定智能体）；`/tasks` 是 **定时任务**（`app/pages/tasks.vue`）——沿用这个地址、不做 `/schedules`，也不给旧语义的 `/tasks` 留重定向；
+- **路由口径**：`/` 是 **今日页**（`app/pages/index.vue`，读 `/api/overview`，不再 302）；对话入口是 `/chat`（可切换智能体）与 `/chat/:agentId`（固定智能体）；
+  `/spaces` 是工作空间；`/runs` 与 `/runs/{id}` 是运行中心；`/tasks` 仍是自动化编辑页——沿用这个地址、不做 `/schedules`，也不给旧语义的 `/tasks` 留重定向；
   智能体广场在 **`/agents`**，刻意不占侧栏一项——入口是 `/chat` 头部的智能体切换器与 `[agentId]` 页找不到智能体时的返回链接。
   **日历、项目、附件总览、命令面板、笔记（`notes`、`notes/[id]`）与今日页已整体删除**：`WorkCommandPalette.vue`、`calendar.vue`、`projects.vue`、`attachments.vue`、
   `WorkEventDrawer/WorkProjectDrawer/WorkTaskDrawer/WorkTaskRow`、`MarkdownContent.vue` 都不存在了。附件删的只是 **总览页**：聊天附件链路完整保留——`attachments` 表、presign/complete、
   `chat-parts`、`[id]/url`、`[id]/raw`、ImagePicker 与 ChatPane 的 📎 都在。
-- **左侧三段（顶部工作台 / 中间对话历史 / 底部系统设置）**：顶部那一段是 **「新建对话」按钮 + 一张只有一份的清单** `app/utils/work-nav.ts` 的
-  `WORK_NAV_LINKS`（`to/labelKey/icon/match`，**当前一项**：定时任务 `/tasks`），`layouts/default.vue` 的桌面 `aside` 与窄屏抽屉各渲染同一份——两处各写一遍时，
-  同一个页面会在两个菜单里叫两个名字。「新建对话」是按钮而不是路由项（它去 `/chat` 并摘掉 `?c=`）。**对话入口刻意不在表里**：`/` 直接 302 到 `/chat`、
-  Logo 也指向 `/chat`，再加一项就是同一个页面的两个名字。顶部那一段 **不再有分组标题文字**（`nav.groupWork` 只留作 `<nav>` 的 `aria-label`）。
-  中间一段是 `ConversationList`， **常驻**、**只剩列表**：标题「最新对话」与搜索框都已删（列表就在侧栏里，为几十条会话再配一个过滤框是给侧栏加噪声）；
-  以前它由 `isChatSurface` 门控、只在 `/chat*` 出现，于是在别的页面看到「有 3 条会话」却点不进去，`isChatSurface` 现在只剩两个判据——「要不要记已读」和
-  「要不要打后台完成提示」， **不再决定列表出不出现**。
+- **左侧三段（顶部工作台 / 中间空间筛选 + 对话历史 / 底部系统设置）**：顶部那一段是「新建对话」按钮 + `app/utils/work-nav.ts` 的 `WORK_NAV_LINKS`
+  （当前五项：今日 `/`、对话 `/chat`、工作空间 `/spaces`、运行记录 `/runs`、自动化 `/tasks`），桌面 `aside` 与窄屏抽屉共用同一份。
+  `isChatSurface` 仍只负责「记已读 / 完成提示」。中间一段先渲染 `activeSpaceId` 的空间筛选，再渲染 `ConversationList`；新建会话会把当前空间带进
+  `POST /api/conversations` 与聊天 transport。**设置区不渲染空间筛选与会话历史**：`isSettingsSurface` 为 true 时用空占位撑开，配置页不再被会话上下文干扰。
   底部一段只有系统设置一个入口，底栏 **不再有** 主题、语言、版权——外观与语言的唯一入口是 `/settings` 通用页，摆第二套就会出现「两处改、一处不生效」。`match` 的高亮是本地 `isNavActive`
   前缀匹配。侧栏点选会话是 **就地切换**：共享选中态之外，非对话页还要 `navigateTo` 换路由（否则屏幕上还是原来的清单，用户以为点击没生效），且抽屉打开时点完必须手动
   `drawerOpen = false`——只改选中态不动 URL，`route.fullPath` 那条关抽屉的监听不会触发。「新建对话」需要 `navigateTo` 把 `?c=` 摘掉，否则刷新回到刚才那条。`?ask=`
@@ -341,7 +338,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   用户写的正文当场砍断，保存之后就真没了）。⌘K 命令面板已整体移除：没有 `WorkCommandPalette.vue`、没有 `openPalette()`、窄屏顶栏也没有 🔍，页面跳转的唯一入口就是侧栏三段，不要为「加一个快捷入口」把它请回来。
 - 窄屏与主题：`< lg` 侧栏收成左侧抽屉，顶栏只留汉堡与品牌（导航、会话历史、系统设置都在抽屉那三段里）。原来日历在 `< sm` 才需要的「7 列网格换按天分组 agenda」随日历一起删除，
   但那条量级判断仍然适用：一屏 375px 塞 7 列每格约 50px，chip 连标题都放不下，别再往窄屏塞多列表格。图标同 webapp 走 `scripts/generate-icons.mjs` 的 NAMES +
-  `pnpm --filter @repo/work icons`，`app/utils/app-icons.ts` 是生成文件（不要手改，也不要对它跑 prettier）；**NAMES 已按真实消费者收敛到 31 个**
+  `pnpm --filter @repo/work icons`，`app/utils/app-icons.ts` 是生成文件（不要手改，也不要对它跑 prettier）；**NAMES 已按真实消费者收敛到 36 个**
   （清单里原本是从 webapp 继承来的 138 个；今日页与笔记页删除后又带走了 `view-dashboard-outline`、`book-open-page-variant-outline` 之外的 `clock-outline`、
   `tag-outline`、`pin-outline`、`newspaper-variant-outline` 等八个名字）——它整份内联进客户端产物，加图标要确认有人真的在用。
   冒烟测试第 16 节除了 zh/en 键集合对齐，还常驻断言 **两张唯一表**（`WORK_NAV_LINKS`、`WORK_SETTINGS_PAGES`）引用的 `labelKey/descKey` 在 locales 里存在、
@@ -715,7 +712,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | 修改主题或语言               | 两端各自的 `useTheme.ts`、i18n 入口及 locales；主题令牌源为 `packages/commons/src/styles/theme.css`，不要从旧 commons 业务目录推断实际消费者                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 修改图标、格式或检查规则     | 图标从 `packages/webapp/scripts/generate-icons.mjs` 修改；共享检查规则在 `packages/config/src/`，命令范围看根 `package.json`，实际 CI 看 `.github/workflows/ci.yml`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 修改附件 / 对象存储          | `packages/webapp/server/utils/storage.ts` → `packages/webapp/server/api/attachments*`（上传/直传/下载代理）→ 用户端 `packages/webapp/app/pages/attachments.vue` 与移动端 `packages/mobile/src/views/AttachmentsView.vue`；管理端配置在系统设置分区 `packages/webapp/app/components/AdminSettingsStorage.vue`（`/admin/settings`），附件总览在 `packages/webapp/app/pages/admin/attachments.vue`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 修改工作台（packages/work）  | 页面 `packages/work/app/pages/`（`{index(=302 到 /chat),tasks,chat,chat/[agentId],agents,settings,settings/*}`）与 `app/layouts/default.vue` 的 **三段侧栏**（顶部「新建对话 + 定时任务」、中间会话列表、底部系统设置；导航唯一表 `app/utils/work-nav.ts` 的 `WORK_NAV_LINKS`，`isChatSurface` 现在只管「记已读 / 完成提示」）；设置子导航 `app/components/WorkSettingsNav.vue` 与 **设置路由唯一表** `app/utils/work-settings.ts`；接口 `packages/work/server/api/`（定时任务在 `schedules.ts`、`schedules/[id].ts`、`schedules/[id]/run.post.ts`）；写入与日期口径 `server/utils/work-input.ts`、`work-day.ts`（前端那份纯函数在 `app/utils/work-day.ts`，第 19 节把它与服务端逐点对账），**周期语义唯一表** `server/utils/work-schedule.ts` + 带库校验的 `schedule-store.ts`；执行侧 `server/utils/schedule-runner.ts` + `server/tasks/schedules/run-due.ts`（`nitro.scheduledTasks` 每分钟，也是唯一还挂着的定时任务）；AI 能力 `server/utils/workbench-tools.ts`；后台生成 `server/utils/chat-runs.ts` + `server/api/chat/` + `app/composables/useChatRuns.ts`；整机备份 `server/api/export.get.ts`。**先看 §5 末尾的 work 小节**：它没有鉴权，改动前先确认是否触碰绑定地址或来源闸门 |
+| 修改工作台（packages/work）  | 页面 `packages/work/app/pages/`（`{index(今日),tasks,spaces,runs,runs/[id],chat,chat/[agentId],agents,settings,settings/*}`）与 `app/layouts/default.vue` 的 **三段侧栏**（顶部五项导航、中间空间筛选 + 会话列表、底部系统设置；导航唯一表 `app/utils/work-nav.ts`，设置区隐藏会话上下文）；设置子导航 `app/components/WorkSettingsNav.vue` 与 **设置路由唯一表** `app/utils/work-settings.ts`；接口 `packages/work/server/api/`（空间 `spaces.ts`、运行 `runs.ts`、今日聚合 `overview.ts`、自动化 `schedules.ts`）；写入与日期口径 `server/utils/work-input.ts`、`work-day.ts`（前端那份纯函数在 `app/utils/work-day.ts`，第 19 节把它与服务端逐点对账），**周期语义唯一表** `server/utils/work-schedule.ts` + 带库校验的 `schedule-store.ts`；执行侧 `server/utils/schedule-runner.ts` + `server/tasks/schedules/run-due.ts`（`nitro.scheduledTasks` 每分钟，也是唯一还挂着的定时任务）；AI 能力 `server/utils/workbench-tools.ts`；后台生成 `server/utils/chat-runs.ts` + `server/api/chat/` + `app/composables/useChatRuns.ts`；整机备份 `server/api/export.get.ts`。**先看 §5 末尾的 work 小节**：它没有鉴权，改动前先确认是否触碰绑定地址或来源闸门 |
 | 修改资讯新闻                 | `packages/webapp/server/api/news*`、`packages/webapp/server/api/admin/news*` → Web 的 `app/pages/news/`、`app/pages/admin/news.vue` 与移动端 `NewsView.vue`、`NewsDetailView.vue`；契约 `NewsSummary`/`NewsDetailResponse`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 修改宣传栏                   | `packages/webapp/server/api/bulletins.get.ts`、`packages/webapp/server/api/admin/bulletins*` → 两端 `BulletinBanner.vue` 与管理端 `admin/bulletins.vue`；时间窗边界用契约的 `dateInputToBoundary()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 修改消息通知                 | `packages/webapp/server/utils/notify.ts`、`server/api/notifications*`、`server/api/admin/notifications*` → Web 的 `app/pages/notifications.vue`、`admin/notifications.vue` 与移动端 `NotificationsView.vue`；移动端未读角标走 `composables/useUnread.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |

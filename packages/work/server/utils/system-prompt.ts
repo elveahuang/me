@@ -6,6 +6,11 @@ export interface UserPromptContext {
     role?: string | null;
 }
 
+export interface SpacePromptContext {
+    name: string;
+    instructions?: string | null;
+}
+
 function interpolateVariables(template: string, vars: Record<string, string>): string {
     return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key: string) => {
         return Object.prototype.hasOwnProperty.call(vars, key) ? (vars[key] ?? '') : match;
@@ -41,6 +46,7 @@ export function buildSystemPrompt(
     knowledgeContext: string | null = null,
     toolSummary: string | null = null,
     userContext?: UserPromptContext,
+    spaceContext?: SpacePromptContext | null,
 ): string {
     const sections: string[] = [];
 
@@ -67,6 +73,12 @@ export function buildSystemPrompt(
         contextLines.push(`- 当前用户角色：${userContext.role}`);
     }
     sections.push(`# 环境信息\n\n${contextLines.join('\n')}`);
+
+    if (spaceContext?.name) {
+        const lines = [`当前工作空间：${spaceContext.name}`];
+        if (spaceContext.instructions?.trim()) lines.push('', spaceContext.instructions.trim());
+        sections.push(`# 工作空间\n\n${lines.join('\n')}`);
+    }
 
     // 可用技能（Skill 指令块）
     const enabledSkills = agentSkillList.filter((s) => s.enabled && s.instructions?.trim());

@@ -1,5 +1,28 @@
-import { badgeTone } from '@commons/contract';
+import { badgeTone, type ConversationSummary } from '@commons/contract';
 import { dayInputValue } from './work-day';
+
+
+/** 工作空间的列表形状（服务端汇总了会话与自动化数量）。 */
+export interface WorkSpace {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    instructions: string;
+    archived: boolean;
+    createdAt: string;
+    updatedAt: string;
+    conversationCount: number;
+    scheduleCount: number;
+    enabledScheduleCount?: number;
+    lastConversationAt?: string | null;
+}
+
+/** 工作台会话在共享会话摘要外多带空间归属。 */
+export interface WorkConversationSummary extends ConversationSummary {
+    spaceId: string;
+    spaceName?: string | null;
+}
 
 /**
  * 工作台前端的类型与展示口径。
@@ -20,6 +43,8 @@ export interface WorkSchedule {
     agentId: string;
     agentName: string;
     agentEmoji: string;
+    spaceId: string;
+    spaceName: string | null;
     kind: ScheduleKind;
     /** 'HH:mm'，按北京时间解释；interval 与 once 为空串 */
     timeText: string;

@@ -20,6 +20,7 @@ const {
     effectiveConversationId,
     activeAgentId,
     activeConversationId,
+    activeSpaceId,
     newChatRequested,
     agentsError,
     refreshAgents,
@@ -123,6 +124,7 @@ const { open: openDrawer } = useShellDrawer();
                 :conversation-id="effectiveConversationId"
                 :conversation-title="activeConversationTitle"
                 :agent-list="agentList"
+                :space-id="activeSpaceId"
                 :draft="askDraft"
                 @update:agent-id="switchAgent"
                 @update:conversation-id="onActiveConversationChange"

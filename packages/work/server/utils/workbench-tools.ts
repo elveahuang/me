@@ -1,7 +1,7 @@
 import { tool, type ToolSet } from 'ai';
 import { and, asc, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 import * as zod from 'zod';
-import { SCHEDULE_KINDS, schedules, type ScheduleKind } from '../db/schema';
+import { DEFAULT_SPACE_ID, SCHEDULE_KINDS, schedules, type ScheduleKind } from '../db/schema';
 import { db } from './db';
 import { LOCAL_OWNER } from './owner';
 import { likePattern, stringParam } from './query';
@@ -112,7 +112,7 @@ async function gateWrite(action: string): Promise<string | null> {
  * @param agentId 当前这一轮对话所属的智能体。`work_create_schedule` 把新排期挂在它名下——
  *   谁被要求安排就该由谁到点执行；让模型自己挑 agentId 只会多一个「它记错了 id」的失败面。
  */
-export function buildWorkbenchTools(agentId: string): ToolSet {
+export function buildWorkbenchTools(agentId: string, spaceId: string = DEFAULT_SPACE_ID): ToolSet {
     const set: Record<string, unknown> = {};
 
     set.work_today = tool({
@@ -128,7 +128,7 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                 db
                     .select(scheduleColumns)
                     .from(schedules)
-                    .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end)))
+                    .where(and(eq(schedules.spaceId, spaceId), eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end)))
                     .orderBy(asc(schedules.nextRunAt))
                     .limit(RESULT_ROWS_MAX),
                 db
@@ -140,13 +140,13 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                         lastError: schedules.lastError,
                     })
                     .from(schedules)
-                    .where(and(gte(schedules.lastRunAt, start), lt(schedules.lastRunAt, end), sql`${schedules.lastStatus} <> ''`))
+                    .where(and(eq(schedules.spaceId, spaceId), gte(schedules.lastRunAt, start), lt(schedules.lastRunAt, end), sql`${schedules.lastStatus} <> ''`))
                     .orderBy(desc(schedules.lastRunAt))
                     .limit(RESULT_ROWS_MAX),
                 db
                     .select(scheduleColumns)
                     .from(schedules)
-                    .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
+                    .where(and(eq(schedules.spaceId, spaceId), eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
                     .orderBy(asc(schedules.nextRunAt))
                     .limit(RESULT_ROWS_MAX),
             ]);
@@ -175,7 +175,7 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
             limit: zod.number().optional().describe('返回条数，最多 50'),
         }),
         execute: async (input) => {
-            const where: SQL[] = [];
+            const where: SQL[] = [eq(schedules.spaceId, spaceId)];
             const keyword = stringParam(input.keyword, 128);
             if (keyword) where.push(or(ilike(schedules.title, likePattern(keyword)), ilike(schedules.prompt, likePattern(keyword)))!);
             const limit = Math.min(Math.max(Math.floor(Number(input.limit) || RESULT_ROWS_MAX), 1), 50);
@@ -238,6 +238,7 @@ export function buildWorkbenchTools(agentId: string): ToolSet {
                         title,
                         prompt,
                         agentId: ownerAgentId,
+                        spaceId,
                         kind: plan.kind,
                         timeText: plan.timeText,
                         intervalMinutes: plan.intervalMinutes,

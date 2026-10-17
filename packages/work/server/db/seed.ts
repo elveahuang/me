@@ -20,7 +20,7 @@ async function main() {
     const { db } = await import('../utils/db');
     const { fromShanghaiParts, shanghaiParts } = await import('../utils/work-day');
     const { computeNextRunAt, normalizeSchedulePlan } = await import('../utils/work-schedule');
-    const { agentSkills, agentTools, agents, schedules, skills, systemSettings, tools } = await import('./schema');
+    const { agentSkills, agentTools, agents, DEFAULT_SPACE_ID, schedules, skills, spaces, systemSettings, tools } = await import('./schema');
 
     console.log('🌱 开始初始化 work 的 Seed 数据…');
 
@@ -31,6 +31,20 @@ async function main() {
     } else {
         await db.insert(systemSettings).values({ id: 'default', siteTitle: 'WORK' });
         console.log('✓ 已创建系统设置');
+    }
+
+    // 1.1 默认工作空间：旧会话与自动化的落点
+    const [existingSpace] = await db.select().from(spaces).where(eq(spaces.id, DEFAULT_SPACE_ID));
+    if (existingSpace) {
+        console.log('✓ 默认工作空间已存在');
+    } else {
+        await db.insert(spaces).values({
+            id: DEFAULT_SPACE_ID,
+            name: '默认空间',
+            description: '会话、资料与自动化的默认工作上下文',
+            icon: '🗂️',
+        });
+        console.log('✓ 已创建默认工作空间');
     }
 
     // 2. Skills（纯指令块，挂载后注入系统提示词）
