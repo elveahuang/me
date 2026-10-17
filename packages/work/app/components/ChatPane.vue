@@ -156,13 +156,13 @@ const failedConversationId = ref<string | null>(null);
 /** 已载入会话所属的智能体：换人后同一个会话 id 也要重新按新归属处理 */
 const loadedAgentId = ref<string | null>(null);
 
-function buildChat(conversationId: string, agentId: string, history: UIMessage[] = []) {
+function buildChat(conversationId: string, agentId: string, history: UIMessage[] = [], spaceId: string | null = props.spaceId) {
     return new Chat<UIMessage>({
         id: conversationId,
         messages: history,
         transport: new DefaultChatTransport({
             api: '/api/chat',
-            body: { agentId, conversationId, ...(props.spaceId ? { spaceId: props.spaceId } : {}) },
+            body: { agentId, conversationId, ...(spaceId ? { spaceId } : {}) },
         }),
     });
 }
@@ -291,23 +291,22 @@ watch(
 
 /* ---------------- 发送 ---------------- */
 
+async function discardCreatedConversation(id: string) {
+    try {
+        await $fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch {
+        // 清理失败不覆盖用户眼前这次发送的结论；下一次刷新会话列表时仍可人工删除
+    }
+}
+
 async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? input.value).trim();
-    // 允许只发附件（无文字）
     if (!text && !pendingAttachments.value.length) return;
-    if (submitting.value) return;
-    /**
-     * 生成期间不再发第二条。输入框在 <form @submit.prevent> 里，回车始终会提交表单，
-     * 而 sending 之类的预检标记只覆盖「建会话/解析附件」那几毫秒——流一旦跑起来就复位了。
-     * ai@7 的 Chat 对并发 sendMessage 没有任何去重（实测第二次照样发真实请求）：
-     * 于是同一段会话会并行跑出两个 /api/chat，各烧一次真实模型调用、各存一条 assistant 消息，
-     * 两条流还往同一个 Chat 实例交错写；此时界面上只有「停止」，而 stop() 只中止最后一条
-     * 活动响应，前一条继续跑。判据用 status !== 'ready'（实测 submitted/streaming 全程成立）。
-     * 这里直接忽略而不是清空输入：用户的文字要留着，等本轮结束再发。
-     */
+    if (submitting.value || uploadingInChat.value) return;
     if (chat.value && chat.value.status !== 'ready') return;
 
     const agentId = props.agentId;
+    const spaceId = props.spaceId;
     if (!agentId) {
         submitError.value = t('chat.selectAgentFirst');
         return;
@@ -315,13 +314,24 @@ async function handleSubmit(overrideText?: string) {
 
     submitting.value = true;
     try {
-        // 首次发送时自动创建会话。创建失败必须保留输入内容：
-        // 否则用户输入被清空又没发出去，只能重新敲一遍。
+        // 先解析附件再建会话：空间切换发生在附件上传/解析期间时，不留下一条空会话。
+        const instanceBeforeResolve = chat.value;
+        const files = await resolveChatParts(pendingAttachments.value);
+        if (chat.value !== instanceBeforeResolve || props.spaceId !== spaceId) return;
+
         let current = chat.value;
         if (!current) {
             try {
-                const created = await $fetch<{ id: string }>('/api/conversations', { method: 'POST', body: { agentId, ...(props.spaceId ? { spaceId: props.spaceId } : {}) } });
-                current = buildChat(created.id, agentId);
+                const generationToken = loadToken;
+                const created = await $fetch<{ id: string }>('/api/conversations', {
+                    method: 'POST',
+                    body: { agentId, ...(spaceId ? { spaceId } : {}) },
+                });
+                if (props.spaceId !== spaceId || loadToken !== generationToken) {
+                    await discardCreatedConversation(created.id);
+                    return;
+                }
+                current = buildChat(created.id, agentId, [], spaceId);
                 chat.value = current;
                 registerChatRun(created.id, current);
                 loadedConversationId.value = created.id;
@@ -335,20 +345,10 @@ async function handleSubmit(overrideText?: string) {
             }
         }
 
-        const files = await resolveChatParts(pendingAttachments.value);
-        /**
-         * 建会话与解析附件这两次 await 期间，用户可能点侧栏换到别的会话、或点「新对话」。
-         * 那时 chat.value 已被换成（或清成）另一个实例，而 current 是被丢弃的那个 ——
-         * AI SDK 不会替被丢弃的实例收尾，在它上面 sendMessage 照样发出真实请求，
-         * 于是变成一次「看不见的发送」：模型调用已经起跑、消息落进用户已经离开的那段会话，
-         * 界面却停在别处，而输入框马上要被清空。所以清空之前先确认面板没被换走；
-         * 换走就放弃这一次，文字与附件都留在输入区，用户看得见、也不需要重敲。
-         */
         if (chat.value !== current) return;
         input.value = '';
         pendingAttachments.value = [];
         submitError.value = '';
-        // AI SDK 的 sendMessage 支持 { text, files }：files 会作为 file part 进入消息
         current.sendMessage(files.length ? { text, files } : { text });
         nextTick(scrollToBottom);
     } finally {
@@ -440,6 +440,7 @@ useDrawerFocus(
 );
 const attachOptions = ref<AttachmentRecord[]>([]);
 const attachLoading = ref(false);
+let attachPickerToken = 0;
 const attachError = ref('');
 
 // 切换空间后，旧空间的待发送附件不能跟着进入新空间的会话。
@@ -450,6 +451,7 @@ watch(
         pendingAttachments.value = [];
         attachOptions.value = [];
         attachError.value = '';
+        submitError.value = '';
         if (loadedConversationId.value) emit('update:conversationId', null);
     },
 );
@@ -484,16 +486,19 @@ async function resolveChatParts(items: AttachmentRecord[]): Promise<FileUIPart[]
 
 /** 打开附件选择器：拉取最近上传的附件供选择 */
 async function openAttachPicker() {
+    const token = ++attachPickerToken;
     attachPickerOpen.value = true;
     attachLoading.value = true;
     attachError.value = '';
     try {
         const res = await $fetch<AttachmentsResponse>('/api/attachments', { query: { pageSize: 25, spaceId: props.spaceId || undefined } });
-        attachOptions.value = res.attachments;
+        if (token === attachPickerToken) attachOptions.value = res.attachments;
     } catch (e) {
+        if (token !== attachPickerToken) return;
+        attachOptions.value = [];
         attachError.value = extractApiError(e, t('common.loadFailed'));
     } finally {
-        attachLoading.value = false;
+        if (token === attachPickerToken) attachLoading.value = false;
     }
 }
 
@@ -525,12 +530,15 @@ async function onChatFileChange(event: Event) {
     }
     uploadingInChat.value = true;
     attachError.value = '';
+    const uploadSpaceId = props.spaceId;
     try {
         const form = new FormData();
         form.append('file', file);
         form.append('category', 'chat');
-        if (props.spaceId) form.append('spaceId', props.spaceId);
+        if (uploadSpaceId) form.append('spaceId', uploadSpaceId);
         const created = await $fetch<AttachmentRecord>('/api/attachments', { method: 'POST', body: form });
+        // 上传期间用户切了空间：附件已落到旧空间，不能把它挂进新对话的待发送区
+        if (props.spaceId !== uploadSpaceId) return;
         // 上传期间用户可能已挂上别的附件：到上限就只提示，不再塞进待发送区
         if (pendingAttachments.value.length >= 5) {
             attachError.value = t('chat.attachLimit');

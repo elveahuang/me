@@ -33,30 +33,49 @@ const searchError = ref('');
 const reindexing = ref(false);
 const docTotal = computed(() => kb.value?.documentCount ?? 0);
 const chunkTotal = computed(() => kb.value?.chunkCount ?? 0);
+let loadToken = 0;
 
 async function load() {
+    const token = ++loadToken;
+    const id = kbId.value;
     loading.value = true;
     pageError.value = '';
     try {
         const [detail, documentRows] = await Promise.all([
-            $fetch<KnowledgeBaseItem>(`/api/settings/knowledge-bases/${encodeURIComponent(kbId.value)}`),
-            $fetch<KnowledgeDocumentItem[]>(`/api/settings/knowledge-bases/${encodeURIComponent(kbId.value)}/documents`, { query: { limit: 5 } }),
+            $fetch<KnowledgeBaseItem>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}`),
+            $fetch<KnowledgeDocumentItem[]>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}/documents`, { query: { limit: 5 } }),
         ]);
+        if (token !== loadToken) return;
         kb.value = detail;
         docs.value = documentRows;
     } catch (e) {
+        if (token !== loadToken) return;
         pageError.value = extractApiError(e, t('common.loadFailed'));
         kb.value = null;
         docs.value = [];
     } finally {
-        loading.value = false;
+        if (token === loadToken) loading.value = false;
     }
 }
 
 onMounted(load);
 
+watch(kbId, () => {
+    editOpen.value = false;
+    searchOpen.value = false;
+    searchQuery.value = '';
+    searchHits.value = [];
+    searchRan.value = false;
+    searchError.value = '';
+    actionMessage.value = '';
+    actionError.value = '';
+    void load();
+});
+
 function openEdit() {
     if (!kb.value) return;
+    actionMessage.value = '';
+    actionError.value = '';
     Object.assign(editForm, {
         name: kb.value.name,
         description: kb.value.description,
@@ -69,6 +88,8 @@ function openEdit() {
 
 async function saveEdit() {
     if (!kb.value || saving.value) return;
+    actionMessage.value = '';
+    actionError.value = '';
     if (!editForm.name.trim()) {
         editError.value = t('adminForm.requiredName');
         return;
@@ -81,7 +102,7 @@ async function saveEdit() {
             body: {
                 name: editForm.name.trim(),
                 description: editForm.description.trim(),
-                spaceId: editForm.spaceId || undefined,
+                spaceId: editForm.spaceId || null,
                 embeddingModel: editForm.embeddingModel.trim() || 'text-embedding-3-small',
             },
         });
@@ -119,6 +140,8 @@ async function reindex() {
 
 async function removeKb() {
     if (!kb.value || !confirm(t('adminForm.kbDeleteConfirm'))) return;
+    actionMessage.value = '';
+    actionError.value = '';
     try {
         await $fetch(`/api/settings/knowledge-bases/${encodeURIComponent(kb.value.id)}`, { method: 'DELETE' });
         await router.push('/settings/knowledge');
@@ -174,6 +197,10 @@ async function runSearch() {
                         </span>
                     </h1>
                     <p class="app-page-subtitle">{{ kb.description || t('common.none') }}</p>
+                    <p class="text-faint mt-1 text-[10px]">
+                        <span v-if="kb.createdAt">{{ t('spaceDetail.createdAt') }} {{ formatDateTime(kb.createdAt) }}</span>
+                        <span v-if="kb.updatedAt" class="ml-3">{{ t('spaceDetail.updatedAt') }} {{ formatDateTime(kb.updatedAt) }}</span>
+                    </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <NuxtLink :to="`/settings/knowledge/${encodeURIComponent(kb.id)}/documents`" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">
@@ -181,8 +208,12 @@ async function runSearch() {
                         <span>{{ t('knowledge.manageDocuments') }}</span>
                     </NuxtLink>
                     <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" @click="openEdit">{{ t('adminForm.edit') }}</button>
-                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="reindexing" @click="reindex">{{ t('adminForm.kbReindex') }}</button>
-                    <button type="button" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs !text-[color:var(--danger)]" @click="removeKb">{{ t('common.delete') }}</button>
+                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="reindexing" @click="reindex">
+                        {{ t('adminForm.kbReindex') }}
+                    </button>
+                    <button type="button" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs !text-[color:var(--danger)]" @click="removeKb">
+                        {{ t('common.delete') }}
+                    </button>
                 </div>
             </div>
 
@@ -190,34 +221,68 @@ async function runSearch() {
             <div v-if="actionError" class="app-alert app-alert-danger">{{ actionError }}</div>
 
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div class="app-card p-4"><p class="text-faint text-[11px]">{{ t('adminForm.kbDocs') }}</p><p class="text-strong mt-1 text-2xl font-black">{{ docTotal }}</p></div>
-                <div class="app-card p-4"><p class="text-faint text-[11px]">Chunks</p><p class="text-strong mt-1 text-2xl font-black">{{ chunkTotal }}</p></div>
-                <div class="app-card p-4"><p class="text-faint text-[11px]">{{ t('adminForm.kbEmbeddingModel') }}</p><p class="text-strong mt-1 truncate font-mono text-xs font-bold">{{ kb.embeddingModel }}</p></div>
-                <div class="app-card p-4"><p class="text-faint text-[11px]">{{ t('adminForm.provider') }}</p><p class="text-strong mt-1 truncate text-xs font-bold">{{ kb.providerName || t('adminForm.defaultProvider') }}</p></div>
+                <div class="app-card p-4">
+                    <p class="text-faint text-[11px]">{{ t('adminForm.kbDocs') }}</p>
+                    <p class="text-strong mt-1 text-2xl font-black">{{ docTotal }}</p>
+                </div>
+                <div class="app-card p-4">
+                    <p class="text-faint text-[11px]">Chunks</p>
+                    <p class="text-strong mt-1 text-2xl font-black">{{ chunkTotal }}</p>
+                </div>
+                <div class="app-card p-4">
+                    <p class="text-faint text-[11px]">{{ t('adminForm.kbEmbeddingModel') }}</p>
+                    <p class="text-strong mt-1 truncate font-mono text-xs font-bold">{{ kb.embeddingModel }}</p>
+                </div>
+                <div class="app-card p-4">
+                    <p class="text-faint text-[11px]">{{ t('adminForm.provider') }}</p>
+                    <p class="text-strong mt-1 truncate text-xs font-bold">{{ kb.providerName || t('adminForm.defaultProvider') }}</p>
+                </div>
             </div>
 
             <section class="app-card overflow-hidden">
                 <div class="border-line flex items-center justify-between border-b px-4 py-3">
                     <h2 class="text-sm font-black">{{ t('adminForm.kbDocs') }}</h2>
-                    <NuxtLink :to="`/settings/knowledge/${encodeURIComponent(kb.id)}/documents`" class="text-hover-brand text-[11px] font-bold">{{ t('knowledge.manageDocuments') }}</NuxtLink>
+                    <NuxtLink :to="`/settings/knowledge/${encodeURIComponent(kb.id)}/documents`" class="text-hover-brand text-[11px] font-bold">{{
+                        t('knowledge.manageDocuments')
+                    }}</NuxtLink>
                 </div>
                 <div v-if="docs.length" class="divide-line divide-y">
-                    <NuxtLink v-for="doc in docs" :key="doc.id" :to="`/settings/knowledge/${encodeURIComponent(kb.id)}/documents`" class="flex items-center gap-3 px-4 py-3 hover:bg-[color:var(--surface-3)]">
+                    <NuxtLink
+                        v-for="doc in docs"
+                        :key="doc.id"
+                        :to="`/settings/knowledge/${encodeURIComponent(kb.id)}/documents`"
+                        class="flex items-center gap-3 px-4 py-3 hover:bg-[color:var(--surface-3)]"
+                    >
                         <AppIcon name="file-outline" :size="16" class="text-faint shrink-0" />
-                        <span class="min-w-0 flex-1"><span class="text-strong block truncate text-xs font-bold">{{ doc.title }}</span><span class="text-faint mt-0.5 block text-[10px]">{{ t('adminForm.kbDocChunks', { n: doc.chunkCount }) }} · {{ formatDateTime(doc.createdAt) }}</span></span>
+                        <span class="min-w-0 flex-1"
+                            ><span class="text-strong block truncate text-xs font-bold">{{ doc.title }}</span
+                            ><span class="text-faint mt-0.5 block text-[10px]"
+                                >{{ t('adminForm.kbDocChunks', { n: doc.chunkCount }) }} · {{ formatDateTime(doc.createdAt) }}</span
+                            ></span
+                        >
                     </NuxtLink>
                 </div>
-                <div v-else class="app-empty py-8"><p class="app-empty-desc">{{ t('adminForm.kbDocEmpty') }}</p></div>
+                <div v-else class="app-empty py-8">
+                    <p class="app-empty-desc">{{ t('adminForm.kbDocEmpty') }}</p>
+                </div>
             </section>
 
             <section class="app-card overflow-hidden">
                 <button type="button" class="flex w-full items-center justify-between px-4 py-3 text-left" @click="searchOpen = !searchOpen">
-                    <span class="text-sm font-black">{{ t('adminForm.kbSearchTitle') }}</span><span class="text-faint text-[11px]">{{ searchOpen ? '−' : '+' }}</span>
+                    <span class="text-sm font-black">{{ t('adminForm.kbSearchTitle') }}</span
+                    ><span class="text-faint text-[11px]">{{ searchOpen ? '−' : '+' }}</span>
                 </button>
                 <div v-if="searchOpen" class="border-line space-y-3 border-t px-4 py-3">
                     <div class="flex items-center gap-2">
-                        <input v-model="searchQuery" class="app-input !text-xs" :placeholder="t('adminForm.kbSearchPlaceholder')" @keydown.enter.prevent="runSearch" />
-                        <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" :disabled="searching" @click="runSearch">{{ t('adminForm.kbSearchRun') }}</button>
+                        <input
+                            v-model="searchQuery"
+                            class="app-input !text-xs"
+                            :placeholder="t('adminForm.kbSearchPlaceholder')"
+                            @keydown.enter.prevent="runSearch"
+                        />
+                        <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" :disabled="searching" @click="runSearch">
+                            {{ t('adminForm.kbSearchRun') }}
+                        </button>
                     </div>
                     <p v-if="searchError" class="app-help-error">{{ searchError }}</p>
                     <div v-if="searchHits.length" class="space-y-2">
@@ -233,13 +298,30 @@ async function runSearch() {
 
         <AdminDrawer :open="editOpen" :title="t('adminForm.kbEditTitle')" width-class="sm:max-w-xl" @close="editOpen = false">
             <div class="space-y-3">
-                <input v-model="editForm.name" class="app-input" maxlength="100" :placeholder="t('adminForm.kbNamePlaceholder')" :aria-label="t('adminForm.kbNamePlaceholder')" />
-                <input v-model="editForm.description" class="app-input" maxlength="500" :placeholder="t('adminForm.description')" :aria-label="t('adminForm.description')" />
+                <input
+                    v-model="editForm.name"
+                    class="app-input"
+                    maxlength="100"
+                    :placeholder="t('adminForm.kbNamePlaceholder')"
+                    :aria-label="t('adminForm.kbNamePlaceholder')"
+                />
+                <input
+                    v-model="editForm.description"
+                    class="app-input"
+                    maxlength="500"
+                    :placeholder="t('adminForm.description')"
+                    :aria-label="t('adminForm.description')"
+                />
                 <select v-model="editForm.spaceId" class="app-input" :aria-label="t('adminForm.kbSpace')">
                     <option value="">{{ t('adminForm.kbGlobalSpace') }}</option>
                     <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
                 </select>
-                <input v-model="editForm.embeddingModel" class="app-input !font-mono !text-xs" :placeholder="t('adminForm.kbEmbeddingModel')" :aria-label="t('adminForm.kbEmbeddingModel')" />
+                <input
+                    v-model="editForm.embeddingModel"
+                    class="app-input !font-mono !text-xs"
+                    :placeholder="t('adminForm.kbEmbeddingModel')"
+                    :aria-label="t('adminForm.kbEmbeddingModel')"
+                />
                 <p v-if="editError" class="app-help-error">{{ editError }}</p>
             </div>
             <template #footer>

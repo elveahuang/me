@@ -1,4 +1,4 @@
-import { desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { agents, attachments, conversations, kbDocuments, knowledgeBases, messages, schedules, spaces } from '../db/schema';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
                 updatedAt: spaces.updatedAt,
             })
             .from(spaces)
-            .where(or(ilike(spaces.name, pattern), ilike(spaces.description, pattern), ilike(spaces.instructions, pattern)))
+            .where(and(eq(spaces.archived, false), or(ilike(spaces.name, pattern), ilike(spaces.description, pattern), ilike(spaces.instructions, pattern))))
             .orderBy(desc(spaces.updatedAt))
             .limit(GROUP_LIMIT),
         db
@@ -102,6 +102,7 @@ export default defineEventHandler(async (event) => {
                 mimeType: attachments.mimeType,
                 size: attachments.size,
                 category: attachments.category,
+                spaceId: attachments.spaceId,
                 createdAt: attachments.createdAt,
             })
             .from(attachments)

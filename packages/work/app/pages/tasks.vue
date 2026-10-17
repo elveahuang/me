@@ -224,7 +224,7 @@ async function save() {
         title,
         prompt,
         agentId: form.agentId,
-        spaceId: form.spaceId || undefined,
+        spaceId: form.spaceId || null,
         kind: form.kind,
         time: showClock.value ? form.time : '',
         intervalMinutes: showInterval.value ? form.intervalMinutes : undefined,
@@ -443,7 +443,9 @@ onMounted(() => {
                         <span class="text-lg leading-none">{{ row.agentEmoji }}</span>
                         {{ row.agentName }}
                     </span>
-                    <span v-if="row.spaceName" class="text-faint flex items-center gap-1">🗂️ {{ row.spaceName }}</span>
+                    <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="row.spaceName ? 'app-chip-brand' : ''">
+                        {{ row.spaceName || t('work.globalSpace') }}
+                    </span>
                     <span class="text-faint flex items-center gap-1">
                         {{ t('work.nextRun') }}
                         <b class="text-strong font-medium">{{
@@ -508,6 +510,8 @@ onMounted(() => {
                         <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
                     </select>
                 </div>
+
+                <p v-if="!form.spaceId" class="text-faint -mt-1 text-[11px]">{{ t('work.globalSpaceHint') }}</p>
 
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <select v-model="form.kind" class="app-input" :aria-label="t('work.fieldRepeat')">

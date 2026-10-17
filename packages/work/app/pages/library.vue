@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 
 interface KbItem {
     id: string;
-    spaceId: string;
+    spaceId: string | null;
     spaceName?: string | null;
     name: string;
     description: string;
@@ -21,18 +21,36 @@ interface KbItem {
  * 知识库仍以 `/settings/knowledge` 为编辑面；资料库负责发现、搜索和跳转。
  */
 const { t } = useI18n();
-const keyword = ref('');
-const page = ref(1);
+const route = useRoute();
+const router = useRouter();
+const { spaces } = useChatSidebar();
+
+type LibraryTab = 'all' | 'files' | 'knowledge';
+function queryText(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+}
+function queryPage(value: unknown): number {
+    const parsed = Number.parseInt(queryText(value), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+function queryTab(value: unknown): LibraryTab {
+    return value === 'files' || value === 'knowledge' ? value : 'all';
+}
+
+const keyword = ref(queryText(route.query.q));
+const page = ref(queryPage(route.query.page));
 const pageSize = 24;
 const fileInput = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 const uploadError = ref('');
-const tab = ref<'all' | 'files' | 'knowledge'>('all');
+const tab = ref<LibraryTab>(queryTab(route.query.tab));
+const spaceFilter = ref(queryText(route.query.space));
 
 const attachmentQuery = computed(() => ({
     page: page.value,
     pageSize,
     keyword: keyword.value.trim() || undefined,
+    spaceId: spaceFilter.value || undefined,
 }));
 const {
     data: attachmentData,
@@ -50,6 +68,7 @@ const {
     error: kbsError,
     refresh: refreshKbs,
 } = await useFetch<KbItem[]>('/api/settings/knowledge-bases', {
+    query: computed(() => ({ spaceId: spaceFilter.value || undefined })),
     lazy: true,
     default: () => [],
 });
@@ -64,8 +83,35 @@ const totalDocs = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.docum
 const totalChunks = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.chunkCount, 0));
 const totalPages = computed(() => Math.max(1, Math.ceil((attachmentData.value?.total ?? 0) / pageSize)));
 
-watch(keyword, () => {
+watch([keyword, spaceFilter], () => {
     page.value = 1;
+});
+
+watch(
+    () => [route.query.tab, route.query.q, route.query.page, route.query.space] as const,
+    ([nextTab, nextKeyword, nextPage, nextSpace]) => {
+        const normalizedTab = queryTab(nextTab);
+        const normalizedKeyword = queryText(nextKeyword);
+        const normalizedPage = queryPage(nextPage);
+        const normalizedSpace = queryText(nextSpace);
+        if (tab.value !== normalizedTab) tab.value = normalizedTab;
+        if (keyword.value !== normalizedKeyword) keyword.value = normalizedKeyword;
+        if (page.value !== normalizedPage) page.value = normalizedPage;
+        if (spaceFilter.value !== normalizedSpace) spaceFilter.value = normalizedSpace;
+    },
+);
+
+watch([tab, keyword, page, spaceFilter], () => {
+    const query = { ...route.query };
+    if (tab.value === 'all') delete query.tab;
+    else query.tab = tab.value;
+    if (keyword.value.trim()) query.q = keyword.value.trim();
+    else delete query.q;
+    if (page.value > 1) query.page = String(page.value);
+    else delete query.page;
+    if (spaceFilter.value) query.space = spaceFilter.value;
+    else delete query.space;
+    void router.replace({ query });
 });
 const loading = computed(() => attachmentsPending.value || kbsPending.value);
 const hasError = computed(() => Boolean(attachmentsError.value || kbsError.value));
@@ -184,6 +230,10 @@ async function removeFile(file: { id: string; filename: string }) {
             >
                 {{ item.label }}
             </button>
+            <select v-model="spaceFilter" class="app-input !w-auto !text-xs" :aria-label="t('knowledge.allSpaces')">
+                <option value="">{{ t('knowledge.allSpaces') }}</option>
+                <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+            </select>
         </div>
 
         <div v-if="hasError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
@@ -225,7 +275,11 @@ async function removeFile(file: { id: string; filename: string }) {
                                 <span>{{ formatDateTime(file.createdAt) }}</span>
                             </div>
                         </a>
-                        <button type="button" class="app-btn app-btn-ghost app-btn-sm self-start !px-2 !py-1 !text-[10px] !text-[color:var(--danger)]" @click="removeFile(file)">
+                        <button
+                            type="button"
+                            class="app-btn app-btn-ghost app-btn-sm self-start !px-2 !py-1 !text-[10px] !text-[color:var(--danger)]"
+                            @click="removeFile(file)"
+                        >
                             {{ t('common.delete') }}
                         </button>
                     </div>
@@ -248,7 +302,12 @@ async function removeFile(file: { id: string; filename: string }) {
                     <NuxtLink to="/settings/knowledge" class="text-hover-brand text-[11px] font-bold">{{ t('library.manageKnowledge') }}</NuxtLink>
                 </div>
                 <div v-if="kbs.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    <NuxtLink v-for="kb in kbs" :key="kb.id" to="/settings/knowledge" class="app-card app-card-hover flex flex-col gap-3 p-4">
+                    <NuxtLink
+                        v-for="kb in kbs"
+                        :key="kb.id"
+                        :to="`/settings/knowledge/${encodeURIComponent(kb.id)}`"
+                        class="app-card app-card-hover flex flex-col gap-3 p-4"
+                    >
                         <div class="flex items-start gap-3">
                             <span class="app-avatar-icon h-11 w-11 shrink-0 text-xl">📚</span>
                             <div class="min-w-0 flex-1">

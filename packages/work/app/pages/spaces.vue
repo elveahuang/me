@@ -13,6 +13,8 @@ const { t } = useI18n();
 const { refreshSpaces } = useChatSidebar();
 
 const spaces = ref<WorkSpace[]>([]);
+const keyword = ref('');
+const scope = ref<'active' | 'archived'>('active');
 const loading = ref(true);
 const listError = ref('');
 const drawerOpen = ref(false);
@@ -21,6 +23,16 @@ const saving = ref(false);
 const formError = ref('');
 const actionError = ref('');
 const success = ref('');
+
+const activeCount = computed(() => spaces.value.filter((space) => !space.archived).length);
+const archivedCount = computed(() => spaces.value.filter((space) => space.archived).length);
+const filteredSpaces = computed(() => {
+    const q = keyword.value.trim().toLowerCase();
+    return spaces.value.filter((space) => {
+        if (scope.value === 'active' ? space.archived : !space.archived) return false;
+        return !q || space.name.toLowerCase().includes(q) || space.description.toLowerCase().includes(q);
+    });
+});
 
 const form = reactive({
     name: '',
@@ -128,9 +140,38 @@ async function toggleArchive(space: WorkSpace) {
                 <h1 class="app-page-title text-strong">{{ t('spaces.title') }}</h1>
                 <p class="app-page-subtitle">{{ t('spaces.subtitle') }}</p>
             </div>
-            <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" @click="openCreate">
-                <AppIcon name="plus" :size="14" />
-                <span>{{ t('spaces.new') }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+                <input
+                    v-model="keyword"
+                    class="app-input !w-44 !text-xs"
+                    :placeholder="t('spaces.searchPlaceholder')"
+                    :aria-label="t('spaces.searchPlaceholder')"
+                />
+                <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" @click="openCreate">
+                    <AppIcon name="plus" :size="14" />
+                    <span>{{ t('spaces.new') }}</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <button
+                type="button"
+                class="app-chip"
+                :class="scope === 'active' ? 'app-chip-brand' : ''"
+                :aria-pressed="scope === 'active'"
+                @click="scope = 'active'"
+            >
+                {{ t('spaces.active') }} <span class="ml-1 opacity-70">{{ activeCount }}</span>
+            </button>
+            <button
+                type="button"
+                class="app-chip"
+                :class="scope === 'archived' ? 'app-chip-brand' : ''"
+                :aria-pressed="scope === 'archived'"
+                @click="scope = 'archived'"
+            >
+                {{ t('spaces.archived') }} <span class="ml-1 opacity-70">{{ archivedCount }}</span>
             </button>
         </div>
 
@@ -148,8 +189,8 @@ async function toggleArchive(space: WorkSpace) {
             <div v-for="i in 6" :key="i" class="app-skeleton app-skeleton-card" />
         </div>
 
-        <div v-else-if="spaces.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <article v-for="space in spaces" :key="space.id" class="app-card flex flex-col p-5">
+        <div v-else-if="filteredSpaces.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <article v-for="space in filteredSpaces" :key="space.id" class="app-card flex flex-col p-5">
                 <div class="flex items-start gap-3">
                     <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--surface-3)] text-2xl">{{ space.icon }}</span>
                     <div class="min-w-0 flex-1">
@@ -171,10 +212,17 @@ async function toggleArchive(space: WorkSpace) {
                 </div>
 
                 <div class="mt-auto flex flex-wrap items-center gap-2 pt-5">
-                    <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openSpace(space)">{{ t('spaces.openSpace') }}</button>
+                    <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openSpace(space)">
+                        {{ t('spaces.openSpace') }}
+                    </button>
                     <button v-else type="button" class="app-btn app-btn-primary app-btn-sm" @click="toggleArchive(space)">{{ t('spaces.restore') }}</button>
                     <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="openEdit(space)">{{ t('common.edit') }}</button>
-                    <button v-if="!space.archived && space.id !== 'default'" type="button" class="app-btn app-btn-ghost app-btn-sm" @click="toggleArchive(space)">
+                    <button
+                        v-if="!space.archived && space.id !== 'default'"
+                        type="button"
+                        class="app-btn app-btn-ghost app-btn-sm"
+                        @click="toggleArchive(space)"
+                    >
                         {{ t('spaces.archive') }}
                     </button>
                     <button
@@ -191,8 +239,10 @@ async function toggleArchive(space: WorkSpace) {
 
         <div v-else class="app-empty">
             <AppIcon name="folder-outline" :size="30" class="app-empty-icon" />
-            <p class="app-empty-title">{{ t('spaces.empty') }}</p>
-            <p class="app-empty-desc">{{ t('spaces.emptyHint') }}</p>
+            <p class="app-empty-title">{{ keyword ? t('spaces.noMatches') : scope === 'archived' ? t('spaces.archivedEmpty') : t('spaces.empty') }}</p>
+            <p class="app-empty-desc">
+                {{ keyword ? t('spaces.searchPlaceholder') : scope === 'archived' ? t('spaces.archivedEmptyHint') : t('spaces.emptyHint') }}
+            </p>
         </div>
 
         <AdminDrawer :open="drawerOpen" :title="editingId ? t('spaces.edit') : t('spaces.new')" width-class="sm:max-w-xl" @close="drawerOpen = false">

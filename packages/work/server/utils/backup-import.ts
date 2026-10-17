@@ -160,6 +160,10 @@ export async function importWorkBackup(payload: unknown): Promise<BackupImportRe
             }
         });
     } catch (error) {
+        const record = error as { statusCode?: number; statusMessage?: string };
+        if (record.statusCode && record.statusMessage) {
+            throw createError({ statusCode: record.statusCode, statusMessage: record.statusMessage });
+        }
         console.error('[import] 备份导入失败:', error);
         throw createError({ statusCode: 400, statusMessage: '备份导入失败：引用的数据不完整或格式不兼容' });
     }

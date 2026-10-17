@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 definePageMeta({ layout: 'settings' });
@@ -185,6 +184,65 @@ async function saveName() {
 
 const saveStateLabel = computed(() => (saveState.value === 'saving' ? t('settings.preferenceSaving') : t('settings.preferenceFailed')));
 
+interface HealthCheck {
+    status: 'up' | 'down' | 'degraded' | 'not_configured';
+}
+interface HealthResponse {
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    ready: boolean;
+    timestamp: string;
+    totalLatencyMs: number;
+    checks: {
+        database: HealthCheck;
+        redis: HealthCheck;
+        modelProvider: HealthCheck;
+    };
+}
+
+const health = ref<HealthResponse | null>(null);
+const healthLoading = ref(false);
+const healthError = ref('');
+
+async function loadHealth() {
+    if (healthLoading.value) return;
+    healthLoading.value = true;
+    healthError.value = '';
+    try {
+        health.value = await $fetch<HealthResponse>('/api/health');
+    } catch (e) {
+        health.value = null;
+        healthError.value = extractApiError(e, t('common.loadFailed'));
+    } finally {
+        healthLoading.value = false;
+    }
+}
+
+onMounted(() => {
+    void loadHealth();
+});
+
+const healthItems = computed(() => {
+    if (!health.value) return [];
+    return [
+        { key: 'database', label: t('settings.healthDatabase'), status: health.value.checks.database.status },
+        { key: 'redis', label: t('settings.healthRedis'), status: health.value.checks.redis.status },
+        { key: 'model', label: t('settings.healthModel'), status: health.value.checks.modelProvider.status },
+    ];
+});
+
+function healthTone(status: string) {
+    if (status === 'up' || status === 'healthy') return 'app-badge-success';
+    if (status === 'down' || status === 'unhealthy') return 'app-badge-danger';
+    if (status === 'degraded') return 'app-badge-warning';
+    return 'app-badge-neutral';
+}
+
+function healthLabel(status: string) {
+    if (status === 'up' || status === 'healthy') return t('settings.healthUp');
+    if (status === 'down' || status === 'unhealthy') return t('settings.healthDown');
+    if (status === 'degraded') return t('settings.healthDegraded');
+    return t('settings.healthNotConfigured');
+}
 </script>
 
 <template>
@@ -250,6 +308,30 @@ const saveStateLabel = computed(() => (saveState.value === 'saving' ? t('setting
             </template>
         </section>
 
+        <section class="app-card space-y-3 p-4 sm:p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-black"><AppIcon name="history" :size="15" class="mr-1 inline" />{{ t('settings.healthTitle') }}</h2>
+                    <p class="text-faint mt-1 text-[11px]">{{ t('settings.healthSubtitle') }}</p>
+                </div>
+                <button type="button" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs" :disabled="healthLoading" @click="loadHealth">
+                    <AppIcon name="autorenew" :size="14" :class="healthLoading ? 'animate-spin' : ''" />
+                    <span>{{ healthLoading ? t('common.loading') : t('common.retry') }}</span>
+                </button>
+            </div>
+            <div v-if="healthError" class="app-alert app-alert-danger !text-xs">{{ healthError }}</div>
+            <div v-else-if="health" class="grid gap-2 sm:grid-cols-4">
+                <div class="rounded-xl border border-[color:var(--line)] p-3">
+                    <p class="text-faint text-[10px]">{{ t('settings.healthOverall') }}</p>
+                    <span class="app-badge mt-1 inline-flex" :class="healthTone(health.status)">{{ healthLabel(health.status) }}</span>
+                </div>
+                <div v-for="item in healthItems" :key="item.key" class="rounded-xl border border-[color:var(--line)] p-3">
+                    <p class="text-faint text-[10px]">{{ item.label }}</p>
+                    <span class="app-badge mt-1 inline-flex" :class="healthTone(item.status)">{{ healthLabel(item.status) }}</span>
+                </div>
+            </div>
+        </section>
+
         <section class="app-card space-y-2 p-4 sm:p-5">
             <h2 class="text-sm font-black"><AppIcon name="cog-outline" :size="15" class="mr-1 inline" />{{ t('settings.workspaceTitle') }}</h2>
             <form class="flex flex-wrap items-center gap-2" @submit.prevent="saveName">
@@ -272,6 +354,5 @@ const saveStateLabel = computed(() => (saveState.value === 'saving' ? t('setting
                 <span>{{ nameSavedHint }}</span>
             </p>
         </section>
-
     </div>
 </template>

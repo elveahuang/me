@@ -123,7 +123,9 @@ function durationLabel(ms: number | null) {
                     <span class="text-faint shrink-0 text-[10px]">{{ formatDateTime(run.startedAt) }}</span>
                 </div>
                 <div class="text-faint flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-                    <span>{{ run.spaceName || t('runs.space') }}</span>
+                    <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="run.spaceName ? 'app-chip-brand' : ''">{{
+                        run.spaceName || t('knowledge.global')
+                    }}</span>
                     <span>{{ run.agentName || t('runs.agent') }}</span>
                     <span>{{ t('runs.duration') }} · {{ durationLabel(run.durationMs) }}</span>
                     <span v-if="run.outputConversationId" class="text-brand font-medium">{{ t('runs.openOutput') }}</span>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDateTime } from '@commons/contract';
+import { extractApiError, formatBytes, formatDateTime } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import type { KnowledgeBaseItem, KnowledgeDocumentItem } from '../../../../utils/knowledge';
 
@@ -18,27 +18,66 @@ const actionError = ref('');
 const success = ref('');
 const fileRef = ref<HTMLInputElement | null>(null);
 const form = reactive({ title: '', content: '' });
+const selectedFile = ref<{ name: string; size: number } | null>(null);
+const keyword = ref('');
+const statusFilter = ref('');
+let loadToken = 0;
+
+const filteredDocs = computed(() => {
+    const q = keyword.value.trim().toLowerCase();
+    return docs.value.filter((doc) => {
+        if (statusFilter.value && doc.status !== statusFilter.value) return false;
+        return !q || doc.title.toLowerCase().includes(q);
+    });
+});
+const docChunkTotal = computed(() => docs.value.reduce((sum, doc) => sum + doc.chunkCount, 0));
+const statusOptions = computed(() => [...new Set(docs.value.map((doc) => doc.status).filter(Boolean))]);
 
 async function load() {
+    const token = ++loadToken;
+    const id = kbId.value;
     loading.value = true;
     listError.value = '';
     try {
         const [detail, rows] = await Promise.all([
-            $fetch<KnowledgeBaseItem>(`/api/settings/knowledge-bases/${encodeURIComponent(kbId.value)}`),
-            $fetch<KnowledgeDocumentItem[]>(`/api/settings/knowledge-bases/${encodeURIComponent(kbId.value)}/documents`, { query: { limit: 500 } }),
+            $fetch<KnowledgeBaseItem>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}`),
+            $fetch<KnowledgeDocumentItem[]>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}/documents`, { query: { limit: 500 } }),
         ]);
+        if (token !== loadToken) return;
         kb.value = detail;
         docs.value = rows;
     } catch (e) {
+        if (token !== loadToken) return;
         listError.value = extractApiError(e, t('common.loadFailed'));
         kb.value = null;
         docs.value = [];
     } finally {
-        loading.value = false;
+        if (token === loadToken) loading.value = false;
     }
 }
 
 onMounted(load);
+
+watch(kbId, () => {
+    keyword.value = '';
+    statusFilter.value = '';
+    actionError.value = '';
+    success.value = '';
+    selectedFile.value = null;
+    if (fileRef.value) fileRef.value.value = '';
+    void load();
+});
+
+function statusTone(status: string) {
+    if (status === 'ready') return 'app-badge-success';
+    if (status === 'failed' || status === 'error') return 'app-badge-danger';
+    return 'app-badge-info';
+}
+
+function onFileChange(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    selectedFile.value = file ? { name: file.name, size: file.size } : null;
+}
 
 async function importDocument() {
     if (uploading.value) return;
@@ -65,6 +104,7 @@ async function importDocument() {
         form.title = '';
         form.content = '';
         if (fileRef.value) fileRef.value.value = '';
+        selectedFile.value = null;
         success.value = t('adminForm.kbDocImported');
         await load();
     } catch (e) {
@@ -111,6 +151,12 @@ async function removeDocument(doc: KnowledgeDocumentItem) {
                 <div>
                     <h1 class="app-page-title text-strong truncate">{{ kb.name }} · {{ t('adminForm.kbDocs') }}</h1>
                     <p class="app-page-subtitle">{{ t('knowledge.documentsSubtitle') }}</p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="app-chip !px-1.5 !py-0 !text-[9px]" :class="kb.spaceName ? 'app-chip-brand' : ''">{{
+                            kb.spaceName || t('knowledge.global')
+                        }}</span>
+                        <span class="app-chip !px-1.5 !py-0 font-mono !text-[9px]">{{ kb.embeddingModel }}</span>
+                    </div>
                 </div>
                 <span class="app-chip">{{ t('library.documents', { n: kb.documentCount }) }}</span>
             </div>
@@ -120,11 +166,36 @@ async function removeDocument(doc: KnowledgeDocumentItem) {
 
             <section class="app-card space-y-3 p-4">
                 <h2 class="text-sm font-black">{{ t('adminForm.kbDocImport') }}</h2>
-                <input v-model="form.title" class="app-input" maxlength="200" :placeholder="t('adminForm.kbDocTitlePlaceholder')" :aria-label="t('adminForm.kbDocTitlePlaceholder')" />
-                <textarea v-model="form.content" rows="5" class="app-input" :placeholder="t('adminForm.kbDocContentPlaceholder')" :aria-label="t('adminForm.kbDocContentLabel')" />
+                <input
+                    v-model="form.title"
+                    class="app-input"
+                    maxlength="200"
+                    :placeholder="t('adminForm.kbDocTitlePlaceholder')"
+                    :aria-label="t('adminForm.kbDocTitlePlaceholder')"
+                />
+                <textarea
+                    v-model="form.content"
+                    rows="5"
+                    class="app-input"
+                    :placeholder="t('adminForm.kbDocContentPlaceholder')"
+                    :aria-label="t('adminForm.kbDocContentLabel')"
+                />
                 <div class="flex flex-wrap items-center gap-3">
-                    <input ref="fileRef" type="file" accept=".txt,.md,.markdown,.csv,.json" class="text-muted-2 block text-xs" :aria-label="t('adminForm.kbDocFileLabel')" />
-                    <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" :disabled="uploading" @click="importDocument">
+                    <input
+                        ref="fileRef"
+                        type="file"
+                        accept=".txt,.md,.markdown,.csv,.json"
+                        class="text-muted-2 block text-xs"
+                        :aria-label="t('adminForm.kbDocFileLabel')"
+                        @change="onFileChange"
+                    />
+                    <span v-if="selectedFile" class="app-chip !text-[10px]">{{ selectedFile.name }} · {{ formatBytes(selectedFile.size) }}</span>
+                    <button
+                        type="button"
+                        class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs"
+                        :disabled="uploading || (!selectedFile && !form.content.trim())"
+                        @click="importDocument"
+                    >
                         <AppIcon name="tray-arrow-up" :size="14" />
                         <span>{{ uploading ? t('adminForm.kbDocImporting') : t('adminForm.kbDocImport') }}</span>
                     </button>
@@ -132,26 +203,67 @@ async function removeDocument(doc: KnowledgeDocumentItem) {
             </section>
 
             <section class="app-card overflow-hidden">
-                <div class="border-line flex items-center justify-between border-b px-4 py-3">
-                    <h2 class="text-sm font-black">{{ t('adminForm.kbDocs') }}</h2>
-                    <span class="text-faint text-[11px]">{{ docs.length }}</span>
+                <div class="border-line flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-sm font-black">{{ t('adminForm.kbDocs') }}</h2>
+                        <p class="text-faint mt-0.5 text-[10px]">
+                            {{ t('library.documents', { n: docs.length }) }} · {{ t('library.chunks', { n: docChunkTotal }) }}
+                        </p>
+                    </div>
+                    <span class="text-faint text-[11px]">{{ filteredDocs.length }} / {{ docs.length }}</span>
                 </div>
-                <div v-if="docs.length" class="divide-line divide-y">
-                    <div v-for="doc in docs" :key="doc.id" class="flex items-center gap-3 px-4 py-3">
+                <div v-if="docs.length" class="border-line flex flex-wrap items-center gap-2 border-b px-4 py-2">
+                    <input
+                        v-model="keyword"
+                        class="app-input !w-48 !text-xs"
+                        :placeholder="t('knowledge.searchDocuments')"
+                        :aria-label="t('knowledge.searchDocuments')"
+                    />
+                    <button
+                        type="button"
+                        class="app-chip"
+                        :class="!statusFilter ? 'app-chip-brand' : ''"
+                        :aria-pressed="!statusFilter"
+                        @click="statusFilter = ''"
+                    >
+                        {{ t('common.all') }}
+                    </button>
+                    <button
+                        v-for="status in statusOptions"
+                        :key="status"
+                        type="button"
+                        class="app-chip"
+                        :class="statusFilter === status ? 'app-chip-brand' : ''"
+                        :aria-pressed="statusFilter === status"
+                        @click="statusFilter = status"
+                    >
+                        {{ status }}
+                    </button>
+                </div>
+                <div v-if="filteredDocs.length" class="divide-line divide-y">
+                    <div v-for="doc in filteredDocs" :key="doc.id" class="flex items-center gap-3 px-4 py-3">
                         <AppIcon name="file-outline" :size="16" class="text-faint shrink-0" />
                         <div class="min-w-0 flex-1">
                             <p class="text-strong truncate text-xs font-bold">{{ doc.title }}</p>
-                            <p class="text-faint mt-0.5 text-[10px]">{{ t('adminForm.kbDocChunks', { n: doc.chunkCount }) }} · {{ formatDateTime(doc.createdAt) }}</p>
+                            <p class="text-faint mt-0.5 text-[10px]">
+                                {{ t('adminForm.kbDocChunks', { n: doc.chunkCount }) }} · {{ formatDateTime(doc.createdAt) }}
+                            </p>
                         </div>
-                        <span class="app-badge app-badge-neutral !text-[9px]">{{ doc.status }}</span>
-                        <button type="button" class="app-btn app-btn-ghost app-btn-icon !text-[color:var(--danger)]" :title="t('common.delete')" :aria-label="t('common.delete')" @click="removeDocument(doc)">
+                        <span class="app-badge !text-[9px]" :class="statusTone(doc.status)">{{ doc.status }}</span>
+                        <button
+                            type="button"
+                            class="app-btn app-btn-ghost app-btn-icon !text-[color:var(--danger)]"
+                            :title="t('common.delete')"
+                            :aria-label="t('common.delete')"
+                            @click="removeDocument(doc)"
+                        >
                             <AppIcon name="trash-can-outline" :size="15" />
                         </button>
                     </div>
                 </div>
                 <div v-else class="app-empty py-10">
                     <AppIcon name="file-outline" :size="28" class="app-empty-icon" />
-                    <p class="app-empty-title">{{ t('adminForm.kbDocEmpty') }}</p>
+                    <p class="app-empty-title">{{ keyword || statusFilter ? t('knowledge.noDocumentMatches') : t('adminForm.kbDocEmpty') }}</p>
                 </div>
             </section>
         </template>

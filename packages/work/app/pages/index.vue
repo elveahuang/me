@@ -279,7 +279,7 @@ function durationLabel(ms: number | null) {
                         <NuxtLink
                             v-for="space in spaces"
                             :key="space.id"
-                            to="/spaces"
+                            :to="`/spaces/${encodeURIComponent(space.id)}`"
                             class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--surface-3)]"
                         >
                             <span class="text-lg">{{ space.icon }}</span>

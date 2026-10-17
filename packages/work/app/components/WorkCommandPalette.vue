@@ -35,6 +35,7 @@ interface AttachmentHit {
     filename: string;
     mimeType: string;
     size: number;
+    spaceId: string | null;
 }
 interface KnowledgeHit {
     id: string;
@@ -72,6 +73,7 @@ const panelRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
 const results = ref<SearchResponse | null>(null);
 const loading = ref(false);
+const searchError = ref(false);
 const activeIndex = ref(0);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let requestToken = 0;
@@ -120,7 +122,7 @@ const searchItems = computed<PaletteItem[]>(() => {
             label: hit.filename,
             description: hit.mimeType,
             icon: hit.mimeType.startsWith('image/') ? 'file-image-outline' : 'file-outline',
-            to: '/library',
+            to: `/library?${new URLSearchParams({ tab: 'files', q: hit.filename, ...(hit.spaceId ? { space: hit.spaceId } : {}) }).toString()}`,
         })),
         ...data.knowledgeBases.map((hit) => ({
             key: `kb-${hit.id}`,
@@ -128,7 +130,7 @@ const searchItems = computed<PaletteItem[]>(() => {
             label: hit.name,
             description: hit.description,
             icon: 'book-open-page-variant-outline',
-            to: '/settings/knowledge',
+            to: `/settings/knowledge/${encodeURIComponent(hit.id)}`,
         })),
         ...data.kbDocuments.map((hit) => ({
             key: `kbdoc-${hit.id}`,
@@ -136,12 +138,20 @@ const searchItems = computed<PaletteItem[]>(() => {
             label: hit.title,
             description: hit.kbName,
             icon: 'file-outline',
-            to: '/settings/knowledge',
+            to: `/settings/knowledge/${encodeURIComponent(hit.kbId)}/documents`,
         })),
     ];
 });
 
-const items = computed(() => searchItems.value);
+const quickItems = computed<PaletteItem[]>(() => [
+    { key: 'quick-today', group: t('nav.groupWork'), label: t('nav.today'), icon: 'view-dashboard-outline', to: '/' },
+    { key: 'quick-spaces', group: t('nav.groupWork'), label: t('nav.spaces'), icon: 'folder-outline', to: '/spaces' },
+    { key: 'quick-runs', group: t('nav.groupWork'), label: t('nav.runs'), icon: 'history', to: '/runs' },
+    { key: 'quick-library', group: t('nav.groupWork'), label: t('nav.library'), icon: 'bookshelf', to: '/library' },
+    { key: 'quick-tasks', group: t('nav.groupWork'), label: t('nav.schedules'), icon: 'timer-outline', to: '/tasks' },
+    { key: 'quick-settings', group: t('nav.groupWork'), label: t('nav.systemSettings'), icon: 'cog-outline', to: '/settings' },
+]);
+const items = computed(() => (query.value.trim() ? searchItems.value : quickItems.value));
 const groupedItems = computed(() => {
     const groups = new Map<string, PaletteItem[]>();
     for (const item of items.value) {
@@ -156,8 +166,10 @@ watch(open, async (value) => {
     if (!value) {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = null;
+        requestToken += 1;
         results.value = null;
         loading.value = false;
+        searchError.value = false;
         query.value = '';
         return;
     }
@@ -173,6 +185,7 @@ watch(query, (value) => {
     if (!q) {
         results.value = null;
         loading.value = false;
+        searchError.value = false;
         return;
     }
     loading.value = true;
@@ -180,9 +193,15 @@ watch(query, (value) => {
         const token = ++requestToken;
         try {
             const data = await $fetch<SearchResponse>('/api/search', { query: { q } });
-            if (token === requestToken) results.value = data;
+            if (token === requestToken) {
+                results.value = data;
+                searchError.value = false;
+            }
         } catch {
-            if (token === requestToken) results.value = null;
+            if (token === requestToken) {
+                results.value = null;
+                searchError.value = true;
+            }
         } finally {
             if (token === requestToken) loading.value = false;
         }
@@ -270,6 +289,7 @@ onBeforeUnmount(() => {
                             </button>
                         </section>
                     </div>
+                    <div v-else-if="searchError && !loading" class="app-alert app-alert-danger m-2 !text-xs">{{ t('commandPalette.searchFailed') }}</div>
                     <div v-else-if="query.trim() && !loading" class="app-empty py-12">
                         <AppIcon name="magnify" :size="28" class="app-empty-icon" />
                         <p class="app-empty-title">{{ t('commandPalette.noResults') }}</p>

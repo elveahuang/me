@@ -115,7 +115,15 @@ export async function searchLocalFiles(queryRaw: unknown, rootRaw?: unknown, max
     const query = typeof queryRaw === 'string' ? queryRaw.trim() : '';
     if (!query) fail('query 不能为空');
     if (query.length > 200) fail('query 最长 200 个字符');
-    const roots = rootRaw ? [await resolveAllowedPath(rootRaw)] : parseLocalRoots();
+    const roots: string[] = [];
+    if (rootRaw) {
+        const root = await resolveAllowedPath(rootRaw);
+        const info = await stat(root);
+        if (!info.isDirectory()) fail('root 必须是目录');
+        roots.push(root);
+    } else {
+        roots.push(...parseLocalRoots());
+    }
     if (!roots.length) fail('没有配置本地文件目录，请先在 .env 设置 WORK_FILE_ROOTS');
     const maxResults = Math.min(Math.max(Math.floor(Number(maxResultsRaw) || 30), 1), MAX_SEARCH_RESULTS);
     const lowerQuery = query.toLowerCase();
