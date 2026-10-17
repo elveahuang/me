@@ -8,7 +8,6 @@ import { noteColumns } from '../../utils/note-select';
 import { capBody } from '../../utils/request-body';
 import { routeId } from '../../utils/route-id';
 import { NOTE_CONTENT_MAX, WORK_TITLE_MAX, normalizeNoteKind, normalizeWorkOptionalText, normalizeWorkTags } from '../../utils/work-input';
-import { assertProjectExists, lockProjectRow } from '../../utils/work-project';
 
 const NOTE_BODY_LIMIT_BYTES = 1024 * 1024;
 
@@ -36,7 +35,6 @@ export default defineEventHandler(async (event) => {
     if (body.kind !== undefined) patch.kind = normalizeNoteKind(body.kind);
     if (body.pinned !== undefined) patch.pinned = normalizeAdminBoolean(body.pinned, 'pinned', false);
     if (body.tags !== undefined) patch.tags = normalizeWorkTags(body.tags);
-    if (body.projectId !== undefined) patch.projectId = await assertProjectExists(body.projectId);
 
     // 改了正文就要让旧索引失效：summary 是给检索回喂用的，留着旧值等于拿过期结论回答新问题。
     // 清空之后立刻补一次异步索引（摘要 + 向量），否则这条笔记在用户下一次点开「重建索引」之前
@@ -48,11 +46,7 @@ export default defineEventHandler(async (event) => {
         patch.embeddingDim = null;
     }
 
-    const [row] = await db.transaction(async (tx) => {
-        // 与新建同一口径：锁父项目与写笔记同事务，并发删除项目时得到 400 而不是 23503 → 500
-        if (patch.projectId !== undefined) await lockProjectRow(tx, patch.projectId as string | null);
-        return tx.update(notes).set(patch).where(eq(notes.id, id)).returning(noteColumns);
-    });
+    const [row] = await db.update(notes).set(patch).where(eq(notes.id, id)).returning(noteColumns);
     if (!row) throw createError({ statusCode: 404, statusMessage: '笔记不存在' });
     if (body.content !== undefined) scheduleNoteIndex(id);
     return row;

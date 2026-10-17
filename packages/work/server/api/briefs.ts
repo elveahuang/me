@@ -12,6 +12,14 @@ import { shanghaiDateKey } from '../utils/work-day';
 const BRIEF_LIST_MAX = 60;
 
 /**
+ * 读接口的列集合：`data`（结构化快照）刻意不在里面。
+ *
+ * 它只服务于「正文丢了按同一份事实重建」，界面一行都不读；一份快照随排期数量增长到几十 KB，
+ * 单日接口与历史列表都是给人看的，把它们一起发出去等于每次浏览都搬一遍快照。
+ */
+const readColumns = { briefDate: briefs.briefDate, content: briefs.content, model: briefs.model, generatedAt: briefs.generatedAt };
+
+/**
  * 每日简报：读历史、按需生成。
  *
  * 生成走 `generateBrief()`，与定时任务 `server/tasks/brief/daily.ts` 共用同一条链路
@@ -30,7 +38,9 @@ export default defineEventHandler(async (event) => {
         const at = rawDate ? briefDateInput(rawDate) : null;
         if (rawDate && !at) throw createError({ statusCode: 400, statusMessage: 'date 必须是 YYYY-MM-DD' });
         try {
-            return await generateBrief({ at: at ?? new Date(), force: body?.force === true });
+            const { brief, generated } = await generateBrief({ at: at ?? new Date(), force: body?.force === true });
+            // 手动生成后今日页直接把返回值当简报正文用，所以这里也只回展示四列（`data` 快照同理不外传）
+            return { brief: { briefDate: brief.briefDate, content: brief.content, model: brief.model, generatedAt: brief.generatedAt }, generated };
         } catch (error) {
             // `resolveModel()` 抛的 400（没配供应商/没配 Key）要原样带状态码出去，
             // 其它（外呼超时、供应商 5xx）折成 502 的可读文案，不把上游原文透给界面
@@ -45,7 +55,7 @@ export default defineEventHandler(async (event) => {
         const at = briefDateInput(dateParam);
         if (!at) throw createError({ statusCode: 400, statusMessage: 'date 必须是 YYYY-MM-DD' });
         const key = shanghaiDateKey(at);
-        const [row] = await db.select().from(briefs).where(eq(briefs.briefDate, key));
+        const [row] = await db.select(readColumns).from(briefs).where(eq(briefs.briefDate, key));
         return { date: key, brief: row ?? null };
     }
 
@@ -53,7 +63,7 @@ export default defineEventHandler(async (event) => {
     // 列表默认不带正文：一篇可到 6000 字，14 篇一起搬回浏览器会让每次刷新变成上百 KB。
     // `?full=1` 才给全文（简报历史页展开某天时按需再取单日）。
     if (stringParam(query.full) === '1') {
-        return db.select().from(briefs).orderBy(desc(briefs.briefDate)).limit(limit);
+        return db.select(readColumns).from(briefs).orderBy(desc(briefs.briefDate)).limit(limit);
     }
     return db
         .select({ briefDate: briefs.briefDate, model: briefs.model, generatedAt: briefs.generatedAt, excerpt: sql<string>`left(${briefs.content}, 160)` })

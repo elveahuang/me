@@ -9,8 +9,8 @@ export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 /**
  * 路径参数 `:id` 的形状闸门，必须在查库之前。
  *
- * 少这一步时 `GET /api/tasks/%00` 会把带 NUL 的串原样交给驱动，PostgreSQL 直接拒绝 `0x00`，
- * 而 drizzle 把整条 `Failed query: select "id", "project_id", "title", ...` 连同列清单一起
+ * 少这一步时 `GET /api/schedules/%00` 会把带 NUL 的串原样交给驱动，PostgreSQL 直接拒绝 `0x00`，
+ * 而 drizzle 把整条 `Failed query: select "id", "title", "prompt", ...` 连同列清单一起
  * 写进响应体——一条 URL 就透出全表结构；400 个 `x` 这类段同样是白白多打一次库。
  *
  * 显式 import h3 的理由同其它 utils：`pnpm work:test` 用 tsx 直跑，没有 Nitro 自动导入。

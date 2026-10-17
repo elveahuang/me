@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { extractApiError, formatDateTime } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import type { WorkNote, WorkProject } from '../../utils/work';
+import type { WorkNote } from '../../utils/work';
 
 /**
  * 笔记编辑器。
  *
  * 自动保存的口径：改动停止 1.2 秒后 PATCH **变化的字段**，而不是整篇覆盖——
- * 整篇覆盖会把「另一处（AI 工具 / 命令面板）刚写入的字段」抹掉，
+ * 整篇覆盖会把「另一处（AI 工具）刚写入的字段」抹掉，
  * 只发 diff 时服务端逐字段归一，冲突面小得多。
  *
  * 正文一变，服务端会清空摘要与向量并异步重建索引（`scheduleNoteIndex`），
@@ -19,12 +19,10 @@ const { t } = useI18n();
 const id = String(route.params.id ?? '');
 
 const { data: note, status: noteStatus } = await useFetch<WorkNote>(`/api/notes/${encodeURIComponent(id)}`, { lazy: true });
-const { data: projects } = useFetch<WorkProject[]>('/api/projects', { lazy: true, default: () => [] });
 
 const title = ref('');
 const content = ref('');
 const tags = ref<string[]>([]);
-const projectId = ref('');
 const kind = ref<'note' | 'daily'>('note');
 const pinned = ref(false);
 
@@ -47,7 +45,6 @@ watch(
         title.value = value.title ?? '';
         content.value = value.content ?? '';
         tags.value = Array.isArray(value.tags) ? [...value.tags] : [];
-        projectId.value = value.projectId ?? '';
         kind.value = value.kind === 'daily' ? 'daily' : 'note';
         pinned.value = !!value.pinned;
         void nextTick(() => (hydrated = true));
@@ -55,7 +52,7 @@ watch(
     { immediate: true },
 );
 
-watch([title, content, tags, projectId, kind, pinned], () => {
+watch([title, content, tags, kind, pinned], () => {
     if (hydrated) dirty.value = true;
 });
 
@@ -77,7 +74,6 @@ function changedFields(): Record<string, unknown> {
     if (title.value !== (base.title ?? '')) patch.title = title.value;
     if (content.value !== (base.content ?? '')) patch.content = content.value;
     if (tags.value.join('|') !== (base.tags ?? []).join('|')) patch.tags = tags.value;
-    if (projectId.value !== (base.projectId ?? '')) patch.projectId = projectId.value || null;
     if (kind.value !== base.kind) patch.kind = kind.value;
     if (pinned.value !== !!base.pinned) patch.pinned = pinned.value;
     return patch;
@@ -210,10 +206,6 @@ const notFound = computed(() => noteStatus.value === 'success' && !note.value);
                 <select v-model="kind" class="app-input !w-auto !text-xs" :aria-label="t('work.fieldKind')">
                     <option value="note">{{ t('work.kindNote') }}</option>
                     <option value="daily">{{ t('work.kindDaily') }}</option>
-                </select>
-                <select v-model="projectId" class="app-input !w-auto max-w-[10rem] truncate !text-xs" :aria-label="t('work.fieldProject')">
-                    <option value="">{{ t('work.noProject') }}</option>
-                    <option v-for="p in projects ?? []" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
                 <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-[11px]" :aria-pressed="pinned" @click="togglePin">
                     <AppIcon name="pin-outline" :size="13" />

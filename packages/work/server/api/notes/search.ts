@@ -3,10 +3,9 @@ import { requireMethod } from '../../utils/method';
 import { searchNotes } from '../../utils/note-search';
 import { intParam, stringParam } from '../../utils/query';
 import { capBody } from '../../utils/request-body';
-import { normalizeWorkId } from '../../utils/work-input';
 
 /**
- * 笔记语义检索：`GET /api/notes/search?q=...&limit=&projectId=`
+ * 笔记语义检索：`GET /api/notes/search?q=...&limit=`
  *
  * 与 `/api/notes?keyword=` 的分工：那条是列表页的字面筛选（SQL ilike，不打分），
  * 这里回答「我记过和 X 有关的东西吗」——先向量、拿不到再 Bigram 重叠，并按相关性排序。
@@ -22,16 +21,12 @@ export default defineEventHandler(async (event) => {
     const q = stringParam(query.q, 512) ?? '';
     if (!q.trim()) return { q: '', mode: 'none', hits: [] };
 
-    // 每次检索 = 一次嵌入外呼，且命令面板是「边打字边搜」的交互：没有这一道，
+    // 每次检索 = 一次嵌入外呼，而笔记页的搜索框是「边打字边搜」的交互：没有这一道，
     // 一次停顿就能把供应商打满，而 Nitro 进程会跟着请求一起堆等待。
     await gateExpensiveCalls('note-search', '笔记语义检索', 20);
 
-    let projectId: string | null = null;
-    const rawProject = stringParam(query.projectId, 64);
-    if (rawProject) projectId = normalizeWorkId(rawProject, 'projectId');
-
     const limit = intParam(query.limit, 10, 1, 50);
-    const hits = await searchNotes(q, { limit, projectId });
+    const hits = await searchNotes(q, { limit });
     return {
         q,
         // 命中方式随响应回传：界面据此说明「这是语义近似」还是「字面匹配」，

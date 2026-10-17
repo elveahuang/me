@@ -1,16 +1,16 @@
 import { generateText } from 'ai';
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
-import { agents, briefs, events, notes, tasks, type Brief, type TaskStatus } from '../db/schema';
+import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { agents, briefs, notes, schedules, type Brief } from '../db/schema';
 import { db } from './db';
 import { resolveModel } from './providers';
-import { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange } from './work-day';
+import { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange, shanghaiUpcomingEnd } from './work-day';
 
 /**
  * 每日简报：把「今天的工作台」压成一页可读的中文正文。
  *
- * 为什么要落库（`briefs` 主键就是日期）而不是每次打开 Today 页现生成：
- * 1. 生成一次就是一次真实外呼，Today 页一天打开几十次，按打开次数算账会把预算花在重复内容上；
- * 2. 简报是「早上那一眼」的快照，重跑一遍会因为用户已经完成了几条任务而改写历史，
+ * 为什么要落库（`briefs` 主键就是日期）而不是每次打开今日页现生成：
+ * 1. 生成一次就是一次真实外呼，今日页一天打开几十次，按打开次数算账会把预算花在重复内容上；
+ * 2. 简报是「早上那一眼」的快照，重跑一遍会因为用户已经跑完了几条排期而改写历史，
  *    主键幂等 + `data` 里存结构化快照，正文丢了还能按同一份事实重建。
  *
  * 模型不可用（没配供应商 / 外呼失败）时不写库、直接抛可读错误，
@@ -19,19 +19,20 @@ import { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange } from './work-day
 
 /** 简报正文上限：模型偶尔会写成长文，超过这个长度就截到最后一个整行，避免塞满提示词与界面。 */
 const BRIEF_CONTENT_MAX = 6_000;
-/** 进提示词的事实条数上限：逾期/今天/日程各一块，再多就把生成变成了搬运。 */
+/** 进提示词的事实条数上限：今天排期/今天运行/未来安排各一块，再多就把生成变成了搬运。 */
 const SNAPSHOT_ROWS_MAX = 20;
 /** 一次生成的外层预算：供应商停摆时宁可让定时任务这轮失败，也不把请求挂到 undici 的 300 秒默认上限。 */
 const GENERATE_TIMEOUT_MS = 60_000;
 
 export type BriefSnapshot = {
     date: string;
-    counts: Record<string, number>;
-    overdue: { id: string; title: string; dueAt: string | null; priority: string }[];
-    dueToday: { id: string; title: string; dueAt: string | null; priority: string; status: string }[];
-    doneToday: { id: string; title: string }[];
-    eventsToday: { id: string; title: string; startsAt: string; allDay: boolean; location: string }[];
-    upcoming: { id: string; title: string; startsAt: string }[];
+    counts: { schedulesEnabled: number; ranToday: number; failedToday: number; notesToday: number };
+    /** 今天排期表上要跑的（按 nextRunAt 落在北京日内筛） */
+    dueToday: { id: string; title: string; nextRunAt: string; kind: string }[];
+    /** 今天已经跑过的每一轮（含失败），失败的那条带原因 */
+    runsToday: { id: string; title: string; lastRunAt: string; lastStatus: string; lastError: string }[];
+    /** 未来 7 天里第一次要跑的安排，用来提醒「明天开始有排期」 */
+    upcoming: { id: string; title: string; nextRunAt: string }[];
     recentNotes: { id: string; title: string; updatedAt: string }[];
 };
 
@@ -42,85 +43,102 @@ function isoOrNull(value: Date | null): string | null {
 /**
  * 采集某一天的事实快照。
  *
- * 区间按北京日切：与 Today 页的 `/api/overview`、`/api/events` 默认窗口同一个口径，
- * 否则「早上 8 点前生成的简报」会算进昨天下午到期的任务。
+ * 区间按北京日切：与今日页的 `/api/overview` 同一个口径，
+ * 否则「早上 8 点前生成的简报」会把昨天夜里那轮运行算成今天的。
  */
 export async function collectBriefSnapshot(at: Date = new Date()): Promise<BriefSnapshot> {
     const { start, end } = shanghaiDayRange(at);
-    const open = inArray(tasks.status, ['todo', 'doing'] as TaskStatus[]);
-    const weekEnd = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // 「未来 7 天」= 从明天 00:00 起数 7 个北京日；按 start 数会只覆盖到第 6 天，
+    // 而提示词与页面都写着 7（同一口径见 overview.ts 与 workbench-tools.ts 的 work_today）
+    const weekEnd = shanghaiUpcomingEnd(end, 7);
 
-    const [overdue, dueToday, doneToday, todayEvents, upcoming, counts, recentNotes] = await Promise.all([
+    const [dueToday, runsToday, upcoming, enabledCount, notesToday, recentNotes] = await Promise.all([
         db
-            .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, priority: tasks.priority })
-            .from(tasks)
-            .where(and(open, isNotNull(tasks.dueAt), lt(tasks.dueAt, start)))
-            .orderBy(asc(tasks.dueAt))
+            .select({ id: schedules.id, title: schedules.title, nextRunAt: schedules.nextRunAt, kind: schedules.kind })
+            .from(schedules)
+            .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end)))
+            .orderBy(asc(schedules.nextRunAt))
             .limit(SNAPSHOT_ROWS_MAX),
         db
-            .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, priority: tasks.priority, status: tasks.status })
-            .from(tasks)
-            .where(and(open, gte(tasks.dueAt, start), lt(tasks.dueAt, end)))
-            .orderBy(asc(tasks.dueAt))
+            .select({
+                id: schedules.id,
+                title: schedules.title,
+                lastRunAt: schedules.lastRunAt,
+                lastStatus: schedules.lastStatus,
+                lastError: schedules.lastError,
+            })
+            .from(schedules)
+            .where(and(gte(schedules.lastRunAt, start), lt(schedules.lastRunAt, end), inArray(schedules.lastStatus, ['success', 'failed'] as const)))
+            .orderBy(desc(schedules.lastRunAt))
             .limit(SNAPSHOT_ROWS_MAX),
         db
-            .select({ id: tasks.id, title: tasks.title })
-            .from(tasks)
-            .where(and(eq(tasks.status, 'done'), gte(tasks.completedAt, start), lt(tasks.completedAt, end)))
-            .orderBy(desc(tasks.completedAt))
+            .select({ id: schedules.id, title: schedules.title, nextRunAt: schedules.nextRunAt })
+            .from(schedules)
+            .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
+            .orderBy(asc(schedules.nextRunAt))
             .limit(SNAPSHOT_ROWS_MAX),
         db
-            .select({ id: events.id, title: events.title, startsAt: events.startsAt, allDay: events.allDay, location: events.location })
-            .from(events)
-            .where(and(gte(events.startsAt, start), lt(events.startsAt, end)))
-            .orderBy(asc(events.startsAt))
-            .limit(SNAPSHOT_ROWS_MAX),
+            .select({ count: sql<number>`count(*)::int` })
+            .from(schedules)
+            .where(eq(schedules.enabled, true)),
         db
-            .select({ id: events.id, title: events.title, startsAt: events.startsAt })
-            .from(events)
-            .where(and(gte(events.startsAt, end), lt(events.startsAt, weekEnd)))
-            .orderBy(asc(events.startsAt))
-            .limit(SNAPSHOT_ROWS_MAX),
-        db
-            .select({ status: tasks.status, count: sql<number>`count(*)::int` })
-            .from(tasks)
-            .groupBy(tasks.status),
+            .select({ count: sql<number>`count(*)::int` })
+            .from(notes)
+            .where(and(gte(notes.createdAt, start), lt(notes.createdAt, end))),
         db.select({ id: notes.id, title: notes.title, updatedAt: notes.updatedAt }).from(notes).orderBy(desc(notes.updatedAt)).limit(8),
     ]);
 
-    const stat = { todo: 0, doing: 0, done: 0, cancelled: 0 } as Record<string, number>;
-    for (const row of counts) stat[row.status] = Number(row.count);
+    const failedToday = runsToday.filter((row) => row.lastStatus === 'failed').length;
 
     return {
         date: shanghaiDateKey(at),
-        counts: stat,
-        overdue: overdue.map((r) => ({ ...r, dueAt: isoOrNull(r.dueAt) })),
-        dueToday: dueToday.map((r) => ({ ...r, dueAt: isoOrNull(r.dueAt) })),
-        doneToday,
-        eventsToday: todayEvents.map((r) => ({ ...r, startsAt: r.startsAt.toISOString() })),
-        upcoming: upcoming.map((r) => ({ ...r, startsAt: r.startsAt.toISOString() })),
+        counts: {
+            schedulesEnabled: Number(enabledCount[0]?.count ?? 0),
+            ranToday: runsToday.length,
+            failedToday,
+            notesToday: Number(notesToday[0]?.count ?? 0),
+        },
+        dueToday: dueToday.map((r) => ({ ...r, nextRunAt: r.nextRunAt.toISOString() })),
+        runsToday: runsToday.map((r) => ({ ...r, lastRunAt: isoOrNull(r.lastRunAt) ?? '' })),
+        upcoming: upcoming.map((r) => ({ ...r, nextRunAt: r.nextRunAt.toISOString() })),
         recentNotes: recentNotes.map((r) => ({ ...r, updatedAt: r.updatedAt.toISOString() })),
     };
 }
 
 /** 快照 → 提示词里的事实清单（模型不需要 JSON 的全部细节，只要读得懂的条目）。 */
 function snapshotToPromptData(s: BriefSnapshot): string {
-    const line = (prefix: string, rows: { title: string; dueAt?: string | null; startsAt?: string; priority?: string; location?: string }[]) =>
-        `${prefix} ${rows.length}：${rows.map((r) => `${r.title}${r.dueAt ? `（${shanghaiDateKey(new Date(r.dueAt))}）` : ''}${r.startsAt ? `（${shanghaiDateKey(new Date(r.startsAt))} ${r.location ? `@${r.location}` : ''}）` : ''}`).join('、') || '无'}`;
+    /**
+     * 空串与脏值都要挡：`lastRunAt` 在认领失败或行被手改时可能是空串，
+     * 而 `new Date('')` 是 Invalid Date，`getUTCMinutes()` 回 NaN，
+     * 于是「Na:Na」直接进了简报正文（模型照抄，用户看到的是简报里写着乱码时间）。
+     */
+    const at = (iso: string): Date | null => {
+        const date = new Date(iso);
+        return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const day = (iso: string) => {
+        const date = at(iso);
+        return date ? shanghaiDateKey(date) : '未知时间';
+    };
+    const clock = (iso: string) => {
+        const date = at(iso);
+        if (!date) return '--:--';
+        const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+        return `${String(shifted.getUTCHours()).padStart(2, '0')}:${String(shifted.getUTCMinutes()).padStart(2, '0')}`;
+    };
+    const due = s.dueToday.map((r) => `${r.title}（${clock(r.nextRunAt)}）`).join('、') || '无';
+    const runs =
+        s.runsToday
+            .map((r) => `${r.title}（${clock(r.lastRunAt)} ${r.lastStatus === 'failed' ? `失败：${r.lastError || '未知原因'}` : '已跑出结果'}）`)
+            .join('、') || '无';
+    const upcoming = s.upcoming.map((r) => `${r.title}（${day(r.nextRunAt)} ${clock(r.nextRunAt)}）`).join('、') || '无';
     return [
         `日期：${s.date}（北京时间）`,
-        `任务计数：待办 ${s.counts.todo} / 进行中 ${s.counts.doing} / 已完成 ${s.counts.done}`,
-        line('已逾期未完', s.overdue),
-        line('今天到期', s.dueToday),
-        line(
-            '今天已完成',
-            s.doneToday.map((r) => ({ title: r.title })),
-        ),
-        line(
-            '今天的日程',
-            s.eventsToday.map((r) => ({ title: r.title, startsAt: r.startsAt, location: r.location })),
-        ),
-        line('未来 7 天日程', s.upcoming),
+        `启用中的定时任务：${s.counts.schedulesEnabled} 条`,
+        `今天要跑 ${s.dueToday.length}：${due}`,
+        `今天已跑完 ${s.runsToday.length}（其中失败 ${s.counts.failedToday}）：${runs}`,
+        `未来 7 天首次安排 ${s.upcoming.length}：${upcoming}`,
+        `今天新增笔记：${s.counts.notesToday} 条`,
         `最近笔记：${s.recentNotes.map((r) => r.title || '无标题').join('、') || '无'}`,
     ].join('\n');
 }
@@ -130,9 +148,9 @@ function buildBriefPrompt(s: BriefSnapshot): string {
         '你是本机工作台的每日简报撰写者。根据下面这份「今日事实清单」写一篇简体中文的每日简报。',
         '',
         '要求：',
-        '- Markdown，总长不超过 400 字，分「今天要事 / 逾期与风险 / 日程 / 一句话建议」四小节，小节标题用 ###。',
-        '- 只使用清单里给出的事实，不要编造任务、时间或项目；清单里没有的小节写「无」。',
-        '- 逾期任务按优先级 high > medium > low 排在前面；没有逾期就明确说没有。',
+        '- Markdown，总长不超过 400 字，分「今天要跑 / 运行与异常 / 后续安排 / 一句话建议」四小节，小节标题用 ###。',
+        '- 只使用清单里给出的事实，不要编造任务、时间或笔记标题；清单里没有的小节写「无」。',
+        '- 「运行与异常」里失败的那几条排在前面并把原因带上；没有失败就明确说没有。',
         '- 不要重复整份清单，只挑出最需要用户今天注意的条目。',
         '',
         '今日事实清单：',

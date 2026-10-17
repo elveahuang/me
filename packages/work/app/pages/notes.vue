@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { extractApiError, formatDateTime } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import { safeProjectColor, type WorkNote, type WorkProject } from '../utils/work';
+import type { WorkNote } from '../utils/work';
 
 /**
  * 笔记页：列表 + 两种检索。
@@ -14,20 +14,18 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-/** 初值取自 URL：项目页的「看这个项目的笔记」是带 ?project= 跳过来的，不读就等于深链失效 */
+/** 初值取自 URL：深链（`?kind=&tag=&q=`）要能还原出同一个筛选结果，不读就等于书签失效 */
 const readQuery = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : '');
 const keywordInput = ref(readQuery('q'));
 const keyword = ref(keywordInput.value);
 const kindFilter = ref(readQuery('kind'));
-const projectFilter = ref(readQuery('project'));
 const tagFilter = ref(readQuery('tag'));
 
-watch([kindFilter, projectFilter, tagFilter, keyword], () => {
+watch([kindFilter, tagFilter, keyword], () => {
     router.replace({
         query: {
             ...route.query,
             kind: kindFilter.value || undefined,
-            project: projectFilter.value || undefined,
             tag: tagFilter.value || undefined,
             q: keyword.value || undefined,
         },
@@ -45,14 +43,12 @@ onBeforeUnmount(() => {
 
 const listQuery = computed(() => ({
     kind: kindFilter.value || undefined,
-    projectId: projectFilter.value || undefined,
     tag: tagFilter.value || undefined,
     keyword: keyword.value || undefined,
     limit: '120',
 }));
 
 const { data: notes, pending, error, refresh } = await useFetch<WorkNote[]>('/api/notes', { query: listQuery, lazy: true, default: () => [] });
-const { data: projects } = useFetch<WorkProject[]>('/api/projects', { lazy: true, default: () => [] });
 
 const { data: indexState, refresh: refreshIndex } = useFetch<{ unindexed: number; batchMax: number; embedding: { provider: string; model: string } | null }>(
     '/api/notes/reindex',
@@ -86,7 +82,7 @@ async function runSemantic() {
     semanticBusy.value = true;
     actionError.value = '';
     try {
-        semantic.value = await $fetch<SemanticResult>('/api/notes/search', { query: { q, limit: 12, projectId: projectFilter.value || undefined } });
+        semantic.value = await $fetch<SemanticResult>('/api/notes/search', { query: { q, limit: 12 } });
     } catch (e) {
         actionError.value = extractApiError(e, t('work.searchFailed'));
     } finally {
@@ -112,7 +108,7 @@ async function createNote() {
     }
 }
 
-/** 命令面板「新建笔记」的深链：先清标志再建笔记，避免重挂载时重复 POST（SSR 阶段不建，见 calendar.vue 同段说明） */
+/** 「新建笔记」的深链：先清标志再建笔记，避免重挂载时重复 POST（必须在 onMounted 里消费，写在 setup 顶层会让 SSR 首屏就带着一次创建） */
 onMounted(() => {
     if (route.query.new !== '1') return;
     void router.replace({ query: { ...route.query, new: undefined } });
@@ -159,7 +155,6 @@ async function rebuildIndex() {
     }
 }
 
-const projectMap = computed(() => new Map((projects.value ?? []).map((p) => [p.id, p])));
 const allTags = computed(() => {
     const set = new Set<string>();
     for (const note of notes.value ?? []) for (const tag of note.tags ?? []) set.add(tag);
@@ -218,10 +213,6 @@ const allTags = computed(() => {
                 <option value="">{{ t('work.kindAll') }}</option>
                 <option value="note">{{ t('work.kindNote') }}</option>
                 <option value="daily">{{ t('work.kindDaily') }}</option>
-            </select>
-            <select v-model="projectFilter" class="app-input !w-auto max-w-[10rem] truncate !text-xs" :aria-label="t('work.fieldProject')">
-                <option value="">{{ t('work.allProjects') }}</option>
-                <option v-for="p in projects ?? []" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
         </div>
 
@@ -315,13 +306,6 @@ const allTags = computed(() => {
                 <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
                     <span v-if="note.kind === 'daily'" class="app-badge app-badge-neutral">{{ t('work.kindDaily') }}</span>
                     <span v-for="tag in (note.tags ?? []).slice(0, 3)" :key="tag" class="app-chip !px-2 !py-0.5 !text-[10px]">{{ tag }}</span>
-                    <span v-if="note.projectId && projectMap.get(note.projectId)" class="text-faint ml-auto flex items-center gap-1 truncate">
-                        <span
-                            class="inline-block h-1.5 w-1.5 rounded-full"
-                            :style="{ backgroundColor: safeProjectColor(projectMap.get(note.projectId)?.color) }"
-                        />
-                        {{ projectMap.get(note.projectId)?.name }}
-                    </span>
                 </div>
                 <div class="app-divider flex items-center gap-2 pt-1 text-[10px]">
                     <span class="text-faint">{{ formatDateTime(note.updatedAt) }}</span>

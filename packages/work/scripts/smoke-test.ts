@@ -1,5 +1,21 @@
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+// 纯类型：esbuild 会把 type-only import 整条擦掉，不会影响下面的环境变量加载顺序
+import type { SchedulePlan } from '../server/utils/work-schedule';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/** 递归列出目录里的 `.vue` / `.ts` 源文件（冒烟测试里的静态对账用，不碰 node_modules 与生成产物）。 */
+function listSourceFiles(root: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+        const full = resolve(root, entry.name);
+        if (entry.isDirectory()) out.push(...listSourceFiles(full));
+        else if (/\.(vue|ts)$/.test(entry.name)) out.push(full);
+    }
+    return out;
+}
 
 // 加载环境变量
 for (const p of ['.env', '.env.local', '../../.env', '../../.env.local']) {
@@ -122,12 +138,10 @@ async function runSmokeTests() {
 
     // 6. 查询入参归一（分页与关键词）
     console.log('\n6. 测试查询入参归一');
-    const { likePattern, exactLikePattern, intParam } = await import('../server/utils/query');
+    const { likePattern, intParam } = await import('../server/utils/query');
     assert(likePattern('100%') === '%100\\%%' && likePattern('a_b') === '%a\\_b%', 'LIKE 模式转义 % 与 _ 通配符');
     assert(likePattern('  hi  ') === '%hi%' && likePattern('x'.repeat(500)).length === 130, '关键词先 trim 再夹到 128 字符');
-    // 整值匹配（项目名引用走这条）：不转义时 `Q1%` 是通配符、`C:\work\` 会以 22025 炸成 500
-    assert(exactLikePattern('Q1%') === 'Q1\\%' && exactLikePattern('a_b') === 'a\\_b', '整值 LIKE 模式转义通配符而不加两侧 %');
-    assert(exactLikePattern('C:\\work\\') === 'C:\\\\work\\\\' && exactLikePattern('  hi  ') === 'hi', '反斜杠成对转义、结尾不残留孤立转义符');
+    assert(likePattern('C:\\work\\') === '%C:\\\\work\\\\%', '反斜杠成对转义：不转义时 LIKE 的 escape 缺失会让 PG 以 22025 炸成 500');
     assert(
         intParam('1.7', 10, 1, 100) === 1 && intParam('-3', 10, 1, 100) === 1 && intParam('1e9', 10, 1, 100) === 100 && intParam('abc', 10, 1, 100) === 10,
         '分页参数取整、夹逼、非法值回退（小数会被 PG 拒成 22P02 → 500 + SQL 细节外泄）',
@@ -240,21 +254,10 @@ async function runSmokeTests() {
     );
     assert(!blocksWrite('POST', 'http://localhost:3001') && !blocksWrite('PATCH', undefined), '本机来源与非浏览器客户端放行');
 
-    // 11. 工作台写入归一与北京日口径（projects/tasks/notes/events 各 handler 共用的同一套规则）
+    // 11. 工作台写入归一与北京日口径（notes 各 handler 与定时任务共用的同一套规则）
     console.log('\n11. 测试工作台写入归一与北京日口径');
-    const {
-        REMINDER_MINUTES_MAX,
-        normalizeReminderMinutes,
-        WORK_TITLE_MAX,
-        normalizeWorkDate,
-        normalizeWorkDateRange,
-        normalizeWorkId,
-        normalizeWorkOptionalText,
-        normalizeWorkTags,
-        normalizeWorkText,
-        normalizeTaskStatus,
-        taskCompletionPatch,
-    } = await import('../server/utils/work-input');
+    const { WORK_TITLE_MAX, normalizeNoteKind, normalizeWorkDate, normalizeWorkId, normalizeWorkOptionalText, normalizeWorkTags, normalizeWorkText } =
+        await import('../server/utils/work-input');
     const { safeTrim, stripNull } = await import('../server/utils/pg-text');
     const { shanghaiDateInput, shanghaiDateKey, shanghaiDayRange } = await import('../server/utils/work-day');
 
@@ -273,40 +276,21 @@ async function runSmokeTests() {
     );
     assert(safeTrim({ toString: () => ' x ' }) === '' && safeTrim('  y  ') === 'y', 'safeTrim 只认字符串，对象不会被 toString 蒙混过关');
     assert(
-        normalizeTaskStatus(undefined) === 'todo' && threw400(() => normalizeTaskStatus('one')),
-        '枚举缺失回退、未知值拒绝：静默落库的坏状态会让任务在看板与筛选里凭空消失',
+        normalizeNoteKind(undefined) === 'note' && threw400(() => normalizeNoteKind('one')),
+        '枚举缺失回退、未知值拒绝：静默落库的坏类型会让笔记在按 kind 筛选的列表里凭空消失',
     );
     assert(normalizeWorkTags(['a', 'a', '  ', 2026, {}, null, 'b']).join(',') === 'a,2026,b', '标签去重、标量字符串化、对象与空串丢弃');
     assert(
-        threw400(() => normalizeWorkTags('a,b')) && threw400(() => normalizeWorkId('not-a-uuid', 'projectId')),
+        threw400(() => normalizeWorkTags('a,b')) && threw400(() => normalizeWorkId('not-a-uuid', 'agentId')),
         'tags 非数组与 id 形状不对都回 400（省一次无谓查库）',
     );
     assert(
-        threw400(() => normalizeWorkDate('2026-02-30', 'dueAt')) && threw400(() => normalizeWorkDate('2025-02-29', 'dueAt')),
-        '不存在的日历日拒绝：V8 会把 02-30 顺延成 03-02，提醒与简报就静默错一天',
-    );
-    assert(threw400(() => normalizeWorkDate(1e18, 'dueAt')) && normalizeWorkDate('', 'dueAt') === null, '超出 1970–2100 的脏时间戳拒绝，空串归一为 null');
-    const dayStart = new Date('2026-10-15T06:00:00+08:00');
-    assert(
-        threw400(() => normalizeWorkDateRange('2026-10-15T05:00:00+08:00', dayStart)),
-        'endsAt 早于 startsAt 拒绝',
+        threw400(() => normalizeWorkDate('2026-02-30', 'startsAt')) && threw400(() => normalizeWorkDate('2025-02-29', 'startsAt')),
+        '不存在的日历日拒绝：V8 会把 02-30 顺延成 03-02，下一次运行时刻就静默错一天',
     );
     assert(
-        normalizeReminderMinutes(undefined) === null &&
-            normalizeReminderMinutes(15) === 15 &&
-            normalizeReminderMinutes(90.7) === 90 &&
-            threw400(() => normalizeReminderMinutes('15')) &&
-            threw400(() => normalizeReminderMinutes(-1)) &&
-            threw400(() => normalizeReminderMinutes(REMINDER_MINUTES_MAX + 1)),
-        '提醒提前量：缺失归一为不设提醒、小数取整、字符串/负数/超 30 天拒绝（相对量换算成绝对时刻前必须先收口）',
-    );
-    assert(
-        'completedAt' in taskCompletionPatch('done', null) && !('completedAt' in taskCompletionPatch('done', new Date())),
-        '置 done 补完成时间、已完成的不再重写',
-    );
-    assert(
-        JSON.stringify(taskCompletionPatch('todo', new Date(0))) === '{"completedAt":null}',
-        '退回未完成时清掉旧的完成时间（否则统计里有一条「进行中但已完成于…」）',
+        threw400(() => normalizeWorkDate(1e18, 'startsAt')) && normalizeWorkDate('', 'startsAt') === null,
+        '超出 1970–2100 的脏时间戳拒绝，空串归一为 null（1e18 读回给模型是「距今约 3000 万年」）',
     );
     assert(
         shanghaiDateInput('2026-10-15')?.toISOString() === '2026-10-14T16:00:00.000Z' &&
@@ -318,6 +302,121 @@ async function runSmokeTests() {
         shanghaiDayRange(new Date('2026-10-14T16:30:00Z')).start.toISOString() === '2026-10-14T16:00:00.000Z' &&
             shanghaiDateKey(new Date('2026-10-14T16:30:00Z')) === '2026-10-15',
         '「今天」的窗口与日键固定北京口径，不受主机时区影响（UTC 容器上会差一天）',
+    );
+
+    // 定时任务的排期口径：这些形状在真实接口上都要等下一分钟才看得出算错，所以先在这里断言纯函数
+    const {
+        INTERVAL_DEFAULT_MINUTES,
+        INTERVAL_MINUTES_MAX,
+        INTERVAL_MINUTES_MIN,
+        computeNextRunAt,
+        describeSchedule,
+        normalizeScheduleDays,
+        normalizeScheduleInterval,
+        normalizeScheduleKind,
+        normalizeSchedulePlan,
+        normalizeScheduleTime,
+    } = await import('../server/utils/work-schedule');
+
+    assert(
+        normalizeScheduleKind(undefined) === 'daily' && threw400(() => normalizeScheduleKind('hourly')),
+        '排期类型未知值拒绝：落库成 hourlv 之后列表按 kind 分组时这一条永远排不出来',
+    );
+    assert(
+        normalizeScheduleTime('') === '' && normalizeScheduleTime('  09:00 ') === '09:00',
+        '空钟点归一成空串（interval 与 once 没有钟点），带空白的合法值 trim',
+    );
+    assert(
+        threw400(() => normalizeScheduleTime('9:00')) && threw400(() => normalizeScheduleTime('24:00')) && threw400(() => normalizeScheduleTime(900)),
+        '不做「9 补成 09:00」的宽容解析：库里留下没校验过的写法，下一次 PATCH 就把用户自己填的值判成非法',
+    );
+    assert(
+        normalizeScheduleInterval(undefined) === INTERVAL_DEFAULT_MINUTES && normalizeScheduleInterval(INTERVAL_MINUTES_MIN) === INTERVAL_MINUTES_MIN,
+        '缺失间隔回退默认值、下限可取',
+    );
+    assert(
+        threw400(() => normalizeScheduleInterval('60')) &&
+            threw400(() => normalizeScheduleInterval(60.5)) &&
+            threw400(() => normalizeScheduleInterval(INTERVAL_MINUTES_MIN - 1)) &&
+            threw400(() => normalizeScheduleInterval(INTERVAL_MINUTES_MAX + 1)),
+        '间隔只收整数分钟并夹到 5–10080：runner 每分钟醒一次，比这更密就是排队跑真实外呼（一天 1440 次）',
+    );
+    assert(
+        normalizeScheduleDays([3, 3, 1, '5', null, 7, -1]).join(',') === '1,3' && normalizeScheduleDays(undefined).length === 0,
+        '星期去重排序、非法项只丢单项（字符串不会被当成数字，7/-1 越界丢弃）',
+    );
+    assert(
+        threw400(() => normalizeScheduleDays('0,1')),
+        'days 非数组回 400（jsonb 列收下字符串后每周排期永远匹配不上任何星期）',
+    );
+    assert(
+        threw400(() => normalizeSchedulePlan({ kind: 'weekly', time: '09:00', intervalMinutes: null, days: [], startsAt: new Date(0) })) &&
+            threw400(() => normalizeSchedulePlan({ kind: 'daily', time: '', intervalMinutes: null, days: [], startsAt: new Date(0) })),
+        '必填校验按 kind 分派：weekly 要有星期、daily/weekly 要有钟点',
+    );
+    const intervalPlan = normalizeSchedulePlan({ kind: 'interval', time: '09:00', intervalMinutes: 30, days: [1], startsAt: new Date(0) });
+    assert(intervalPlan.timeText === '' && intervalPlan.days.length === 0, 'interval 丢掉钟点与星期：表单里残留的上一轮选择不会被当成排期的一部分');
+
+    // 排期落库的是绝对时刻 `nextRunAt`，croner 只负责多久醒一次——所以下面这些日期算术必须与进程时区无关
+    const dailyEarly = { kind: 'daily', timeText: '09:00', intervalMinutes: null, days: [], startsAt: new Date('2026-01-01T00:00:00+08:00') } as SchedulePlan;
+    const dailyLate = { kind: 'daily', timeText: '23:30', intervalMinutes: null, days: [], startsAt: new Date('2026-01-01T00:00:00+08:00') } as SchedulePlan;
+    assert(
+        computeNextRunAt(dailyEarly, new Date('2026-10-15T08:00:00+08:00'))?.toISOString() === '2026-10-15T01:00:00.000Z' &&
+            computeNextRunAt(dailyEarly, new Date('2026-10-15T10:00:00+08:00'))?.toISOString() === '2026-10-16T01:00:00.000Z',
+        '钟点没过排今天 09:00(+08)=01:00Z，过了就排明天：runner 比较的是绝对时刻，主机时区不参与',
+    );
+    assert(
+        computeNextRunAt(dailyEarly, new Date('2026-10-31T23:00:00+08:00'))?.toISOString() === '2026-11-01T01:00:00.000Z' &&
+            computeNextRunAt(dailyEarly, new Date('2026-12-31T23:30:00+08:00'))?.toISOString() === '2027-01-01T01:00:00.000Z',
+        '跨月与跨年靠 Date.UTC 的日溢出数格子，不是「减 24 小时」：后者在 23:30 排 09:00 这种边界上会把日期算成后一天',
+    );
+    assert(
+        computeNextRunAt(dailyEarly, new Date('2028-02-28T10:00:00+08:00'))?.toISOString() === '2028-02-29T01:00:00.000Z' &&
+            computeNextRunAt(dailyLate, new Date('2026-02-28T00:00:00+08:00'))?.toISOString() === '2026-02-28T15:30:00.000Z',
+        '闰年 2 月 29 日排得出来；非闰年 2026-02-28 当晚 23:30 仍是当天（V8 顺延出的 03-01 会多跑一天）',
+    );
+
+    // 2026-01-04 是星期日（`makeWeekdayName` 也锚在这一天）
+    const weeklyPlan = (days: number[]): SchedulePlan => ({
+        kind: 'weekly',
+        timeText: '09:00',
+        intervalMinutes: null,
+        days,
+        startsAt: new Date('2026-01-01T00:00:00+08:00'),
+    });
+    assert(
+        computeNextRunAt(weeklyPlan([0]), new Date('2026-01-03T12:00:00+08:00'))?.toISOString() === '2026-01-04T01:00:00.000Z' &&
+            computeNextRunAt(weeklyPlan([1]), new Date('2026-01-03T12:00:00+08:00'))?.toISOString() === '2026-01-05T01:00:00.000Z' &&
+            computeNextRunAt(weeklyPlan([0]), new Date('2026-01-04T10:00:00+08:00'))?.toISOString() === '2026-01-11T01:00:00.000Z',
+        '每周只落在选中的星期上，且当天钟点已过要跳到下周同一星期（星期口径按北京日取，不是 UTC 日）',
+    );
+
+    const intervalStart = new Date('2026-01-04T09:00:00+08:00');
+    const interval60 = (at: Date): SchedulePlan => ({ kind: 'interval', timeText: '', intervalMinutes: 60, days: [], startsAt: at });
+    assert(
+        computeNextRunAt(interval60(intervalStart), new Date('2026-01-04T00:00:00Z'))?.toISOString() === intervalStart.toISOString(),
+        '还没到锚点就等锚点，不提前跑',
+    );
+    assert(
+        computeNextRunAt(interval60(intervalStart), new Date(intervalStart.getTime() + 30_000))?.toISOString() === '2026-01-04T02:00:00.000Z' &&
+            computeNextRunAt(interval60(intervalStart), new Date(intervalStart.getTime() + 3_690_000))?.toISOString() === '2026-01-04T03:00:00.000Z',
+        '第 k 个整步从锚点起算：每 60 分钟永远落在整点，不会因为上一轮晚了 90 秒而一路漂下去',
+    );
+
+    const oncePlan = (at: Date): SchedulePlan => ({ kind: 'once', timeText: '', intervalMinutes: null, days: [], startsAt: at });
+    assert(
+        computeNextRunAt(oncePlan(new Date('2026-10-20T09:00:00+08:00')), new Date('2026-10-15T00:00:00+08:00'))?.toISOString() ===
+            '2026-10-20T01:00:00.000Z' && computeNextRunAt(oncePlan(new Date('2026-10-01T09:00:00+08:00')), new Date('2026-10-15T00:00:00+08:00')) === null,
+        'once 到点前给出那一刻、跑过之后回 null（runner 据此自动停用，否则一条过期排期会被反复排队）',
+    );
+    assert(computeNextRunAt({ ...dailyEarly, timeText: '不是钟点' }, new Date()) === null, '钟点算不出候选时回 null 而不是抛错或返回 Invalid Date');
+
+    assert(
+        describeSchedule(dailyEarly) === '每天 09:00' &&
+            describeSchedule({ ...interval60(intervalStart), intervalMinutes: 30 }) === '每 30 分钟' &&
+            describeSchedule(weeklyPlan([0, 1])) === '每周日、一 09:00' &&
+            describeSchedule(oncePlan(new Date('2026-01-04T09:00:00+08:00'))) === '一次 2026-01-04 09:00',
+        '一句句话术四种类型全覆盖：once 必须带上日期与时分，工具结果里只写「一次」等于没告诉模型是哪一天',
     );
 
     // 12. 启动环境审计（work 无鉴权，绑定地址是唯一边界）
@@ -359,6 +458,41 @@ async function runSmokeTests() {
         ['orders', 'membershipPlans', 'user', 'users'].every((k) => !(k in schema)),
         'schema 里没有订单/会员/账号表（fork 时刻意不带）',
     );
+    // 待办、项目、日程三条链路已整机移除：表留在库里等于给旧深链留一个「页面没了但接口还通」的半成品
+    assert(
+        ['projects', 'tasks', 'events'].every((k) => !(k in schema)),
+        'schema 里没有 projects/tasks/events 表（含引用它们的项目、日历与提醒代码一并删净）',
+    );
+    assert(!columnsOf(schema.notes).includes('project_id'), 'notes 没有 project_id 列（笔记不再归属项目）');
+    assert(
+        ['agent_id', 'kind', 'time_text', 'interval_minutes', 'days', 'starts_at', 'enabled', 'next_run_at'].every((c) =>
+            columnsOf(schema.schedules).includes(c),
+        ),
+        '定时任务表带齐排期字段与下一次时刻（croner 只负责唤醒，「什么时候跑」的真相在库里）',
+    );
+    assert(!columnsOf(schema.schedules).includes('user_id'), '定时任务表没有归属列（本机单主）');
+    assert(primaryOf(schema.schedules).join(',') === 'id', '定时任务以 id 为主键');
+
+    /**
+     * 整机备份必须覆盖每一张表：`/api/export` 漏一张不会报错，只会静默少一份数据，
+     * 而用户是按「这是这台机器的备份」来相信它的（AGENTS 里点名过的坑）。
+     * 所以这条不变量按 schema 里的真实表清单来对，新增表时不补 builder 就直接测红。
+     */
+    const { is } = await import('drizzle-orm');
+    const { PgTable } = await import('drizzle-orm/pg-core');
+    const schemaTables = Object.entries(schema)
+        .filter(([, value]) => is(value, PgTable))
+        .map(([key]) => key)
+        .sort();
+    const exportText = readFileSync(resolve(HERE, '../server/api/export.get.ts'), 'utf8');
+    const builtTables = new Set([...exportText.matchAll(/\.from\(\s*([A-Za-z]+)\s*\)/g)].map((matched) => matched[1]!));
+    // 刻意不进备份的派生数据：知识库分块与向量可重建（导入后「重建索引」），文件里也丢掉了
+    const SKIPPED_TABLES = new Set(['kbChunks']);
+    const uncovered = schemaTables.filter((name) => !builtTables.has(name) && !SKIPPED_TABLES.has(name));
+    assert(
+        schemaTables.length >= 19 && uncovered.length === 0,
+        `export 覆盖 schema 的全部 ${schemaTables.length} 张表（未覆盖：${uncovered.join(', ') || '无'}；派生数据除外）`,
+    );
 
     // 14. 共享契约展示层：时区固定与徽章回退
     console.log('\n14. 测试共享契约展示层不变量');
@@ -398,15 +532,14 @@ async function runSmokeTests() {
     );
 
     const { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } = await import('../server/utils/workbench-tools');
-    const workbenchTools = buildWorkbenchTools();
+    const workbenchTools = buildWorkbenchTools('00000000-0000-4000-8000-000000000000');
+    const toolNames = Object.keys(workbenchTools).sort();
     assert(
-        ['work_today', 'work_list_tasks', 'work_create_task', 'work_update_task', 'work_create_note', 'work_create_event', 'work_search'].every(
-            (name) => name in workbenchTools,
-        ),
-        '七个工作台动作全部注册为模型可见工具',
+        toolNames.join(',') === ['work_create_note', 'work_create_schedule', 'work_list_schedules', 'work_search', 'work_today'].sort().join(','),
+        '五个工作台动作全部注册为模型可见工具，且没有多出的（待办与日程已随表删除，留着就是模型每轮都能调一个必然失败的旧动作）',
     );
     assert(
-        Object.keys(workbenchTools).every((name) => WORKBENCH_TOOL_SUMMARY.includes(name)),
+        toolNames.every((name) => WORKBENCH_TOOL_SUMMARY.includes(name)),
         '系统提示词的工具清单与真实工具同名：提示里写一个不存在的工具，模型每轮都会空跑一次失败调用',
     );
     assert(
@@ -449,6 +582,69 @@ async function runSmokeTests() {
     assert(
         placeholderDiff.length === 0,
         `同名键的插值参数成对一致（不一致时切换语言会在界面上露出裸 {n}）：${placeholderDiff.slice(0, 3).join(', ') || '无差异'}`,
+    );
+
+    /**
+     * 引用侧对账：模板里写了 locales 没有的键，界面会把键名本身渲染出来（`work.foo`）。
+     *
+     * 上面三条只保证 zh/en 互相比对一致，两边一起缺同一个键时全绿。
+     * 动态键（`t(\`work.${x}\`)`）匹配不到字面量，天然不参与判定。
+     */
+    const localeKeyRe = /(^|[^A-Za-z0-9_$.])t\(\s*'([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'/g;
+    const templateKeys = new Set<string>();
+    for (const file of listSourceFiles(resolve(HERE, '../app'))) {
+        if (file.includes(`${sep}locales${sep}`)) continue;
+        for (const match of readFileSync(file, 'utf8').matchAll(localeKeyRe)) templateKeys.add(match[2]!);
+    }
+    const zhKeySet = new Set(zhKeys);
+    const missingKeys = [...templateKeys].sort().filter((key) => !zhKeySet.has(key));
+    assert(
+        templateKeys.size > 100 && missingKeys.length === 0,
+        `模板引用的 ${templateKeys.size} 个字面量键都在 locales 里存在（缺失：${missingKeys.slice(0, 5).join(', ') || '无'}）`,
+    );
+
+    /**
+     * 动态键的引用侧：侧栏与设置子导航的文案经 `t(link.labelKey)` 取，上面那条字面量正则匹配不到它们。
+     *
+     * 这两张表是「唯一一份」的约定所在（导航、设置路由都只此一处），也正因如此，改名只会在这里断掉：
+     * 表现是侧栏某一项渲染成裸键名 `nav.foo`，或者新增一页时locales 补了、表里的 key 拼错，界面不报错只是不说人话。
+     */
+    const { WORK_NAV_GROUPS } = await import('../app/utils/work-nav');
+    const { WORK_SETTINGS_PAGES } = await import('../app/utils/work-settings');
+    const navKeys = WORK_NAV_GROUPS.flatMap((group) => [group.titleKey, ...group.links.map((link) => link.labelKey)]);
+    const settingsKeys = WORK_SETTINGS_PAGES.flatMap((page) => [page.labelKey, page.descKey]);
+    const tableKeys = [...new Set([...navKeys, ...settingsKeys])];
+    const missingTableKeys = tableKeys.filter((key) => !zhKeySet.has(key));
+    assert(
+        tableKeys.length >= 20 && missingTableKeys.length === 0,
+        `导航与设置表引用的 ${tableKeys.length} 个动态键都在 locales 里存在（缺失：${missingTableKeys.join(', ') || '无'}）`,
+    );
+
+    // 图标名同样只在这两张表里写一次：名字拼错时 AppIcon 只画一个占位方框，没有任何报错
+    const { APP_ICONS } = await import('../app/utils/app-icons');
+    const tableIcons = [
+        ...new Set([...WORK_NAV_GROUPS.flatMap((group) => group.links.map((link) => link.icon)), ...WORK_SETTINGS_PAGES.map((page) => page.icon)]),
+    ];
+    const missingIcons = tableIcons.filter((name) => !(name in APP_ICONS));
+    assert(
+        tableIcons.length >= 8 && missingIcons.length === 0,
+        `导航与设置表用到的 ${tableIcons.length} 个图标都已打包（缺失：${missingIcons.join(', ') || '无'}；新增图标要改 generate-icons.mjs 再跑 icons）`,
+    );
+
+    /**
+     * 表里的 `to` 必须有对应页面文件。这两张表是唯一的路由清单，写错的表现是「菜单里看得到、点进去 404」，
+     * 而 Nuxt 的文件路由不会给这张表任何类型检查。
+     */
+    const pagesRoot = resolve(HERE, '../app/pages');
+    /** `to` 带前导斜杠，直接交给 resolve 会被当成「盘根绝对路径」，必须剥掉后按段拼。 */
+    const hasPage = (to: string) => {
+        const segments = to.replace(/^\//, '').split('/').filter(Boolean);
+        return existsSync(resolve(pagesRoot, ...segments, 'index.vue')) || (segments.length > 0 && existsSync(`${resolve(pagesRoot, ...segments)}.vue`));
+    };
+    const deadTargets = [...WORK_NAV_GROUPS.flatMap((group) => group.links), ...WORK_SETTINGS_PAGES].filter((item) => !hasPage(item.to)).map((item) => item.to);
+    assert(
+        deadTargets.length === 0,
+        `导航与设置表的 ${WORK_NAV_GROUPS.reduce((n, g) => n + g.links.length, 0) + WORK_SETTINGS_PAGES.length} 个目标都有页面文件（悬空：${deadTargets.join(', ') || '无'}）`,
     );
 
     // 18. 后台生成的回放缓冲（chat-runs）：切页面/刷新不打断生成，靠的就是这份内存副本
@@ -599,10 +795,8 @@ async function runSmokeTests() {
         await db.execute(sql`SELECT 1`);
         assert(true, 'PostgreSQL 数据库连通正常');
         for (const [name, table] of [
-            ['projects', schema.projects],
-            ['tasks', schema.tasks],
             ['notes', schema.notes],
-            ['events', schema.events],
+            ['schedules', schema.schedules],
             ['briefs', schema.briefs],
             ['agents', schema.agents],
         ] as const) {
@@ -612,6 +806,79 @@ async function runSmokeTests() {
     } catch (e: any) {
         console.warn('  ⚠️ 数据库未运行或无法连接，跳过真实 DB 查询:', e?.message);
     }
+
+    // 20. 前后端档位对账：work 的前端不 import 服务端，表单档位是抄一份的，
+    //     抄漏一次的表现是「界面填得进、保存被 400」或反过来「服务端放宽了、表单还卡在旧值」，两边都不报错。
+    console.log('\n20. 测试前后端档位常量一致');
+    const feWorkText = readFileSync(resolve(HERE, '../app/utils/work.ts'), 'utf8');
+    const feTasksText = readFileSync(resolve(HERE, '../app/pages/tasks.vue'), 'utf8');
+    /** 取 `export const NAME = <数字或乘法式>;` 的数值（前端那份刻意写成字面量，所以能按文本取）。 */
+    const numConstOf = (src: string, name: string): number | null => {
+        const matched = new RegExp(`^export const ${name}(?::[^=]+)? = ([0-9_]+(?:\\s*\\*\\s*[0-9_]+)*);`, 'm').exec(src);
+        if (!matched) return null;
+        return matched[1]!.split('*').reduce((acc, part) => acc * Number(part.trim().replace(/_/g, '')), 1);
+    };
+    /** 取 `export const NAME = [...]` 里的引号项。 */
+    const listOf = (src: string, name: string): string[] | null => {
+        const matched = new RegExp(`^export const ${name}(?::[^=]+)? = \\[([^\\]]*)\\]`, 'm').exec(src);
+        return matched ? [...matched[1]!.matchAll(/'([^']+)'/g)].map((item) => item[1]!) : null;
+    };
+    const beScheduleText = readFileSync(resolve(HERE, '../server/utils/work-schedule.ts'), 'utf8');
+    for (const name of ['SCHEDULE_PROMPT_MAX', 'INTERVAL_MINUTES_MIN', 'INTERVAL_MINUTES_MAX', 'INTERVAL_DEFAULT_MINUTES']) {
+        const be = numConstOf(beScheduleText, name);
+        const fe = numConstOf(feWorkText, name);
+        assert(be !== null && fe !== null && be === fe, `${name} 前后端同值（服务端 ${be} / 前端 ${fe}）`);
+    }
+    const beKinds = listOf(readFileSync(resolve(HERE, '../server/db/schema.ts'), 'utf8'), 'SCHEDULE_KINDS');
+    const feKinds = listOf(feWorkText, 'SCHEDULE_KIND_OPTIONS');
+    assert(
+        !!beKinds && !!feKinds && [...beKinds].sort().join(',') === [...feKinds].sort().join(','),
+        `排期类型集合一致（服务端 ${beKinds} / 前端 ${feKinds}；下拉顺序可以不同，缺一项就是建得出来却归不了类）`,
+    );
+    /** 数字型 `maxlength` 一律要能在服务端档位里找到同名值：裸数字是这套表单唯一的漂移点。 */
+    const beTitleMax = numConstOf(readFileSync(resolve(HERE, '../server/utils/work-input.ts'), 'utf8'), 'WORK_TITLE_MAX');
+    const maxlengths = [...feTasksText.matchAll(/maxlength="(\d+)"/g)].map((matched) => Number(matched[1]));
+    assert(
+        maxlengths.length > 0 && maxlengths.every((value) => value === beTitleMax),
+        `排期表单的数字 maxlength 等于服务端 WORK_TITLE_MAX（表单 ${[...new Set(maxlengths)].join(', ') || '无'} / 服务端 ${beTitleMax}）`,
+    );
+
+    /**
+     * 「日期 + 钟点」的两侧对拍：表单合成 `startsAt` 的那段算法与服务端 `work-day.ts` 各写了一份
+     * （客户端不能 import 服务端），所以只能用真实输入把两份钉在一起。
+     * 漂移的表现是「界面写着明天 09:00，落库是今天 09:00」——排期会提前一天跑，用户只会看到结果来得莫名其妙。
+     */
+    const { composeStartsAt } = await import('../app/utils/work-day');
+    const { fromShanghaiParts } = await import('../server/utils/work-day');
+    const dayTimePairs = [
+        ['2026-02-28', '09:00'],
+        ['2026-07-15', '23:59'],
+        ['2026-12-31', '18:30'],
+        ['2027-01-01', '07:05'],
+        ['2028-02-29', '00:00'],
+    ] as const;
+    assert(
+        dayTimePairs.every(
+            ([day, time]) =>
+                composeStartsAt(day, time) ===
+                fromShanghaiParts(
+                    Number(day.slice(0, 4)),
+                    Number(day.slice(5, 7)),
+                    Number(day.slice(8, 10)),
+                    Number(time.slice(0, 2)),
+                    Number(time.slice(3, 5)),
+                ).toISOString(),
+        ),
+        '表单合成的 startsAt 与服务端「北京年月日时分 → 绝对时刻」逐点一致（含闰日、跨年、午夜与 23:59）',
+    );
+    assert(
+        ['2026-02-29', '2026-02-30', '2026-13-01'].every((day) => composeStartsAt(day, '09:00') === null),
+        '日历上不存在的日期直接拒绝，不让 Date.UTC 顺延成别的一天（选了 2/29 却存成 3/1）',
+    );
+    assert(
+        composeStartsAt('', '09:00') === null && composeStartsAt('2026-3-1', '09:00') === null && composeStartsAt('2026-03-01 09:00', '09:00') === null,
+        '空日期与「看着像日期但不是 YYYY-MM-DD」的形状都回 null，不猜成某一天',
+    );
 
     console.log(`\n========================================`);
     console.log(`🏁 冒烟测试完成: 通过 ${passed} 项，失败 ${failed} 项`);

@@ -16,20 +16,6 @@ export function likePattern(keyword: string): string {
 }
 
 /**
- * 把值转成「整串相等、但大小写不敏感」的 ILIKE 模式（不加 `%`，只转义通配符）。
- *
- * 与 `likePattern` 的区别是语义：这里要的是名字对得上，不是包含。直接把原值交给 `ilike`
- * 有两个后果——项目名叫 `Q1%` 时模型抄来的 `Q1%` 会连 `Q2 收尾` 一起命中并把任务静默归到
- * 错误的项目里；以单个 `\` 结尾（例如模型照抄的 Windows 路径 `C:\work\`）更会被
- * PostgreSQL 拒成 `22025 LIKE pattern must not end with escape character`，
- * 于是一次普通的「记到那个项目里」变成看不懂的驱动层报错，而不是那句「现有项目：…」。
- */
-export function exactLikePattern(keyword: string, max = KEYWORD_MAX): string {
-    const trimmed = keyword.trim().slice(0, max);
-    return trimmed.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
-
-/**
  * 查询参数夹逼取整：负数（2201W）、小数（22P02）、NaN/Infinity 直接进 SQL 会被
  * PostgreSQL 拒绝并把 SQL 细节透出响应体，超大 page/offset 还会让 offset 溢出 int8。
  * 同一段 `Math.min(Math.max(min, Math.floor(Number(x)) || fallback), max)` 表达式此前

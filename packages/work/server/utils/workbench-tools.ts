@@ -1,43 +1,30 @@
 import { tool, type ToolSet } from 'ai';
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 import * as zod from 'zod';
-import { events, notes, projects, tasks, type TaskPriority, type TaskStatus } from '../db/schema';
+import { SCHEDULE_KINDS, notes, schedules, type ScheduleKind } from '../db/schema';
 import { db } from './db';
 import { scheduleNoteIndex } from './note-index';
 import { LOCAL_OWNER } from './owner';
-import { exactLikePattern, likePattern, stringParam } from './query';
+import { likePattern, stringParam } from './query';
 import { rateLimit } from './rate-limit';
-import { UUID_PATTERN } from './route-id';
-import { shanghaiDateKey, shanghaiDayRange } from './work-day';
-import {
-    NOTE_CONTENT_MAX,
-    WORK_DETAIL_MAX,
-    WORK_TITLE_MAX,
-    normalizeReminderMinutes,
-    normalizeTaskPriority,
-    normalizeTaskStatus,
-    normalizeWorkDate,
-    normalizeWorkDateRange,
-    normalizeWorkOptionalText,
-    normalizeWorkTags,
-    normalizeWorkText,
-    taskCompletionPatch,
-} from './work-input';
-import { lockProjectRow } from './work-project';
+import { resolveSchedulePlan } from './schedule-store';
+import { shanghaiDateKey, shanghaiDayRange, shanghaiParts, shanghaiUpcomingEnd } from './work-day';
+import { NOTE_CONTENT_MAX, WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkOptionalText, normalizeWorkTags, normalizeWorkText } from './work-input';
+import { SCHEDULE_PROMPT_MAX, describeSchedule, type SchedulePlan } from './work-schedule';
 
 /**
  * 工作台内置工具：让任意智能体都能读写本机的工作台数据。
  *
  * 与 `buildToolSet()`（管理端配置的工具行）分开的理由：
- * 1. 这是本机的**私人事物**，不需要运营逐个绑定；用户说「帮我记个待办」时，
+ * 1. 这是本机的**私人事物**，不需要运营逐个绑定；用户说「帮我记个笔记」「每天九点跑一遍」时，
  *    答案不该取决于他选的这个智能体恰好挂了哪几行工具。
- * 2. 它们直接落到与 `/api/tasks` 同一批表、同一套入参归一（`work-input.ts`），
- *    所以模型写入的行与用户在界面上手敲的行形状完全一致，只是 `source` 记成 `ai`。
+ * 2. 它们直接落到与 `/api/notes`、`/api/schedules` 同一批表、同一套入参归一，
+ *    所以模型写入的行与用户在界面上手敲的行形状完全一致。
  * 3. 工具结果会进模型上下文，也可能进日志，因此一律输出「人读得懂的紧凑清单」，
  *    不外传正文全文、向量或供应商端点。
  *
  * 写侧一律带按次限流：work 唯一的门是 Origin 核验，本机进程发的请求一概放行，
- * 而模型在 agent 循环里可以连开 `maxSteps` 步，一次失控的提示就能刷出几十条任务。
+ * 而模型在 agent 循环里可以连开 `maxSteps` 步，一次失控的提示就能刷出几十条记录。
  */
 
 /** 工具结果进入模型上下文，条数与单条长度都要封顶：一次 `work_search` 打满 50 条笔记正文会把窗口挤爆。 */
@@ -46,248 +33,198 @@ const RESULT_TEXT_MAX = 400;
 /** 单次工具写入的预算：正常对话一轮最多调用一两次，阈值只为「模型自我循环」而存在。 */
 const WRITE_LIMIT_PER_MIN = 20;
 
+/** 排期清单里要读到的列：`describeSchedule` 要吃完整 plan，只给 `nextRunAt` 会描述成「每天 」。 */
+type ScheduleLine = {
+    id: string;
+    title: string;
+    kind: string;
+    timeText: string;
+    intervalMinutes: number | null;
+    days: number[] | null;
+    startsAt: Date;
+    nextRunAt: Date;
+    enabled: boolean;
+};
+
 function clip(value: string): string {
     const flat = value.replace(/\s+/g, ' ').trim();
     return flat.length > RESULT_TEXT_MAX ? `${flat.slice(0, RESULT_TEXT_MAX)}…` : flat;
 }
 
-function formatWhen(value: Date | null): string {
-    if (!value) return '';
+function clockOf(value: Date): string {
+    const p = shanghaiParts(value);
+    return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+}
+
+/** 「今天」写成今天，其余写完整日期；只留 MM-DD 会让跨月的排期读起来像本周。 */
+function formatWhen(value: Date): string {
     return shanghaiDateKey(value) === shanghaiDateKey(new Date()) ? '今天' : shanghaiDateKey(value);
 }
 
-function taskLine(row: { id: string; title: string; status: string; priority: string; dueAt: Date | null }): string {
-    return `- [${row.id}] ${row.title}（${row.status}/${row.priority}${row.dueAt ? `，到期 ${formatWhen(row.dueAt)}` : ''}）`;
+function planOfLine(row: ScheduleLine): SchedulePlan {
+    return {
+        kind: row.kind as ScheduleKind,
+        timeText: row.timeText,
+        intervalMinutes: row.intervalMinutes,
+        days: row.days ?? [],
+        startsAt: row.startsAt,
+    };
 }
 
-/**
- * 模型给出的项目既可能是名字也可能是 id，且它只会照抄自己上一轮看到的文本。
- * 先按 uuid 形状认 id，再按名字精确匹配；匹配不上时把现有项目回给对方，
- * 让它能在下一步改正，而不是让一次拼错的项目名变成一整条失败写入。
- */
-async function resolveProjectRef(raw: unknown): Promise<{ id: string | null; error?: string }> {
-    if (raw === undefined || raw === null || raw === '') return { id: null };
-    const value = typeof raw === 'string' ? raw.trim() : '';
-    if (!value) return { id: null, error: 'project 必须是非空字符串（项目名或项目 id）' };
-    if (UUID_PATTERN.test(value)) {
-        const [row] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, value));
-        return row ? { id: row.id } : { id: null, error: `项目 id ${value} 不存在` };
-    }
-    const rows = await db
-        .select({ id: projects.id, name: projects.name })
-        .from(projects)
-        .where(ilike(projects.name, exactLikePattern(value)));
-    if (rows.length === 1) return { id: rows[0]!.id };
-    const names = await db.select({ name: projects.name }).from(projects).where(eq(projects.archived, false)).limit(30);
-    if (rows.length > 1) return { id: null, error: `项目名「${value}」有歧义，现有项目：${names.map((n) => n.name).join('、')}` };
-    return { id: null, error: `没有名为「${value}」的项目，现有项目：${names.map((n) => n.name).join('、') || '（暂无）'}` };
+function scheduleLine(row: ScheduleLine): string {
+    return `- [${row.id}] ${clip(row.title)}（${describeSchedule(planOfLine(row))}，下一次 ${formatWhen(row.nextRunAt)} ${clockOf(row.nextRunAt)}${row.enabled ? '' : '，已暂停'}）`;
 }
 
-/** 写侧统一闸门：键按动作分开，让「建了 20 条任务」不影响「改一条状态」。 */
+/** 清单查询共用的列集合——漏一列就有一条描述变成空格，而且不会报错。 */
+const scheduleColumns = {
+    id: schedules.id,
+    title: schedules.title,
+    kind: schedules.kind,
+    timeText: schedules.timeText,
+    intervalMinutes: schedules.intervalMinutes,
+    days: schedules.days,
+    startsAt: schedules.startsAt,
+    nextRunAt: schedules.nextRunAt,
+    enabled: schedules.enabled,
+};
+
+/** 写侧统一闸门：键按动作分开，让「建了 20 条笔记」不影响「建一条排期」。 */
 async function gateWrite(action: string): Promise<string | null> {
     const limited = await rateLimit(`workbench-${action}:${LOCAL_OWNER}`, WRITE_LIMIT_PER_MIN, 60_000);
     return limited.ok ? null : `操作过于频繁（每分钟最多 ${WRITE_LIMIT_PER_MIN} 次），请 ${limited.retryAfterSec} 秒后再试`;
 }
 
 /**
- * 按 id 或标题片段定位一条任务。
- *
- * 模型不总是留着 id（尤其跨轮对话），只给 id 会让「把那条周报的待办改成已完成」变成一次失败调用；
- * 但模糊命中必须只有一条才算数——多条时把候选回给对方，绝不自作主张改第一条。
+ * @param agentId 当前这一轮对话所属的智能体。`work_create_schedule` 把新排期挂在它名下——
+ *   谁被要求安排就该由谁到点执行；让模型自己挑 agentId 只会多一个「它记错了 id」的失败面。
  */
-async function findTaskForPatch(input: {
-    id?: string;
-    title?: string;
-}): Promise<{ ok: true; row: typeof tasks.$inferSelect } | { ok: false; message: string }> {
-    if (input.id) {
-        if (!UUID_PATTERN.test(input.id)) return { ok: false, message: 'id 不是合法的 task id' };
-        const [row] = await db.select().from(tasks).where(eq(tasks.id, input.id));
-        return row ? { ok: true, row } : { ok: false, message: `找不到 id 为 ${input.id} 的任务` };
-    }
-    const keyword = (input.title ?? '').trim();
-    if (!keyword) return { ok: false, message: '必须提供 id 或 title 其中之一' };
-    const rows = await db
-        .select()
-        .from(tasks)
-        .where(and(ilike(tasks.title, likePattern(keyword)), inArray(tasks.status, ['todo', 'doing'] as TaskStatus[])))
-        .orderBy(desc(tasks.updatedAt))
-        .limit(5);
-    if (rows.length === 1) return { ok: true, row: rows[0]! };
-    if (!rows.length) return { ok: false, message: `没有未完成的任务标题匹配「${keyword}」` };
-    return { ok: false, message: `「${keyword}」匹配到多条任务，请用 id 指明：\n${rows.map(taskLine).join('\n')}` };
-}
-
-export function buildWorkbenchTools(): ToolSet {
+export function buildWorkbenchTools(agentId: string): ToolSet {
     const set: Record<string, unknown> = {};
 
     set.work_today = tool({
-        description: '读取工作台今日概览：逾期与今天到期的任务、未来 7 天日程、各状态任务计数、最近笔记。回答「今天该做什么」之前先调用它。',
+        description: '读取工作台今日概览：今天要跑的定时任务、今天已跑出的结果、未来 7 天的安排、最近笔记。回答「今天有什么」「跑得怎么样」之前先调用它。',
         inputSchema: zod.object({}),
         execute: async () => {
             const now = new Date();
             const { start, end } = shanghaiDayRange(now);
-            const open = inArray(tasks.status, ['todo', 'doing'] as TaskStatus[]);
-            const weekEnd = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+            // 与今日页、简报同一份「未来 7 天」口径（见 work-day.ts 的 shanghaiUpcomingEnd）
+            const weekEnd = shanghaiUpcomingEnd(end, 7);
 
-            const [overdue, dueToday, upcoming, counts] = await Promise.all([
+            const [dueToday, runsToday, upcoming, recentNotes] = await Promise.all([
                 db
-                    .select()
-                    .from(tasks)
-                    .where(and(open, isNotNull(tasks.dueAt), lt(tasks.dueAt, start)))
-                    .orderBy(asc(tasks.dueAt))
+                    .select(scheduleColumns)
+                    .from(schedules)
+                    .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end)))
+                    .orderBy(asc(schedules.nextRunAt))
                     .limit(RESULT_ROWS_MAX),
                 db
-                    .select()
-                    .from(tasks)
-                    .where(and(open, gte(tasks.dueAt, start), lt(tasks.dueAt, end)))
-                    .orderBy(asc(tasks.dueAt))
+                    .select({
+                        id: schedules.id,
+                        title: schedules.title,
+                        lastRunAt: schedules.lastRunAt,
+                        lastStatus: schedules.lastStatus,
+                        lastError: schedules.lastError,
+                    })
+                    .from(schedules)
+                    .where(and(gte(schedules.lastRunAt, start), lt(schedules.lastRunAt, end), sql`${schedules.lastStatus} <> ''`))
+                    .orderBy(desc(schedules.lastRunAt))
                     .limit(RESULT_ROWS_MAX),
                 db
-                    .select({ id: events.id, title: events.title, startsAt: events.startsAt, allDay: events.allDay, location: events.location })
-                    .from(events)
-                    .where(and(gte(events.startsAt, now), lt(events.startsAt, weekEnd)))
-                    .orderBy(asc(events.startsAt))
+                    .select(scheduleColumns)
+                    .from(schedules)
+                    .where(and(eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
+                    .orderBy(asc(schedules.nextRunAt))
                     .limit(RESULT_ROWS_MAX),
-                db
-                    .select({ status: tasks.status, count: sql<number>`count(*)::int` })
-                    .from(tasks)
-                    .groupBy(tasks.status),
+                db.select({ id: notes.id, title: notes.title, updatedAt: notes.updatedAt }).from(notes).orderBy(desc(notes.updatedAt)).limit(8),
             ]);
 
-            const stat = { todo: 0, doing: 0, done: 0, cancelled: 0 } as Record<string, number>;
-            for (const row of counts) stat[row.status] = Number(row.count);
-
-            const lines = [`今日（${shanghaiDateKey(now)}，北京时间）概览`, `任务计数：待办 ${stat.todo} / 进行中 ${stat.doing} / 已完成 ${stat.done}`];
-            lines.push(`逾期 ${overdue.length} 条：${overdue.map(taskLine).join('\n') || '无'}`);
-            lines.push(`今天到期 ${dueToday.length} 条：${dueToday.map(taskLine).join('\n') || '无'}`);
+            const lines = [`今日（${shanghaiDateKey(now)}，北京时间）概览`];
+            lines.push(`今天该跑的定时任务 ${dueToday.length} 条：\n${dueToday.map(scheduleLine).join('\n') || '无'}`);
             lines.push(
-                `未来 7 天日程 ${upcoming.length} 条：${upcoming.map((e) => `- [${e.id}] ${formatWhen(e.startsAt)} ${e.title}${e.location ? `（${e.location}）` : ''}`).join('\n') || '无'}`,
+                `今天已跑 ${runsToday.length} 条：${
+                    runsToday
+                        .map(
+                            (r) =>
+                                `- ${clip(r.title)}（${clockOf(r.lastRunAt ?? now)} ${r.lastStatus === 'failed' ? `失败：${clip(r.lastError) || '未知原因'}` : r.lastStatus === 'running' ? '进行中' : '已跑出结果'}）`,
+                        )
+                        .join('\n') || '无'
+                }`,
             );
+            lines.push(`未来 7 天安排 ${upcoming.length} 条：\n${upcoming.map(scheduleLine).join('\n') || '无'}`);
+            lines.push(`最近笔记：${recentNotes.map((n) => `${n.title || '无标题'}（${formatWhen(n.updatedAt)}）`).join('、') || '无'}`);
             return lines.join('\n');
         },
     });
 
-    set.work_list_tasks = tool({
-        description:
-            '列出工作台任务。可用 status（todo/doing/done/cancelled，逗号分隔）、keyword、projectId 或 project（项目名）过滤；不传 status 时只列未完成。',
+    set.work_list_schedules = tool({
+        description: '列出工作台定时任务。可用 keyword 过滤标题与正文，limit 控制条数（最多 50）。',
         inputSchema: zod.object({
-            status: zod.string().optional().describe('逗号分隔的状态，如 todo,doing'),
-            keyword: zod.string().optional().describe('标题关键词'),
-            project: zod.string().optional().describe('项目名或项目 id'),
+            keyword: zod.string().optional().describe('标题或正文关键词'),
             limit: zod.number().optional().describe('返回条数，最多 50'),
         }),
         execute: async (input) => {
             const where: SQL[] = [];
-            const statusList = (input.status ?? '')
-                .split(',')
-                .map((s) => s.trim())
-                .filter((s) => ['todo', 'doing', 'done', 'cancelled'].includes(s)) as TaskStatus[];
-            where.push(statusList.length ? inArray(tasks.status, statusList) : inArray(tasks.status, ['todo', 'doing'] as TaskStatus[]));
             const keyword = stringParam(input.keyword, 128);
-            if (keyword) where.push(ilike(tasks.title, likePattern(keyword)));
-            const ref = await resolveProjectRef(input.project);
-            if (ref.error) return ref.error;
-            if (ref.id) where.push(eq(tasks.projectId, ref.id));
+            if (keyword) where.push(or(ilike(schedules.title, likePattern(keyword)), ilike(schedules.prompt, likePattern(keyword)))!);
             const limit = Math.min(Math.max(Math.floor(Number(input.limit) || RESULT_ROWS_MAX), 1), 50);
             const rows = await db
-                .select()
-                .from(tasks)
-                .where(and(...where))
-                .orderBy(asc(tasks.dueAt), desc(tasks.createdAt))
+                .select(scheduleColumns)
+                .from(schedules)
+                .where(where.length ? and(...where) : undefined)
+                .orderBy(asc(schedules.nextRunAt))
                 .limit(limit);
-            if (!rows.length) return '没有符合条件的任务';
-            return `${rows.length} 条任务：\n${rows.map(taskLine).join('\n')}`;
+            if (!rows.length) return '没有符合条件的定时任务';
+            return `${rows.length} 条定时任务：\n${rows.map(scheduleLine).join('\n')}`;
         },
     });
 
-    set.work_create_task = tool({
-        description: '在工作台新建一条任务。dueAt 用北京时间可懂的 ISO 日期（如 2026-10-16 或 2026-10-16T09:00:00+08:00）；project 传项目名或 id。',
+    set.work_create_schedule = tool({
+        description:
+            '新建一条定时任务：到点会自动跑当前这个智能体并把结果落成会话。kind 用 once/interval/daily/weekly；daily、weekly 给 time（HH:mm，北京时间），weekly 再给 days（0=周日…6=周六）；interval 给 intervalMinutes（5–10080）。startsAt 是首次执行的绝对时刻。',
         inputSchema: zod.object({
             title: zod.string().describe(`任务标题，最长 ${WORK_TITLE_MAX} 字`),
-            detail: zod.string().optional().describe('补充说明（可选）'),
-            priority: zod.enum(['low', 'medium', 'high']).optional().describe('优先级，默认 medium'),
-            dueAt: zod.string().optional().describe('到期时间，ISO 字符串或毫秒时间戳'),
-            project: zod.string().optional().describe('项目名或项目 id'),
+            prompt: zod.string().describe(`到点发给智能体的正文，最长 ${SCHEDULE_PROMPT_MAX} 字`),
+            kind: zod.enum(SCHEDULE_KINDS).describe('once / interval / daily / weekly'),
+            startsAt: zod.string().describe('首次执行时间，ISO 字符串或毫秒时间戳，如 2026-10-18T09:00:00+08:00'),
+            time: zod.string().optional().describe('每天/每周的钟点 HH:mm（北京时间）'),
+            days: zod.array(zod.number()).optional().describe('weekly 的星期数组，0=周日…6=周六'),
+            intervalMinutes: zod.number().optional().describe('interval 的间隔分钟，5–10080'),
         }),
         execute: async (input) => {
-            const blocked = await gateWrite('task');
+            const blocked = await gateWrite('schedule');
             if (blocked) return blocked;
-            let projectId: string | null;
-            try {
-                const ref = await resolveProjectRef(input.project);
-                if (ref.error) return ref.error;
-                projectId = ref.id;
-            } catch {
-                return 'project 参数不合法：请传项目名或项目 id';
-            }
             let title: string;
-            let detail: string;
-            let dueAt: Date | null;
-            let priority: TaskPriority;
+            let prompt: string;
+            let startsAt: Date | null;
+            let resolved: { plan: SchedulePlan; nextRunAt: Date };
             try {
                 title = normalizeWorkText(input.title, 'title', WORK_TITLE_MAX);
-                detail = normalizeWorkOptionalText(input.detail, 'detail', WORK_DETAIL_MAX);
-                dueAt = normalizeWorkDate(input.dueAt, 'dueAt');
-                priority = normalizeTaskPriority(input.priority);
+                prompt = normalizeWorkText(input.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
+                startsAt = normalizeWorkDate(input.startsAt, 'startsAt');
+                if (!startsAt) return 'startsAt 必填';
+                resolved = resolveSchedulePlan(
+                    { kind: input.kind, time: input.time, intervalMinutes: input.intervalMinutes, days: input.days, startsAt },
+                    new Date(),
+                );
             } catch (error) {
                 return `参数不合法：${(error as Error).message ?? String(error)}`;
             }
             const id = crypto.randomUUID();
-            const status: TaskStatus = 'todo';
-            await db.transaction(async (tx) => {
-                await lockProjectRow(tx, projectId);
-                await tx.insert(tasks).values({ id, projectId, title, detail, status, priority, dueAt, source: 'ai' });
+            const { plan, nextRunAt } = resolved;
+            await db.insert(schedules).values({
+                id,
+                title,
+                prompt,
+                agentId,
+                kind: plan.kind,
+                timeText: plan.timeText,
+                intervalMinutes: plan.intervalMinutes,
+                days: plan.days,
+                startsAt: plan.startsAt,
+                nextRunAt,
+                enabled: true,
             });
-            return `已创建任务：${taskLine({ id, title, status, priority, dueAt })}`;
-        },
-    });
-
-    set.work_update_task = tool({
-        description: '修改任务：状态（todo/doing/done/cancelled）、优先级、到期时间。用 id 定位；没有 id 时可用 title 模糊匹配唯一的未完成任务。',
-        inputSchema: zod.object({
-            id: zod.string().optional().describe('任务 id'),
-            title: zod.string().optional().describe('任务标题片段（仅当没有 id 时用）'),
-            status: zod.enum(['todo', 'doing', 'done', 'cancelled']).optional(),
-            priority: zod.enum(['low', 'medium', 'high']).optional(),
-            dueAt: zod.string().nullable().optional().describe('新的到期时间；传 null 清空'),
-        }),
-        execute: async (input) => {
-            const blocked = await gateWrite('task-patch');
-            if (blocked) return blocked;
-            const found = await findTaskForPatch({ id: input.id, title: input.title });
-            if (!found.ok) return found.message;
-            const patch: Record<string, unknown> = {};
-            let nextStatus: TaskStatus | null = null;
-            try {
-                if (input.status !== undefined) {
-                    nextStatus = normalizeTaskStatus(input.status);
-                    patch.status = nextStatus;
-                }
-                if (input.priority !== undefined) patch.priority = normalizeTaskPriority(input.priority);
-                if (input.dueAt !== undefined) patch.dueAt = normalizeWorkDate(input.dueAt, 'dueAt');
-            } catch (error) {
-                return `参数不合法：${(error as Error).message ?? String(error)}`;
-            }
-            if (!Object.keys(patch).length) return '没有需要修改的字段（status / priority / dueAt 至少给一个）';
-            patch.updatedAt = new Date();
-            // 改状态要连带算 completedAt，而「旧的 completedAt」必须和写落在同一个事务里、且对行取锁
-            // （与 `api/tasks/[id].ts` 同一口径）。用 `findTaskForPatch` 那次无锁读出的旧值会交错：
-            // 用户在界面上刚点「完成」（写入 T1），模型的 `status: 'done'` 若在那之前读过这一行，
-            // 就会把 completedAt 覆盖成 now，真实的完成时刻被静默改掉，今日概览与简报跟着算错一天。
-            const [updated] = await db.transaction(async (tx) => {
-                if (nextStatus === null) return tx.update(tasks).set(patch).where(eq(tasks.id, found.row.id)).returning({ id: tasks.id });
-                const [current] = await tx.select({ completedAt: tasks.completedAt }).from(tasks).where(eq(tasks.id, found.row.id)).for('update');
-                if (!current) return [];
-                return tx
-                    .update(tasks)
-                    .set({ ...patch, ...taskCompletionPatch(nextStatus, current.completedAt) })
-                    .where(eq(tasks.id, found.row.id))
-                    .returning({ id: tasks.id });
-            });
-            if (!updated) return `找不到 id 为 ${found.row.id} 的任务（可能刚被删除）`;
-            return `已更新任务 ${found.row.id}：${Object.keys(patch)
-                .filter((k) => k !== 'updatedAt')
-                .join('、')}`;
+            return `已创建定时任务 [${id}]：${title}（${describeSchedule(plan)}，下一次 ${formatWhen(nextRunAt)} ${clockOf(nextRunAt)}）`;
         },
     });
 
@@ -297,13 +234,10 @@ export function buildWorkbenchTools(): ToolSet {
             title: zod.string().describe(`标题，最长 ${WORK_TITLE_MAX} 字`),
             content: zod.string().describe('Markdown 正文'),
             tags: zod.array(zod.string()).optional().describe('标签列表'),
-            project: zod.string().optional().describe('项目名或项目 id'),
         }),
         execute: async (input) => {
             const blocked = await gateWrite('note');
             if (blocked) return blocked;
-            const ref = await resolveProjectRef(input.project);
-            if (ref.error) return ref.error;
             let title: string;
             let content: string;
             try {
@@ -314,70 +248,15 @@ export function buildWorkbenchTools(): ToolSet {
             }
             const id = crypto.randomUUID();
             const tagList = normalizeWorkTags(input.tags);
-            await db.transaction(async (tx) => {
-                await lockProjectRow(tx, ref.id);
-                await tx.insert(notes).values({ id, projectId: ref.id, title, content, tags: tagList });
-            });
+            await db.insert(notes).values({ id, title, content, tags: tagList });
             // 与界面新建同口径：异步补摘要与向量，让这条笔记立刻能被 work_search 的语义路径检索到
             scheduleNoteIndex(id);
             return `已记录笔记 [${id}] ${title}${tagList.length ? `（标签：${tagList.join('、')}）` : ''}`;
         },
     });
 
-    set.work_create_event = tool({
-        description: '在工作台日程里创建一个事件。startsAt 必填（北京时间可懂的 ISO 时间），可给 endsAt、location、allDay、reminderBeforeMinutes。',
-        inputSchema: zod.object({
-            title: zod.string().describe(`事件标题，最长 ${WORK_TITLE_MAX} 字`),
-            startsAt: zod.string().describe('开始时间，ISO 字符串或毫秒时间戳'),
-            endsAt: zod.string().optional().describe('结束时间，不得早于 startsAt'),
-            location: zod.string().optional().describe('地点'),
-            detail: zod.string().optional().describe('备注'),
-            allDay: zod.boolean().optional().describe('是否全天'),
-            project: zod.string().optional().describe('项目名或项目 id'),
-            reminderBeforeMinutes: zod.number().optional().describe('开始前多少分钟提醒，0–43200；用户说「提前 15 分钟提醒我」就填 15，全天事件不填'),
-        }),
-        execute: async (input) => {
-            const blocked = await gateWrite('event');
-            if (blocked) return blocked;
-            const ref = await resolveProjectRef(input.project);
-            if (ref.error) return ref.error;
-            let startsAt: Date | null;
-            let title: string;
-            let endsAt: Date | null;
-            let reminderMinutes: number | null;
-            try {
-                startsAt = normalizeWorkDate(input.startsAt, 'startsAt');
-                if (!startsAt) return 'startsAt 必填';
-                title = normalizeWorkText(input.title, 'title', WORK_TITLE_MAX);
-                endsAt = normalizeWorkDateRange(input.endsAt, startsAt);
-                reminderMinutes = normalizeReminderMinutes(input.reminderBeforeMinutes);
-            } catch (error) {
-                return `参数不合法：${(error as Error).message ?? String(error)}`;
-            }
-            const id = crypto.randomUUID();
-            const reminderAt = reminderMinutes === null ? null : new Date(startsAt.getTime() - reminderMinutes * 60_000);
-            await db.transaction(async (tx) => {
-                await lockProjectRow(tx, ref.id);
-                await tx.insert(events).values({
-                    id,
-                    projectId: ref.id,
-                    title,
-                    detail: normalizeWorkOptionalText(input.detail, 'detail', WORK_DETAIL_MAX),
-                    startsAt,
-                    endsAt,
-                    allDay: input.allDay === true,
-                    location: normalizeWorkOptionalText(input.location, 'location', 200),
-                    reminderAt,
-                    source: 'ai',
-                });
-            });
-            const reminded = reminderAt ? `，将在 ${reminderAt.toISOString()} 提醒` : '';
-            return `已创建日程 [${id}] ${title}（${startsAt.toISOString()}）${reminded}`;
-        },
-    });
-
     set.work_search = tool({
-        description: '在工作台里检索：任务、笔记、日程、项目。用于回答「我之前记过…吗」「关于 X 的任务有哪些」这类需要历史内容的问题。',
+        description: '在工作台里检索：笔记与定时任务。用于回答「我之前记过…吗」「关于 X 有什么安排」这类需要历史内容的问题。',
         inputSchema: zod.object({
             keyword: zod.string().describe('检索关键词，命中各实体的标题与正文'),
             limit: zod.number().optional().describe('每类最多返回条数，默认 10，最多 20'),
@@ -387,36 +266,29 @@ export function buildWorkbenchTools(): ToolSet {
             if (!keyword) return 'keyword 不能为空';
             const pattern = likePattern(keyword);
             const limit = Math.min(Math.max(Math.floor(Number(input.limit) || 10), 1), RESULT_ROWS_MAX);
-            const [ts, ns, es, ps] = await Promise.all([
+            const [ns, ss] = await Promise.all([
                 db
-                    .select({ id: tasks.id, title: tasks.title, status: tasks.status, priority: tasks.priority, dueAt: tasks.dueAt })
-                    .from(tasks)
-                    .where(or(ilike(tasks.title, pattern), ilike(tasks.detail, pattern)))
-                    .orderBy(desc(tasks.updatedAt))
-                    .limit(limit),
-                db
-                    .select({ id: notes.id, title: notes.title, updatedAt: notes.updatedAt, snippet: sql<string>`left(${notes.content}, 160)` })
+                    .select({
+                        id: notes.id,
+                        title: notes.title,
+                        updatedAt: notes.updatedAt,
+                        // 优先用 AI 摘要（已是单段纯文本），没摘要才截正文；正文里的 Markdown 与换行会撑爆清单
+                        snippet: sql<string>`coalesce(nullif(${notes.summary}, ''), left(${notes.content}, 160))`,
+                    })
                     .from(notes)
-                    .where(or(ilike(notes.title, pattern), ilike(notes.content, pattern)))
+                    .where(or(ilike(notes.title, pattern), ilike(notes.content, pattern), ilike(notes.summary, pattern)))
                     .orderBy(desc(notes.updatedAt))
                     .limit(limit),
                 db
-                    .select({ id: events.id, title: events.title, startsAt: events.startsAt })
-                    .from(events)
-                    .where(or(ilike(events.title, pattern), ilike(events.detail, pattern), ilike(events.location, pattern)))
-                    .orderBy(desc(events.startsAt))
-                    .limit(limit),
-                db
-                    .select({ id: projects.id, name: projects.name })
-                    .from(projects)
-                    .where(or(ilike(projects.name, pattern), ilike(projects.description, pattern)))
+                    .select(scheduleColumns)
+                    .from(schedules)
+                    .where(or(ilike(schedules.title, pattern), ilike(schedules.prompt, pattern)))
+                    .orderBy(asc(schedules.nextRunAt))
                     .limit(limit),
             ]);
             const blocks = [
-                `任务 ${ts.length}：${ts.map(taskLine).join('\n') || '无'}`,
                 `笔记 ${ns.length}：${ns.map((n) => `- [${n.id}] ${clip(n.title || '无标题')}：${clip(n.snippet)}`).join('\n') || '无'}`,
-                `日程 ${es.length}：${es.map((e) => `- [${e.id}] ${e.title}（${formatWhen(e.startsAt)}）`).join('\n') || '无'}`,
-                `项目 ${ps.length}：${ps.map((p) => `- [${p.id}] ${p.name}`).join('\n') || '无'}`,
+                `定时任务 ${ss.length}：${ss.map(scheduleLine).join('\n') || '无'}`,
             ];
             return `「${keyword}」的检索结果：\n${blocks.join('\n')}`;
         },
@@ -427,9 +299,8 @@ export function buildWorkbenchTools(): ToolSet {
 
 /** 供系统提示词的工具清单使用：与上面实现保持同一份口径，不在两处各写一遍。 */
 export const WORKBENCH_TOOL_SUMMARY = [
-    '- work_today：今日概览（逾期/今天到期/未来 7 天日程/任务计数）',
-    '- work_list_tasks / work_create_task / work_update_task：查、建、改任务（状态、优先级、到期）',
+    '- work_today：今日概览（今天要跑的定时任务 / 今天已跑出的结果 / 未来 7 天安排 / 最近笔记）',
+    '- work_list_schedules / work_create_schedule：查、建定时任务（到点自动跑智能体并把结果落成会话）',
     '- work_create_note：记笔记（Markdown）',
-    '- work_create_event：创建日程（可带开始前多少分钟的提醒）',
-    '- work_search：跨任务/笔记/日程/项目检索',
+    '- work_search：跨笔记与定时任务检索',
 ].join('\n');

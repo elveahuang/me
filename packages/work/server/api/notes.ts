@@ -10,7 +10,6 @@ import { intParam, likePattern, stringParam } from '../utils/query';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody } from '../utils/request-body';
 import { NOTE_CONTENT_MAX, WORK_TAG_MAX, WORK_TITLE_MAX, normalizeNoteKind, normalizeWorkOptionalText, normalizeWorkTags } from '../utils/work-input';
-import { assertProjectExists, lockProjectRow } from '../utils/work-project';
 
 const NOTE_LIST_MAX = 200;
 
@@ -31,7 +30,6 @@ export default defineEventHandler(async (event) => {
 
         const body = (await readBody(event)) ?? {};
         const id = crypto.randomUUID();
-        const projectId = await assertProjectExists(body.projectId);
         const title = normalizeWorkOptionalText(body.title, 'title', WORK_TITLE_MAX);
         const content = normalizeWorkOptionalText(body.content, 'content', NOTE_CONTENT_MAX);
         // 只带 content 或只带 title 都算一条笔记，两者都空则不是内容：
@@ -40,17 +38,13 @@ export default defineEventHandler(async (event) => {
         if (!title && !content) {
             throw createError({ statusCode: 400, statusMessage: 'title 与 content 至少填写一项' });
         }
-        await db.transaction(async (tx) => {
-            await lockProjectRow(tx, projectId);
-            await tx.insert(notes).values({
-                id,
-                projectId,
-                title,
-                content,
-                kind: normalizeNoteKind(body.kind),
-                pinned: normalizeAdminBoolean(body.pinned, 'pinned', false),
-                tags: normalizeWorkTags(body.tags),
-            });
+        await db.insert(notes).values({
+            id,
+            title,
+            content,
+            kind: normalizeNoteKind(body.kind),
+            pinned: normalizeAdminBoolean(body.pinned, 'pinned', false),
+            tags: normalizeWorkTags(body.tags),
         });
         // 先把回给客户端的那一行读完，再触发异步索引：
         // 反过来的话索引那次 `update(summary)` 可能与这里的 SELECT 交错，
@@ -72,8 +66,6 @@ export default defineEventHandler(async (event) => {
         if (list.length) where.push(inArray(notes.kind, list as ('note' | 'daily')[]));
     }
 
-    const projectId = stringParam(query.projectId);
-    if (projectId) where.push(eq(notes.projectId, projectId));
     if (stringParam(query.pinned) === '1') where.push(eq(notes.pinned, true));
 
     const tag = stringParam(query.tag, WORK_TAG_MAX);
@@ -93,29 +85,30 @@ export default defineEventHandler(async (event) => {
     const limit = intParam(query.limit, NOTE_LIST_MAX, 1, NOTE_LIST_MAX);
     // 摘要列表不带正文：笔记正文可达数百 KB，整列表返回会把一次刷新变成几 MB 传输。
     // ?full=1 才回正文（单篇阅读走 GET /api/notes/[id]）。
-    if (stringParam(query.full) === '1') {
-        return db
-            .select(noteColumns)
-            .from(notes)
-            .where(where.length ? and(...where) : undefined)
-            .orderBy(desc(notes.pinned), desc(notes.updatedAt))
-            .limit(limit);
-    }
-    return db
-        .select({
-            id: notes.id,
-            projectId: notes.projectId,
-            title: notes.title,
-            kind: notes.kind,
-            pinned: notes.pinned,
-            tags: notes.tags,
-            summary: notes.summary,
-            createdAt: notes.createdAt,
-            updatedAt: notes.updatedAt,
-            excerpt: sql<string>`left(${notes.content}, 240)`,
-        })
-        .from(notes)
-        .where(where.length ? and(...where) : undefined)
-        .orderBy(desc(notes.pinned), desc(notes.updatedAt))
-        .limit(limit);
+    const summaryColumns = {
+        id: notes.id,
+        title: notes.title,
+        kind: notes.kind,
+        pinned: notes.pinned,
+        tags: notes.tags,
+        summary: notes.summary,
+        createdAt: notes.createdAt,
+        updatedAt: notes.updatedAt,
+        excerpt: sql<string>`left(${notes.content}, 240)`,
+    };
+    const order = [desc(notes.pinned), desc(notes.updatedAt)];
+    const whereClause = where.length ? and(...where) : undefined;
+    return stringParam(query.full) === '1'
+        ? db
+              .select(noteColumns)
+              .from(notes)
+              .where(whereClause)
+              .orderBy(...order)
+              .limit(limit)
+        : db
+              .select(summaryColumns)
+              .from(notes)
+              .where(whereClause)
+              .orderBy(...order)
+              .limit(limit);
 });

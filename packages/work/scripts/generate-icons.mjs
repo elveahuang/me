@@ -1,5 +1,5 @@
 /**
- * 生成 Web 端本地图标表（app/utils/app-icons.ts）。
+ * 生成工作台本地图标表（app/utils/app-icons.ts）。
  *
  * 为什么不用 @nuxt/icon 的运行时加载：
  * 图标名一旦写在模板里，客户端会去 api.iconify.design 拉取 SVG。离线、内网或被墙的网络下
@@ -20,152 +20,62 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = resolve(HERE, '../app/utils/app-icons.ts');
 
-/** 需要打包进客户端的图标（Iconify mdi 名称，不带前缀） */
+/**
+ * 需要打包进客户端的图标（Iconify mdi 名称，不带前缀）。
+ *
+ * 这份清单是从 webapp 那一套继承来的，删掉日历/项目/附件/命令面板之后大部分已经没有消费者。
+ * 每个图标体都会内联进 `app/utils/app-icons.ts` 打进客户端包，留着就是纯体积，
+ * 所以只保留 `app/**` 与 `server/**` 里还能 grep 到名字的行——清减后请跑
+ * `pnpm --filter @repo/work icons` 重新生成，别让生成文件与这份清单漂移。
+ */
 const NAMES = [
     // 外壳 / 导航
     'menu',
     'close',
     'chevron-down',
-    'chevron-up',
-    'chevron-left',
     'chevron-right',
     'arrow-left',
-    'arrow-right',
-    'arrow-up',
-    'arrow-down',
-    'dots-vertical',
-    'dots-horizontal',
-    'external-link',
-    'open-in-new',
     'plus',
-    'minus',
     'magnify',
     'close-circle-outline',
-    'filter-variant',
-    'filter-off-outline',
-    'sort-variant',
-    'refresh',
-    'check',
-    'check-all',
     'check-circle-outline',
     // 外观
     'white-balance-sunny',
     'moon-waning-crescent',
     'monitor',
-    'palette-outline',
-    'theme-light-dark',
-    // 账号
+    // 账号与设置
     'account-outline',
-    'account-circle-outline',
-    'account-group-outline',
-    'account-multiple-plus-outline',
-    'login-variant',
-    'logout-variant',
-    'translate',
     'cog-outline',
-    'shield-account-outline',
-    'shield-check-outline',
-    'lock-outline',
-    'key-variant',
-    'email-outline',
-    // 对话
-    'message-text-outline',
-    'chat-outline',
-    'send',
-    'send-outline',
-    'stop-circle-outline',
-    'content-copy',
+    // 行内操作与附件
     'pencil-outline',
     'trash-can-outline',
     'download-outline',
-    'upload-outline',
     'paperclip',
-    'thought-bubble-outline',
-    'lightbulb-outline',
-    'emoticon-happy-outline',
+    'tray-arrow-up',
+    'file-outline',
+    'file-image-outline',
+    // 对话
     'robot-outline',
-    'dots-grid',
-    'plus-circle-outline',
-    // AI 资产
+    'brain',
     'creation-outline',
+    // AI 能力与设置子页
     'wrench-outline',
-    'wrench-cog-outline',
     'lightning-bolt-outline',
-    'server-network',
-    'server-outline',
     'power-plug-outline',
     'book-open-page-variant-outline',
     'database-outline',
-    'brain',
-    'api',
-    'xml',
-    'code-json',
-    'file-document-outline',
-    'folder-outline',
-    'link-variant',
-    'cloud-upload-outline',
-    'autorenew',
-    // 运营 / 计费
     'view-dashboard-outline',
-    'credit-card-outline',
-    'receipt-text-outline',
-    'cash-multiple',
-    'chart-line',
-    'chart-donut',
-    'trending-up',
-    'ticket-confirmation-outline',
-    'crown-outline',
-    'infinity',
-    'rocket-launch-outline',
-    'gift-outline',
-    'qrcode',
-    'calendar-outline',
-    'calendar-check-outline',
+    'autorenew',
+    // 定时任务 / 今日页
     'clock-outline',
-    'history',
-    'star-outline',
-    'star',
+    'timer-outline',
+    'play-circle-outline',
+    'newspaper-variant-outline',
+    // 状态与标记
     'alert-circle-outline',
     'alert-outline',
-    'information-outline',
-    'help-circle-outline',
-    'eye-outline',
-    'eye-off-outline',
-    'table-of-contents',
-    'view-list-outline',
-    'text-box-outline',
-    // 附件管理 / 对象存储
-    'cloud-outline',
-    'cloud-check-outline',
-    'cloud-cog-outline',
-    'database-cog-outline',
-    'harddisk',
-    'folder-multiple-outline',
-    'package-variant-closed',
-    'tray-arrow-up',
-    'tray-arrow-down',
-    'file-outline',
-    'file-image-outline',
-    'file-pdf-box',
-    'file-word-outline',
-    'file-excel-outline',
-    'zip-box-outline',
-    'music-box-outline',
-    'video-outline',
-    'shield-lock-outline',
-    // 资讯 / 宣传栏 / 通知
-    'newspaper',
-    'newspaper-variant-outline',
-    'bullhorn',
-    'bullhorn-outline',
-    'bell-outline',
-    'bell-badge-outline',
-    'send-check-outline',
     'tag-outline',
     'pin-outline',
-    'earth',
-    'bookmark-outline',
-    'clock-check-outline',
 ].sort();
 
 const collection = JSON.parse(readFileSync(resolve(HERE, '../../../node_modules/@iconify-json/mdi/icons.json'), 'utf8'));

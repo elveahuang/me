@@ -300,53 +300,34 @@ export const systemSettings = pgTable('system_settings', {
 });
 
 // ==========================================
-// 工作台：项目 / 任务 / 笔记 / 日程 / 每日简报
+// 工作台：笔记 / 定时任务 / 每日简报
 // ==========================================
 // work 是单主的本机应用，这些表刻意没有归属列。
+//
+// 待办（tasks）、项目（projects）与日程（events）已整体退场：工作台只剩「记东西」和
+// 「到点自动跑智能体」两种能力，`schedules` 取代的就是原来「任务 + 日历」的位置。
 
-export const TASK_STATUSES = ['todo', 'doing', 'done', 'cancelled'] as const;
-export const TASK_PRIORITIES = ['low', 'medium', 'high'] as const;
-export const WORK_SOURCES = ['manual', 'ai', 'brief'] as const;
 export const NOTE_KINDS = ['note', 'daily'] as const;
 
-export type TaskStatus = (typeof TASK_STATUSES)[number];
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
-export type WorkSource = (typeof WORK_SOURCES)[number];
+/**
+ * 定时任务的重复口径。
+ *
+ * 刻意不做 cron 表达式：croner 按**进程本地时区**解释表达式，容器几乎都是 UTC，
+ * 于是「每天 09:00」会在北京时间 17:00 跑（`brief:daily` 为此每小时自判北京日，见 nuxt.config）。
+ * 这里把「北京时间几点 / 星期几」存成结构化字段，下一次时刻由 `work-schedule.ts` 自己按北京日算，
+ * 用户看到的是「每天 09:00」而不是一个需要查表的表达式。
+ */
+export const SCHEDULE_KINDS = ['once', 'interval', 'daily', 'weekly'] as const;
+export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
 
-export const projects = pgTable('projects', {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    description: text('description').notNull().default(''),
-    color: text('color').notNull().default(''),
-    archived: boolean('archived').notNull().default(false),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-export const tasks = pgTable(
-    'tasks',
-    {
-        id: text('id').primaryKey(),
-        projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
-        title: text('title').notNull(),
-        detail: text('detail').notNull().default(''),
-        status: text('status').notNull().default('todo'),
-        priority: text('priority').notNull().default('medium'),
-        dueAt: timestamp('due_at'),
-        completedAt: timestamp('completed_at'),
-        // 任务由谁产生：用户手敲 / 助手工具写入 / 简报建议
-        source: text('source').notNull().default('manual'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at').notNull().defaultNow(),
-    },
-    (t) => [index('tasks_status_due_idx').on(t.status, t.dueAt), index('tasks_project_idx').on(t.projectId)],
-);
+/** `lastStatus` 的空串是「还没跑过」，与界面显示 `-` 对应；`running` 只在那一轮真正在途时出现。 */
+export const SCHEDULE_STATUSES = ['running', 'success', 'failed'] as const;
+export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 
 export const notes = pgTable(
     'notes',
     {
         id: text('id').primaryKey(),
-        projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
         title: text('title').notNull().default(''),
         // Markdown 正文，与编辑器/导出同一套
         content: text('content').notNull().default(''),
@@ -364,23 +345,45 @@ export const notes = pgTable(
     (t) => [index('notes_updated_at_idx').on(t.updatedAt), index('notes_kind_idx').on(t.kind)],
 );
 
-export const events = pgTable(
-    'events',
+/**
+ * 定时任务：到点自动跑一轮智能体，并把结果落成一条会话。
+ *
+ * `startsAt` 与 `nextRunAt` 存绝对时刻（UTC timestamp），但**含义**按北京时间解释：
+ * `timeText`/`days` 是「北京时间的几点、星期几」，`nextRunAt` 由 `work-schedule.ts` 按同一个
+ * 时区口径算出，所以换机器、容器跑 UTC 都不会让「每天 09:00」漂移。
+ * 每次写入（新建或 PATCH）都重算 `nextRunAt`，用户改完钟点不需要等下一轮 cron 才发现没生效。
+ */
+export const schedules = pgTable(
+    'schedules',
     {
         id: text('id').primaryKey(),
-        projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
         title: text('title').notNull(),
-        detail: text('detail').notNull().default(''),
+        // 到点发给智能体的那一条消息正文
+        prompt: text('prompt').notNull().default(''),
+        agentId: text('agent_id')
+            .notNull()
+            .references(() => agents.id, { onDelete: 'cascade' }),
+        kind: text('kind').$type<ScheduleKind>().notNull().default('daily'),
+        /** 'HH:mm'（北京时间）：once/daily/weekly 的钟点；interval 不用，留空串 */
+        timeText: text('time_text').notNull().default(''),
+        /** kind=interval 时的步长（分钟），其余为 null */
+        intervalMinutes: integer('interval_minutes'),
+        /** kind=weekly 时的星期（0=周日 … 6=周六，按北京日），其余为空数组 */
+        days: jsonb('days').$type<number[]>().notNull().default([]),
+        /** 首次生效时刻；once 就是它自己 */
         startsAt: timestamp('starts_at').notNull(),
-        endsAt: timestamp('ends_at'),
-        allDay: boolean('all_day').notNull().default(false),
-        location: text('location').notNull().default(''),
-        reminderAt: timestamp('reminder_at'),
-        source: text('source').notNull().default('manual'),
+        enabled: boolean('enabled').notNull().default(true),
+        nextRunAt: timestamp('next_run_at').notNull(),
+        lastRunAt: timestamp('last_run_at'),
+        lastStatus: text('last_status').$type<ScheduleStatus | ''>().notNull().default(''),
+        lastError: text('last_error').notNull().default(''),
+        /** 最近一轮跑出来的会话；删会话时置空，不连带删掉定时任务 */
+        lastConversationId: text('last_conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
-    (t) => [index('events_starts_at_idx').on(t.startsAt)],
+    // runner 每分钟按 (enabled, nextRunAt) 取到期行，这条索引就是它的查询形状
+    (t) => [index('schedules_enabled_next_idx').on(t.enabled, t.nextRunAt)],
 );
 
 /**
@@ -391,28 +394,14 @@ export const briefs = pgTable('briefs', {
     briefDate: date('brief_date').primaryKey(),
     // 模型产出的 Markdown 正文
     content: text('content').notNull().default(''),
-    // 生成时的结构化快照（到期/逾期/进行中/日程），正文丢了也能重建
+    // 生成时的结构化快照（今天到期/今天跑过/未来 7 天/最近笔记 + 四个计数），正文丢了也能重建
     data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
     model: text('model').notNull().default(''),
     generatedAt: timestamp('generated_at').notNull().defaultNow(),
 });
 
-export const projectsRelations = relations(projects, ({ many }) => ({
-    tasks: many(tasks),
-    notes: many(notes),
-    events: many(events),
-}));
-
-export const tasksRelations = relations(tasks, ({ one }) => ({
-    project: one(projects, { fields: [tasks.projectId], references: [projects.id] }),
-}));
-
-export const notesRelations = relations(notes, ({ one }) => ({
-    project: one(projects, { fields: [notes.projectId], references: [projects.id] }),
-}));
-
-export const eventsRelations = relations(events, ({ one }) => ({
-    project: one(projects, { fields: [events.projectId], references: [projects.id] }),
+export const schedulesRelations = relations(schedules, ({ one }) => ({
+    agent: one(agents, { fields: [schedules.agentId], references: [agents.id] }),
 }));
 
 // ==========================================
@@ -431,8 +420,6 @@ export type Message = typeof messages.$inferSelect;
 export type StorageConfig = typeof storageConfigs.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type SystemSetting = typeof systemSettings.$inferSelect;
-export type Project = typeof projects.$inferSelect;
-export type Task = typeof tasks.$inferSelect;
 export type Note = typeof notes.$inferSelect;
-export type WorkEvent = typeof events.$inferSelect;
+export type Schedule = typeof schedules.$inferSelect;
 export type Brief = typeof briefs.$inferSelect;

@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, or, sql, type SQL } from 'drizzle-orm';
+import { desc, ilike, isNotNull, or, sql, type SQL } from 'drizzle-orm';
 import { notes } from '../db/schema';
 import { db } from './db';
 import { bigrams, bigramScore, embedTexts } from './embedding';
@@ -88,12 +88,12 @@ async function keywordSearch(querySet: ReadonlySet<string>, lowered: string, lim
 }
 
 /**
- * 检索笔记。`projectId` 传值表示限定某个项目，不传表示全库。
+ * 检索笔记。
  *
  * 向量路径的任何一次失败（供应商未配、外呼超时、候选维度全不可比）都落到字面匹配，
  * 并把原因写进日志：用户点「搜索」要得到结果，而不是一个 502。
  */
-export async function searchNotes(query: string, options: { limit?: number; projectId?: string | null } = {}): Promise<NoteSearchHit[]> {
+export async function searchNotes(query: string, options: { limit?: number } = {}): Promise<NoteSearchHit[]> {
     const trimmed = query.trim();
     if (!trimmed) return [];
     const limit = Math.min(Math.max(Math.floor(options.limit ?? 10) || 10, 1), 50);
@@ -113,7 +113,7 @@ export async function searchNotes(query: string, options: { limit?: number; proj
                         embedding: notes.embedding,
                     })
                     .from(notes)
-                    .where(and(isNotNull(notes.embedding), options.projectId ? eq(notes.projectId, options.projectId) : undefined))
+                    .where(isNotNull(notes.embedding))
                     .orderBy(desc(notes.updatedAt))
                     .limit(NOTE_SCAN_MAX);
 
@@ -148,9 +148,12 @@ export async function searchNotes(query: string, options: { limit?: number; proj
         }
     }
 
-    const filters: SQL[] = [or(ilike(notes.title, pattern), ilike(notes.summary, pattern), ilike(notes.content, pattern))!];
-    if (options.projectId) filters.push(eq(notes.projectId, options.projectId));
     // bigrams(query) 只在循环外算一次：下面每个候选行都要打一次分，
     // 让 bigramScore 自己重算会把整段兜底变成 O(查询长度 × 笔记数)（见 embedding.ts 的 bigramScore 注释）。
-    return keywordSearch(bigrams(trimmed), trimmed.toLowerCase(), limit, and(...filters)!);
+    return keywordSearch(
+        bigrams(trimmed),
+        trimmed.toLowerCase(),
+        limit,
+        or(ilike(notes.title, pattern), ilike(notes.summary, pattern), ilike(notes.content, pattern))!,
+    );
 }

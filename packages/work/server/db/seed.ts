@@ -18,7 +18,7 @@ for (const envPath of ['.env', '.env.local', '../../.env', '../../.env.local']) 
 async function main() {
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../utils/db');
-    const { agentSkills, agentTools, agents, events, notes, projects, skills, systemSettings, tasks, tools } = await import('./schema');
+    const { agentSkills, agentTools, agents, notes, schedules, skills, systemSettings, tools } = await import('./schema');
 
     console.log('🌱 开始初始化 work 的 Seed 数据…');
 
@@ -50,7 +50,7 @@ async function main() {
             name: '工作台行动规范',
             description: '要求助手用工具落地，而不是嘴上答应',
             instructions:
-                '涉及任务、笔记、日程的增删改时，必须调用对应工作台工具完成，不允许只在回答里声称「已记下」；写入前确认标题与时间齐全，缺信息就先追问。改动完成后用一行说明落到了哪条对象上。',
+                '涉及笔记、定时任务的增删改时，必须调用对应工作台工具完成，不允许只在回答里声称「已记下」；写入前确认标题与时间齐全，缺信息就先追问。改动完成后用一行说明落到了哪条对象上。',
             enabled: true,
         },
     ];
@@ -91,10 +91,10 @@ async function main() {
         {
             name: '工作台助手',
             emoji: '🧭',
-            description: '管理你的任务、笔记与日程，每天给一份简报',
+            description: '管理你的笔记与定时任务，每天给一份简报',
             systemPrompt: [
-                '你是这台个人工作台里的助手。除了回答问题，你还能读写用户的任务、笔记与日程，遇到「帮我记一下 / 明天提醒我 / 今天有什么」这类诉求时直接调用工具完成。',
-                '不确定当前时间或日期时先查「当前时间」工具，不要凭猜测写入到期日。回答保持简短，并说清落到了哪条具体对象上。',
+                '你是这台个人工作台里的助手。除了回答问题，你还能读写用户的笔记与定时任务，遇到「帮我记一下 / 每天九点跑一遍 / 今天有什么」这类诉求时直接调用工具完成。',
+                '不确定当前时间或日期时先查「当前时间」工具，不要凭猜测写入执行时间。回答保持简短，并说清落到了哪条具体对象上。',
             ].join('\n'),
             model: 'deepseek-chat',
             providerId: null,
@@ -165,54 +165,12 @@ async function main() {
     }
 
     // 5. 示例工作台内容：只在空库上创建，重跑不会覆盖用户真实数据
-    const [existingProject] = await db.select().from(projects).limit(1);
-    if (existingProject) {
+    const [existingSchedule] = await db.select({ id: schedules.id }).from(schedules).limit(1);
+    if (existingSchedule) {
         console.log('✓ 工作台已有数据，跳过示例内容');
     } else {
-        const projectId = randomUUID();
-        await db.insert(projects).values({ id: projectId, name: '示例项目', description: 'seed 生成的演示内容，可直接删掉', color: 'green' });
-
-        const dayStart = new Date();
-        dayStart.setHours(9, 0, 0, 0);
-        const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-        const afternoon = new Date();
-        afternoon.setHours(15, 0, 0, 0);
-
-        await db.insert(tasks).values([
-            {
-                id: randomUUID(),
-                projectId,
-                title: '看看 Today 面板都有什么',
-                detail: '今日到期与逾期任务都会汇总在这里。',
-                status: 'doing',
-                priority: 'high',
-                dueAt: dayStart,
-            },
-            {
-                id: randomUUID(),
-                projectId,
-                title: '试用快捷记录',
-                detail: '在 Today 顶部输入框写一句话，助手会解析成任务 / 笔记 / 日程，确认后才落库。',
-                status: 'todo',
-                priority: 'medium',
-                dueAt: tomorrow,
-            },
-            {
-                id: randomUUID(),
-                projectId,
-                title: '让助手建一条任务',
-                detail: '在右侧助手里说「明天下午三点提醒我评审方案」。',
-                status: 'done',
-                priority: 'low',
-                dueAt: dayStart,
-                completedAt: dayStart,
-                source: 'ai',
-            },
-        ]);
-
         await db.insert(notes).values({
             id: randomUUID(),
-            projectId,
             title: '这台工作台怎么用',
             kind: 'note',
             pinned: true,
@@ -220,26 +178,36 @@ async function main() {
             content: [
                 '# 这台工作台怎么用',
                 '',
-                '- **Today**：今日到期、逾期任务、当天日程与每日简报。',
-                '- **任务**：按项目分组，支持优先级与到期时间。',
+                '- **今日**：今天要跑的定时任务、今天跑出的结果、最近笔记与每日简报。',
+                '- **定时任务**：到点自动跑选定的智能体，结果落成一条会话；可以暂停，也可以「立即运行」试一次。',
                 '- **笔记**：Markdown 编辑，检索与摘要走同一套嵌入配置。',
-                '- **日历**：月视图与当天时间线。',
-                '- **助手**：右侧常驻面板，能直接读写任务、笔记与日程。',
+                '- **对话**：助手能直接读写笔记与定时任务，说「每天九点帮我总结一下昨天」就会建出一条排期。',
                 '',
-                '配置入口都在「设置」里：模型供应商、技能、工具、MCP、知识库与存储。',
+                '配置入口在左下角「设置」：模型供应商、智能体、技能、工具、MCP、知识库与存储。',
             ].join('\n'),
         });
 
-        await db.insert(events).values({
-            id: randomUUID(),
-            projectId,
-            title: '示例日程：今天的 15 分钟检查',
-            detail: '演示数据，可删除。',
-            startsAt: afternoon,
-            endsAt: new Date(afternoon.getTime() + 15 * 60 * 1000),
-        });
+        // 示例排期挂在「工作台助手」上：seed 刚建的智能体一定存在，且它是唯一默认带写工具的那一个
+        const [helperAgent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.name, '工作台助手'));
+        if (helperAgent) {
+            const tomorrowNine = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            tomorrowNine.setHours(9, 0, 0, 0);
+            await db.insert(schedules).values({
+                id: randomUUID(),
+                title: '示例：每天 09:00 的今日安排',
+                prompt: '用三行以内说清我今天该跑哪些定时任务、最近记了什么，以及有没有需要我决定的事。',
+                agentId: helperAgent.id,
+                kind: 'daily',
+                timeText: '09:00',
+                intervalMinutes: null,
+                days: [],
+                startsAt: tomorrowNine,
+                nextRunAt: tomorrowNine,
+                enabled: false,
+            });
+        }
 
-        console.log('✓ 已创建示例项目、任务、笔记与日程');
+        console.log('✓ 已创建示例笔记与定时任务');
     }
 
     console.log('✨ work 的 Seed 初始化完成！');

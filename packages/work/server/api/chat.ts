@@ -451,8 +451,9 @@ export default defineEventHandler(async (event) => {
 
     // 10. 工具集与 MCP 连接
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
-    //     用户说「帮我记个待办」时不该取决于所选智能体恰好绑了哪几行工具。
-    let toolSet = { ...buildWorkbenchTools(), ...buildToolSet(boundTools.map((row) => row.tool)) };
+    //     用户说「帮我记个笔记」「每天九点跑一遍」时不该取决于所选智能体恰好绑了哪几行工具。
+    //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
+    let toolSet = { ...buildWorkbenchTools(agentId), ...buildToolSet(boundTools.map((row) => row.tool)) };
     if (agent.selfConfig) {
         toolSet['self-config'] = buildSelfConfigTool(agentId);
     }

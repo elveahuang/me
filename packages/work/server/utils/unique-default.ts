@@ -27,7 +27,7 @@ const DEFAULT_SLOT_LOCKS = {
 
 export type DefaultSlotResource = keyof typeof DEFAULT_SLOT_LOCKS;
 
-/** 与 `db.transaction` 回调拿到的句柄兼容的最小集合（照搬 work-project.ts 的写法）。 */
+/** 与 `db.transaction` 回调拿到的句柄兼容的最小集合（只需要 `execute`）。 */
 type DefaultSlotTx = Pick<typeof db, 'execute'>;
 
 /**

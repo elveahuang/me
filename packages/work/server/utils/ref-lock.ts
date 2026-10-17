@@ -6,7 +6,6 @@ import { db } from './db';
 /**
  * 外键父行的「锁内存在性判定」。
  *
- * 与 `work-project.ts` 的 `lockProjectRow()` 同一个道理，只是父表换成了智能体与供应商：
  * 「事务外先查一次父行存在 → 事务内插子行」这条写法在两次读之间有一个真实的窗口，
  * 窗口里父行可以被完整地删掉（删除走的是另一条连接、另一笔事务），于是子插入撞外键 23503，
  * 响应变成 500 且把 `Failed query: insert into "conversations" ("id", "agent_id", "title", ...)`
@@ -16,6 +15,8 @@ import { db } from './db';
  *
  * 锁内那次读顺带完成存在性判定：`FOR SHARE` 与删除侧的 `FOR UPDATE` 互斥、与并发子插入互相兼容
  * （不会牺牲吞吐），父行确实没了就回可读的 404/400，而不是让 PostgreSQL 替我们报错。
+ * 同一个道理的另一处消费者是 `schedule-store.ts` 的 `assertScheduleAgent`——`schedules.agent_id`
+ * 也是 cascade，先查后插会让新建的排期在插入的同一刻被那次删除带走。
  */
 
 /** 与 `db.transaction` 回调拿到的句柄兼容的最小集合（同 `agent-skills.ts` 的 DbRunner 写法）。 */

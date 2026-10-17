@@ -1,10 +1,13 @@
 import { createClient, type RedisClientType } from 'redis';
 
 /**
- * node-redis 客户端与高层缓存工具层。
+ * node-redis 客户端。
  *
  * 具备优雅降级能力：当未配置 REDIS_URL 或 Redis 离线时，
  * 捕获连接异常并自动降级，避免阻塞应用启动与业务运行。
+ *
+ * 只导出 `getRedisClient()`：限流与 `/api/health` 要的是「有没有这个客户端」，
+ * 不是缓存层。本机工作台没有需要跨请求复用的缓存，以前那几个 `cache*` 助手一个消费者都没有。
  */
 
 let redisClient: RedisClientType | null = null;
@@ -90,73 +93,6 @@ export async function getRedisClient(): Promise<RedisClientType | null> {
     } finally {
         isConnecting = false;
     }
-}
-
-/**
- * 读取缓存
- */
-export async function cacheGet<T>(key: string): Promise<T | null> {
-    try {
-        const client = await getRedisClient();
-        if (!client) return null;
-        const val = await client.get(key);
-        if (!val) return null;
-        return JSON.parse(val) as T;
-    } catch (err) {
-        console.warn(`[redis] cacheGet 失败 (${key}):`, (err as Error)?.message);
-        return null;
-    }
-}
-
-/**
- * 设置缓存（支持秒级 TTL）
- */
-export async function cacheSet(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
-    try {
-        if (value === undefined) return;
-        const serialized = JSON.stringify(value);
-        if (serialized === undefined) return;
-
-        const client = await getRedisClient();
-        if (!client) return;
-
-        if (ttlSeconds && ttlSeconds > 0) {
-            await client.set(key, serialized, { EX: ttlSeconds });
-        } else {
-            await client.set(key, serialized);
-        }
-    } catch (err) {
-        console.warn(`[redis] cacheSet 失败 (${key}):`, (err as Error)?.message);
-    }
-}
-
-/**
- * 删除缓存（单条或批量）
- */
-export async function cacheDel(keys: string | string[]): Promise<void> {
-    try {
-        const client = await getRedisClient();
-        if (!client) return;
-        const list = Array.isArray(keys) ? keys : [keys];
-        if (list.length > 0) {
-            await client.del(list);
-        }
-    } catch (err) {
-        console.warn(`[redis] cacheDel 失败:`, (err as Error)?.message);
-    }
-}
-
-/**
- * 带有缓存穿透保护的 Get or Set 辅助函数
- */
-export async function cacheGetOrSet<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
-    const cached = await cacheGet<T>(key);
-    if (cached !== null && cached !== undefined) {
-        return cached;
-    }
-    const fresh = await fetcher();
-    await cacheSet(key, fresh, ttlSeconds);
-    return fresh;
 }
 
 if (typeof process !== 'undefined' && typeof process.on === 'function') {

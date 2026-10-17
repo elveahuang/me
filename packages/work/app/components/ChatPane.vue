@@ -479,7 +479,7 @@ function removePending(id: string) {
     pendingAttachments.value = pendingAttachments.value.filter((a) => a.id !== id);
 }
 
-/** 在聊天里直接选本地文件上传（无需先去附件页） */
+/** 聊天里直接选本地文件：走服务端中转上传，上传完即挂到这一轮，不需要先经过任何页面 */
 async function onChatFileChange(event: Event) {
     const el = event.target as HTMLInputElement;
     const file = el.files?.[0];
@@ -822,7 +822,6 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                             <AppIcon name="tray-arrow-up" :size="14" />
                             <span>{{ uploadingInChat ? t('attachments.uploading') : t('chat.uploadAndAttach') }}</span>
                         </button>
-                        <NuxtLink to="/attachments" class="app-btn app-btn-ghost !py-1.5">{{ t('attachments.title') }} →</NuxtLink>
                     </div>
 
                     <div v-if="attachLoading" class="mt-3 space-y-2">

@@ -7,6 +7,9 @@ import { useI18n } from 'vue-i18n';
  *
  * 组件是展示型 + 自身的重命名/删除动作，列表数据由 `useChatSidebar` 共享状态提供
  * （布局拉取、页面消费），删除与重命名成功后 emit('changed'|'deleted', id)，由布局统一刷新。
+ *
+ * 「新建对话」不在这里：它是「开始一件事」，与今日/定时任务/笔记同级，所以由布局的工作台段持有，
+ * 本组件只负责历史本身（三段式布局的中段）。
  */
 const props = withDefaults(
     defineProps<{
@@ -24,7 +27,6 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     select: [payload: { id: string; agentId: string }];
-    create: [];
     /** 重命名成功：布局需要刷新列表（带着 id，好把这条重新记为已读） */
     changed: [id: string];
     /** 删除成功：布局刷新列表；若删的正是当前打开的会话，还需切到下一个或复位 */
@@ -103,11 +105,7 @@ async function removeConversation(id: string) {
 
 <template>
     <aside class="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-        <div class="shrink-0 p-3">
-            <button type="button" class="app-btn app-btn-primary w-full" @click="emit('create')">+ {{ t('chat.newChat') }}</button>
-        </div>
-
-        <p class="app-sidebar-group-title shrink-0">{{ t('chat.recentConversations') }}</p>
+        <p class="app-sidebar-group-title shrink-0 pt-3">{{ t('chat.recentConversations') }}</p>
 
         <div class="shrink-0 px-2.5 pb-2">
             <input v-model="searchQuery" :placeholder="t('chat.searchChat')" :aria-label="t('chat.searchChat')" class="app-input !px-2.5 !py-1 !text-xs" />

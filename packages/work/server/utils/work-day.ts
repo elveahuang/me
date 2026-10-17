@@ -33,3 +33,38 @@ export function shanghaiDateKey(at: Date = new Date()): string {
     const shifted = new Date(at.getTime() + SHANGHAI_OFFSET_MIN * 60_000);
     return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`;
 }
+
+/** 一个绝对时刻按北京时间读出来的年月日时分与星期（0=周日 … 6=周六）。 */
+export function shanghaiParts(at: Date): { year: number; month: number; day: number; hour: number; minute: number; weekday: number } {
+    const shifted = new Date(at.getTime() + SHANGHAI_OFFSET_MIN * 60_000);
+    return {
+        year: shifted.getUTCFullYear(),
+        month: shifted.getUTCMonth() + 1,
+        day: shifted.getUTCDate(),
+        hour: shifted.getUTCHours(),
+        minute: shifted.getUTCMinutes(),
+        weekday: shifted.getUTCDay(),
+    };
+}
+
+/**
+ * 「未来 N 天」窗口的右开边界。
+ *
+ * 传的是 `shanghaiDayRange().end`（明天 00:00），不是 `start`：三处调用（今日页、简报快照、
+ * `work_today` 工具）的文案都写「未来 7 天」，而按 `start + 7 天` 算出来只有 6 天——
+ * 那条「下周一下午」的安排会出现在页面标题的口径里却不在清单里，用户只能自己发现。
+ * 边界集中在这里算，避免三个文件各写一份 `+ N * 24h` 然后各差一天。
+ */
+export function shanghaiUpcomingEnd(nextDayStart: Date, days: number): Date {
+    return new Date(nextDayStart.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * 「北京时间的某年某月某日几点几分」→ 绝对时刻。
+ *
+ * `Date.UTC` 会把超出当月的 `day` 顺延（`day: 32` 变成下月 1 日），定时任务算「下一次 occurrence」
+ * 正是靠这一点逐日往后数，不需要调用方自己处理跨月/跨年。
+ */
+export function fromShanghaiParts(year: number, month: number, day: number, hour: number, minute: number): Date {
+    return new Date(Date.UTC(year, month - 1, day, hour, minute) - SHANGHAI_OFFSET_MIN * 60_000);
+}

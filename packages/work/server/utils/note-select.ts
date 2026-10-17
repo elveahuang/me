@@ -10,7 +10,6 @@ import { notes } from '../db/schema';
  */
 export const noteColumns = {
     id: notes.id,
-    projectId: notes.projectId,
     title: notes.title,
     content: notes.content,
     kind: notes.kind,

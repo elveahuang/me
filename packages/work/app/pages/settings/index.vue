@@ -167,7 +167,7 @@ const saveStateLabel = computed(() => (saveState.value === 'saving' ? t('setting
  * 其余七个设置子页的入口卡片。
  *
  * 侧栏只有「系统设置」一项，子页面原本要靠顶部那条横向子导航才能发现——
- * 窄屏上它要左右滑才看得全，所以在本页再给一组能一眼扫到的入口。清单与子导航、命令面板共用同一份。
+ * 窄屏上它要左右滑才看得全，所以在本页再给一组能一眼扫到的入口。清单与顶部子导航共用同一份。
  */
 const sectionPages = computed(() => WORK_SETTINGS_PAGES.filter((page) => page.to !== '/settings'));
 </script>

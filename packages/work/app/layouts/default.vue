@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { dayInputValue } from '../utils/work';
 import { WORK_NAV_GROUPS } from '../utils/work-nav';
 
 /**
- * 工作台外壳（主流 AI 工作台布局：固定左栏 + 无顶部导航）。
+ * 工作台外壳：固定左栏的三段式布局。
  *
- * 左栏自上而下：品牌 / 命令面板入口 / 功能导航 / 会话列表。
- * 会话列表只在对话面（`/chat`、`/chat/:agentId`）展开——它属于对话，其余页面把这列的空间还给导航。
- * 外观、语言与站点名称都只有一处入口（`/settings` 通用页），底栏不再摆第二套。
+ * 左栏自上而下 **工作台 / 对话历史 / 系统设置** 三段：
+ * - 顶部是功能导航（今日、定时任务、笔记）加上「新建对话」——新建属于「要做一件事」，
+ *   所以它跟导航放在一起，而不是藏在中间那段历史列表的头部（那里原本还有个 +）。
+ * - 中间是对话历史，**常驻**：它以前只在 `/chat*` 展开，于是在今日页看到「有 3 条会话」却点不进去；
+ *   现在任何页面都能就地切会话。
+ * - 底部是系统设置单一入口（外观、语言与八个子页都从那里进），底栏不再摆第二套主题/语言开关。
  *
  * - ≥ lg：固定左侧栏占满高度；主内容区 `lg:pl-64`，没有顶部导航栏与页脚。
- * - < lg：左栏收成左侧抽屉，只留一条极窄顶栏（汉堡 + Logo + 面板入口）作为抽屉入口。
+ * - < lg：左栏收成左侧抽屉，只留一条极窄顶栏（汉堡 + Logo）作为抽屉入口，抽屉是同一套三段。
  * - 会话列表与选中态由 `useChatSidebar` 提供：布局拉数据、渲染左栏，聊天页只消费，
  *   避免侧栏与页面各拉一份、选中态分叉。
  * - 主题 CSS 未分层：.app-btn 的 display 会压掉 utilities 层的响应式隐藏，
@@ -27,8 +29,6 @@ const route = useRoute();
 /** 抽屉开关：布局持有，ChatPane 头部的历史按钮（窄屏）也开同一个抽屉 */
 const { open: drawerOpen } = useShellDrawer();
 const drawerRef = ref<HTMLElement | null>(null);
-/** 命令面板只暴露 openPalette()/close()，布局不持有它的开关状态 */
-const palette = ref<{ openPalette: () => void } | null>(null);
 
 /** 会话列表与选中态：左栏渲染，聊天页消费 */
 const {
@@ -63,7 +63,7 @@ onMounted(refreshRemoteRuns);
  *
  * `/agents` 是智能体广场，屏幕上没有任何会话，所以它不算——广场也会给 `effectiveConversationId`
  * 算出一条会话来，把它当「正在看」会让完成提示被吞掉、阅读记录被误写。
- * 同一个判据还决定左栏要不要展开会话列表。
+ * 会话列表本身已经常驻，这个判据只留给「要不要记已读」和「要不要打完成提示」。
  */
 const isChatSurface = computed(() => route.path === '/chat' || route.path.startsWith('/chat/'));
 
@@ -131,50 +131,10 @@ watch(
 watch(visibleConversations, (list) => ensureSeeded(list), { immediate: true });
 
 /**
- * 日程提醒到点。
+ * 侧栏顶部那一段功能导航。
  *
- * 提醒过去只是抽屉里一个写进库的时间，界面不会因此发生任何事——这一层才是它的作用时刻。
- * 只在布局挂载期间轮询（工作台没有后台守护、也没有推送），所以浮层刻意驻留得比会话完成提示更久：
- * 用户回到屏幕前得来得及读完「该做什么」，而不只是看见它闪了一下。
- */
-const { due: dueReminder, dismiss: dismissReminder, startPolling, stopPolling } = useEventReminders();
-const REMINDER_NOTICE_MS = 45_000;
-let reminderTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearReminderTimer() {
-    if (reminderTimer) {
-        clearTimeout(reminderTimer);
-        reminderTimer = null;
-    }
-}
-
-function closeReminder() {
-    clearReminderTimer();
-    dismissReminder();
-}
-
-watch(dueReminder, (event) => {
-    clearReminderTimer();
-    if (!event) return;
-    reminderTimer = setTimeout(closeReminder, REMINDER_NOTICE_MS);
-});
-
-/** 提醒深链到那一天：`?day=` 是日历页锚定的本机日，点开就能直接落在这条日程所在的格子上 */
-const reminderPath = computed(() => {
-    const event = dueReminder.value;
-    if (!event) return '';
-    const day = dayInputValue(event.startsAt);
-    return `/calendar${day ? `?day=${encodeURIComponent(day)}` : ''}`;
-});
-
-onMounted(startPolling);
-
-/**
- * 侧栏分组导航（Linear / Notion 的写法：条目多了靠分组标题保持可扫读）。
- *
- * 清单在 `utils/work-nav`，命令面板的「前往」组读同一份——两处各写一遍时，同一个页面会有两套名字。
- * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器与命令面板。
- * 桌面端与抽屉共用这里的一份，两侧不会因某次只改一处而菜单项分叉。
+ * 清单在 `utils/work-nav`，桌面与抽屉各渲染一次同一份——之前两处各写一遍时，同一个页面会有两套名字。
+ * 智能体广场（`/agents`）刻意不占一项——它和「对话」是同一件事的两面，入口交给对话头部的切换器。
  */
 const navGroups = WORK_NAV_GROUPS;
 
@@ -186,13 +146,14 @@ function isNavActive(match: string) {
 /**
  * 侧栏点选会话：就地切换。
  *
- * 会话列表只在对话面（`/chat`、`/chat/:agentId`）渲染，所以这里永远不需要跳路由——
- * `/chat` 上选到别的智能体的会话由 ChatPane 按 props 换人，`/chat/:agentId` 上列表本来就只列该智能体。
+ * 列表现在在所有页面都出现，所以在 /tasks 上点一条会话要先把人带回对话：
+ * 只改共享选中态而不换路由，屏幕上还是任务表，用户会以为点击没生效。
  */
 function onSelectConversation(payload: { id: string; agentId: string }) {
     // 就地切换不改 URL，route 监听不会关抽屉；窄屏下用户点完会话是要看对话，不是看抽屉
     drawerOpen.value = false;
     selectConversation(payload.agentId, payload.id);
+    if (!isChatSurface.value) return navigateTo(`/chat/${encodeURIComponent(payload.agentId)}?c=${encodeURIComponent(payload.id)}`);
 }
 
 /** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
@@ -277,8 +238,6 @@ useCloseDrawerOnWide(drawerOpen);
 
 onBeforeUnmount(() => {
     clearFinishedNotice();
-    clearReminderTimer();
-    stopPolling();
     if (import.meta.client) {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onKeydown);
@@ -294,23 +253,21 @@ if (import.meta.client) {
     <div class="bg-surface-2 text-strong min-h-dvh antialiased">
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
-        <!-- 桌面左侧栏：品牌 + 命令面板入口 + 功能导航（对话面再往下展开会话列表） -->
+        <!-- 桌面左侧栏：三段——工作台导航（含新建对话）/ 对话历史 / 系统设置 -->
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('common.navigation')">
             <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
                 <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
                 <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
 
-            <!-- 命令面板入口放在导航之上：它是这列导航的键盘版，快捷键是隐性的，看得见的路径（带 ⌘K 角标的按钮）才是发现方式 -->
-            <div class="shrink-0 px-3 pb-2">
-                <button type="button" class="app-btn app-btn-outline app-btn-block !justify-start gap-2 !text-xs" @click="palette?.openPalette()">
-                    <AppIcon name="magnify" :size="15" class="text-faint" />
-                    <span>{{ t('work.paletteTitle') }}</span>
-                    <kbd class="text-faint ml-auto rounded border border-[color:var(--line)] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-                </button>
-            </div>
-
-            <nav class="min-h-0 space-y-1 overflow-y-auto px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'flex-1'">
+            <!-- 第一段：工作台。新建对话与功能导航同级——它是「开始一件事」，不是历史列表的一个操作 -->
+            <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
+                <div class="px-2 pb-1.5">
+                    <button type="button" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="onCreateConversation">
+                        <AppIcon name="plus" :size="15" />
+                        <span>{{ t('chat.newChat') }}</span>
+                    </button>
+                </div>
                 <template v-for="group in navGroups" :key="group.titleKey">
                     <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
                     <NuxtLink
@@ -327,9 +284,8 @@ if (import.meta.client) {
                 </template>
             </nav>
 
-            <!-- 会话列表属于对话：只在对话面展开，其余页面不占这列的高度 -->
+            <!-- 第二段：对话历史，常驻 -->
             <ConversationList
-                v-if="isChatSurface"
                 class="border-line min-h-0 flex-1 border-t"
                 :conversations="visibleConversations"
                 :active-id="activeConversationId"
@@ -337,13 +293,25 @@ if (import.meta.client) {
                 :error="conversationError"
                 :show-agent-name="!agentIdParam"
                 @select="onSelectConversation"
-                @create="onCreateConversation"
                 @changed="onConversationsChanged"
                 @deleted="onConversationDeleted"
             />
+
+            <!-- 第三段：系统设置。外观、语言与八个子页都只从这一个入口进 -->
+            <div class="border-line shrink-0 border-t px-3 py-2">
+                <NuxtLink
+                    to="/settings"
+                    class="app-sidebar-link"
+                    :class="isNavActive('/settings') ? 'app-sidebar-link-active' : ''"
+                    :aria-current="isNavActive('/settings') ? 'page' : undefined"
+                >
+                    <AppIcon name="cog-outline" :size="17" />
+                    <span>{{ t('nav.systemSettings') }}</span>
+                </NuxtLink>
+            </div>
         </aside>
 
-        <!-- 窄屏顶栏：只有抽屉入口与品牌，导航/会话/外观/语言都在抽屉里 -->
+        <!-- 窄屏顶栏：只有抽屉入口与品牌，导航/会话/设置都在抽屉里 -->
         <header
             class="border-line sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-3 backdrop-blur-md lg:hidden"
             style="border-color: var(--line); background-color: color-mix(in oklab, var(--surface) 85%, transparent)"
@@ -363,10 +331,6 @@ if (import.meta.client) {
                 <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
                 <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
-            <!-- 窄屏没有侧栏，命令面板的入口挂在顶栏右侧 -->
-            <button type="button" class="app-btn app-btn-ghost app-btn-icon ml-auto" :aria-label="t('work.paletteTitle')" @click="palette?.openPalette()">
-                <AppIcon name="magnify" :size="18" />
-            </button>
         </header>
 
         <div class="lg:pl-64">
@@ -374,14 +338,6 @@ if (import.meta.client) {
                 <slot />
             </main>
         </div>
-
-        <!--
-            移动端导航抽屉。遮罩与抽屉的入场动画写在 CSS 里（.app-drawer-backdrop / .app-drawer-left），
-            不用 <Transition> 包裹：外层容器一旦拿到 transform 就会成为 fixed 子元素的包含块，
-            而该容器自身高度为 0，会把抽屉压成 0 高度。
-        -->
-        <!-- 命令面板：全局快捷键在组件内部注册（布局常驻，切页不会重复挂载） -->
-        <WorkCommandPalette ref="palette" />
 
         <!--
             后台那一轮跑完的提示：右下角浮层而不是弹窗。用户可能正在别的页面输入，
@@ -406,24 +362,10 @@ if (import.meta.client) {
         </Teleport>
 
         <!--
-            日程提醒到点。与上面那条完成提示分处对角（窄屏在上、桌面在左下）：
-            两条浮层可能同时在，叠在一起就谁都读不到。
+            移动端导航抽屉。遮罩与抽屉的入场动画写在 CSS 里（.app-drawer-backdrop / .app-drawer-left），
+            不用 <Transition> 包裹：外层容器一旦拿到 transform 就会成为 fixed 子元素的包含块，
+            而该容器自身高度为 0，会把抽屉压成 0 高度。
         -->
-        <Teleport to="body">
-            <div
-                v-if="dueReminder"
-                role="status"
-                class="app-card fixed inset-x-3 top-16 z-50 flex items-center gap-2 py-2.5 pr-2 pl-3 !shadow-lg sm:inset-x-auto sm:top-auto sm:bottom-6 sm:left-72 sm:w-[22rem]"
-            >
-                <AppIcon name="bell-outline" :size="18" class="shrink-0 text-[color:var(--warning)]" />
-                <p class="min-w-0 flex-1 truncate text-sm">{{ t('work.reminderDue', { title: dueReminder.title }) }}</p>
-                <NuxtLink :to="reminderPath" class="app-btn app-btn-soft app-btn-sm shrink-0" @click="closeReminder">{{ t('common.viewDetail') }}</NuxtLink>
-                <button type="button" class="app-btn app-btn-ghost app-btn-icon shrink-0" :aria-label="t('common.close')" @click="closeReminder">
-                    <AppIcon name="close" :size="16" />
-                </button>
-            </div>
-        </Teleport>
-
         <Teleport to="body">
             <div v-if="drawerOpen" class="lg:hidden">
                 <div class="app-drawer-backdrop" @click="drawerOpen = false" />
@@ -451,9 +393,15 @@ if (import.meta.client) {
                         </button>
                     </div>
 
-                    <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由两段各自控制内边距 -->
+                    <!-- 抽屉本体自带 1rem padding（theme.css），这里去掉后由三段各自控制内边距 -->
                     <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
-                        <nav class="space-y-1 px-3 py-2" :class="isChatSurface ? 'shrink-0' : 'min-h-0 flex-1 overflow-y-auto'">
+                        <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
+                            <div class="px-2 pb-1.5">
+                                <button type="button" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="onCreateConversation">
+                                    <AppIcon name="plus" :size="15" />
+                                    <span>{{ t('chat.newChat') }}</span>
+                                </button>
+                            </div>
                             <template v-for="group in navGroups" :key="group.titleKey">
                                 <p class="app-sidebar-group-title !px-2">{{ t(group.titleKey) }}</p>
                                 <NuxtLink
@@ -471,7 +419,6 @@ if (import.meta.client) {
                         </nav>
 
                         <ConversationList
-                            v-if="isChatSurface"
                             class="border-line min-h-0 flex-1 border-t"
                             :conversations="visibleConversations"
                             :active-id="activeConversationId"
@@ -479,10 +426,21 @@ if (import.meta.client) {
                             :error="conversationError"
                             :show-agent-name="!agentIdParam"
                             @select="onSelectConversation"
-                            @create="onCreateConversation"
                             @changed="onConversationsChanged"
                             @deleted="onConversationDeleted"
                         />
+
+                        <div class="border-line shrink-0 border-t px-3 py-2">
+                            <NuxtLink
+                                to="/settings"
+                                class="app-sidebar-link"
+                                :class="isNavActive('/settings') ? 'app-sidebar-link-active' : ''"
+                                :aria-current="isNavActive('/settings') ? 'page' : undefined"
+                            >
+                                <AppIcon name="cog-outline" :size="17" />
+                                <span>{{ t('nav.systemSettings') }}</span>
+                            </NuxtLink>
+                        </div>
                     </div>
                 </aside>
             </div>

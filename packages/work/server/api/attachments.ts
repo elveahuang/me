@@ -171,8 +171,12 @@ export default defineEventHandler(async (event) => {
     if (keyword) filters.push(sql`${attachments.filename} ilike ${likePattern(keyword)}`);
     const where = filters.length ? and(...filters) : undefined;
 
-    // 列表、总数、分类统计三者互不依赖，一次并发发出，避免三次串行往返叠加到响应延迟。
-    const [rows, [totalRow], stats] = await Promise.all([
+    // 列表与总数互不依赖，一次并发发出，避免两次串行往返叠加到响应延迟。
+    //
+    // 这里**不**算分类占用统计（`stats`）：那是 `GROUP BY category` 的全表聚合，
+    // 消费方只有 Web 端的附件总览页，而 work 的附件页已随本轮重构删除——
+    // 留着它等于每次打开聊天里的附件选择弹层都重算一遍没人看的数字。
+    const [rows, [totalRow]] = await Promise.all([
         db
             .select()
             .from(attachments)
@@ -184,27 +188,7 @@ export default defineEventHandler(async (event) => {
             .select({ count: sql<number>`count(*)::int` })
             .from(attachments)
             .where(where),
-        db
-            .select({
-                category: attachments.category,
-                count: sql<number>`count(*)::int`,
-                bytes: sql<number>`coalesce(sum(${attachments.size}), 0)::bigint`,
-            })
-            .from(attachments)
-            .groupBy(attachments.category),
     ]);
-
-    /**
-     * 分类占用统计：无论当前筛选如何，都返回全量分布，
-     * 这样切换分类时侧边统计不会跟着筛选结果跳动，用户能稳定看到"空间用在哪"。
-     */
-    const categoryStats = stats.map((row) => ({
-        category: row.category,
-        count: row.count,
-        bytes: Number(row.bytes),
-    }));
-    const totalCount = categoryStats.reduce((sum, row) => sum + row.count, 0);
-    const totalBytes = categoryStats.reduce((sum, row) => sum + row.bytes, 0);
 
     // 每条附件按各自的 storageConfigId 解析存储配置（去重后各查一次），
     // 避免用「当前默认配置」给分属其他桶的历史附件签出错误地址。
@@ -233,10 +217,5 @@ export default defineEventHandler(async (event) => {
         total: totalRow?.count ?? 0,
         page,
         pageSize,
-        stats: {
-            totalCount,
-            totalBytes,
-            byCategory: categoryStats,
-        },
     };
 });

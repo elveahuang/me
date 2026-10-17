@@ -8,18 +8,16 @@ import {
     attachments,
     briefs,
     conversations,
-    events,
     kbDocuments,
     knowledgeBases,
     mcpServers,
     messages,
     notes,
-    projects,
     providers,
+    schedules,
     skills,
     storageConfigs,
     systemSettings,
-    tasks,
     tools,
 } from '../db/schema';
 import { db } from '../utils/db';
@@ -43,7 +41,7 @@ import { shanghaiDateKey } from '../utils/work-day';
  * - 附件二进制：对象存储里的桶需要另行备份，这里只给元数据与 objectKey。
  *
  * 整份文件在内存里序列化且行数不封顶；单用户工作台的量级（几千条消息）远不到风险线，
- * 但**不要**把它挂进任何轮询或定时任务。
+ * 但**不要**把它挂进任何轮询或后台任务。
  */
 
 /** 密钥字段在导出里一律折成空串，同时把这个决定写进 `redacted`，免得用户以为备份可直接还原 */
@@ -53,13 +51,12 @@ const SKIPPED = ['kb_chunks（知识库分块与向量，导入后重新「重�
 /**
  * 每张表一个 builder：把排序、脱敏和表名写在同一行里。
  *
- * 不用「21 个 await 排成一排再按位置解构」——那种写法加一张表就要数一遍位置，
- * 数错一次不会报错，只会把 notes 的内容当成 tasks 写进备份文件。
+ * 不用「十几个 await 排成一排再按位置解构」——那种写法加一张表就要数一遍位置，
+ * 数错一次不会报错，只会把 notes 的内容当成 schedules 写进备份文件。
  */
 const builders = {
     systemSettings: async () => (await db.select().from(systemSettings))[0] ?? null,
-    projects: () => db.select().from(projects).orderBy(asc(projects.createdAt)),
-    tasks: () => db.select().from(tasks).orderBy(asc(tasks.createdAt)),
+    schedules: () => db.select().from(schedules).orderBy(asc(schedules.createdAt)),
     notes: async () =>
         (await db.select().from(notes).orderBy(asc(notes.createdAt))).map((row) => ({
             ...row,
@@ -68,7 +65,6 @@ const builders = {
             embeddingModel: undefined,
             embeddingDim: undefined,
         })),
-    events: () => db.select().from(events).orderBy(asc(events.startsAt)),
     briefs: () => db.select().from(briefs).orderBy(asc(briefs.briefDate)),
     providers: async () => (await db.select().from(providers).orderBy(asc(providers.name))).map((row) => ({ ...row, apiKey: '' })),
     skills: () => db.select().from(skills).orderBy(asc(skills.name)),

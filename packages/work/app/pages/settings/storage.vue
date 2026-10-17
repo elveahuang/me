@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
  * 存储配置子页：附件上传用的 S3 协议对象桶（RustFS / MinIO / AWS S3）。
  *
  * 表单与列表都在 `AdminSettingsStorage` 里（fork 时带过来却一直没有入口的组件），
- * 这一页只是把它接进设置区导航——附件页的直传/中转通道都依赖这里的默认配置。
+ * 这一页只是把它接进设置区导航——聊天附件上传与下载链接都读这里的默认配置。
  */
 const { t } = useI18n();
 </script>
