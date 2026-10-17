@@ -41,22 +41,19 @@ function isActive(to: string) {
         <a href="#main" class="app-skip-link">{{ t('common.skipToContent') }}</a>
 
         <aside class="border-line bg-surface fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex" :aria-label="t('settings.navTitle')">
-            <div class="border-line flex shrink-0 items-center gap-2.5 border-b px-4 py-4">
-                <span class="app-avatar h-9 w-9 text-sm shadow-xs">W</span>
-                <div class="min-w-0">
-                    <p class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</p>
-                    <p class="text-faint text-[10px]">{{ t('nav.systemSettings') }}</p>
-                </div>
-            </div>
+            <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 px-4 py-4">
+                <span class="app-avatar h-9 w-9 text-sm shadow-xs transition-transform group-hover:scale-105">W</span>
+                <span class="text-brand truncate text-lg font-black tracking-tight">{{ siteTitle }}</span>
+            </NuxtLink>
 
-            <div class="shrink-0 px-3 pt-3 pb-2">
+            <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('settings.navTitle')">
                 <div class="px-2 pb-1.5">
                     <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs">
                         <AppIcon name="arrow-left" :size="15" />
                         <span>{{ t('settings.backToWorkbench') }}</span>
                     </NuxtLink>
                 </div>
-            </div>
+            </nav>
 
             <nav class="min-h-0 flex-1 overflow-y-auto px-3 py-4">
                 <div v-for="group in groups" :key="group.key" class="mb-5 last:mb-0">
@@ -80,7 +77,10 @@ function isActive(to: string) {
             <NuxtLink to="/" class="app-btn app-btn-ghost app-btn-icon" :aria-label="t('settings.backToWorkbench')" :title="t('settings.backToWorkbench')">
                 <AppIcon name="arrow-left" :size="19" />
             </NuxtLink>
-            <span class="text-brand truncate text-base font-black">{{ t('nav.systemSettings') }}</span>
+            <NuxtLink to="/" class="flex min-w-0 items-center gap-2.5">
+                <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
+                <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
+            </NuxtLink>
             <button
                 type="button"
                 class="app-btn app-btn-ghost app-btn-icon ml-auto"
@@ -122,16 +122,16 @@ function isActive(to: string) {
                             <AppIcon name="close" :size="18" />
                         </button>
                     </div>
-                    <div class="shrink-0 px-3 pt-3 pb-2">
-                        <div class="px-2 pb-1.5">
-                            <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="drawerOpen = false">
-                                <AppIcon name="arrow-left" :size="15" />
-                                <span>{{ t('settings.backToWorkbench') }}</span>
-                            </NuxtLink>
-                        </div>
-                    </div>
-                    <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-3">
-                        <nav class="min-h-0 flex-1 overflow-y-auto" :aria-label="t('settings.navTitle')">
+                    <div class="app-drawer-body flex min-h-0 flex-1 flex-col !p-0">
+                        <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('settings.navTitle')">
+                            <div class="px-2 pb-1.5">
+                                <NuxtLink to="/" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="drawerOpen = false">
+                                    <AppIcon name="arrow-left" :size="15" />
+                                    <span>{{ t('settings.backToWorkbench') }}</span>
+                                </NuxtLink>
+                            </div>
+                        </nav>
+                        <nav class="min-h-0 flex-1 overflow-y-auto px-3 py-3" :aria-label="t('settings.navTitle')">
                             <div v-for="group in groups" :key="group.key" class="mb-5 last:mb-0">
                                 <p class="text-faint px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide">{{ group.label }}</p>
                                 <NuxtLink
