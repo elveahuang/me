@@ -36,14 +36,12 @@ const {
     conversations,
     visibleConversations,
     activeConversationId,
-    activeSpaceId,
     agentIdParam,
     conversationsPending,
     conversationsError,
     refreshConversations,
     effectiveConversationId,
     selectConversation,
-    selectSpace,
     startNewChat,
 } = useChatSidebar();
 
@@ -169,9 +167,6 @@ function onSelectConversation(payload: { id: string; agentId: string }) {
     return navigateTo({ path: route.path, query: { ...route.query, c: payload.id } }, { replace: true });
 }
 
-function onSpaceChange(event: Event) {
-    selectSpace((event.target as HTMLSelectElement).value || null);
-}
 
 /** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
 function onCreateConversation() {
@@ -319,13 +314,21 @@ if (import.meta.client) {
                 </NuxtLink>
             </nav>
 
-            <!-- 第二段：空间筛选 + 对话历史。设置区不渲染这段，避免配置页被会话上下文干扰。 -->
+            <!-- 第二段：空间列表 + 全局最近对话。设置区不渲染这段。 -->
             <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
-                <label class="text-faint mb-1 block text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaceFilter') }}</label>
-                <select class="app-input !text-xs" :value="activeSpaceId ?? ''" :aria-label="t('nav.spaceFilter')" @change="onSpaceChange">
-                    <option value="">{{ t('nav.allSpaces') }}</option>
-                    <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
-                </select>
+                <div class="flex items-center justify-between px-2 pb-1">
+                    <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaces') }}</span>
+                    <NuxtLink to="/spaces" class="text-hover-brand text-[10px] font-bold">{{ t('nav.manageSpaces') }}</NuxtLink>
+                </div>
+                <NuxtLink
+                    v-for="space in spaces.slice(0, 5)"
+                    :key="space.id"
+                    :to="`/spaces/${encodeURIComponent(space.id)}`"
+                    class="app-sidebar-link !py-1.5"
+                >
+                    <span class="text-base">{{ space.icon }}</span>
+                    <span class="truncate">{{ space.name }}</span>
+                </NuxtLink>
             </div>
             <ConversationList
                 v-if="!isSettingsSurface"
@@ -468,11 +471,19 @@ if (import.meta.client) {
                         </nav>
 
                         <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
-                            <label class="text-faint mb-1 block text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaceFilter') }}</label>
-                            <select class="app-input !text-xs" :value="activeSpaceId ?? ''" :aria-label="t('nav.spaceFilter')" @change="onSpaceChange">
-                                <option value="">{{ t('nav.allSpaces') }}</option>
-                                <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
-                            </select>
+                            <div class="flex items-center justify-between px-2 pb-1">
+                                <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaces') }}</span>
+                                <NuxtLink to="/spaces" class="text-hover-brand text-[10px] font-bold">{{ t('nav.manageSpaces') }}</NuxtLink>
+                            </div>
+                            <NuxtLink
+                                v-for="space in spaces.slice(0, 5)"
+                                :key="space.id"
+                                :to="`/spaces/${encodeURIComponent(space.id)}`"
+                                class="app-sidebar-link !py-1.5"
+                            >
+                                <span class="text-base">{{ space.icon }}</span>
+                                <span class="truncate">{{ space.name }}</span>
+                            </NuxtLink>
                         </div>
                         <ConversationList
                             v-if="!isSettingsSurface"

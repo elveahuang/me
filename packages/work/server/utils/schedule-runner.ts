@@ -232,7 +232,12 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
                   await db
                       .select({ id: knowledgeBases.id })
                       .from(knowledgeBases)
-                      .where(and(eq(knowledgeBases.spaceId, row.spaceId), inArray(knowledgeBases.id, boundKbIds)))
+                      .where(
+                          and(
+                              inArray(knowledgeBases.id, boundKbIds),
+                              row.spaceId ? or(eq(knowledgeBases.spaceId, row.spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId),
+                          ),
+                      )
               ).map((item) => item.id)
             : [];
 
@@ -247,7 +252,9 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
             }
         }
 
-        const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, row.spaceId));
+        const [space] = row.spaceId
+            ? await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, row.spaceId))
+            : [];
         const { model } = await resolveModel(agent.providerId, agent.model);
 
         const localTools = buildLocalFileTools();

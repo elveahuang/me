@@ -30,7 +30,6 @@ interface RunsResponse {
 
 /** 运行中心：每一次自动化执行一条记录，而不是被 schedules.last_* 覆盖。 */
 const { t } = useI18n();
-const { activeSpaceId, spaces } = useChatSidebar();
 const route = useRoute();
 const router = useRouter();
 const status = ref(typeof route.query.status === 'string' ? route.query.status : '');
@@ -41,8 +40,7 @@ watch(status, () => {
     void router.replace({ query: { ...route.query, status: status.value || undefined } });
 });
 
-const query = computed(() => ({ status: status.value || undefined, spaceId: activeSpaceId.value || undefined, page: page.value, pageSize: 30 }));
-const currentSpaceName = computed(() => spaces.value.find((space) => space.id === activeSpaceId.value)?.name ?? null);
+const query = computed(() => ({ status: status.value || undefined, page: page.value, pageSize: 30 }));
 const { data, pending, error, refresh } = await useFetch<RunsResponse>('/api/runs', {
     query,
     lazy: true,
@@ -80,7 +78,6 @@ function durationLabel(ms: number | null) {
             <div>
                 <h1 class="app-page-title text-strong">{{ t('runs.title') }}</h1>
                 <p class="app-page-subtitle">{{ t('runs.subtitle') }}</p>
-                <span v-if="currentSpaceName" class="app-chip app-chip-brand mt-2 !text-[10px]">🗂️ {{ currentSpaceName }}</span>
             </div>
             <div class="flex items-center gap-2">
                 <button type="button" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs" @click="refresh()">{{ t('common.retry') }}</button>

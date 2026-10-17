@@ -3,11 +3,11 @@ import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
-const { activeSpaceId, spaces } = useChatSidebar();
+const { spaces } = useChatSidebar();
 
 interface KbItem {
     id: string;
-    spaceId: string;
+    spaceId: string | null;
     spaceName?: string | null;
     name: string;
     description: string;
@@ -109,7 +109,7 @@ async function reindex(kb: KbItem) {
 async function load() {
     loading.value = true;
     try {
-        kbs.value = await $fetch<KbItem[]>('/api/settings/knowledge-bases', { query: { spaceId: activeSpaceId.value || undefined } });
+        kbs.value = await $fetch<KbItem[]>('/api/settings/knowledge-bases');
         listError.value = '';
     } catch (e) {
         // 失败时清空并提示：否则表格走空态，会被读成「还没有知识库」
@@ -121,15 +121,6 @@ async function load() {
 }
 
 onMounted(load);
-watch(activeSpaceId, () => {
-    current.value = null;
-    docs.value = [];
-    docsError.value = '';
-    searchHits.value = [];
-    searchRan.value = false;
-    message.value = '';
-    void load();
-});
 
 /** 打开新建抽屉：清空上次输入与错误 */
 function openCreateKb() {
@@ -137,7 +128,7 @@ function openCreateKb() {
     // 上一张表单的在途创建已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
     creatingKb.value = false;
     Object.assign(newKb, {
-        spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
+        spaceId: '',
         name: '',
         description: '',
         embeddingModel: 'text-embedding-3-small',
@@ -162,21 +153,19 @@ async function createKb() {
     }
     creatingKb.value = true;
     const token = kbCreateToken;
-    const targetSpaceId = newKb.spaceId;
     try {
         await $fetch('/api/settings/knowledge-bases', { method: 'POST', body: { ...newKb } });
         // 创建期间用户可能已关掉抽屉并重新打开：清空与关闭只对发起这次创建的那张表单生效
         if (token === kbCreateToken) {
             Object.assign(newKb, {
-                spaceId: activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || 'default',
+                spaceId: '',
                 name: '',
                 description: '',
                 embeddingModel: 'text-embedding-3-small',
             });
             createOpen.value = false;
         }
-        if (activeSpaceId.value && targetSpaceId && activeSpaceId.value !== targetSpaceId) activeSpaceId.value = targetSpaceId;
-        else await load();
+        await load();
     } catch (e) {
         const failure = extractApiError(e, t('adminForm.saveFailed'));
         // 抽屉已关或已换成新的一张：这条失败属于上一次创建，改挂到页面级提示
@@ -245,7 +234,7 @@ function openEditKb(kb: KbItem) {
     // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
     savingKb.value = false;
     editingKb.value = kb;
-    Object.assign(editForm, { spaceId: kb.spaceId, name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
+    Object.assign(editForm, { spaceId: kb.spaceId ?? '', name: kb.name, description: kb.description, embeddingModel: kb.embeddingModel });
     editError.value = '';
 }
 
@@ -258,11 +247,10 @@ async function saveKb() {
     editError.value = '';
     savingKb.value = true;
     const token = kbEditToken;
-    const targetSpaceId = editForm.spaceId;
     try {
         const { vectorsInvalidated, ...updated } = await $fetch<KbItem & { vectorsInvalidated?: number }>(
             `/api/settings/knowledge-bases/${encodeURIComponent(editingKb.value.id)}`,
-            { method: 'PATCH', body: { spaceId: editForm.spaceId, name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel } },
+            { method: 'PATCH', body: { spaceId: editForm.spaceId || undefined, name: editForm.name, description: editForm.description, embeddingModel: editForm.embeddingModel } },
         );
         // 同步当前面板标题，避免改名后仍显示旧名
         if (current.value?.id === updated.id) current.value = { ...current.value, ...updated };
@@ -277,8 +265,7 @@ async function saveKb() {
             if (current.value?.id === updated.id) message.value = note;
             else listMessage.value = note;
         }
-        if (activeSpaceId.value && targetSpaceId && activeSpaceId.value !== targetSpaceId) activeSpaceId.value = targetSpaceId;
-        else await load();
+        await load();
     } catch (e) {
         const failure = extractApiError(e, t('adminForm.saveFailed'));
         // 抽屉已换成另一条知识库时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题
@@ -548,6 +535,7 @@ async function search() {
                         class="app-input"
                     />
                     <select v-model="newKb.spaceId" class="app-input" :aria-label="t('adminForm.kbSpace')">
+                        <option value="">{{ t('adminForm.kbGlobalSpace') }}</option>
                         <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
                     </select>
                     <input :aria-label="t('adminForm.description')" v-model="newKb.description" :placeholder="t('adminForm.description')" class="app-input" />
@@ -575,6 +563,7 @@ async function search() {
                         class="app-input"
                     />
                     <select v-model="editForm.spaceId" class="app-input" :aria-label="t('adminForm.kbSpace')">
+                        <option value="">{{ t('adminForm.kbGlobalSpace') }}</option>
                         <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
                     </select>
                     <input

@@ -2,13 +2,11 @@ import type { AgentSummary } from '@commons/contract';
 import type { WorkConversationSummary, WorkSpace } from '../utils/work';
 
 /**
- * 会话侧栏共享状态：布局、对话页和空间筛选消费同一份数据。
+ * 侧栏共享状态：全局最近对话 + 空间列表。
  *
- * `activeSpaceId` 为 null 表示「全部空间」；新建对话会把当前筛选空间带进 POST /api/conversations，
- * 聊天页的 transport 也带同一个 spaceId，于是服务端自动建会话时不会落回默认空间。
+ * 空间不再是全局筛选器。对话是否属于空间由 `conversation.spaceId` 决定；
+ * 首页、运行记录和资料库默认展示全局数据，空间页面自己按路由参数筛选。
  */
-const ACTIVE_SPACE_KEY = 'work_active_space';
-
 export function useChatSidebar() {
     const route = useRoute();
 
@@ -33,46 +31,14 @@ export function useChatSidebar() {
 
     const activeAgentId = useState<string | null>('chat-active-agent', () => null);
     const activeConversationId = useState<string | null>('chat-active-conversation', () => null);
-    const activeSpaceId = useState<string | null>('chat-active-space', () => null);
-    /** `/chat` 的「新建对话」意图：为 true 时该页保持空白，不再自动落到最近一条会话 */
     const newChatRequested = useState<boolean>('chat-new-chat-requested', () => false);
-    const spacePreferenceLoaded = useState<boolean>('chat-space-preference-loaded', () => false);
-
-    onMounted(() => {
-        if (spacePreferenceLoaded.value || !import.meta.client) return;
-        spacePreferenceLoaded.value = true;
-        try {
-            const stored = localStorage.getItem(ACTIVE_SPACE_KEY);
-            if (stored) activeSpaceId.value = stored;
-        } catch {
-            // localStorage 不可用时保持“全部空间”。
-        }
-    });
-
-    watch(activeSpaceId, (value) => {
-        if (!import.meta.client) return;
-        try {
-            if (value) localStorage.setItem(ACTIVE_SPACE_KEY, value);
-            else localStorage.removeItem(ACTIVE_SPACE_KEY);
-        } catch {
-            // 忽略隐私模式下的写入失败。
-        }
-    });
-
-    // 空间被归档/删除后，本地偏好不能在下次加载时指向一个不存在的 id。
-    watch(spaces, (list) => {
-        if (!list.length || !activeSpaceId.value) return;
-        if (!list.some((space) => space.id === activeSpaceId.value)) activeSpaceId.value = null;
-    });
 
     const agentIdParam = computed(() => (route.params.agentId as string | undefined) ?? null);
     const visibleConversations = computed(() => {
         const agentId = agentIdParam.value;
-        const spaceId = activeSpaceId.value;
-        return conversations.value.filter((conversation) => (!spaceId || conversation.spaceId === spaceId) && (!agentId || conversation.agentId === agentId));
+        return conversations.value.filter((conversation) => !agentId || conversation.agentId === agentId);
     });
 
-    /** `/chat` 未显式选择智能体时，跟随最近一条会话（没有历史则第一个智能体） */
     const effectiveAgentId = computed(() => {
         if (agentIdParam.value) return agentIdParam.value;
         if (activeAgentId.value) return activeAgentId.value;
@@ -97,17 +63,6 @@ export function useChatSidebar() {
         activeConversationId.value = null;
     }
 
-    /** 切换空间筛选：当前会话若不在新空间里就复位成新对话，避免显示一段不属于该空间的历史。 */
-    function selectSpace(spaceId: string | null) {
-        activeSpaceId.value = spaceId;
-        if (!activeConversationId.value) return;
-        const current = conversations.value.find((conversation) => conversation.id === activeConversationId.value);
-        if (current && spaceId && current.spaceId !== spaceId) {
-            activeConversationId.value = null;
-            newChatRequested.value = true;
-        }
-    }
-
     return {
         agents,
         refreshAgents,
@@ -121,14 +76,12 @@ export function useChatSidebar() {
         conversationsError,
         activeAgentId,
         activeConversationId,
-        activeSpaceId,
         newChatRequested,
         agentIdParam,
         visibleConversations,
         effectiveAgentId,
         effectiveConversationId,
         selectConversation,
-        selectSpace,
         startNewChat,
     };
 }

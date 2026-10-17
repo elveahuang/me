@@ -1,5 +1,5 @@
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, stepCountIs, streamText, type UIMessage } from 'ai';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import {
     agentKnowledgeBases,
     agentMcpServers,
@@ -26,7 +26,7 @@ import { lockAgentRow } from '../utils/ref-lock';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
-import { resolveSpaceId } from '../utils/spaces';
+import { resolveOptionalSpaceId } from '../utils/spaces';
 import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { buildSystemPrompt } from '../utils/system-prompt';
 import { buildToolSet } from '../utils/tools';
@@ -355,7 +355,7 @@ export default defineEventHandler(async (event) => {
 
     if (!row) {
         const newId = crypto.randomUUID();
-        const spaceId = await resolveSpaceId(requestedSpaceId);
+        const spaceId = await resolveOptionalSpaceId(requestedSpaceId);
         // 第 2 步那次读只是快路径（顺带把「已停用」挡在前面）。从它到这里之间，另一个标签页可以完整地
         // 删掉这个智能体（`settings/agents/[id].ts` 的 DELETE 在事务里对该行取 FOR UPDATE），
         // 于是这条裸 INSERT 撞 23503：响应变成 500 + drizzle 的整张列清单，用户刚打的那句话没有任何地方落库。
@@ -386,13 +386,20 @@ export default defineEventHandler(async (event) => {
         row.title = autoTitle;
     }
     const conversation = row!;
-    const [space] = await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, conversation.spaceId));
+    const [space] = conversation.spaceId
+        ? await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, conversation.spaceId))
+        : [];
     const spaceKbIds = boundKbIds.length
         ? (
               await db
                   .select({ id: knowledgeBases.id })
                   .from(knowledgeBases)
-                  .where(and(inArray(knowledgeBases.id, boundKbIds), eq(knowledgeBases.spaceId, conversation.spaceId)))
+                  .where(
+                      and(
+                          inArray(knowledgeBases.id, boundKbIds),
+                          conversation.spaceId ? or(eq(knowledgeBases.spaceId, conversation.spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId),
+                      ),
+                  )
           ).map((item) => item.id)
         : [];
 

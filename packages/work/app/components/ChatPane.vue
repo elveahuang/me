@@ -31,10 +31,12 @@ const props = withDefaults(
         draft?: string | null;
         /** 侧栏已知的当前会话标题：接管在途实例时不会回源历史，标题只能由父级给 */
         conversationTitle?: string | null;
-        /** 新建会话落到哪个工作空间；null 交给服务端落默认空间 */
+        /** 新建会话落到哪个工作空间；null 表示独立对话 */
         spaceId?: string | null;
+        /** 当前会话/新建目标的空间名，用于头部归属提示 */
+        spaceName?: string | null;
     }>(),
-    { conversationId: null, agentList: () => [], initialAgent: null, draft: null, conversationTitle: null, spaceId: null },
+    { conversationId: null, agentList: () => [], initialAgent: null, draft: null, conversationTitle: null, spaceId: null, spaceName: null },
 );
 
 const emit = defineEmits<{
@@ -617,6 +619,7 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
             :agent-emoji="agentEmoji"
             :agent-name="agentName"
             :description="headerDescription"
+            :space-name="props.spaceName"
             :model="agent?.model"
             :temperature="agent?.temperature"
             :tool-count="agent?.tools?.length ?? 0"

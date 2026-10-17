@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { extractApiError, type ConversationSummary } from '@commons/contract';
+import { extractApiError } from '@commons/contract';
+import type { WorkConversationSummary } from '../utils/work';
 import { useI18n } from 'vue-i18n';
 
 /**
@@ -13,7 +14,7 @@ import { useI18n } from 'vue-i18n';
  */
 withDefaults(
     defineProps<{
-        conversations: ConversationSummary[];
+        conversations: WorkConversationSummary[];
         /** 当前打开的会话 id，用于高亮 */
         activeId?: string | null;
         loading?: boolean;
@@ -47,7 +48,7 @@ let editTitleOriginal = '';
  */
 const renamedConversation = useState<{ id: string; title: string } | null>('conversation-renamed', () => null);
 
-function startRename(c: ConversationSummary) {
+function startRename(c: WorkConversationSummary) {
     editingTitleId.value = c.id;
     editTitleInput.value = c.title;
     editTitleOriginal = c.title;
@@ -148,7 +149,12 @@ async function removeConversation(id: string) {
                             <span class="sr-only">{{ isRunning(c.id) ? t('chat.runningInBackground') : isUnread(c) ? t('chat.unreadReply') : '' }}</span>
                             <span class="truncate" :class="isUnread(c) && !isRunning(c.id) ? 'font-semibold' : ''">{{ c.title }}</span>
                         </span>
-                        <span v-if="showAgentName" class="text-faint mt-0.5 block truncate text-[10px]">{{ c.agentName }}</span>
+                        <span class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px]">
+                            <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="c.spaceName ? 'app-chip-brand' : ''">
+                                {{ c.spaceName || t('chat.independentChat') }}
+                            </span>
+                            <span v-if="showAgentName" class="text-faint truncate">{{ c.agentName }}</span>
+                        </span>
                     </button>
                     <div class="app-hover-reveal absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
                         <button

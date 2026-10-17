@@ -6,11 +6,11 @@ import type { WorkSpace } from '../utils/work';
 /**
  * 工作空间：会话、资料与自动化的长期上下文。
  *
- * 第一版把「进入对话」做成显式动作：设置 activeSpaceId 后跳到 /chat，
- * 新建会话会带上同一个 spaceId，避免所有对话都落回默认空间。
+ * 空间是容器：点「进入空间」打开 /spaces/:id 的空间主页，
+ * 在主页里再选择「在空间中新建对话」。侧栏的最近对话始终是全局列表。
  */
 const { t } = useI18n();
-const { activeSpaceId, refreshSpaces } = useChatSidebar();
+const { refreshSpaces } = useChatSidebar();
 
 const spaces = ref<WorkSpace[]>([]);
 const loading = ref(true);
@@ -95,7 +95,6 @@ async function remove(space: WorkSpace) {
     actionError.value = '';
     try {
         await $fetch(`/api/spaces/${encodeURIComponent(space.id)}`, { method: 'DELETE' });
-        if (activeSpaceId.value === space.id) activeSpaceId.value = null;
         success.value = t('spaces.deleted');
         await load();
         await refreshSpaces();
@@ -104,17 +103,15 @@ async function remove(space: WorkSpace) {
     }
 }
 
-async function openChat(space: WorkSpace) {
+async function openSpace(space: WorkSpace) {
     if (space.archived) return;
-    activeSpaceId.value = space.id;
-    await navigateTo('/chat');
+    await navigateTo(`/spaces/${encodeURIComponent(space.id)}`);
 }
 
 async function toggleArchive(space: WorkSpace) {
     actionError.value = '';
     try {
         await $fetch(`/api/spaces/${encodeURIComponent(space.id)}`, { method: 'PATCH', body: { archived: !space.archived } });
-        if (!space.archived && activeSpaceId.value === space.id) activeSpaceId.value = null;
         success.value = space.archived ? t('spaces.restored') : t('spaces.archivedMessage');
         await load();
         await refreshSpaces();
@@ -174,7 +171,7 @@ async function toggleArchive(space: WorkSpace) {
                 </div>
 
                 <div class="mt-auto flex flex-wrap items-center gap-2 pt-5">
-                    <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openChat(space)">{{ t('spaces.openChat') }}</button>
+                    <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openSpace(space)">{{ t('spaces.openSpace') }}</button>
                     <button v-else type="button" class="app-btn app-btn-primary app-btn-sm" @click="toggleArchive(space)">{{ t('spaces.restore') }}</button>
                     <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="openEdit(space)">{{ t('common.edit') }}</button>
                     <button v-if="!space.archived && space.id !== 'default'" type="button" class="app-btn app-btn-ghost app-btn-sm" @click="toggleArchive(space)">

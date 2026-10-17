@@ -6,7 +6,7 @@ import { requireMethod } from '../../utils/method';
 import { capBody } from '../../utils/request-body';
 import { routeId } from '../../utils/route-id';
 import { assertScheduleAgent, resolvePlanOfRow } from '../../utils/schedule-store';
-import { resolveSpaceId } from '../../utils/spaces';
+import { resolveOptionalSpaceId } from '../../utils/spaces';
 import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from '../../utils/work-input';
 import { SCHEDULE_PROMPT_MAX } from '../../utils/work-schedule';
 
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (body.title !== undefined) patch.title = normalizeWorkText(body.title, 'title', WORK_TITLE_MAX);
     if (body.prompt !== undefined) patch.prompt = normalizeWorkText(body.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
-    if (body.spaceId !== undefined) patch.spaceId = await resolveSpaceId(body.spaceId);
+    if (body.spaceId !== undefined) patch.spaceId = await resolveOptionalSpaceId(body.spaceId);
 
     let startsAtValue: Date | undefined;
     if (body.startsAt !== undefined) {

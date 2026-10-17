@@ -23,7 +23,8 @@ export interface WorkSpace {
 
 /** 工作台会话在共享会话摘要外多带空间归属。 */
 export interface WorkConversationSummary extends ConversationSummary {
-    spaceId: string;
+    agentEmoji?: string | null;
+    spaceId: string | null;
     spaceName?: string | null;
 }
 
@@ -46,7 +47,7 @@ export interface WorkSchedule {
     agentId: string;
     agentName: string;
     agentEmoji: string;
-    spaceId: string;
+    spaceId: string | null;
     spaceName: string | null;
     kind: ScheduleKind;
     /** 'HH:mm'，按北京时间解释；interval 与 once 为空串 */

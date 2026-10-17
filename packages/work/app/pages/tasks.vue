@@ -66,11 +66,9 @@ watch([enabledFilter, keyword], () => {
     router.replace({ query: { ...route.query, enabled: enabledFilter.value || undefined, q: keyword.value || undefined } });
 });
 
-const { activeSpaceId } = useChatSidebar();
 const listQuery = computed(() => ({
     enabled: enabledFilter.value || undefined,
     keyword: keyword.value || undefined,
-    spaceId: activeSpaceId.value || undefined,
     limit: '200',
 }));
 const { data: schedules, pending, error, refresh } = await useFetch<WorkSchedule[]>('/api/schedules', { query: listQuery, lazy: true, default: () => [] });
@@ -125,20 +123,12 @@ const form = reactive({
 watch(agents, (list) => {
     if (!form.agentId && list.length) form.agentId = list[0]!.id;
 });
-watch(
-    spaces,
-    (list) => {
-        if (form.spaceId || !list.length) return;
-        form.spaceId = activeSpaceId.value || list.find((space) => space.id === 'default')?.id || list[0]!.id;
-    },
-    { immediate: true },
-);
 
 function resetForm() {
     form.title = '';
     form.prompt = '';
     form.agentId = agents.value[0]?.id ?? '';
-    form.spaceId = activeSpaceId.value || spaces.value.find((space) => space.id === 'default')?.id || spaces.value[0]?.id || '';
+    form.spaceId = '';
     form.kind = 'daily';
     form.time = '09:00';
     form.intervalMinutes = 60;
@@ -182,7 +172,7 @@ async function openEdit(id: string) {
         form.title = full.title;
         form.prompt = full.prompt;
         form.agentId = full.agentId;
-        form.spaceId = full.spaceId;
+        form.spaceId = full.spaceId ?? '';
         form.kind = full.kind;
         form.time = timeTextInputValue(full.timeText) || '09:00';
         form.intervalMinutes = full.intervalMinutes ?? 60;
@@ -219,7 +209,6 @@ async function save() {
     if (!title) return (formError.value = t('common.required', { field: t('work.fieldTitle') }));
     if (!prompt) return (formError.value = t('common.required', { field: t('work.fieldPrompt') }));
     if (!form.agentId) return (formError.value = t('common.required', { field: t('work.fieldAgent') }));
-    if (!form.spaceId) return (formError.value = t('common.required', { field: t('work.fieldSpace') }));
     if (!agents.value.length) return (formError.value = t('work.noAgentToPick'));
     const startsAt = composeStartsAt(form.startDay, showClock.value ? form.time : '');
     if (!startsAt) return (formError.value = t('common.required', { field: t('work.fieldStartDay') }));
@@ -235,7 +224,7 @@ async function save() {
         title,
         prompt,
         agentId: form.agentId,
-        spaceId: form.spaceId,
+        spaceId: form.spaceId || undefined,
         kind: form.kind,
         time: showClock.value ? form.time : '',
         intervalMinutes: showInterval.value ? form.intervalMinutes : undefined,
@@ -515,6 +504,7 @@ onMounted(() => {
                         <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.emoji }} {{ agent.name }}</option>
                     </select>
                     <select v-model="form.spaceId" class="app-input" :aria-label="t('work.fieldSpace')">
+                        <option value="">{{ t('work.globalSpace') }}</option>
                         <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
                     </select>
                 </div>

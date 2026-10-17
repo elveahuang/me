@@ -20,7 +20,7 @@ const {
     effectiveConversationId,
     activeAgentId,
     activeConversationId,
-    activeSpaceId,
+    spaces,
     newChatRequested,
     agentsError,
     refreshAgents,
@@ -29,9 +29,13 @@ const {
 
 const agentList = computed(() => agents.value ?? []);
 /** 当前会话标题：ChatPane 接管在途实例时不回源历史，导出用的标题由这里补上 */
-const activeConversationTitle = computed(() => conversations.value.find((c) => c.id === effectiveConversationId.value)?.title ?? null);
+const activeConversation = computed(() => conversations.value.find((c) => c.id === effectiveConversationId.value) ?? null);
+const activeConversationTitle = computed(() => activeConversation.value?.title ?? null);
 const route = useRoute();
 const router = useRouter();
+const requestedSpaceId = computed(() => (typeof route.query.space === 'string' && route.query.space ? route.query.space : null));
+const chatSpaceId = computed(() => (effectiveConversationId.value ? (activeConversation.value?.spaceId ?? null) : requestedSpaceId.value));
+const chatSpaceName = computed(() => activeConversation.value?.spaceName ?? spaces.value.find((space) => space.id === chatSpaceId.value)?.name ?? null);
 
 /**
  * `?c=` 是 URL 里的「当前会话」。
@@ -124,7 +128,8 @@ const { open: openDrawer } = useShellDrawer();
                 :conversation-id="effectiveConversationId"
                 :conversation-title="activeConversationTitle"
                 :agent-list="agentList"
-                :space-id="activeSpaceId"
+                :space-id="chatSpaceId"
+                :space-name="chatSpaceName"
                 :draft="askDraft"
                 @update:agent-id="switchAgent"
                 @update:conversation-id="onActiveConversationChange"

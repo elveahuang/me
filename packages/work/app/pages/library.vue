@@ -21,7 +21,6 @@ interface KbItem {
  * 知识库仍以 `/settings/knowledge` 为编辑面；资料库负责发现、搜索和跳转。
  */
 const { t } = useI18n();
-const { activeSpaceId, spaces } = useChatSidebar();
 const keyword = ref('');
 const page = ref(1);
 const pageSize = 24;
@@ -34,7 +33,6 @@ const attachmentQuery = computed(() => ({
     page: page.value,
     pageSize,
     keyword: keyword.value.trim() || undefined,
-    spaceId: activeSpaceId.value || undefined,
 }));
 const {
     data: attachmentData,
@@ -64,10 +62,9 @@ const kbs = computed(() => {
 });
 const totalDocs = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.documentCount, 0));
 const totalChunks = computed(() => kbRows.value.reduce((sum, kb) => sum + kb.chunkCount, 0));
-const currentSpaceName = computed(() => spaces.value.find((space) => space.id === activeSpaceId.value)?.name ?? null);
 const totalPages = computed(() => Math.max(1, Math.ceil((attachmentData.value?.total ?? 0) / pageSize)));
 
-watch([keyword, activeSpaceId], () => {
+watch(keyword, () => {
     page.value = 1;
 });
 const loading = computed(() => attachmentsPending.value || kbsPending.value);
@@ -96,7 +93,6 @@ async function uploadFile(event: Event) {
         const form = new FormData();
         form.append('file', file);
         form.append('category', 'other');
-        if (activeSpaceId.value) form.append('spaceId', activeSpaceId.value);
         await $fetch('/api/attachments', { method: 'POST', body: form });
         page.value = 1;
         await refreshAttachments();
@@ -127,7 +123,6 @@ async function removeFile(file: { id: string; filename: string }) {
             <div>
                 <h1 class="app-page-title text-strong">{{ t('library.title') }}</h1>
                 <p class="app-page-subtitle">{{ t('library.subtitle') }}</p>
-                <span v-if="currentSpaceName" class="app-chip app-chip-brand mt-2 !text-[10px]">🗂️ {{ currentSpaceName }}</span>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs" :disabled="uploading" @click="fileInput?.click()">

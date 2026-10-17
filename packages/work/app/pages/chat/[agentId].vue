@@ -19,7 +19,7 @@ const agentId = computed(() => route.params.agentId as string);
 const { data: agentData, error: agentError } = await useFetch<AgentDetail>(() => `/api/agents/${encodeURIComponent(agentId.value)}`);
 
 /** 会话列表与选中态由布局左栏共享：这里只按 agentId 过滤后的可见列表 */
-const { conversations, visibleConversations, activeConversationId, activeSpaceId, refreshConversations } = useChatSidebar();
+const { conversations, visibleConversations, activeConversationId, spaces, refreshConversations } = useChatSidebar();
 
 /**
  * 深链 `?c=` 是「打开这一条会话」的明确意图，优先级高于「该智能体的最近一条」。
@@ -49,7 +49,11 @@ function resolveInitialConversation(): string | null {
 const initialConversationId = resolveInitialConversation();
 activeConversationId.value = initialConversationId;
 /** 当前会话标题：ChatPane 接管在途实例时不回源历史，导出用的标题由这里补上 */
-const activeConversationTitle = computed(() => visibleConversations.value.find((c) => c.id === activeConversationId.value)?.title ?? null);
+const activeConversation = computed(() => visibleConversations.value.find((c) => c.id === activeConversationId.value) ?? null);
+const activeConversationTitle = computed(() => activeConversation.value?.title ?? null);
+const requestedSpaceId = computed(() => (typeof route.query.space === 'string' && route.query.space ? route.query.space : null));
+const chatSpaceId = computed(() => (activeConversationId.value ? (activeConversation.value?.spaceId ?? null) : requestedSpaceId.value));
+const chatSpaceName = computed(() => activeConversation.value?.spaceName ?? spaces.value.find((space) => space.id === chatSpaceId.value)?.name ?? null);
 /** 还等着自动选中该智能体的最近一条会话：用户主动选会话或开新对话后就不再自动跳 */
 const autoSelectPending = ref(!initialConversationId);
 
@@ -120,7 +124,8 @@ const { open: openDrawer } = useShellDrawer();
                 :agent-id="agentId"
                 :conversation-id="activeConversationId"
                 :conversation-title="activeConversationTitle"
-                :space-id="activeSpaceId"
+                :space-id="chatSpaceId"
+                :space-name="chatSpaceName"
                 :initial-agent="agentData"
                 @update:conversation-id="onActiveConversationChange"
                 @conversation-list-stale="refreshConversations()"

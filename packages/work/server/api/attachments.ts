@@ -8,7 +8,7 @@ import { LOCAL_OWNER } from '../utils/owner';
 import { intParam, likePattern, stringParam } from '../utils/query';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody, readCappedBodyIntoH3Cache } from '../utils/request-body';
-import { resolveSpaceId } from '../utils/spaces';
+import { resolveOptionalSpaceId } from '../utils/spaces';
 import {
     assertRelayPayloadSize,
     assertRelayRequestAllowed,
@@ -79,7 +79,7 @@ async function relayUpload(event: H3Event) {
     const categoryPart = parts.find((part) => part.name === 'category');
     const category = normalizeAttachmentCategory(categoryPart?.data.toString('utf-8'));
     const spacePart = parts.find((part) => part.name === 'spaceId');
-    const spaceId = await resolveSpaceId(spacePart?.data.toString('utf-8'));
+    const spaceId = await resolveOptionalSpaceId(spacePart?.data.toString('utf-8'));
 
     const filename = sanitizeFilename(filePart.filename || 'file');
     const mimeType = normalizeMimeType(filePart.type);
@@ -168,7 +168,7 @@ export default defineEventHandler(async (event) => {
     const category = stringParam(query.category);
     const keyword = stringParam(query.keyword) ?? '';
     const requestedSpaceId = stringParam(query.spaceId);
-    const spaceId = requestedSpaceId ? await resolveSpaceId(requestedSpaceId) : null;
+    const spaceId = requestedSpaceId ? await resolveOptionalSpaceId(requestedSpaceId) : null;
     const page = intParam(query.page, 1, 1, 1e6);
     const pageSize = intParam(query.pageSize, 20, 1, 100);
 

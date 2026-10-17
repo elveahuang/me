@@ -6,6 +6,7 @@ withDefaults(
         agentEmoji: string;
         agentName: string;
         description?: string;
+        spaceName?: string | null;
         model?: string | null;
         temperature?: number | null;
         toolCount?: number;
@@ -17,6 +18,7 @@ withDefaults(
     }>(),
     {
         description: '',
+        spaceName: null,
         model: null,
         temperature: null,
         toolCount: 0,
@@ -81,6 +83,7 @@ const { t } = useI18n();
                     </button>
                     <h2 v-else class="truncate text-sm font-bold">{{ agentName }}</h2>
 
+                    <span class="app-chip" :class="spaceName ? 'app-chip-brand' : ''">{{ spaceName || t('chat.independentChat') }}</span>
                     <span v-if="model" class="app-chip font-mono">{{ model }}</span>
                     <span v-if="temperature !== null && temperature !== undefined" class="app-chip app-chip-brand">Temp {{ temperature }}</span>
                     <span v-if="toolCount" class="app-chip"> 🛠️ {{ toolCount }} </span>

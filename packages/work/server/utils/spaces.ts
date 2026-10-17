@@ -32,6 +32,12 @@ export async function ensureDefaultSpace(): Promise<void> {
         .onConflictDoNothing();
 }
 
+/** 可选空间：空值表示独立对话 / 全局资料 / 全局自动化，非空时做存在性校验。 */
+export async function resolveOptionalSpaceId(raw: unknown): Promise<string | null> {
+    if (raw === undefined || raw === null || raw === '') return null;
+    return resolveSpaceId(raw);
+}
+
 /** 新建会话或查询筛选使用：空值落到默认空间，非法 id 回 400。 */
 export async function resolveSpaceId(raw: unknown): Promise<string> {
     if (raw === undefined || raw === null || raw === '') {

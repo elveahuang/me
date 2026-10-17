@@ -8,7 +8,7 @@ import { intParam, likePattern, stringParam } from '../utils/query';
 import { rateLimit } from '../utils/rate-limit';
 import { capBody } from '../utils/request-body';
 import { assertScheduleAgent, resolveSchedulePlan } from '../utils/schedule-store';
-import { resolveSpaceId } from '../utils/spaces';
+import { resolveOptionalSpaceId } from '../utils/spaces';
 import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from '../utils/work-input';
 import { SCHEDULE_PROMPT_MAX } from '../utils/work-schedule';
 
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
         // prompt 是「到点发给智能体的那一句话」，空正文等于到点白跑一轮外呼，所以按必填处理
         const prompt = normalizeWorkText(body.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
         const enabled = normalizeAdminBoolean(body.enabled, 'enabled', true);
-        const spaceId = await resolveSpaceId(body.spaceId);
+        const spaceId = await resolveOptionalSpaceId(body.spaceId);
 
         const id = crypto.randomUUID();
         await db.transaction(async (tx) => {
@@ -101,7 +101,10 @@ export default defineEventHandler(async (event) => {
     if (enabled === '0') where.push(eq(schedules.enabled, false));
 
     const requestedSpaceId = stringParam(query.spaceId);
-    if (requestedSpaceId) where.push(eq(schedules.spaceId, await resolveSpaceId(requestedSpaceId)));
+    if (requestedSpaceId) {
+        const scopedSpaceId = await resolveOptionalSpaceId(requestedSpaceId);
+        if (scopedSpaceId) where.push(eq(schedules.spaceId, scopedSpaceId));
+    }
 
     const keyword = stringParam(query.keyword);
     if (keyword) where.push(or(ilike(schedules.title, likePattern(keyword)), ilike(schedules.prompt, likePattern(keyword)))!);

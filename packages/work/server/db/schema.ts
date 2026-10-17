@@ -165,10 +165,7 @@ export const knowledgeBases = pgTable(
     'knowledge_bases',
     {
         id: text('id').primaryKey(),
-        spaceId: text('space_id')
-            .notNull()
-            .default(DEFAULT_SPACE_ID)
-            .references(() => spaces.id, { onDelete: 'restrict' }),
+        spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
         name: text('name').notNull(),
     description: text('description').notNull().default(''),
     embeddingProviderId: text('embedding_provider_id').references(() => providers.id, {
@@ -231,10 +228,7 @@ export const conversations = pgTable(
         agentId: text('agent_id')
             .notNull()
             .references(() => agents.id, { onDelete: 'cascade' }),
-        spaceId: text('space_id')
-            .notNull()
-            .default(DEFAULT_SPACE_ID)
-            .references(() => spaces.id, { onDelete: 'restrict' }),
+        spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
@@ -305,10 +299,7 @@ export const attachments = pgTable(
     'attachments',
     {
         id: text('id').primaryKey(),
-        spaceId: text('space_id')
-            .notNull()
-            .default(DEFAULT_SPACE_ID)
-            .references(() => spaces.id, { onDelete: 'restrict' }),
+        spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
         storageConfigId: text('storage_config_id').references(() => storageConfigs.id, { onDelete: 'set null' }),
         // 对象存储中的 key（相对桶根路径）
         objectKey: text('object_key').notNull(),
@@ -378,10 +369,7 @@ export const schedules = pgTable(
         agentId: text('agent_id')
             .notNull()
             .references(() => agents.id, { onDelete: 'cascade' }),
-        spaceId: text('space_id')
-            .notNull()
-            .default(DEFAULT_SPACE_ID)
-            .references(() => spaces.id, { onDelete: 'restrict' }),
+        spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
         kind: text('kind').$type<ScheduleKind>().notNull().default('daily'),
         /** 'HH:mm'（北京时间）：once/daily/weekly 的钟点；interval 不用，留空串 */
         timeText: text('time_text').notNull().default(''),

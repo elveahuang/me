@@ -6,7 +6,7 @@ import { safeTrim, stripNull } from '../../utils/pg-text';
 import { stringParam } from '../../utils/query';
 import { assertProviderExists } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
-import { resolveSpaceId } from '../../utils/spaces';
+import { resolveOptionalSpaceId } from '../../utils/spaces';
 
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: 'name 过长（最多 100 字符）' });
         }
         const embeddingProviderId = await assertProviderExists(body.embeddingProviderId, '向量模型供应商');
-        const spaceId = await resolveSpaceId(body.spaceId);
+        const spaceId = await resolveOptionalSpaceId(body.spaceId);
         const id = crypto.randomUUID();
         await db.insert(knowledgeBases).values({
             id,
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
      * 四条查询互不依赖，一次并发发出。
      */
     const requestedSpaceId = stringParam(getQuery(event).spaceId);
-    const spaceId = requestedSpaceId ? await resolveSpaceId(requestedSpaceId) : null;
+    const spaceId = requestedSpaceId ? await resolveOptionalSpaceId(requestedSpaceId) : null;
 
     const [rows, docCounts, chunkCounts, providerRows, spaceRows] = await Promise.all([
         db.select().from(knowledgeBases).where(spaceId ? eq(knowledgeBases.spaceId, spaceId) : undefined).orderBy(asc(knowledgeBases.createdAt)),
@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
     return rows.map((kb) => ({
         ...kb,
         providerName: kb.embeddingProviderId ? providerMap.get(kb.embeddingProviderId) : undefined,
-        spaceName: spaceMap.get(kb.spaceId),
+        spaceName: kb.spaceId ? spaceMap.get(kb.spaceId) : undefined,
         documentCount: docMap.get(kb.id) ?? 0,
         chunkCount: chunkMap.get(kb.id) ?? 0,
     }));

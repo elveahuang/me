@@ -1,6 +1,6 @@
 import { requireMethod } from '../../utils/method';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
-import { resolveSpaceId } from '../../utils/spaces';
+import { resolveOptionalSpaceId } from '../../utils/spaces';
 import {
     assertFileSize,
     buildObjectKey,
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     const category = normalizeAttachmentCategory(body?.category);
     const size = Number(body?.size) || 0;
     const mode = body?.mode === 'post' ? 'post' : 'put';
-    const spaceId = await resolveSpaceId(body?.spaceId);
+    const spaceId = await resolveOptionalSpaceId(body?.spaceId);
 
     const config = await resolveStorageConfig(null);
     if (size > 0) assertFileSize(config, size);

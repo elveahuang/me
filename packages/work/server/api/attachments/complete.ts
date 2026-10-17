@@ -5,7 +5,7 @@ import { requireMethod } from '../../utils/method';
 import { LOCAL_OWNER } from '../../utils/owner';
 import { rateLimit } from '../../utils/rate-limit';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
-import { resolveSpaceId } from '../../utils/spaces';
+import { resolveOptionalSpaceId } from '../../utils/spaces';
 import {
     assertFileSize,
     buildPublicUrl,
@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
     // 体积闸门与限流各管一件事：限流挡频率，readCappedJsonBody 挡单请求体积。
     // 闸门放在这里不影响后面的 HeadObject 复核——真实体积仍以存储侧返回值为准。
     const body: Record<string, unknown> = (await readCappedJsonBody<Record<string, unknown>>(event)) ?? {};
-    const spaceId = await resolveSpaceId(body.spaceId);
+    const spaceId = await resolveOptionalSpaceId(body.spaceId);
 
     const objectKey = String(body.objectKey ?? '').trim();
     if (!objectKey) {
