@@ -3,8 +3,8 @@ import { kbChunks, kbDocuments, knowledgeBases, providers, spaces } from '../../
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { safeTrim, stripNull } from '../../utils/pg-text';
-import { stringParam } from '../../utils/query';
 import { assertProviderExists } from '../../utils/providers';
+import { stringParam } from '../../utils/query';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
 import { resolveOptionalSpaceId } from '../../utils/spaces';
 
@@ -49,7 +49,11 @@ export default defineEventHandler(async (event) => {
     const spaceId = requestedSpaceId ? await resolveOptionalSpaceId(requestedSpaceId) : null;
 
     const [rows, docCounts, chunkCounts, providerRows, spaceRows] = await Promise.all([
-        db.select().from(knowledgeBases).where(spaceId ? eq(knowledgeBases.spaceId, spaceId) : undefined).orderBy(asc(knowledgeBases.createdAt)),
+        db
+            .select()
+            .from(knowledgeBases)
+            .where(spaceId ? eq(knowledgeBases.spaceId, spaceId) : undefined)
+            .orderBy(asc(knowledgeBases.createdAt)),
         db
             .select({ kbId: kbDocuments.kbId, count: sql<number>`count(*)::int` })
             .from(kbDocuments)

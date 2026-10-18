@@ -9,7 +9,13 @@ import { stripNull } from '../../../utils/pg-text';
 import { flagParam } from '../../../utils/query';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { routeId } from '../../../utils/route-id';
-import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, normalizeStoragePublicBaseUrl, sanitizeStorageConfig } from '../../../utils/storage';
+import {
+    invalidateStorageConfigCache,
+    MAX_FILE_SIZE_MB_LIMIT,
+    normalizeStorageEndpoint,
+    normalizeStoragePublicBaseUrl,
+    sanitizeStorageConfig,
+} from '../../../utils/storage';
 import { lockDefaultSlot } from '../../../utils/unique-default';
 
 const BOOLEAN_FIELDS = ['forcePathStyle', 'enabled', 'isDefault'] as const;

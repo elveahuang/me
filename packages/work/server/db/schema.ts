@@ -167,10 +167,10 @@ export const knowledgeBases = pgTable(
         id: text('id').primaryKey(),
         spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
         name: text('name').notNull(),
-    description: text('description').notNull().default(''),
-    embeddingProviderId: text('embedding_provider_id').references(() => providers.id, {
-        onDelete: 'set null',
-    }),
+        description: text('description').notNull().default(''),
+        embeddingProviderId: text('embedding_provider_id').references(() => providers.id, {
+            onDelete: 'set null',
+        }),
         embeddingModel: text('embedding_model').notNull().default('text-embedding-3-small'),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -232,10 +232,7 @@ export const conversations = pgTable(
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
-    (table) => [
-        index('conversations_agent_id_idx').on(table.agentId),
-        index('conversations_space_updated_idx').on(table.spaceId, table.updatedAt),
-    ],
+    (table) => [index('conversations_agent_id_idx').on(table.agentId), index('conversations_space_updated_idx').on(table.spaceId, table.updatedAt)],
 );
 
 export const messages = pgTable(

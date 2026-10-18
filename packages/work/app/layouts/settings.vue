@@ -14,9 +14,16 @@ const siteTitle = useSiteTitle();
 
 const drawerOpen = ref(false);
 const drawerRef = ref<HTMLElement | null>(null);
-useDrawerFocus(() => drawerOpen.value, drawerRef, () => (drawerOpen.value = false));
+useDrawerFocus(
+    () => drawerOpen.value,
+    drawerRef,
+    () => (drawerOpen.value = false),
+);
 useCloseDrawerOnWide(drawerOpen);
-watch(() => route.fullPath, () => (drawerOpen.value = false));
+watch(
+    () => route.fullPath,
+    () => (drawerOpen.value = false),
+);
 
 const groups = computed(() => {
     const defs = [
@@ -57,7 +64,7 @@ function isActive(to: string) {
 
             <nav class="min-h-0 flex-1 overflow-y-auto px-3 py-4">
                 <div v-for="group in groups" :key="group.key" class="mb-5 last:mb-0">
-                    <p class="text-faint px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide">{{ group.label }}</p>
+                    <p class="text-faint px-2 pb-1.5 text-[10px] font-bold tracking-wide uppercase">{{ group.label }}</p>
                     <NuxtLink
                         v-for="item in group.items"
                         :key="item.to"
@@ -133,7 +140,7 @@ function isActive(to: string) {
                         </nav>
                         <nav class="min-h-0 flex-1 overflow-y-auto px-3 py-3" :aria-label="t('settings.navTitle')">
                             <div v-for="group in groups" :key="group.key" class="mb-5 last:mb-0">
-                                <p class="text-faint px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide">{{ group.label }}</p>
+                                <p class="text-faint px-2 pb-1.5 text-[10px] font-bold tracking-wide uppercase">{{ group.label }}</p>
                                 <NuxtLink
                                     v-for="item in group.items"
                                     :key="item.to"

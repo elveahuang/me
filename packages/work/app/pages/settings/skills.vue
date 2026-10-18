@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 definePageMeta({ layout: 'settings' });

@@ -1,7 +1,6 @@
 import { badgeTone, type ConversationSummary } from '@commons/contract';
 import { dayInputValue } from './work-day';
 
-
 /** 工作空间的列表形状（服务端汇总了会话与自动化数量）。 */
 export interface WorkSpace {
     id: string;

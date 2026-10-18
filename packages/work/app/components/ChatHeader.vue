@@ -96,13 +96,7 @@ const { t } = useI18n();
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
-            <button
-                v-if="hasMessages"
-                type="button"
-                class="app-btn app-btn-outline !px-2.5 !py-1.5"
-                :title="t('chat.exportMarkdown')"
-                @click="emit('export')"
-            >
+            <button v-if="hasMessages" type="button" class="app-btn app-btn-outline !px-2.5 !py-1.5" :title="t('chat.exportMarkdown')" @click="emit('export')">
                 <span>📥</span>
                 <span class="hidden sm:inline">{{ t('chat.exportMarkdown') }}</span>
             </button>

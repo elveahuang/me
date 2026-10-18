@@ -168,7 +168,6 @@ function onSelectConversation(payload: { id: string; agentId: string }) {
     return navigateTo({ path: route.path, query: { ...route.query, c: payload.id } }, { replace: true });
 }
 
-
 /** 新建对话：清掉选中态；对话页还要把 URL 里的 `?c=` 摘掉，否则刷新会回到刚才那条 */
 function onCreateConversation() {
     drawerOpen.value = false;
@@ -306,21 +305,16 @@ if (import.meta.client) {
             <!-- 第二段：空间列表 + 全局最近对话。设置区不渲染这段。 -->
             <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
                 <div class="flex items-center justify-between px-2 pb-1">
-                    <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaces') }}</span>
+                    <span class="text-faint text-[10px] font-bold tracking-wide uppercase">{{ t('nav.spaces') }}</span>
                     <NuxtLink to="/spaces" class="text-hover-brand text-[10px] font-bold">{{ t('nav.manageSpaces') }}</NuxtLink>
                 </div>
-                <NuxtLink
-                    v-for="space in spaces.slice(0, 5)"
-                    :key="space.id"
-                    :to="`/spaces/${encodeURIComponent(space.id)}`"
-                    class="app-sidebar-link !py-1.5"
-                >
+                <NuxtLink v-for="space in spaces.slice(0, 5)" :key="space.id" :to="`/spaces/${encodeURIComponent(space.id)}`" class="app-sidebar-link !py-1.5">
                     <span class="text-base">{{ space.icon }}</span>
                     <span class="truncate">{{ space.name }}</span>
                 </NuxtLink>
             </div>
             <div v-if="!isSettingsSurface" class="flex shrink-0 items-center justify-between px-5 pt-3 pb-1">
-                <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.recentChats') }}</span>
+                <span class="text-faint text-[10px] font-bold tracking-wide uppercase">{{ t('nav.recentChats') }}</span>
                 <span class="text-faint text-[10px]">{{ visibleConversations.length }}</span>
             </div>
             <ConversationList
@@ -371,12 +365,7 @@ if (import.meta.client) {
                 <span class="app-avatar h-8 w-8 text-xs shadow-xs">W</span>
                 <span class="text-brand truncate text-base font-black tracking-tight">{{ siteTitle }}</span>
             </NuxtLink>
-            <button
-                type="button"
-                class="app-btn app-btn-ghost app-btn-icon ml-auto"
-                :aria-label="t('commandPalette.searchButton')"
-                @click="showCommandPalette"
-            >
+            <button type="button" class="app-btn app-btn-ghost app-btn-icon ml-auto" :aria-label="t('commandPalette.searchButton')" @click="showCommandPalette">
                 <AppIcon name="magnify" :size="19" />
             </button>
         </header>
@@ -465,7 +454,7 @@ if (import.meta.client) {
 
                         <div v-if="!isSettingsSurface && spaces.length" class="shrink-0 px-3 pb-2">
                             <div class="flex items-center justify-between px-2 pb-1">
-                                <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.spaces') }}</span>
+                                <span class="text-faint text-[10px] font-bold tracking-wide uppercase">{{ t('nav.spaces') }}</span>
                                 <NuxtLink to="/spaces" class="text-hover-brand text-[10px] font-bold">{{ t('nav.manageSpaces') }}</NuxtLink>
                             </div>
                             <NuxtLink
@@ -479,7 +468,7 @@ if (import.meta.client) {
                             </NuxtLink>
                         </div>
                         <div v-if="!isSettingsSurface" class="flex shrink-0 items-center justify-between px-5 pt-3 pb-1">
-                            <span class="text-faint text-[10px] font-bold uppercase tracking-wide">{{ t('nav.recentChats') }}</span>
+                            <span class="text-faint text-[10px] font-bold tracking-wide uppercase">{{ t('nav.recentChats') }}</span>
                             <span class="text-faint text-[10px]">{{ visibleConversations.length }}</span>
                         </div>
                         <ConversationList
@@ -511,6 +500,6 @@ if (import.meta.client) {
                 </aside>
             </div>
         </Teleport>
-            <WorkCommandPalette />
+        <WorkCommandPalette />
     </div>
 </template>

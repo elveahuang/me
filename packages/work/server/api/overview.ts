@@ -38,7 +38,14 @@ export default defineEventHandler(async (event) => {
                 .from(schedules)
                 .leftJoin(agents, eq(agents.id, schedules.agentId))
                 .leftJoin(spaces, eq(spaces.id, schedules.spaceId))
-                .where(and(spaceId ? eq(schedules.spaceId, spaceId) : undefined, eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end)))
+                .where(
+                    and(
+                        spaceId ? eq(schedules.spaceId, spaceId) : undefined,
+                        eq(schedules.enabled, true),
+                        gte(schedules.nextRunAt, start),
+                        lt(schedules.nextRunAt, end),
+                    ),
+                )
                 .orderBy(asc(schedules.nextRunAt))
                 .limit(SLICE_MAX),
             db
@@ -50,7 +57,14 @@ export default defineEventHandler(async (event) => {
                 })
                 .from(schedules)
                 .leftJoin(spaces, eq(spaces.id, schedules.spaceId))
-                .where(and(spaceId ? eq(schedules.spaceId, spaceId) : undefined, eq(schedules.enabled, true), gte(schedules.nextRunAt, end), lt(schedules.nextRunAt, weekEnd)))
+                .where(
+                    and(
+                        spaceId ? eq(schedules.spaceId, spaceId) : undefined,
+                        eq(schedules.enabled, true),
+                        gte(schedules.nextRunAt, end),
+                        lt(schedules.nextRunAt, weekEnd),
+                    ),
+                )
                 .orderBy(asc(schedules.nextRunAt))
                 .limit(SLICE_MAX),
             db
@@ -104,7 +118,14 @@ export default defineEventHandler(async (event) => {
             db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(schedules)
-                .where(and(spaceId ? eq(schedules.spaceId, spaceId) : undefined, eq(schedules.enabled, true), gte(schedules.nextRunAt, start), lt(schedules.nextRunAt, end))),
+                .where(
+                    and(
+                        spaceId ? eq(schedules.spaceId, spaceId) : undefined,
+                        eq(schedules.enabled, true),
+                        gte(schedules.nextRunAt, start),
+                        lt(schedules.nextRunAt, end),
+                    ),
+                ),
             db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(automationRuns)
@@ -113,7 +134,14 @@ export default defineEventHandler(async (event) => {
                 .select({ count: sql<number>`count(*)::int` })
                 .from(automationRuns)
                 .innerJoin(schedules, eq(schedules.id, automationRuns.scheduleId))
-                .where(and(spaceId ? eq(schedules.spaceId, spaceId) : undefined, eq(automationRuns.status, 'failed'), gte(automationRuns.startedAt, start), lt(automationRuns.startedAt, end))),
+                .where(
+                    and(
+                        spaceId ? eq(schedules.spaceId, spaceId) : undefined,
+                        eq(automationRuns.status, 'failed'),
+                        gte(automationRuns.startedAt, start),
+                        lt(automationRuns.startedAt, end),
+                    ),
+                ),
             db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(conversations)

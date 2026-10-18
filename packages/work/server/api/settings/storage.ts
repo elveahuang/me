@@ -6,7 +6,13 @@ import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
-import { invalidateStorageConfigCache, MAX_FILE_SIZE_MB_LIMIT, normalizeStorageEndpoint, normalizeStoragePublicBaseUrl, sanitizeStorageConfig } from '../../utils/storage';
+import {
+    invalidateStorageConfigCache,
+    MAX_FILE_SIZE_MB_LIMIT,
+    normalizeStorageEndpoint,
+    normalizeStoragePublicBaseUrl,
+    sanitizeStorageConfig,
+} from '../../utils/storage';
 import { lockDefaultSlot } from '../../utils/unique-default';
 
 /**

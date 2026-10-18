@@ -5,8 +5,8 @@ import { requireMethod } from '../../../utils/method';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
 import { assertProviderExists } from '../../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
-import { resolveOptionalSpaceId } from '../../../utils/spaces';
 import { routeId } from '../../../utils/route-id';
+import { resolveOptionalSpaceId } from '../../../utils/spaces';
 
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
@@ -21,11 +21,15 @@ export default defineEventHandler(async (event) => {
         const [kb] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
         if (!kb) throw createError({ statusCode: 404, statusMessage: '知识库不存在' });
         const [[docCount], [chunkCount], [provider], [space]] = await Promise.all([
-            db.select({ count: sql<number>`count(*)::int` }).from(kbDocuments).where(eq(kbDocuments.kbId, id)),
-            db.select({ count: sql<number>`count(*)::int` }).from(kbChunks).where(eq(kbChunks.kbId, id)),
-            kb.embeddingProviderId
-                ? db.select({ name: providers.name }).from(providers).where(eq(providers.id, kb.embeddingProviderId))
-                : Promise.resolve([]),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(kbDocuments)
+                .where(eq(kbDocuments.kbId, id)),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(kbChunks)
+                .where(eq(kbChunks.kbId, id)),
+            kb.embeddingProviderId ? db.select({ name: providers.name }).from(providers).where(eq(providers.id, kb.embeddingProviderId)) : Promise.resolve([]),
             kb.spaceId ? db.select({ name: spaces.name }).from(spaces).where(eq(spaces.id, kb.spaceId)) : Promise.resolve([]),
         ]);
         return {

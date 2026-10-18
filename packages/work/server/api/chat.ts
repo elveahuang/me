@@ -17,17 +17,17 @@ import {
 import { beginChatRun, endChatRun, tapChatRun, type ChatRun } from '../utils/chat-runs';
 import { retrieveContext } from '../utils/embedding';
 import { JSONB_MAX_DEPTH, exceedsJsonDepth } from '../utils/jsonb-input';
+import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from '../utils/mcp';
 import { requireMethod } from '../utils/method';
 import { LOCAL_OWNER } from '../utils/owner';
 import { stripNull, stripNullDeep } from '../utils/pg-text';
 import { resolveModel } from '../utils/providers';
-import { lockAgentRow } from '../utils/ref-lock';
 import { rateLimit } from '../utils/rate-limit';
+import { lockAgentRow } from '../utils/ref-lock';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
 import { buildSelfConfigTool } from '../utils/self-config';
 import { resolveOptionalSpaceId } from '../utils/spaces';
-import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { buildSystemPrompt } from '../utils/system-prompt';
 import { buildToolSet } from '../utils/tools';
 import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from '../utils/workbench-tools';
@@ -245,10 +245,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 413, statusMessage: '请求体过大（上限 512KB 消息内容）' });
     }
 
-    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown; spaceId?: unknown }>(
-        event,
-        MAX_CHAT_BODY_BYTES,
-    );
+    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown; spaceId?: unknown }>(event, MAX_CHAT_BODY_BYTES);
     const incoming = normalizeIncomingMessages(body?.messages);
     const agentId = typeof body?.agentId === 'string' ? body.agentId : '';
     const conversationId = typeof body?.conversationId === 'string' ? body.conversationId : '';
@@ -397,7 +394,9 @@ export default defineEventHandler(async (event) => {
                   .where(
                       and(
                           inArray(knowledgeBases.id, boundKbIds),
-                          conversation.spaceId ? or(eq(knowledgeBases.spaceId, conversation.spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId),
+                          conversation.spaceId
+                              ? or(eq(knowledgeBases.spaceId, conversation.spaceId), isNull(knowledgeBases.spaceId))
+                              : isNull(knowledgeBases.spaceId),
                       ),
                   )
           ).map((item) => item.id)

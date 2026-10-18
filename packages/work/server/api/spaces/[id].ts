@@ -16,10 +16,22 @@ export default defineEventHandler(async (event) => {
 
     if (method === 'GET') {
         const [[conv], [sched], [files], [kbs], [docs]] = await Promise.all([
-            db.select({ count: sql<number>`count(*)::int` }).from(conversations).where(eq(conversations.spaceId, id)),
-            db.select({ count: sql<number>`count(*)::int` }).from(schedules).where(eq(schedules.spaceId, id)),
-            db.select({ count: sql<number>`count(*)::int` }).from(attachments).where(eq(attachments.spaceId, id)),
-            db.select({ count: sql<number>`count(*)::int` }).from(knowledgeBases).where(eq(knowledgeBases.spaceId, id)),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(conversations)
+                .where(eq(conversations.spaceId, id)),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(schedules)
+                .where(eq(schedules.spaceId, id)),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(attachments)
+                .where(eq(attachments.spaceId, id)),
+            db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(knowledgeBases)
+                .where(eq(knowledgeBases.spaceId, id)),
             db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(kbDocuments)
@@ -61,10 +73,22 @@ export default defineEventHandler(async (event) => {
     }
 
     const [[conv], [sched], [files], [kbs]] = await Promise.all([
-        db.select({ count: sql<number>`count(*)::int` }).from(conversations).where(eq(conversations.spaceId, id)),
-        db.select({ count: sql<number>`count(*)::int` }).from(schedules).where(eq(schedules.spaceId, id)),
-        db.select({ count: sql<number>`count(*)::int` }).from(attachments).where(eq(attachments.spaceId, id)),
-        db.select({ count: sql<number>`count(*)::int` }).from(knowledgeBases).where(eq(knowledgeBases.spaceId, id)),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(conversations)
+            .where(eq(conversations.spaceId, id)),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(schedules)
+            .where(eq(schedules.spaceId, id)),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(attachments)
+            .where(eq(attachments.spaceId, id)),
+        db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(knowledgeBases)
+            .where(eq(knowledgeBases.spaceId, id)),
     ]);
     const references = [
         { label: '会话', count: Number(conv?.count ?? 0) },

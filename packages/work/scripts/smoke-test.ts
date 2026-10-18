@@ -274,7 +274,10 @@ async function runSmokeTests() {
     process.env.WORK_FILE_ROOTS = localRoot;
     try {
         const entries = await listLocalFiles(localRoot, 1);
-        assert(entries.some((entry) => entry.path.endsWith('package.json')), '白名单目录可以列出 package.json');
+        assert(
+            entries.some((entry) => entry.path.endsWith('package.json')),
+            '白名单目录可以列出 package.json',
+        );
         const packageText = await readLocalFile(resolve(localRoot, 'package.json'), 10_000);
         assert(packageText.includes('"name"'), '白名单目录可以读取文本文件');
         const hits = await searchLocalFiles('@repo/work', localRoot, 5);
@@ -532,7 +535,9 @@ async function runSmokeTests() {
         'export 折掉 mcp_servers.headers 与 tools.config.headers（只留头名，值不进备份）',
     );
     assert(
-        ["'providers.api_key'", "'storage_configs.secret_access_key'", "'mcp_servers.headers'", "'tools.config.headers'"].every((field) => exportText.includes(field)),
+        ["'providers.api_key'", "'storage_configs.secret_access_key'", "'mcp_servers.headers'", "'tools.config.headers'"].every((field) =>
+            exportText.includes(field),
+        ),
         'export 的 redacted 清单说全了四处凭据位（漏一处，用户以为备份可直接还原）',
     );
 

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 definePageMeta({ layout: 'settings' });
@@ -234,12 +233,7 @@ async function remove(id: string) {
             </button>
         </div>
 
-        <AdminDrawer
-            :open="editing !== null"
-            :title="editing?.id ? t('common.edit') : t('adminForm.toolNew')"
-            width-class="sm:max-w-2xl"
-            @close="closeDrawer"
-        >
+        <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.toolNew')" width-class="sm:max-w-2xl" @close="closeDrawer">
             <div class="space-y-3">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input

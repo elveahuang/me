@@ -145,7 +145,11 @@ async function removeConversation(id: string) {
                                 class="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[color:var(--warning)]"
                                 aria-hidden="true"
                             />
-                            <span v-else-if="isUnread(c)" class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--brand-500)]" aria-hidden="true" />
+                            <span
+                                v-else-if="isUnread(c)"
+                                class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--brand-500)]"
+                                aria-hidden="true"
+                            />
                             <span class="sr-only">{{ isRunning(c.id) ? t('chat.runningInBackground') : isUnread(c) ? t('chat.unreadReply') : '' }}</span>
                             <span class="truncate" :class="isUnread(c) && !isRunning(c.id) ? 'font-semibold' : ''">{{ c.title }}</span>
                         </span>
