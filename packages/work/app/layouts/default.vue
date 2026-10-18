@@ -148,6 +148,8 @@ const primaryLinks = navLinks.filter((link) => link.to !== '/spaces');
 
 function isNavActive(match: string) {
     const path = route.path;
+    if (match === '/') return path === '/';
+    if (match === '/tasks' && (path === '/runs' || path.startsWith('/runs/'))) return true;
     return path === match || path.startsWith(`${match}/`);
 }
 
@@ -283,14 +285,21 @@ if (import.meta.client) {
 
             <!-- 第一段：工作台。新建对话与功能导航同级——它是「开始一件事」，不是历史列表的一个操作 -->
             <nav class="shrink-0 space-y-1 px-3 pb-2" :aria-label="t('nav.groupWork')">
-                <div v-if="!isSettingsSurface" class="px-2 pb-1.5">
+                <div v-if="!isSettingsSurface" class="space-y-1.5 px-2 pb-1.5">
                     <button type="button" class="app-btn app-btn-primary app-btn-block gap-1.5 !text-xs" @click="onCreateConversation">
                         <AppIcon name="plus" :size="15" />
                         <span>{{ t('chat.newChat') }}</span>
                     </button>
+                    <button type="button" class="app-btn app-btn-outline app-btn-block justify-between !px-2.5 !py-1.5 !text-xs" @click="showCommandPalette">
+                        <span class="flex items-center gap-1.5">
+                            <AppIcon name="magnify" :size="14" class="text-faint" />
+                            <span class="text-soft">{{ t('commandPalette.searchButton') }}</span>
+                        </span>
+                        <kbd class="text-faint rounded border border-[color:var(--line)] px-1.5 py-0.5 font-mono text-[10px]">Ctrl+K</kbd>
+                    </button>
                 </div>
                 <NuxtLink
-                    v-for="link in navLinks"
+                    v-for="link in primaryLinks"
                     :key="link.to"
                     :to="link.to"
                     class="app-sidebar-link"
@@ -440,7 +449,7 @@ if (import.meta.client) {
                                 </button>
                             </div>
                             <NuxtLink
-                                v-for="link in navLinks"
+                                v-for="link in primaryLinks"
                                 :key="link.to"
                                 :to="link.to"
                                 class="app-sidebar-link"

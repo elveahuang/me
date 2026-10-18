@@ -8,6 +8,10 @@ export interface WorkSpace {
     description: string;
     icon: string;
     instructions: string;
+    defaultAgentId?: string | null;
+    defaultAgentName?: string | null;
+    defaultAgentEmoji?: string | null;
+    localRoot?: string;
     archived: boolean;
     createdAt: string;
     updatedAt: string;

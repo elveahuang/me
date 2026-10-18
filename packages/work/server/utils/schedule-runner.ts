@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from 'ai';
-import { and, asc, eq, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import {
     agentKnowledgeBases,
     agentMcpServers,
@@ -252,12 +252,41 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
             }
         }
 
+        // 周期任务增量连续性：若存在上一轮成功产出的会话，提取其回复前 800 字供模型参考，避免每天复读相同结论
+        if (row.lastConversationId && row.kind !== 'once') {
+            try {
+                const [prevMsg] = await db
+                    .select({ parts: messages.parts })
+                    .from(messages)
+                    .where(and(eq(messages.conversationId, row.lastConversationId), eq(messages.role, 'assistant')))
+                    .orderBy(desc(messages.seq))
+                    .limit(1);
+                const prevText = Array.isArray(prevMsg?.parts)
+                    ? (prevMsg.parts as Array<{ type?: string; text?: string }>)
+                          .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+                          .map((p) => p.text)
+                          .join('')
+                          .trim()
+                          .slice(0, 800)
+                    : '';
+                if (prevText) {
+                    const continuityBlock = `【上一轮定时执行产出摘要（请优先汇报增量变化，避免重复相同内容）】\n${prevText}`;
+                    knowledgeContext = knowledgeContext ? `${knowledgeContext}\n\n${continuityBlock}` : continuityBlock;
+                }
+            } catch {
+                // 忽略读取上一轮摘要异常
+            }
+        }
+
         const [space] = row.spaceId
-            ? await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, row.spaceId))
+            ? await db
+                  .select({ name: spaces.name, instructions: spaces.instructions, localRoot: spaces.localRoot })
+                  .from(spaces)
+                  .where(eq(spaces.id, row.spaceId))
             : [];
         const { model } = await resolveModel(agent.providerId, agent.model);
 
-        const localTools = buildLocalFileTools();
+        const localTools = buildLocalFileTools(space?.localRoot || undefined);
         let toolSet = {
             ...buildWorkbenchTools(row.agentId, row.spaceId),
             ...localTools,
@@ -275,10 +304,6 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
         // 「这一轮有没有留下会话」），TS 不会把回调里的赋值算作收窄，直接插会报 id 可为 null。
         const conversationRowId = crypto.randomUUID();
         const title = `${row.title} · ${shanghaiDateKey(at)}`;
-        // 会话与那句 prompt 仍在调用模型 **之前** 落库（失败的一轮也留得下现场），但两条 INSERT 必须同事务、
-        // 并对父行取锁：`conversations.agent_id` 是 cascade，上面那次读到这里之间智能体可能已被删掉，
-        // 裸插撞 23503 会让这一轮白烧一次外呼，还留下一条永远读不到归属的会话。
-        // 与 POST /api/conversations、/api/chat 同一道闸门（见 utils/ref-lock）。
         await db.transaction(async (tx) => {
             await lockAgentRow(tx, row.agentId);
             await tx.insert(conversations).values({ id: conversationRowId, agentId: row.agentId, spaceId: row.spaceId, title });
@@ -289,31 +314,43 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
                 parts: [{ type: 'text', text: row.prompt }],
             });
         });
-        // 事务提交之后才认这条会话：插入失败（智能体被并发删除、库断连）时它并不存在，
-        // 提前赋值会让失败结论带着一个死 id 写进 lastConversationId——`/tasks` 那行的
-        // 「打开运行结果」于是永远点进一条 404。
         conversationId = conversationRowId;
 
-        const { text } = await generateText({
-            model,
-            system: buildSystemPrompt(
-                agent,
-                boundSkillRows.map((r) => r.skill),
-                knowledgeContext,
-                toolSummary,
-                undefined,
-                space,
-            ),
-            prompt: row.prompt,
-            tools: toolSet,
-            stopWhen: stepCountIs(agent.maxSteps),
-            temperature: agent.temperature ?? undefined,
-            maxOutputTokens: agent.maxTokens ?? undefined,
-            timeout: { firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: CHUNK_TIMEOUT_MS, toolMs: TOOL_TIMEOUT_MS },
-            abortSignal: AbortSignal.timeout(RUN_TOTAL_BUDGET_MS),
-        });
-        const content = text.trim().slice(0, RESULT_TEXT_MAX);
-        if (!content) throw new RunFailure('模型没有返回可用正文');
+        const systemPromptText = buildSystemPrompt(
+            agent,
+            boundSkillRows.map((r) => r.skill),
+            knowledgeContext,
+            toolSummary,
+            undefined,
+            space,
+        );
+
+        let generatedText = '';
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                if (attempt > 1) {
+                    await db.update(automationRuns).set({ attempt }).where(eq(automationRuns.id, runId));
+                    await new Promise((r) => setTimeout(r, 1500));
+                }
+                const { text } = await generateText({
+                    model,
+                    system: systemPromptText,
+                    prompt: row.prompt,
+                    tools: toolSet,
+                    stopWhen: stepCountIs(agent.maxSteps),
+                    temperature: agent.temperature ?? undefined,
+                    maxOutputTokens: agent.maxTokens ?? undefined,
+                    timeout: { firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: CHUNK_TIMEOUT_MS, toolMs: TOOL_TIMEOUT_MS },
+                    abortSignal: AbortSignal.timeout(RUN_TOTAL_BUDGET_MS),
+                });
+                generatedText = text.trim().slice(0, RESULT_TEXT_MAX);
+                if (!generatedText) throw new RunFailure('模型没有返回可用正文');
+                break;
+            } catch (err) {
+                if (attempt >= 2) throw err;
+            }
+        }
+        const content = generatedText;
         await db.insert(messages).values({ id: `cmsg_${crypto.randomUUID()}`, conversationId, role: 'assistant', parts: [{ type: 'text', text: content }] });
         await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
         return { ok: true, conversationId, runId };

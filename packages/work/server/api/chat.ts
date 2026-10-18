@@ -17,6 +17,7 @@ import {
 import { beginChatRun, endChatRun, tapChatRun, type ChatRun } from '../utils/chat-runs';
 import { retrieveContext } from '../utils/embedding';
 import { JSONB_MAX_DEPTH, exceedsJsonDepth } from '../utils/jsonb-input';
+import { isTextLikeAttachment, readAttachmentBuffer } from '../utils/kb-ingest';
 import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from '../utils/mcp';
 import { requireMethod } from '../utils/method';
@@ -384,7 +385,10 @@ export default defineEventHandler(async (event) => {
     }
     const conversation = row!;
     const [space] = conversation.spaceId
-        ? await db.select({ name: spaces.name, instructions: spaces.instructions }).from(spaces).where(eq(spaces.id, conversation.spaceId))
+        ? await db
+              .select({ name: spaces.name, instructions: spaces.instructions, localRoot: spaces.localRoot })
+              .from(spaces)
+              .where(eq(spaces.id, conversation.spaceId))
         : [];
     const spaceKbIds = boundKbIds.length
         ? (
@@ -486,7 +490,7 @@ export default defineEventHandler(async (event) => {
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
     //     用户说「每天九点跑一遍」「今天有什么安排」时不该取决于所选智能体恰好绑了哪几行工具。
     //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
-    const localTools = buildLocalFileTools();
+    const localTools = buildLocalFileTools(space?.localRoot || undefined);
     let toolSet = {
         ...buildWorkbenchTools(agentId, conversation.spaceId),
         ...localTools,
@@ -529,30 +533,63 @@ export default defineEventHandler(async (event) => {
         // 12. 流式生成（带温度、Token 限制与思维链传递）
         /**
          * 私有桶附件在历史里以站内路径 `/api/attachments/{id}/raw` 形式保存：
-         * 浏览器能带 cookie 读取（会话 UI 正常显示），但**模型侧无法抓取**该地址。
-         * 直接交给 convertToModelMessages 会让部分供应商尝试下载并失败，
-         * 因此这里把这类 part 转成文字说明，模型至少知道"用户附了一个什么文件"。
+         * 浏览器能带 cookie 读取（会话 UI 正常显示），但**模型侧无法直接抓取**该相对地址。
+         * 对最近 6 条消息内的站内附件：
+         * - 文本/代码类（<=64KB）直接从 S3 读取 UTF-8 正文注入模型消息
+         * - 图片类（<=4MB）读取并转为 base64 Data URL 供多模态模型直接查看
+         * - 其余（过早历史、大体积二进制或读取失败）安全回退为文件名说明
          */
-        const toModelParts = (parts: unknown[]) =>
-            parts.map((part) => {
-                const p = part as { type?: string; url?: string; filename?: string; mediaType?: string };
-                if ((p?.type === 'file' || p?.type === 'image') && typeof p.url === 'string' && p.url.startsWith('/api/')) {
-                    return {
-                        type: 'text' as const,
-                        text: `[用户附带了文件：${p.filename || '未命名'}（${p.mediaType || '未知类型'}）]`,
-                    };
-                }
-                return part;
-            });
+        const MAX_INLINE_TEXT_BYTES = 64 * 1024;
+        const MAX_INLINE_IMAGE_BYTES = 4 * 1024 * 1024;
+        const resolveModelParts = async (parts: unknown[], isRecent: boolean) =>
+            Promise.all(
+                parts.map(async (part) => {
+                    const p = part as { type?: string; url?: string; filename?: string; mediaType?: string };
+                    if ((p?.type === 'file' || p?.type === 'image') && typeof p.url === 'string' && p.url.startsWith('/api/')) {
+                        const stub = {
+                            type: 'text' as const,
+                            text: `[用户附带了文件：${p.filename || '未命名'}（${p.mediaType || '未知类型'}）]`,
+                        };
+                        if (!isRecent) return stub;
+                        const attId = internalAttachmentId(p.url);
+                        if (!attId) return stub;
+                        try {
+                            const filename = p.filename || '未命名';
+                            const mediaType = p.mediaType || 'application/octet-stream';
+                            if (isTextLikeAttachment(filename, mediaType)) {
+                                const { buffer, truncated } = await readAttachmentBuffer(attId, MAX_INLINE_TEXT_BYTES, true);
+                                const content = stripNull(buffer.toString('utf-8')).trim();
+                                if (!content) return stub;
+                                return {
+                                    type: 'text' as const,
+                                    text: `[用户附带了文件：${filename}（${mediaType}）${truncated ? '（已截取前 64KB）' : ''}]\n\`\`\`\n${content}\n\`\`\``,
+                                };
+                            }
+                            if (mediaType.toLowerCase().startsWith('image/')) {
+                                const { buffer } = await readAttachmentBuffer(attId, MAX_INLINE_IMAGE_BYTES, false);
+                                return {
+                                    ...p,
+                                    url: `data:${mediaType};base64,${buffer.toString('base64')}`,
+                                };
+                            }
+                        } catch {
+                            return stub;
+                        }
+                        return stub;
+                    }
+                    return part;
+                }),
+            );
 
-        const modelMessages = await convertToModelMessages(
-            optimizedWindow.map((m) => ({ id: '', role: m.role as UIMessage['role'], parts: toModelParts(m.parts as unknown[]) as UIMessage['parts'] })),
-            // 中断的那一轮会把「只有入参、没有结果」的工具调用原样落库（onFinish 在流被 cancel 时
-            // 同样会跑，且落库只看 parts 非空、不看 isAborted）。这种 part 会发出一个没有配套
-            // tool 结果的 tool_calls，OpenAI 兼容端点据此 400 掉整次请求，于是该会话此后每轮都失败、
-            // 每轮都白跑一次请求，直到那条历史滑出 24 条窗口。读取侧过滤同时能救回已被污染的既有会话。
-            { ignoreIncompleteToolCalls: true },
+        const resolvedWindow = await Promise.all(
+            optimizedWindow.map(async (m, idx) => ({
+                id: '',
+                role: m.role as UIMessage['role'],
+                parts: (await resolveModelParts(m.parts as unknown[], idx >= optimizedWindow.length - 6)) as UIMessage['parts'],
+            })),
         );
+
+        const modelMessages = await convertToModelMessages(resolvedWindow, { ignoreIncompleteToolCalls: true });
         const maxSteps = agent.maxSteps ?? 6;
 
         /**

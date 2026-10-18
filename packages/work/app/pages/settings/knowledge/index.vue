@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import type { KnowledgeBaseItem } from '../../utils/knowledge';
+import type { KnowledgeBaseItem } from '../../../utils/knowledge';
 
 definePageMeta({ layout: 'settings' });
 

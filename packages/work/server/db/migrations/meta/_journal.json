@@ -1,48 +1,55 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1791997837107,
-            "tag": "0000_superb_the_captain",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1792212049468,
-            "tag": "0001_schedules",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "7",
-            "when": 1792221842029,
-            "tag": "0002_drop_notes_briefs",
-            "breakpoints": true
-        },
-        {
-            "idx": 3,
-            "version": "7",
-            "when": 1792229440195,
-            "tag": "0003_amusing_green_goblin",
-            "breakpoints": true
-        },
-        {
-            "idx": 4,
-            "version": "7",
-            "when": 1792233934380,
-            "tag": "0004_equal_rumiko_fujikawa",
-            "breakpoints": true
-        },
-        {
-            "idx": 5,
-            "version": "7",
-            "when": 1792246084906,
-            "tag": "0005_known_robbie_robertson",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791997837107,
+      "tag": "0000_superb_the_captain",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792212049468,
+      "tag": "0001_schedules",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792221842029,
+      "tag": "0002_drop_notes_briefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792229440195,
+      "tag": "0003_amusing_green_goblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792233934380,
+      "tag": "0004_equal_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792246084906,
+      "tag": "0005_known_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792295121414,
+      "tag": "0006_fixed_lockjaw",
+      "breakpoints": true
+    }
+  ]
 }

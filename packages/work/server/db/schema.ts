@@ -29,6 +29,8 @@ export const spaces = pgTable('spaces', {
     description: text('description').notNull().default(''),
     icon: text('icon').notNull().default('🗂️'),
     instructions: text('instructions').notNull().default(''),
+    defaultAgentId: text('default_agent_id'),
+    localRoot: text('local_root').notNull().default(''),
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDateTime, type AttachmentsResponse } from '@commons/contract';
+import { extractApiError, formatDateTime, type AttachmentsResponse } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
 import type { WorkConversationSummary, WorkSchedule } from '../../utils/work';
 
@@ -9,6 +9,10 @@ interface SpaceDetail {
     description: string;
     icon: string;
     instructions: string;
+    defaultAgentId?: string | null;
+    defaultAgentName?: string | null;
+    defaultAgentEmoji?: string | null;
+    localRoot?: string;
     archived: boolean;
     createdAt: string;
     updatedAt: string;
@@ -38,6 +42,7 @@ interface KbItem {
 
 const { t } = useI18n();
 const route = useRoute();
+const { agents, refreshSpaces } = useChatSidebar();
 const id = computed(() => route.params.id as string);
 const keyword = ref('');
 
@@ -65,6 +70,71 @@ const { data: runData, refresh: refreshRuns } = await useFetch<RunsResponse>('/a
 
 watch(id, () => {
     void Promise.all([refreshSpace(), refreshConversations(), refreshSchedules(), refreshAttachments(), refreshKbs(), refreshRuns()]);
+});
+
+const editOpen = ref(false);
+const saving = ref(false);
+const editError = ref('');
+const editForm = reactive({
+    name: '',
+    description: '',
+    icon: '🗂️',
+    instructions: '',
+    defaultAgentId: '',
+    localRoot: '',
+});
+
+function openEdit() {
+    if (!space.value) return;
+    Object.assign(editForm, {
+        name: space.value.name,
+        description: space.value.description,
+        icon: space.value.icon,
+        instructions: space.value.instructions,
+        defaultAgentId: space.value.defaultAgentId ?? '',
+        localRoot: space.value.localRoot ?? '',
+    });
+    editError.value = '';
+    editOpen.value = true;
+}
+
+async function saveEdit() {
+    if (!space.value || saving.value) return;
+    const name = editForm.name.trim();
+    if (!name) {
+        editError.value = t('spaces.nameRequired');
+        return;
+    }
+    saving.value = true;
+    editError.value = '';
+    try {
+        await $fetch(`/api/spaces/${encodeURIComponent(space.value.id)}`, {
+            method: 'PATCH',
+            body: {
+                name,
+                description: editForm.description.trim(),
+                icon: editForm.icon.trim() || '🗂️',
+                instructions: editForm.instructions.trim(),
+                defaultAgentId: editForm.defaultAgentId || null,
+                localRoot: editForm.localRoot.trim(),
+            },
+        });
+        editOpen.value = false;
+        await refreshSpace();
+        await refreshSpaces();
+    } catch (e) {
+        editError.value = extractApiError(e, t('spaces.saveFailed'));
+    } finally {
+        saving.value = false;
+    }
+}
+
+const newChatUrl = computed(() => {
+    if (!space.value) return '/chat';
+    if (space.value.defaultAgentId) {
+        return `/chat/${encodeURIComponent(space.value.defaultAgentId)}?space=${encodeURIComponent(space.value.id)}`;
+    }
+    return `/chat?space=${encodeURIComponent(space.value.id)}`;
 });
 
 const attachments = computed(() => attachmentData.value?.attachments ?? []);
@@ -102,8 +172,15 @@ function conversationPath(conversation: WorkConversationSummary) {
                         <h1 class="app-page-title text-strong flex flex-wrap items-center gap-2">
                             <span class="truncate">{{ space.name }}</span>
                             <span v-if="space.archived" class="app-badge app-badge-neutral !text-[10px]">{{ t('spaces.archived') }}</span>
+                            <span v-if="space.defaultAgentName" class="app-chip app-chip-brand !px-2 !py-0.5 !text-[10px]">
+                                {{ space.defaultAgentEmoji || '🤖' }} {{ space.defaultAgentName }}
+                            </span>
                         </h1>
                         <p class="app-page-subtitle">{{ space.description || t('spaceDetail.noDescription') }}</p>
+                        <p v-if="space.localRoot" class="text-faint mt-1 flex items-center gap-1.5 font-mono text-[11px]">
+                            <AppIcon name="folder-outline" :size="13" />
+                            <span class="truncate">{{ space.localRoot }}</span>
+                        </p>
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -113,11 +190,14 @@ function conversationPath(conversation: WorkConversationSummary) {
                         :placeholder="t('spaceDetail.searchPlaceholder')"
                         :aria-label="t('spaceDetail.searchPlaceholder')"
                     />
-                    <NuxtLink v-if="!space.archived" :to="`/chat?space=${encodeURIComponent(space.id)}`" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">
+                    <NuxtLink v-if="!space.archived" :to="newChatUrl" class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs">
                         <AppIcon name="plus" :size="14" />
                         <span>{{ t('spaceDetail.newChat') }}</span>
                     </NuxtLink>
-                    <NuxtLink to="/spaces" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs">{{ t('spaceDetail.manage') }}</NuxtLink>
+                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" @click="openEdit">
+                        {{ t('common.edit') }}
+                    </button>
+                    <NuxtLink to="/spaces" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs">{{ t('spaceDetail.back') }}</NuxtLink>
                 </div>
             </div>
 
@@ -139,7 +219,10 @@ function conversationPath(conversation: WorkConversationSummary) {
             </div>
 
             <section v-if="space.instructions" class="app-card p-4">
-                <h2 class="text-sm font-black">{{ t('spaceDetail.instructions') }}</h2>
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-sm font-black">{{ t('spaceDetail.instructions') }}</h2>
+                    <button type="button" class="text-hover-brand text-[11px] font-bold" @click="openEdit">{{ t('common.edit') }}</button>
+                </div>
                 <pre class="text-soft mt-2 text-xs leading-relaxed break-words whitespace-pre-wrap">{{ space.instructions }}</pre>
             </section>
 
@@ -152,9 +235,7 @@ function conversationPath(conversation: WorkConversationSummary) {
                 <section class="app-card overflow-hidden">
                     <div class="border-line flex items-center justify-between border-b px-4 py-3">
                         <h2 class="text-sm font-black">{{ t('spaceDetail.conversations') }}</h2>
-                        <NuxtLink :to="`/chat?space=${encodeURIComponent(space.id)}`" class="text-hover-brand text-[11px] font-bold">{{
-                            t('spaceDetail.newChat')
-                        }}</NuxtLink>
+                        <NuxtLink :to="newChatUrl" class="text-hover-brand text-[11px] font-bold">{{ t('spaceDetail.newChat') }}</NuxtLink>
                     </div>
                     <div v-if="filteredConversations.length" class="divide-line divide-y">
                         <NuxtLink
@@ -234,7 +315,7 @@ function conversationPath(conversation: WorkConversationSummary) {
                 <section class="app-card overflow-hidden">
                     <div class="border-line flex items-center justify-between border-b px-4 py-3">
                         <h2 class="text-sm font-black">{{ t('spaceDetail.knowledge') }}</h2>
-                        <NuxtLink :to="`/settings/knowledge?spaceId=${encodeURIComponent(space.id)}`" class="text-hover-brand text-[11px] font-bold">{{
+                        <NuxtLink :to="`/library?space=${encodeURIComponent(space.id)}&tab=knowledge`" class="text-hover-brand text-[11px] font-bold">{{
                             t('spaceDetail.manage')
                         }}</NuxtLink>
                     </div>
@@ -287,6 +368,57 @@ function conversationPath(conversation: WorkConversationSummary) {
                     <p class="app-empty-desc">{{ keyword ? t('spaceDetail.noMatches') : t('spaceDetail.noRuns') }}</p>
                 </div>
             </section>
+
+            <AdminDrawer :open="editOpen" :title="t('spaces.edit')" width-class="sm:max-w-xl" @close="editOpen = false">
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="app-dropdown-label !px-0">{{ t('spaces.name') }}</span>
+                        <input v-model="editForm.name" class="app-input" maxlength="60" :placeholder="t('spaces.namePlaceholder')" />
+                    </label>
+                    <div class="grid grid-cols-[90px_minmax(0,1fr)] gap-3">
+                        <label class="block">
+                            <span class="app-dropdown-label !px-0">{{ t('spaces.icon') }}</span>
+                            <input v-model="editForm.icon" class="app-input text-center" maxlength="16" :placeholder="t('spaces.iconPlaceholder')" />
+                        </label>
+                        <label class="block">
+                            <span class="app-dropdown-label !px-0">{{ t('spaces.description') }}</span>
+                            <input v-model="editForm.description" class="app-input" maxlength="500" :placeholder="t('spaces.descPlaceholder')" />
+                        </label>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="block">
+                            <span class="app-dropdown-label !px-0">{{ t('spaces.defaultAgent') }}</span>
+                            <select v-model="editForm.defaultAgentId" class="app-input">
+                                <option value="">{{ t('spaces.defaultAgentNone') }}</option>
+                                <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.emoji || '🤖' }} {{ agent.name }}</option>
+                            </select>
+                            <span class="text-faint mt-1 block text-[11px]">{{ t('spaces.defaultAgentHint') }}</span>
+                        </label>
+                        <label class="block">
+                            <span class="app-dropdown-label !px-0">{{ t('spaces.localRoot') }}</span>
+                            <input
+                                v-model="editForm.localRoot"
+                                class="app-input !font-mono !text-xs"
+                                maxlength="500"
+                                :placeholder="t('spaces.localRootPlaceholder')"
+                            />
+                            <span class="text-faint mt-1 block text-[11px]">{{ t('spaces.localRootHint') }}</span>
+                        </label>
+                    </div>
+                    <label class="block">
+                        <span class="app-dropdown-label !px-0">{{ t('spaces.instructions') }}</span>
+                        <textarea v-model="editForm.instructions" class="app-input" rows="8" maxlength="4000" />
+                        <span class="text-faint mt-1 block text-[11px]">{{ t('spaces.instructionsHint') }}</span>
+                    </label>
+                    <p v-if="editError" class="app-help-error">{{ editError }}</p>
+                </div>
+                <template #footer>
+                    <div class="flex w-full items-center justify-end gap-2">
+                        <button type="button" class="app-btn app-btn-ghost" :disabled="saving" @click="editOpen = false">{{ t('common.cancel') }}</button>
+                        <button type="button" class="app-btn app-btn-primary" :disabled="saving" @click="saveEdit">{{ t('common.save') }}</button>
+                    </div>
+                </template>
+            </AdminDrawer>
         </template>
     </div>
 </template>

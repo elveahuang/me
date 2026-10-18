@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Chat } from '@ai-sdk/vue';
+import { Markdown } from '@comark/vue';
 import { extractApiError, formatBytes, formatDateTime } from '@commons/contract';
 import type { AgentDetail, AgentSummary, AttachmentRecord, AttachmentsResponse } from '@commons/contract';
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from 'ai';
@@ -77,7 +78,7 @@ watch(
     },
 );
 const input = ref('');
-const inputRef = ref<HTMLInputElement | null>(null);
+const inputRef = ref<HTMLTextAreaElement | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
 
 /**
@@ -619,6 +620,172 @@ function exportMarkdown() {
 }
 
 const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.starterPrompts.1'), t('chat.starterPrompts.2')]);
+
+/* ---------------- 工作台右侧检视栏（Context & Artifact Inspector）与消息沉淀 ---------------- */
+
+const router = useRouter();
+const inspectorOpen = ref(false);
+const inspectorTab = ref<'context' | 'artifact'>('context');
+const inspectedText = ref('');
+const artifactCopied = ref(false);
+
+const latestAssistantText = computed(() => {
+    const msgs = chat.value?.messages ?? [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m?.role === 'assistant' && Array.isArray(m.parts)) {
+            const text = m.parts
+                .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+                .map((p: any) => p.text)
+                .join('\n')
+                .trim();
+            if (text) return text;
+        }
+    }
+    return '';
+});
+
+const effectiveArtifactText = computed(() => inspectedText.value || latestAssistantText.value);
+
+function openArtifactInspector(payload: { text: string }) {
+    inspectedText.value = payload.text;
+    inspectorTab.value = 'artifact';
+    inspectorOpen.value = true;
+}
+
+async function copyArtifactText() {
+    if (!effectiveArtifactText.value) return;
+    try {
+        await navigator.clipboard.writeText(effectiveArtifactText.value);
+        artifactCopied.value = true;
+        setTimeout(() => {
+            artifactCopied.value = false;
+        }, 1800);
+    } catch {
+        // ignore
+    }
+}
+
+function downloadArtifactMarkdown() {
+    if (!effectiveArtifactText.value) return;
+    const title = activeConversationTitle.value || t('chat.newChat');
+    downloadMarkdownFile(`${title}_artifact`, effectiveArtifactText.value);
+}
+
+function turnMessageIntoSchedule(payload: { text: string; role: string }) {
+    const clean = payload.text.trim();
+    if (!clean) return;
+    const firstLine =
+        clean
+            .split('\n')[0]
+            ?.replace(/^[#*\-\s]+/, '')
+            .trim()
+            .slice(0, 40) || t('chat.newChat');
+    void router.push({
+        path: '/tasks',
+        query: {
+            new: '1',
+            title: firstLine,
+            prompt: clean.slice(0, 2000),
+            ...(props.agentId ? { agentId: props.agentId } : {}),
+            ...(props.spaceId ? { spaceId: props.spaceId } : {}),
+        },
+    });
+}
+
+// 一键将消息/产物存入知识库
+interface KbOption {
+    id: string;
+    name: string;
+    spaceId: string | null;
+}
+const saveKbOpen = ref(false);
+const saveKbOptions = ref<KbOption[]>([]);
+const saveKbTargetId = ref('');
+const saveKbTitle = ref('');
+const saveKbContent = ref('');
+const saveKbBusy = ref(false);
+const saveKbError = ref('');
+const saveKbSuccess = ref('');
+
+async function openSaveKnowledgeModal(payload: { text: string; role?: string }) {
+    const clean = payload.text.trim();
+    if (!clean) return;
+    saveKbContent.value = clean;
+    const firstLine =
+        clean
+            .split('\n')[0]
+            ?.replace(/^[#*\-\s]+/, '')
+            .trim()
+            .slice(0, 60) ||
+        activeConversationTitle.value ||
+        t('chat.newChat');
+    saveKbTitle.value = firstLine;
+    saveKbError.value = '';
+    saveKbSuccess.value = '';
+    saveKbOpen.value = true;
+    try {
+        const rows = await $fetch<KbOption[]>('/api/settings/knowledge-bases', {
+            query: props.spaceId ? { spaceId: props.spaceId } : undefined,
+        });
+        saveKbOptions.value = rows;
+        saveKbTargetId.value = rows[0]?.id ?? '';
+    } catch {
+        saveKbOptions.value = [];
+    }
+}
+
+async function submitSaveKnowledge() {
+    if (!saveKbContent.value.trim()) return;
+    saveKbBusy.value = true;
+    saveKbError.value = '';
+    try {
+        let kbId = saveKbTargetId.value;
+        if (!kbId) {
+            const created = await $fetch<{ id: string }>('/api/settings/knowledge-bases', {
+                method: 'POST',
+                body: {
+                    name: props.spaceName ? `${props.spaceName} 知识库` : t('chat.defaultKbName'),
+                    description: t('chat.defaultKbDesc'),
+                    spaceId: props.spaceId || null,
+                    embeddingModel: 'text-embedding-3-small',
+                },
+            });
+            kbId = created.id;
+        }
+        await $fetch(`/api/settings/knowledge-bases/${encodeURIComponent(kbId)}/documents`, {
+            method: 'POST',
+            body: {
+                title: saveKbTitle.value.trim() || t('chat.newChat'),
+                content: saveKbContent.value,
+            },
+        });
+        saveKbOpen.value = false;
+        saveKbSuccess.value = t('chat.saveToKnowledgeSuccess');
+        setTimeout(() => {
+            saveKbSuccess.value = '';
+        }, 3500);
+    } catch (e) {
+        saveKbError.value = extractApiError(e, t('common.saveFailed'));
+    } finally {
+        saveKbBusy.value = false;
+    }
+}
+
+function insertSkillPrompt(skillName: string) {
+    const prefix = `[${skillName}] `;
+    if (!input.value.startsWith(prefix)) {
+        input.value = `${prefix}${input.value}`;
+    }
+    void nextTick(() => inputRef.value?.focus());
+}
+
+function onInputKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        void handleSubmit();
+    }
+}
 </script>
 
 <template>
@@ -636,133 +803,335 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
             :mcp-count="agent?.mcpServers?.length ?? 0"
             :switchable="switchable"
             :has-messages="Boolean(chat?.messages?.length)"
+            :inspector-open="inspectorOpen"
             @open-history="emit('open-history')"
             @open-agent-picker="openAgentPicker"
             @export="exportMarkdown"
+            @toggle-inspector="inspectorOpen = !inspectorOpen"
             @new-chat="emit('update:conversationId', null)"
         />
 
-        <!-- 消息列表与冷启动卡片 -->
-        <div ref="scrollRef" class="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" style="background-color: var(--surface-2)" @scroll="onScroll">
-            <template v-if="chat && chat.messages.length > 0">
-                <ChatMessage v-for="m in chat.messages" :key="m.id" :message="m" />
-                <div v-if="chat.status === 'submitted'" class="text-faint flex items-center gap-2 py-2 text-xs" role="status">
-                    <span class="inline-block animate-spin" aria-hidden="true">🌀</span>
-                    <span>{{ t('chat.thinking') }}</span>
-                </div>
-
-                <!-- 生成失败：给出可读原因与重试入口。role="alert" 让读屏立刻念出原因，
-                     否则右上角的流式样式变化是唯一反馈，视觉之外无从得知这一轮已经失败 -->
-                <div v-if="chat.error" class="app-alert-danger rounded-2xl border p-4 text-xs" role="alert">
-                    <div class="flex items-center justify-between">
-                        <span>{{ errorText }}</span>
-                        <button class="font-bold underline" @click="handleRegenerate">{{ t('common.retry') }}</button>
-                    </div>
-                </div>
-            </template>
-
-            <ChatEmptyState
-                v-else
-                :agent-id="props.agentId"
-                :agent-emoji="agentEmoji"
-                :agent-name="agentName"
-                :description="headerDescription"
-                :starter-prompts="starterPrompts"
-                :switchable="switchable"
-                @open-agent-picker="openAgentPicker"
-                @send="handleSubmit"
-                @fill="fillPrompt"
-            />
+        <div
+            v-if="saveKbSuccess"
+            class="flex items-center justify-between border-b px-4 py-2 text-xs font-semibold"
+            style="border-color: var(--line); background-color: var(--brand-soft); color: var(--brand)"
+        >
+            <span>✓ {{ saveKbSuccess }}</span>
+            <button type="button" class="text-xs opacity-70 hover:opacity-100" @click="saveKbSuccess = ''">✕</button>
         </div>
 
-        <!-- 回到底部悬浮微按钮 -->
-        <div v-if="showScrollBottom" class="absolute right-6 bottom-24 z-20 transition-all duration-200">
-            <button
-                type="button"
-                class="bg-primary-600 hover:bg-primary-700 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-[color:var(--on-brand)] shadow-md transition-transform active:scale-95"
-                @click="scrollToBottom"
-            >
-                <span>↓ {{ t('chat.scrollToBottom') }}</span>
-                <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-[color:var(--warning)]" />
-            </button>
-        </div>
+        <div class="flex min-h-0 flex-1 overflow-hidden">
+            <!-- 左侧对话主列 -->
+            <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+                <!-- 消息列表与冷启动卡片 -->
+                <div ref="scrollRef" class="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" style="background-color: var(--surface-2)" @scroll="onScroll">
+                    <template v-if="chat && chat.messages.length > 0">
+                        <ChatMessage
+                            v-for="m in chat.messages"
+                            :key="m.id"
+                            :message="m"
+                            @save-knowledge="openSaveKnowledgeModal"
+                            @create-schedule="turnMessageIntoSchedule"
+                            @inspect-artifact="openArtifactInspector"
+                        />
+                        <div v-if="chat.status === 'submitted'" class="text-faint flex items-center gap-2 py-2 text-xs" role="status">
+                            <span class="inline-block animate-spin" aria-hidden="true">🌀</span>
+                            <span>{{ t('chat.thinking') }}</span>
+                        </div>
 
-        <!-- 发送前本地错误（建会话失败）与会话历史加载失败：不渲染就会被误当成空会话 -->
-        <div v-if="submitError || loadError" class="app-alert app-alert-danger" role="alert">
-            <div class="flex items-center justify-between gap-3">
-                <span>{{ submitError || loadError }}</span>
-                <button
-                    v-if="loadError && !submitError && failedConversationId"
-                    type="button"
-                    class="font-bold underline"
-                    @click="loadConversation(failedConversationId)"
-                >
-                    {{ t('common.retry') }}
-                </button>
-            </div>
-        </div>
+                        <!-- 生成失败：给出可读原因与重试入口 -->
+                        <div v-if="chat.error" class="app-alert-danger rounded-2xl border p-4 text-xs" role="alert">
+                            <div class="flex items-center justify-between">
+                                <span>{{ errorText }}</span>
+                                <button class="font-bold underline" @click="handleRegenerate">{{ t('common.retry') }}</button>
+                            </div>
+                        </div>
+                    </template>
 
-        <!-- 输入栏 -->
-        <form class="p-3.5" style="border-top: 1px solid var(--line); background-color: var(--surface)" @submit.prevent="() => handleSubmit()">
-            <!-- 待发送附件 -->
-            <div v-if="pendingAttachments.length" class="mb-2 flex flex-wrap gap-2">
-                <span v-for="a in pendingAttachments" :key="a.id" class="app-chip max-w-[14rem] !py-1">
-                    <AppIcon :name="a.isImage ? 'file-image-outline' : 'file-outline'" :size="13" />
-                    <span class="truncate">{{ a.filename }}</span>
-                    <span class="text-faint text-[10px]">{{ formatBytes(a.size) }}</span>
-                    <button type="button" class="text-faint text-hover-strong -m-1 p-1.5" :title="t('common.delete')" @click="removePending(a.id)">✕</button>
-                </span>
-            </div>
-            <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]" role="alert">{{ attachError }}</div>
-
-            <div class="relative flex items-center gap-2.5">
-                <!-- 附件入口：选择已有附件或直接上传 -->
-                <button
-                    type="button"
-                    class="app-btn app-btn-ghost app-btn-icon shrink-0"
-                    :title="t('chat.attach')"
-                    :disabled="uploadingInChat"
-                    @click="openAttachPicker"
-                >
-                    <AppIcon name="paperclip" :size="18" />
-                </button>
-                <input ref="chatFileInput" type="file" class="hidden" @change="onChatFileChange" />
-
-                <div class="relative flex-1">
-                    <input
-                        ref="inputRef"
-                        v-model="input"
-                        :placeholder="t('chat.inputPlaceholder')"
-                        :aria-label="t('chat.inputPlaceholder')"
-                        class="app-input !pr-8"
+                    <ChatEmptyState
+                        v-else
+                        :agent-id="props.agentId"
+                        :agent-emoji="agentEmoji"
+                        :agent-name="agentName"
+                        :description="headerDescription"
+                        :starter-prompts="starterPrompts"
+                        :switchable="switchable"
+                        @open-agent-picker="openAgentPicker"
+                        @send="handleSubmit"
+                        @fill="fillPrompt"
                     />
+                </div>
+
+                <!-- 回到底部悬浮微按钮 -->
+                <div v-if="showScrollBottom" class="absolute right-6 bottom-28 z-20 transition-all duration-200">
                     <button
-                        v-if="input"
                         type="button"
-                        class="text-faint text-hover-strong absolute top-1/2 right-1.5 -translate-y-1/2 p-1.5 text-xs"
-                        :title="t('chat.clearInput')"
-                        @click="input = ''"
+                        class="bg-primary-600 hover:bg-primary-700 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-[color:var(--on-brand)] shadow-md transition-transform active:scale-95"
+                        @click="scrollToBottom"
                     >
-                        ✕
+                        <span>↓ {{ t('chat.scrollToBottom') }}</span>
+                        <span v-if="hasNewMessage" class="flex h-2 w-2 animate-ping rounded-full bg-[color:var(--warning)]" />
                     </button>
                 </div>
-                <button
-                    v-if="chat?.status === 'streaming' || chat?.status === 'submitted'"
-                    type="button"
-                    class="app-btn app-btn-outline"
-                    @click="stopGeneration"
-                >
-                    {{ t('chat.stop') }}
-                </button>
-                <button v-else type="submit" class="app-btn app-btn-primary !px-6" :disabled="submitting">
-                    {{ t('chat.send') }}
-                </button>
+
+                <!-- 发送前本地错误（建会话失败）与会话历史加载失败 -->
+                <div v-if="submitError || loadError" class="app-alert app-alert-danger" role="alert">
+                    <div class="flex items-center justify-between gap-3">
+                        <span>{{ submitError || loadError }}</span>
+                        <button
+                            v-if="loadError && !submitError && failedConversationId"
+                            type="button"
+                            class="font-bold underline"
+                            @click="loadConversation(failedConversationId)"
+                        >
+                            {{ t('common.retry') }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 输入栏（多行自适应 + 快捷上下文与技能条） -->
+                <form class="p-3.5" style="border-top: 1px solid var(--line); background-color: var(--surface)" @submit.prevent="() => handleSubmit()">
+                    <!-- 快捷上下文与技能芯片栏 -->
+                    <div class="mb-2 flex flex-wrap items-center gap-1.5">
+                        <button type="button" class="app-chip !py-0.5 !text-[10px] hover:opacity-90" :disabled="uploadingInChat" @click="openAttachPicker">
+                            <span>@ {{ t('chat.contextAttach') }}</span>
+                        </button>
+                        <button
+                            v-for="sk in agent?.skills ?? []"
+                            :key="sk.id"
+                            type="button"
+                            class="app-chip !py-0.5 !text-[10px] hover:opacity-90"
+                            :title="sk.description"
+                            @click="insertSkillPrompt(sk.name)"
+                        >
+                            <span>🧩 /{{ sk.name }}</span>
+                        </button>
+                    </div>
+
+                    <!-- 待发送附件 -->
+                    <div v-if="pendingAttachments.length" class="mb-2 flex flex-wrap gap-2">
+                        <span v-for="a in pendingAttachments" :key="a.id" class="app-chip max-w-[14rem] !py-1">
+                            <AppIcon :name="a.isImage ? 'file-image-outline' : 'file-outline'" :size="13" />
+                            <span class="truncate">{{ a.filename }}</span>
+                            <span class="text-faint text-[10px]">{{ formatBytes(a.size) }}</span>
+                            <button type="button" class="text-faint text-hover-strong -m-1 p-1.5" :title="t('common.delete')" @click="removePending(a.id)">
+                                ✕
+                            </button>
+                        </span>
+                    </div>
+                    <div v-if="attachError" class="app-alert app-alert-danger mb-2 !text-[11px]" role="alert">{{ attachError }}</div>
+
+                    <div class="relative flex items-end gap-2.5">
+                        <!-- 附件入口：选择已有附件或直接上传 -->
+                        <button
+                            type="button"
+                            class="app-btn app-btn-ghost app-btn-icon shrink-0"
+                            :title="t('chat.attach')"
+                            :disabled="uploadingInChat"
+                            @click="openAttachPicker"
+                        >
+                            <AppIcon name="paperclip" :size="18" />
+                        </button>
+                        <input ref="chatFileInput" type="file" class="hidden" @change="onChatFileChange" />
+
+                        <div class="relative flex-1">
+                            <textarea
+                                ref="inputRef"
+                                v-model="input"
+                                rows="1"
+                                :placeholder="t('chat.inputPlaceholder')"
+                                :aria-label="t('chat.inputPlaceholder')"
+                                class="app-input max-h-36 min-h-[2.375rem] resize-y !py-2 !pr-8 leading-relaxed"
+                                @keydown="onInputKeydown"
+                            />
+                            <button
+                                v-if="input"
+                                type="button"
+                                class="text-faint text-hover-strong absolute top-2 right-1.5 p-1.5 text-xs"
+                                :title="t('chat.clearInput')"
+                                @click="input = ''"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <button
+                            v-if="chat?.status === 'streaming' || chat?.status === 'submitted'"
+                            type="button"
+                            class="app-btn app-btn-outline shrink-0"
+                            @click="stopGeneration"
+                        >
+                            {{ t('chat.stop') }}
+                        </button>
+                        <button v-else type="submit" class="app-btn app-btn-primary shrink-0 !px-6" :disabled="submitting">
+                            {{ t('chat.send') }}
+                        </button>
+                    </div>
+                    <div class="text-faint mt-1.5 flex items-center justify-between px-1 text-[11px] select-none">
+                        <span>💡 {{ t('chat.shortcutHint') }}</span>
+                        <span v-if="input.length > 0">{{ t('chat.charCount', { n: input.length }) }}</span>
+                    </div>
+                </form>
             </div>
-            <div class="text-faint mt-1.5 flex items-center justify-between px-1 text-[11px] select-none">
-                <span>💡 {{ t('chat.shortcutHint') }}</span>
-                <span v-if="input.length > 0">{{ t('chat.charCount', { n: input.length }) }}</span>
+
+            <!-- 右侧可折叠工作台检视栏（Context & Artifact Inspector） -->
+            <aside
+                v-if="inspectorOpen"
+                class="flex w-80 shrink-0 flex-col border-l xl:w-96"
+                style="border-color: var(--line); background-color: var(--surface)"
+            >
+                <div class="flex items-center justify-between border-b px-3.5 py-2.5" style="border-color: var(--line)">
+                    <div class="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            class="app-chip !text-[11px]"
+                            :class="inspectorTab === 'context' ? 'app-chip-brand' : ''"
+                            @click="inspectorTab = 'context'"
+                        >
+                            {{ t('chat.inspectorContext') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="app-chip !text-[11px]"
+                            :class="inspectorTab === 'artifact' ? 'app-chip-brand' : ''"
+                            @click="inspectorTab = 'artifact'"
+                        >
+                            {{ t('chat.inspectorArtifact') }}
+                        </button>
+                    </div>
+                    <button type="button" class="text-faint text-hover-strong text-xs" :aria-label="t('common.close')" @click="inspectorOpen = false">✕</button>
+                </div>
+
+                <!-- Tab 1: 上下文与挂载能力 -->
+                <div v-if="inspectorTab === 'context'" class="flex-1 space-y-4 overflow-y-auto p-4 text-xs">
+                    <div class="app-card space-y-1.5 p-3">
+                        <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.inspectorSpace') }}</p>
+                        <p class="text-strong font-bold">{{ props.spaceName || t('chat.independentChat') }}</p>
+                        <NuxtLink
+                            v-if="props.spaceId"
+                            :to="`/spaces/${encodeURIComponent(props.spaceId)}`"
+                            class="text-hover-brand inline-block text-[11px] font-semibold"
+                        >
+                            {{ t('chat.inspectorEditSpace') }} →
+                        </NuxtLink>
+                    </div>
+
+                    <div class="app-card space-y-1.5 p-3">
+                        <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.inspectorAgent') }}</p>
+                        <p class="text-strong font-bold">{{ agentEmoji }} {{ agentName }}</p>
+                        <p v-if="agent?.model" class="text-faint font-mono text-[11px]">{{ agent.model }} · Temp {{ agent.temperature ?? 0.7 }}</p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-strong font-bold">📚 {{ t('library.knowledge') }} ({{ agent?.knowledgeBases?.length ?? 0 }})</span>
+                            <NuxtLink to="/library?tab=knowledge" class="text-hover-brand text-[11px]">{{ t('common.edit') }}</NuxtLink>
+                        </div>
+                        <div v-if="agent?.knowledgeBases?.length" class="space-y-1.5">
+                            <div v-for="kb in agent.knowledgeBases" :key="kb.id" class="app-card p-2.5">
+                                <p class="text-strong font-semibold">{{ kb.name }}</p>
+                            </div>
+                        </div>
+                        <p v-else class="text-faint text-[11px]">{{ t('chat.inspectorNoKb') }}</p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-strong font-bold">🧩 Skills ({{ agent?.skills?.length ?? 0 }})</span>
+                            <NuxtLink to="/settings/skills" class="text-hover-brand text-[11px]">{{ t('common.edit') }}</NuxtLink>
+                        </div>
+                        <div v-if="agent?.skills?.length" class="flex flex-wrap gap-1.5">
+                            <button v-for="sk in agent.skills" :key="sk.id" type="button" class="app-chip !text-[10px]" @click="insertSkillPrompt(sk.name)">
+                                🧩 {{ sk.name }}
+                            </button>
+                        </div>
+                        <p v-else class="text-faint text-[11px]">{{ t('common.none') }}</p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-strong font-bold">🛠️ Tools & MCP ({{ (agent?.tools?.length ?? 0) + (agent?.mcpServers?.length ?? 0) }})</span>
+                            <NuxtLink to="/settings/mcp" class="text-hover-brand text-[11px]">{{ t('common.edit') }}</NuxtLink>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <span class="app-chip app-chip-brand !text-[10px]">⚡ {{ t('chat.inspectorBuiltinTools') }}</span>
+                            <span v-for="tl in agent?.tools ?? []" :key="tl.id" class="app-chip !text-[10px]">🛠️ {{ tl.name }}</span>
+                            <span v-for="ms in agent?.mcpServers ?? []" :key="ms.id" class="app-chip !text-[10px]">🔌 {{ ms.name }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: 产物阅读与沉淀画布 -->
+                <div v-else class="flex flex-1 flex-col overflow-hidden">
+                    <div v-if="effectiveArtifactText" class="flex items-center justify-between gap-2 border-b px-3.5 py-2" style="border-color: var(--line)">
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" class="app-btn app-btn-outline !px-2 !py-1 !text-[11px]" @click="copyArtifactText">
+                                {{ artifactCopied ? t('common.copied') : t('common.copy') }}
+                            </button>
+                            <button type="button" class="app-btn app-btn-outline !px-2 !py-1 !text-[11px]" @click="downloadArtifactMarkdown">📥 .md</button>
+                        </div>
+                        <button
+                            type="button"
+                            class="app-btn app-btn-primary !px-2.5 !py-1 !text-[11px]"
+                            @click="openSaveKnowledgeModal({ text: effectiveArtifactText })"
+                        >
+                            📚 {{ t('chat.saveToKnowledge') }}
+                        </button>
+                    </div>
+                    <div v-if="effectiveArtifactText" class="flex-1 overflow-y-auto p-4 text-xs leading-relaxed">
+                        <Suspense>
+                            <Markdown :value="effectiveArtifactText" class="markdown-body" />
+                            <template #fallback>
+                                <pre class="whitespace-pre-wrap">{{ effectiveArtifactText }}</pre>
+                            </template>
+                        </Suspense>
+                    </div>
+                    <div v-else class="text-faint flex flex-1 items-center justify-center p-6 text-center text-xs">
+                        {{ t('chat.inspectorArtifactEmpty') }}
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- 一键存入知识库弹层 -->
+        <Teleport to="body">
+            <div
+                v-if="saveKbOpen"
+                class="app-modal-backdrop"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="t('chat.saveToKnowledge')"
+                @click.self="saveKbOpen = false"
+            >
+                <form class="app-card w-full max-w-lg space-y-4 p-5" @submit.prevent="submitSaveKnowledge">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black">📚 {{ t('chat.saveToKnowledge') }}</h3>
+                        <button type="button" class="text-faint text-hover-strong" :aria-label="t('common.close')" @click="saveKbOpen = false">✕</button>
+                    </div>
+                    <div v-if="saveKbError" class="app-alert app-alert-danger !text-xs">{{ saveKbError }}</div>
+                    <div>
+                        <label class="app-label">{{ t('library.ingestTargetKb') }}</label>
+                        <select v-if="saveKbOptions.length" v-model="saveKbTargetId" class="app-input !text-xs">
+                            <option v-for="kb in saveKbOptions" :key="kb.id" :value="kb.id">{{ kb.name }}</option>
+                        </select>
+                        <p v-else class="text-faint text-xs">{{ t('chat.saveToKnowledgeAutoCreate') }}</p>
+                    </div>
+                    <div>
+                        <label class="app-label">{{ t('library.ingestDocTitle') }}</label>
+                        <input v-model="saveKbTitle" required maxlength="200" class="app-input !text-xs" />
+                    </div>
+                    <div>
+                        <label class="app-label">{{ t('knowledge.docContent') }}</label>
+                        <textarea v-model="saveKbContent" rows="6" required class="app-input font-mono !text-xs" />
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" class="app-btn app-btn-outline" @click="saveKbOpen = false">{{ t('common.cancel') }}</button>
+                        <button type="submit" :disabled="saveKbBusy" class="app-btn app-btn-primary">
+                            {{ saveKbBusy ? t('common.saving') : t('common.save') }}
+                        </button>
+                    </div>
+                </form>
             </div>
-        </form>
+        </Teleport>
 
         <!-- 附件选择弹层：列最近上传的附件，也可直接上传新文件 -->
         <Teleport to="body">
@@ -788,8 +1157,6 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
                         </button>
                     </div>
 
-                    <!-- 弹层是 Teleport 到 body 的：输入栏那条 attachError 被遮罩盖在身后，
-                         从弹层里上传失败时用户眼前没有任何反馈，看起来像按钮没反应 -->
                     <div v-if="attachError" class="app-alert app-alert-danger mt-3 !text-[11px]" role="alert">{{ attachError }}</div>
 
                     <div v-if="attachLoading" class="mt-3 space-y-2">

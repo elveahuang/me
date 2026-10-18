@@ -69,6 +69,35 @@ async function load() {
 
 onMounted(load);
 
+const mcpPresets = [
+    {
+        name: 'Context7 Docs',
+        transport: 'http',
+        url: 'https://mcp.context7.com/mcp',
+        headersText: '{}',
+    },
+    {
+        name: 'DeepWiki MCP',
+        transport: 'http',
+        url: 'https://mcp.deepwiki.com/mcp',
+        headersText: '{}',
+    },
+    {
+        name: 'GitHub Copilot MCP',
+        transport: 'http',
+        url: 'https://api.githubcopilot.com/mcp/',
+        headersText: '{\n  "Authorization": "Bearer YOUR_GITHUB_PAT"\n}',
+    },
+];
+
+function applyMcpPreset(preset: (typeof mcpPresets)[number]) {
+    form.name = preset.name;
+    form.transport = preset.transport;
+    form.url = preset.url;
+    form.headersText = preset.headersText;
+    formError.value = '';
+}
+
 function openCreate() {
     formToken += 1;
     // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
@@ -212,6 +241,18 @@ async function remove(id: string) {
 
         <AdminDrawer :open="editing !== null" :title="editing?.id ? t('common.edit') : t('adminForm.mcpNew')" @close="closeDrawer">
             <div class="space-y-3">
+                <div v-if="!editing?.id" class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-faint text-[11px]">{{ t('adminForm.mcpPresetsLabel') }}：</span>
+                    <button
+                        v-for="preset in mcpPresets"
+                        :key="preset.name"
+                        type="button"
+                        class="app-chip !text-[10px] hover:opacity-90"
+                        @click="applyMcpPreset(preset)"
+                    >
+                        🔌 {{ preset.name }}
+                    </button>
+                </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input
                         :aria-label="t('adminForm.mcpNamePlaceholder')"

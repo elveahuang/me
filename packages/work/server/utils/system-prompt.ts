@@ -9,6 +9,7 @@ export interface UserPromptContext {
 export interface SpacePromptContext {
     name: string;
     instructions?: string | null;
+    localRoot?: string | null;
 }
 
 function interpolateVariables(template: string, vars: Record<string, string>): string {
@@ -76,6 +77,9 @@ export function buildSystemPrompt(
 
     if (spaceContext?.name) {
         const lines = [`当前工作空间：${spaceContext.name}`];
+        if (spaceContext.localRoot?.trim()) {
+            lines.push(`当前工作空间绑定本机工作目录：${spaceContext.localRoot.trim()}（调用本地文件工具时优先在此目录内检索与读取）`);
+        }
         if (spaceContext.instructions?.trim()) lines.push('', spaceContext.instructions.trim());
         sections.push(`# 工作空间\n\n${lines.join('\n')}`);
     }

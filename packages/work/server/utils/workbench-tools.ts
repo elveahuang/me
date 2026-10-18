@@ -1,15 +1,28 @@
 import { tool, type ToolSet } from 'ai';
 import { and, asc, desc, eq, gte, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import * as zod from 'zod';
-import { SCHEDULE_KINDS, schedules, type ScheduleKind } from '../db/schema';
+import {
+    AUTOMATION_RUN_STATUSES,
+    automationRuns,
+    conversations,
+    kbDocuments,
+    knowledgeBases,
+    SCHEDULE_KINDS,
+    schedules,
+    spaces,
+    type ScheduleKind,
+} from '../db/schema';
 import { db } from './db';
+import { ingestDocumentIntoKb } from './kb-ingest';
 import { LOCAL_OWNER } from './owner';
+import { stripNull } from './pg-text';
 import { likePattern, stringParam } from './query';
 import { rateLimit } from './rate-limit';
 import { assertScheduleAgent, resolveSchedulePlan } from './schedule-store';
+import { DEFAULT_SPACE_ID, ensureDefaultSpace, SPACE_INSTRUCTIONS_MAX } from './spaces';
 import { shanghaiDateKey, shanghaiDayRange, shanghaiParts, shanghaiUpcomingEnd } from './work-day';
-import { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkText } from './work-input';
-import { SCHEDULE_PROMPT_MAX, describeSchedule, type SchedulePlan } from './work-schedule';
+import { normalizeWorkDate, normalizeWorkText, WORK_TITLE_MAX } from './work-input';
+import { describeSchedule, SCHEDULE_PROMPT_MAX, type SchedulePlan } from './work-schedule';
 
 /**
  * 工作台内置工具：让任意智能体都能读写本机的工作台数据。
@@ -67,7 +80,7 @@ function explainWriteFailure(error: unknown, context: string): string {
     const record = error as { statusCode?: number; statusMessage?: string };
     if (typeof record?.statusCode === 'number' && record.statusMessage) return record.statusMessage;
     console.error(`[workbench] ${context}失败:`, error);
-    return `${context}失败，请改用「定时任务」页手动创建`;
+    return `${context}失败，请改用界面手动操作`;
 }
 
 /** 「今天」写成今天，其余写完整日期；只留 MM-DD 会让跨月的排期读起来像本周。 */
@@ -122,7 +135,6 @@ export function buildWorkbenchTools(agentId: string, spaceId: string | null = nu
         execute: async () => {
             const now = new Date();
             const { start, end } = shanghaiDayRange(now);
-            // 「未来 7 天」的口径只在 work-day.ts 的 shanghaiUpcomingEnd 有一份
             const weekEnd = shanghaiUpcomingEnd(end, 7);
 
             const [dueToday, runsToday, upcoming] = await Promise.all([
@@ -220,17 +232,11 @@ export function buildWorkbenchTools(agentId: string, spaceId: string | null = nu
                     new Date(),
                 );
             } catch (error) {
-                // 归一函数只会抛我们自己的 createError（可读的 400 文案）；认不出就回一句固定的话，
-                // 不能把 error.message 原样交给模型——那串文本会随这轮外呼发到供应商那边。
                 const readable = (error as { statusMessage?: string })?.statusMessage;
                 return `参数不合法：${readable || '请检查 kind / time / intervalMinutes / startsAt 的组合'}`;
             }
             const id = crypto.randomUUID();
             const { plan, nextRunAt } = resolved;
-            // 与 POST /api/schedules 同一道闸门：`schedules.agent_id` 是 onDelete: cascade，
-            // 而这句 INSERT 跑在模型的工具步里——上一轮读到「智能体还在」到这里之间可能已被删掉，
-            // 裸插会撞 23503，异常从 execute 逃出去之后由 AI SDK 折成 tool-error 原样回喂给模型
-            // （里面是整条 SQL 与标题、prompt 正文），且用户以为已经建好的任务其实一条都没有。
             try {
                 await db.transaction(async (tx) => {
                     const ownerAgentId = await assertScheduleAgent(agentId, tx);
@@ -256,11 +262,247 @@ export function buildWorkbenchTools(agentId: string, spaceId: string | null = nu
         },
     });
 
+    set.work_update_schedule = tool({
+        description: '修改、暂停、启用或删除一条已有定时任务。根据 scheduleId 操作，可切换 enabled（启用/暂停）、修改 title/prompt，或设置 remove=true 删除。',
+        inputSchema: zod.object({
+            scheduleId: zod.string().describe('定时任务 ID'),
+            enabled: zod.boolean().optional().describe('是否启用（false 为暂停）'),
+            title: zod.string().optional().describe(`新标题，最长 ${WORK_TITLE_MAX} 字`),
+            prompt: zod.string().optional().describe(`新指令正文，最长 ${SCHEDULE_PROMPT_MAX} 字`),
+            remove: zod.boolean().optional().describe('设为 true 则删除该定时任务'),
+        }),
+        execute: async (input) => {
+            const blocked = await gateWrite('schedule-update');
+            if (blocked) return blocked;
+            const id = stringParam(input.scheduleId, 64);
+            if (!id) return 'scheduleId 必填';
+
+            const [existing] = await db
+                .select()
+                .from(schedules)
+                .where(and(eq(schedules.id, id), spaceWhere()));
+            if (!existing) return `未找到定时任务 [${id}]`;
+
+            if (input.remove) {
+                await db.delete(schedules).where(eq(schedules.id, id));
+                return `已删除定时任务 [${id}]：${clip(existing.title)}`;
+            }
+
+            const patch: Partial<typeof schedules.$inferInsert> = { updatedAt: new Date() };
+            try {
+                if (input.title !== undefined) {
+                    patch.title = normalizeWorkText(input.title, 'title', WORK_TITLE_MAX);
+                }
+                if (input.prompt !== undefined) {
+                    patch.prompt = normalizeWorkText(input.prompt, 'prompt', SCHEDULE_PROMPT_MAX);
+                }
+                if (typeof input.enabled === 'boolean') {
+                    patch.enabled = input.enabled;
+                }
+                await db.update(schedules).set(patch).where(eq(schedules.id, id));
+            } catch (error) {
+                return explainWriteFailure(error, '更新定时任务');
+            }
+            return `已更新定时任务 [${id}]：${clip(patch.title ?? existing.title)}（状态：${(patch.enabled ?? existing.enabled) ? '启用' : '已暂停'}）`;
+        },
+    });
+
+    set.work_list_runs = tool({
+        description: '查询定时任务的最近运行记录（Run Ledger），包括运行状态（success/failed/running）、触发方式、耗时、产出会话与失败原因。',
+        inputSchema: zod.object({
+            scheduleId: zod.string().optional().describe('按定时任务 ID 过滤'),
+            status: zod.enum(AUTOMATION_RUN_STATUSES).optional().describe('按运行状态过滤：running / success / failed'),
+            limit: zod.number().optional().describe('返回条数，最多 30'),
+        }),
+        execute: async (input) => {
+            const where: SQL[] = [spaceWhere()];
+            const schedId = stringParam(input.scheduleId, 64);
+            if (schedId) where.push(eq(automationRuns.scheduleId, schedId));
+            if (input.status) where.push(eq(automationRuns.status, input.status));
+            const limit = Math.min(Math.max(Math.floor(Number(input.limit) || 15), 1), 30);
+
+            const rows = await db
+                .select({
+                    id: automationRuns.id,
+                    scheduleTitle: schedules.title,
+                    trigger: automationRuns.trigger,
+                    status: automationRuns.status,
+                    startedAt: automationRuns.startedAt,
+                    durationMs: automationRuns.durationMs,
+                    outputConversationId: automationRuns.outputConversationId,
+                    error: automationRuns.error,
+                    attempt: automationRuns.attempt,
+                })
+                .from(automationRuns)
+                .innerJoin(schedules, eq(schedules.id, automationRuns.scheduleId))
+                .where(and(...where))
+                .orderBy(desc(automationRuns.startedAt))
+                .limit(limit);
+
+            if (!rows.length) return '暂无符合条件的运行记录';
+            return `${rows.length} 条运行记录：\n${rows
+                .map((r) => {
+                    const dur = r.durationMs != null ? `，耗时 ${(r.durationMs / 1000).toFixed(1)}s` : '';
+                    const detail =
+                        r.status === 'failed'
+                            ? `失败：${clip(r.error || '未知错误')}`
+                            : r.outputConversationId
+                              ? `成功（会话 [${r.outputConversationId}]）`
+                              : r.status;
+                    return `- [${r.id}] ${clip(r.scheduleTitle)}（${formatWhen(r.startedAt)} ${clockOf(r.startedAt)}，${r.trigger === 'manual' ? '手动' : '定时'}${dur}，第 ${r.attempt} 次尝试）→ ${detail}`;
+                })
+                .join('\n')}`;
+        },
+    });
+
+    set.work_search = tool({
+        description: '跨工作台搜索历史会话、知识库文档与定时任务。当用户询问「之前聊过什么」「知识库里有没有某资料」时调用。',
+        inputSchema: zod.object({
+            keyword: zod.string().describe('搜索关键词，1–100 字'),
+        }),
+        execute: async (input) => {
+            const q = stringParam(input.keyword, 100);
+            if (!q) return '请提供非空搜索关键词';
+            const pat = likePattern(q);
+
+            const [convHits, docHits, schedHits] = await Promise.all([
+                db
+                    .select({ id: conversations.id, title: conversations.title, updatedAt: conversations.updatedAt })
+                    .from(conversations)
+                    .where(and(spaceId ? eq(conversations.spaceId, spaceId) : isNull(conversations.spaceId), ilike(conversations.title, pat)))
+                    .orderBy(desc(conversations.updatedAt))
+                    .limit(8),
+                db
+                    .select({
+                        id: kbDocuments.id,
+                        title: kbDocuments.title,
+                        kbName: knowledgeBases.name,
+                        content: kbDocuments.content,
+                    })
+                    .from(kbDocuments)
+                    .innerJoin(knowledgeBases, eq(knowledgeBases.id, kbDocuments.kbId))
+                    .where(
+                        and(
+                            spaceId ? or(eq(knowledgeBases.spaceId, spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId),
+                            or(ilike(kbDocuments.title, pat), ilike(kbDocuments.content, pat)),
+                        ),
+                    )
+                    .orderBy(desc(kbDocuments.createdAt))
+                    .limit(8),
+                db
+                    .select(scheduleColumns)
+                    .from(schedules)
+                    .where(and(spaceWhere(), or(ilike(schedules.title, pat), ilike(schedules.prompt, pat))))
+                    .orderBy(asc(schedules.nextRunAt))
+                    .limit(8),
+            ]);
+
+            const sections: string[] = [];
+            if (docHits.length) {
+                sections.push(`知识库文档（${docHits.length} 条）：\n` + docHits.map((d) => `- [${d.kbName}] ${clip(d.title)}：${clip(d.content)}`).join('\n'));
+            }
+            if (convHits.length) {
+                sections.push(
+                    `历史会话（${convHits.length} 条）：\n` + convHits.map((c) => `- [${c.id}] ${clip(c.title)}（${formatWhen(c.updatedAt)}）`).join('\n'),
+                );
+            }
+            if (schedHits.length) {
+                sections.push(`定时任务（${schedHits.length} 条）：\n` + schedHits.map(scheduleLine).join('\n'));
+            }
+            return sections.length ? sections.join('\n\n') : `未找到与「${clip(q)}」相关的会话、知识文档或定时任务`;
+        },
+    });
+
+    set.work_save_knowledge = tool({
+        description:
+            '将整理好的结论、笔记、规范或报告沉淀为知识库文档（自动切块并建立向量索引），供后续对话检索。可指定 kbId，不传则自动写入当前空间或全局知识库。',
+        inputSchema: zod.object({
+            title: zod.string().describe('文档标题，最多 200 字'),
+            content: zod.string().describe('要沉淀的 Markdown 或纯文本内容'),
+            kbId: zod.string().optional().describe('目标知识库 ID（可选，不传则自动选择或创建默认知识库）'),
+        }),
+        execute: async (input) => {
+            const blocked = await gateWrite('save-knowledge');
+            if (blocked) return blocked;
+            try {
+                let targetKbId = stringParam(input.kbId, 64);
+                if (targetKbId) {
+                    const [found] = await db.select({ id: knowledgeBases.id }).from(knowledgeBases).where(eq(knowledgeBases.id, targetKbId));
+                    if (!found) targetKbId = '';
+                }
+                if (!targetKbId) {
+                    const existingKbs = await db
+                        .select({ id: knowledgeBases.id, spaceId: knowledgeBases.spaceId })
+                        .from(knowledgeBases)
+                        .where(spaceId ? or(eq(knowledgeBases.spaceId, spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId))
+                        .orderBy(desc(knowledgeBases.createdAt))
+                        .limit(5);
+                    const preferred = existingKbs.find((k) => k.spaceId === spaceId) ?? existingKbs[0];
+                    if (preferred) {
+                        targetKbId = preferred.id;
+                    } else {
+                        targetKbId = crypto.randomUUID();
+                        await db.insert(knowledgeBases).values({
+                            id: targetKbId,
+                            spaceId,
+                            name: '工作台沉淀知识库',
+                            description: '由对话与智能体自动沉淀的长期知识文档',
+                            embeddingModel: 'text-embedding-3-small',
+                        });
+                    }
+                }
+                const doc = await ingestDocumentIntoKb({
+                    kbId: targetKbId,
+                    title: input.title,
+                    content: input.content,
+                });
+                return `已沉淀到知识库文档 [${doc.id}]《${clip(doc.title)}》（共 ${doc.chunkCount} 个切片，索引方式：${doc.provider}）`;
+            } catch (error) {
+                return explainWriteFailure(error, '保存知识库文档');
+            }
+        },
+    });
+
+    set.work_update_space_memory = tool({
+        description: '更新当前工作空间（Space）的长期指令与项目背景记忆（instructions）。当用户要求「记住这个项目规范」「以后在本空间都遵循某约定」时调用。',
+        inputSchema: zod.object({
+            content: zod.string().describe('要追加或替换的空间记忆/项目规范内容'),
+            mode: zod.enum(['append', 'replace']).optional().describe('append 在现有说明末尾追加（默认），replace 覆盖全部说明'),
+        }),
+        execute: async (input) => {
+            const blocked = await gateWrite('space-memory');
+            if (blocked) return blocked;
+            const addition = stripNull(input.content || '').trim();
+            if (!addition) return '记忆内容不能为空';
+            try {
+                if (!spaceId) {
+                    await ensureDefaultSpace();
+                }
+                const targetSpaceId = spaceId || DEFAULT_SPACE_ID;
+                const [row] = await db.select().from(spaces).where(eq(spaces.id, targetSpaceId));
+                if (!row) return '未找到当前工作空间';
+
+                const nextInstructions = input.mode === 'replace' || !row.instructions.trim() ? addition : `${row.instructions.trim()}\n- ${addition}`;
+                if (nextInstructions.length > SPACE_INSTRUCTIONS_MAX) {
+                    return `工作空间记忆超出长度上限（最多 ${SPACE_INSTRUCTIONS_MAX} 字）`;
+                }
+                await db.update(spaces).set({ instructions: nextInstructions, updatedAt: new Date() }).where(eq(spaces.id, row.id));
+                return `已更新工作空间「${row.name}」的长期记忆（当前共 ${nextInstructions.length} 字）`;
+            } catch (error) {
+                return explainWriteFailure(error, '更新工作空间记忆');
+            }
+        },
+    });
+
     return set as ToolSet;
 }
 
 /** 供系统提示词的工具清单使用：与上面实现保持同一份口径，不在两处各写一遍。 */
 export const WORKBENCH_TOOL_SUMMARY = [
     '- work_today：今日概览（今天要跑的定时任务 / 今天已跑出的结果 / 未来 7 天安排）',
-    '- work_list_schedules / work_create_schedule：查、建定时任务（到点自动跑智能体并把结果落成会话）',
+    '- work_list_schedules / work_create_schedule / work_update_schedule：查、建、改/暂停/删定时任务（到点自动跑智能体并把结果落成会话）',
+    '- work_list_runs：查询定时任务最近运行记录（状态、耗时、摘要与失败原因）',
+    '- work_search：跨工作台搜索历史会话、知识库文档与定时任务',
+    '- work_save_knowledge：将对话整理出的结论、笔记或报告一键沉淀进知识库并建立向量索引',
+    '- work_update_space_memory：更新当前工作空间（Space）的长期指令与项目记忆',
 ].join('\n');

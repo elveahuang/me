@@ -16,10 +16,36 @@ import {
 } from '../utils/work';
 import { composeStartsAt, dayInputValue, timeTextInputValue, todayInputValue } from '../utils/work-day';
 
+interface RunRow {
+    id: string;
+    scheduleId: string;
+    scheduleTitle: string;
+    spaceName: string | null;
+    agentId: string;
+    agentName: string | null;
+    agentEmoji: string | null;
+    status: 'running' | 'success' | 'failed';
+    trigger: string;
+    scheduledFor: string | null;
+    startedAt: string;
+    finishedAt: string | null;
+    durationMs: number | null;
+    prompt: string;
+    outputConversationId: string | null;
+    error: string;
+}
+interface RunsResponse {
+    runs: RunRow[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+}
+
 /**
- * 定时任务（`/tasks`）：到点自动跑一轮智能体、结果落成一条会话的那些排期。
+ * 自动化与运行中心（`/tasks`）：到点自动跑一轮智能体、结果落成一条会话的排期，以及每一次执行的历史记录。
  *
- * 状态全部写进 URL（`?q=&enabled=&id=&new=1`）：列表每一行点开表单都会把 `?id=` 带回地址，
+ * 状态全部写进 URL（`?tab=&q=&enabled=&id=&new=1`）：列表每一行点开表单都会把 `?id=` 带回地址，
  * 书签也要能回到同一个筛选结果，把条件只存在 ref 里就等于让深链失效。
  *
  * 列表里的 `prompt` 是服务端截到 240 字的摘要，所以点「编辑」要再取一次整行——
@@ -28,6 +54,21 @@ import { composeStartsAt, dayInputValue, timeTextInputValue, todayInputValue } f
 const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
+
+const activeTab = ref<'schedules' | 'runs'>(route.query.tab === 'runs' ? 'runs' : 'schedules');
+watch(
+    () => route.query.tab,
+    (tab) => {
+        activeTab.value = tab === 'runs' ? 'runs' : 'schedules';
+    },
+);
+function switchTab(tab: 'schedules' | 'runs') {
+    activeTab.value = tab;
+    const query = { ...route.query };
+    if (tab === 'runs') query.tab = 'runs';
+    else delete query.tab;
+    void router.replace({ query });
+}
 
 /**
  * 北京「今天」。
@@ -72,6 +113,47 @@ const listQuery = computed(() => ({
     limit: '200',
 }));
 const { data: schedules, pending, error, refresh } = await useFetch<WorkSchedule[]>('/api/schedules', { query: listQuery, lazy: true, default: () => [] });
+
+/* ---------------- 运行记录视图状态 ---------------- */
+const runStatus = ref(typeof route.query.status === 'string' ? route.query.status : '');
+const runPage = ref(1);
+watch(runStatus, () => {
+    runPage.value = 1;
+});
+const runsQuery = computed(() => ({ status: runStatus.value || undefined, page: runPage.value, pageSize: 30 }));
+const {
+    data: runsData,
+    pending: runsPending,
+    error: runsError,
+    refresh: refreshRuns,
+} = await useFetch<RunsResponse>('/api/runs', {
+    query: runsQuery,
+    lazy: true,
+    default: () => ({ runs: [], page: 1, pageSize: 30, total: 0, totalPages: 1 }),
+});
+const runRows = computed(() => runsData.value?.runs ?? []);
+const runsLoadFailed = computed(() => Boolean(runsError.value));
+const runFilters = computed(() => [
+    { value: '', label: t('runs.all') },
+    { value: 'running', label: t('runs.running') },
+    { value: 'success', label: t('runs.success') },
+    { value: 'failed', label: t('runs.failed') },
+]);
+
+function runStatusLabel(value: string) {
+    return value === 'success' ? t('runs.success') : value === 'failed' ? t('runs.failed') : t('runs.running');
+}
+function runStatusClass(value: string) {
+    return value === 'success' ? 'app-badge-success' : value === 'failed' ? 'app-badge-danger' : 'app-badge-info';
+}
+function runTriggerLabel(value: string) {
+    return value === 'manual' ? t('runs.triggerManual') : value === 'retry' ? t('runs.triggerRetry') : t('runs.triggerSchedule');
+}
+function runDurationLabel(ms: number | null) {
+    if (ms === null || ms === undefined) return '—';
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`;
+}
 
 const loadFailed = computed(() => !!error.value);
 const actionError = ref('');
@@ -138,35 +220,28 @@ function resetForm() {
     formError.value = '';
 }
 
-function openNew() {
+function openNew(prefill?: { title?: string; prompt?: string; agentId?: string; spaceId?: string }) {
     // 让在途的 openEdit 作废：否则它的响应回来时会把抽屉重新打开，并盖上「新建」的空表单
     editToken += 1;
     saving.value = false;
     editingId.value = null;
     void router.replace({ query: { ...route.query, id: undefined } });
     resetForm();
+    if (prefill?.title) form.title = prefill.title.slice(0, 200);
+    if (prefill?.prompt) form.prompt = prefill.prompt.slice(0, SCHEDULE_PROMPT_MAX);
+    if (prefill?.agentId) form.agentId = prefill.agentId;
+    if (prefill?.spaceId) form.spaceId = prefill.spaceId;
     drawerOpen.value = true;
 }
 
 /**
  * 打开某条的表单：参数是 id，不是列表里那一行。
- *
- * 整行必须再取一次——列表里的 `prompt` 只有前 240 字，拿摘要回填表单会把用户写的正文当场砍断，
- * 保存之后就真没了。也正因如此，`?id=` 深链不能靠 `(schedules ?? []).find(...)`：
- * 列表是 `lazy` 请求，`onMounted` 那一刻它多半还是空数组，于是「先清掉标志、再什么也没打开」，
- * 用户点过来只看到列表，以为自己没点中。
- *
- * 取到了才把 id 写回 URL（见下方 `drawerOpen` 的同步），所以点行 = 地址变成 `?id=那条`：
- * 刷新能回到同一张表单，链接也发得出去；取失败就不写，否则会留下一个刷新即复现的错误深链。
  */
 async function openEdit(id: string) {
     const token = ++editToken;
-    // 上一张表单的在途保存已经不属于这里，不复位会让新表单的保存按钮一直停在「保存中」
     saving.value = false;
     try {
         const full = await $fetch<WorkSchedule>(`/api/schedules/${encodeURIComponent(id)}`);
-        // 两次点行的响应顺序不保证：先点 A 后点 B，A 的响应晚到会把 B 的表单和 ?id= 一起换回去
-        // （用户随后保存的就是自己没在看的那个任务）。只让最后一次点击写入。
         if (token !== editToken) return;
         editingId.value = full.id;
         form.title = full.title;
@@ -184,7 +259,6 @@ async function openEdit(id: string) {
         void router.replace({ query: { ...route.query, id: full.id } });
     } catch (e) {
         if (token !== editToken) return;
-        // 只报「取不到」这一件事：抽屉里的字段全为空，用户会读成「我的任务被清空了」
         actionError.value = extractApiError(e, t('work.scheduleLoadFailed'));
     }
 }
@@ -212,8 +286,6 @@ async function save() {
     if (!agents.value.length) return (formError.value = t('work.noAgentToPick'));
     const startsAt = composeStartsAt(form.startDay, showClock.value ? form.time : '');
     if (!startsAt) return (formError.value = t('common.required', { field: t('work.fieldStartDay') }));
-    // 「只跑一次」只有未来才有意义：时刻已经过去就永远不会触发。服务端也会拒（算不出未来的 nextRunAt），
-    // 但在这里拦下能省一次往返，并把原因写在表单上——否则用户看到的是一句翻译过来的 400。
     if (form.kind === 'once' && new Date(startsAt).getTime() <= Date.now()) return (formError.value = t('work.onceAlreadyPassed'));
 
     saving.value = true;
@@ -235,17 +307,14 @@ async function save() {
     try {
         if (editingId.value) await $fetch(`/api/schedules/${encodeURIComponent(editingId.value)}`, { method: 'PATCH', body });
         else await $fetch('/api/schedules', { method: 'POST', body });
-        // 保存期间用户可能已关掉抽屉或改开另一条任务：无条件 drawerOpen = false 会把那张表单一起关掉
         if (token === editToken) drawerOpen.value = false;
         flashSuccess(wasEditing ? t('common.saved') : t('work.scheduleAdded'));
         await refresh();
     } catch (e) {
         const failure = extractApiError(e, t('common.error'));
-        // 抽屉已换成另一条任务时，这条失败属于上一条：写进当前表单会被读成本次编辑的问题
         if (token === editToken) formError.value = failure;
         else actionError.value = failure;
     } finally {
-        // 令牌已换说明这一轮早已结束、当前是新表单：不能在这里动它的 saving
         if (token === editToken) saving.value = false;
     }
 }
@@ -271,7 +340,7 @@ async function runNow(row: WorkSchedule) {
     try {
         await $fetch(`/api/schedules/${encodeURIComponent(row.id)}/run`, { method: 'POST' });
         flashSuccess(t('work.scheduleRunQueued'));
-        await refresh();
+        await Promise.all([refresh(), refreshRuns()]);
     } catch (e) {
         actionError.value = extractApiError(e, t('common.error'));
     } finally {
@@ -281,10 +350,6 @@ async function runNow(row: WorkSchedule) {
     }
 }
 
-/**
- * 删除按 id + 标题走，而不是收整行：抽屉底部那颗按钮手上只有表单状态，
- * 传 `{ id } as WorkSchedule` 会让确认框显示出「定时任务undefined吗」。
- */
 async function remove(id: string, title: string) {
     if (!confirm(t('work.deleteScheduleConfirm', { title }))) return;
     try {
@@ -297,22 +362,12 @@ async function remove(id: string, title: string) {
     }
 }
 
-/** 抽屉底部那颗「删除」：手上只有表单状态，所以从 form 里取标题，确认框才不会出现空名字。 */
 function removeCurrent() {
     const id = editingId.value;
     if (!id) return;
     void remove(id, form.title.trim() || t('work.scheduleTitlePlaceholder'));
 }
 
-/**
- * 深链：`?new=1` 开新建表单，`?id=` 开那条的表单。
- *
- * 只在 `onMounted` 里消费：抽屉的开关状态是客户端 ref，写在 setup 顶层会让 SSR 首屏 HTML
- * 直接带一个弹层。`?new=1` 用完必须 `router.replace` 掉，否则刷新即重复打开一张空表单；
- * `?id=` 这里也先清掉，再由 `openEdit` 在取到整行之后写回——取不到时地址就干净地回到没有深链的状态，
- * 不会留下一个「每次刷新都报取不到」的链接。
- * 那条按 id 现取（见 `openEdit`）：此刻 lazy 列表通常还没回来，从 `schedules` 里 find 等于静默失败。
- */
 onMounted(() => {
     const id = readQuery('id');
     if (id) {
@@ -321,8 +376,20 @@ onMounted(() => {
         return;
     }
     if (route.query.new !== '1') return;
-    void router.replace({ query: { ...route.query, new: undefined } });
-    openNew();
+    const prefill = {
+        title: readQuery('title'),
+        prompt: readQuery('prompt'),
+        agentId: readQuery('agentId'),
+        spaceId: readQuery('spaceId'),
+    };
+    const nextQuery = { ...route.query };
+    delete nextQuery.new;
+    delete nextQuery.title;
+    delete nextQuery.prompt;
+    delete nextQuery.agentId;
+    delete nextQuery.spaceId;
+    void router.replace({ query: nextQuery });
+    openNew(prefill);
 });
 </script>
 
@@ -330,157 +397,270 @@ onMounted(() => {
     <div class="space-y-5">
         <div class="app-page-header">
             <div>
-                <h1 class="app-page-title text-strong">{{ t('work.schedulesTitle') }}</h1>
-                <p class="app-page-subtitle">{{ t('work.schedulesSubtitle', { n: (schedules ?? []).length }) }}</p>
+                <h1 class="app-page-title text-strong">{{ activeTab === 'runs' ? t('runs.title') : t('work.schedulesTitle') }}</h1>
+                <p class="app-page-subtitle">
+                    {{ activeTab === 'runs' ? t('runs.subtitle') : t('work.schedulesSubtitle', { n: (schedules ?? []).length }) }}
+                </p>
             </div>
             <div class="app-page-actions">
-                <button type="button" class="app-btn app-btn-primary" @click="openNew">
+                <button v-if="activeTab === 'runs'" type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" @click="refreshRuns()">
+                    {{ t('common.retry') }}
+                </button>
+                <button type="button" class="app-btn app-btn-primary" @click="openNew()">
                     <AppIcon name="plus" :size="16" />
                     <span>{{ t('work.newSchedule') }}</span>
                 </button>
             </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <div class="relative min-w-0 flex-1 sm:max-w-xs">
-                <AppIcon name="magnify" :size="15" class="text-faint pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
-                <input
-                    v-model="keywordInput"
-                    class="app-input !pl-8 !text-xs"
-                    :placeholder="t('work.searchSchedules')"
-                    :aria-label="t('work.searchSchedules')"
-                />
-            </div>
+        <div class="flex flex-wrap items-center gap-2 border-b border-[color:var(--line)] pb-3">
             <button
-                v-for="chip in [
-                    { value: '', label: t('common.all') },
-                    { value: '1', label: t('common.enabled') },
-                    { value: '0', label: t('common.disabled') },
-                ]"
-                :key="chip.value || 'all'"
                 type="button"
                 class="app-chip"
-                :class="enabledFilter === chip.value ? 'app-chip-brand' : ''"
-                :aria-pressed="enabledFilter === chip.value"
-                @click="enabledFilter = chip.value"
+                :class="activeTab === 'schedules' ? 'app-chip-brand' : ''"
+                :aria-pressed="activeTab === 'schedules'"
+                @click="switchTab('schedules')"
             >
-                {{ chip.label }}
+                <AppIcon name="timer-outline" :size="14" class="mr-1" />
+                <span>{{ t('work.schedulesTitle') }}</span>
+                <span class="ml-1 opacity-70">{{ (schedules ?? []).length }}</span>
+            </button>
+            <button
+                type="button"
+                class="app-chip"
+                :class="activeTab === 'runs' ? 'app-chip-brand' : ''"
+                :aria-pressed="activeTab === 'runs'"
+                @click="switchTab('runs')"
+            >
+                <AppIcon name="history" :size="14" class="mr-1" />
+                <span>{{ t('runs.title') }}</span>
+                <span class="ml-1 opacity-70">{{ runsData?.total ?? 0 }}</span>
             </button>
         </div>
 
-        <div v-if="loadFailed" class="app-alert app-alert-danger flex items-center gap-2">
-            <AppIcon name="alert-outline" :size="16" />
-            <span class="min-w-0 flex-1">{{ extractApiError(error, t('common.loadFailed')) }}</span>
-            <button type="button" class="app-btn app-btn-soft !px-3 !py-1 !text-[10px]" @click="refresh()">{{ t('common.retry') }}</button>
-        </div>
-        <div v-if="actionError" class="app-alert app-alert-danger flex items-center gap-2">
-            <AppIcon name="alert-outline" :size="16" />
-            <span class="min-w-0 flex-1">{{ actionError }}</span>
-            <button type="button" class="app-btn app-btn-ghost app-btn-icon !h-6 !w-6" :aria-label="t('common.close')" @click="actionError = ''">
-                <AppIcon name="close" :size="13" />
-            </button>
-        </div>
-        <div v-if="success" class="app-alert app-alert-success">
-            <AppIcon name="check-circle-outline" :size="16" />
-            <span>{{ success }}</span>
-        </div>
+        <template v-if="activeTab === 'schedules'">
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="relative min-w-0 flex-1 sm:max-w-xs">
+                    <AppIcon name="magnify" :size="15" class="text-faint pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
+                    <input
+                        v-model="keywordInput"
+                        class="app-input !pl-8 !text-xs"
+                        :placeholder="t('work.searchSchedules')"
+                        :aria-label="t('work.searchSchedules')"
+                    />
+                </div>
+                <button
+                    v-for="chip in [
+                        { value: '', label: t('common.all') },
+                        { value: '1', label: t('common.enabled') },
+                        { value: '0', label: t('common.disabled') },
+                    ]"
+                    :key="chip.value || 'all'"
+                    type="button"
+                    class="app-chip"
+                    :class="enabledFilter === chip.value ? 'app-chip-brand' : ''"
+                    :aria-pressed="enabledFilter === chip.value"
+                    @click="enabledFilter = chip.value"
+                >
+                    {{ chip.label }}
+                </button>
+            </div>
 
-        <div v-if="pending && !(schedules ?? []).length" class="space-y-2">
-            <div v-for="i in 4" :key="i" class="app-skeleton h-20" />
-        </div>
+            <div v-if="loadFailed" class="app-alert app-alert-danger flex items-center gap-2">
+                <AppIcon name="alert-outline" :size="16" />
+                <span class="min-w-0 flex-1">{{ extractApiError(error, t('common.loadFailed')) }}</span>
+                <button type="button" class="app-btn app-btn-soft !px-3 !py-1 !text-[10px]" @click="refresh()">{{ t('common.retry') }}</button>
+            </div>
+            <div v-if="actionError" class="app-alert app-alert-danger flex items-center gap-2">
+                <AppIcon name="alert-outline" :size="16" />
+                <span class="min-w-0 flex-1">{{ actionError }}</span>
+                <button type="button" class="app-btn app-btn-ghost app-btn-icon !h-6 !w-6" :aria-label="t('common.close')" @click="actionError = ''">
+                    <AppIcon name="close" :size="13" />
+                </button>
+            </div>
+            <div v-if="success" class="app-alert app-alert-success">
+                <AppIcon name="check-circle-outline" :size="16" />
+                <span>{{ success }}</span>
+            </div>
 
-        <ul v-else-if="(schedules ?? []).length" class="space-y-2">
-            <li v-for="row in schedules ?? []" :key="row.id" class="app-card flex flex-col gap-2 p-4">
-                <div class="flex items-start gap-2">
+            <div v-if="pending && !(schedules ?? []).length" class="space-y-2">
+                <div v-for="i in 4" :key="i" class="app-skeleton h-20" />
+            </div>
+
+            <ul v-else-if="(schedules ?? []).length" class="space-y-2">
+                <li v-for="row in schedules ?? []" :key="row.id" class="app-card flex flex-col gap-2 p-4">
+                    <div class="flex items-start gap-2">
+                        <button
+                            type="button"
+                            role="switch"
+                            class="app-switch mt-0.5 shrink-0"
+                            :aria-checked="row.enabled"
+                            :aria-label="t('adminForm.enable')"
+                            :aria-busy="toggling.has(row.id)"
+                            :disabled="toggling.has(row.id)"
+                            :title="row.enabled ? t('common.enabled') : t('common.disabled')"
+                            @click="toggleEnabled(row)"
+                        />
+                        <div class="min-w-0 flex-1">
+                            <button type="button" class="block w-full truncate text-left text-sm font-bold" :title="row.title" @click="openEdit(row.id)">
+                                {{ row.title }}
+                            </button>
+                            <p class="text-faint mt-1 line-clamp-2 text-[11px]">{{ row.prompt }}</p>
+                        </div>
+                        <div class="app-hover-reveal flex shrink-0 items-center gap-1">
+                            <button
+                                type="button"
+                                class="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                                :disabled="running.has(row.id) || row.lastStatus === 'running'"
+                                :aria-label="t('work.runNow')"
+                                :title="t('work.runNow')"
+                                @click="runNow(row)"
+                            >
+                                <AppIcon name="play-circle-outline" :size="14" />
+                            </button>
+                            <button
+                                type="button"
+                                class="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                                :aria-label="t('common.edit')"
+                                @click="openEdit(row.id)"
+                            >
+                                <AppIcon name="pencil-outline" :size="14" />
+                            </button>
+                            <button
+                                type="button"
+                                class="app-btn app-btn-ghost app-btn-icon app-btn-sm"
+                                :aria-label="t('common.delete')"
+                                @click="remove(row.id, row.title)"
+                            >
+                                <AppIcon name="trash-can-outline" :size="14" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
+                        <span class="text-brand flex items-center gap-1 font-medium">
+                            <AppIcon name="timer-outline" :size="12" />
+                            {{ scheduleSummary(row, t, weekdayName) }}
+                        </span>
+                        <span class="text-faint flex items-center gap-1">
+                            <span class="text-lg leading-none">{{ row.agentEmoji }}</span>
+                            {{ row.agentName }}
+                        </span>
+                        <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="row.spaceName ? 'app-chip-brand' : ''">
+                            {{ row.spaceName || t('work.globalSpace') }}
+                        </span>
+                        <span class="text-faint flex items-center gap-1">
+                            {{ t('work.nextRun') }}
+                            <b class="text-strong font-medium">{{
+                                row.enabled ? `${relativeDayLabel(row.nextRunAt, today, t, formatDateTime)} ${formatTime(row.nextRunAt)}` : t('work.paused')
+                            }}</b>
+                        </span>
+                        <span v-if="row.lastStatus" class="app-badge" :class="scheduleStatusTone(row.lastStatus)">
+                            {{
+                                row.lastStatus === 'running'
+                                    ? t('work.statusRunning')
+                                    : row.lastStatus === 'success'
+                                      ? t('work.statusSuccess')
+                                      : t('work.statusFailed')
+                            }}
+                        </span>
+                        <span v-if="row.lastRunAt" class="text-faint">{{ formatDateTime(row.lastRunAt) }}</span>
+                        <NuxtLink
+                            v-if="row.lastConversationId"
+                            :to="`/chat/${encodeURIComponent(row.agentId)}?c=${encodeURIComponent(row.lastConversationId)}`"
+                            class="text-hover-brand font-medium"
+                        >
+                            {{ t('work.openRunResult') }}
+                        </NuxtLink>
+                    </div>
+
+                    <!-- 失败原因贴着这一行说：它是「为什么今天没出结果」的唯一线索，藏在详情里等于没有 -->
+                    <p v-if="row.lastStatus === 'failed' && row.lastError" class="app-help-error">{{ row.lastError }}</p>
+                </li>
+            </ul>
+
+            <div v-else-if="!loadFailed" class="app-empty">
+                <AppIcon name="timer-outline" :size="30" class="app-empty-icon" />
+                <p class="app-empty-title">{{ keyword || enabledFilter ? t('work.noSchedulesMatch') : t('work.noSchedulesYet') }}</p>
+                <p class="app-empty-desc">{{ t('work.noSchedulesHint') }}</p>
+            </div>
+        </template>
+
+        <template v-else>
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    v-for="filter in runFilters"
+                    :key="filter.value || 'all'"
+                    type="button"
+                    class="app-chip"
+                    :class="runStatus === filter.value ? 'app-chip-brand' : ''"
+                    :aria-pressed="runStatus === filter.value"
+                    @click="runStatus = filter.value"
+                >
+                    {{ filter.label }}
+                </button>
+                <span class="text-faint ml-auto text-[11px]">{{ runsData?.total ?? 0 }}</span>
+            </div>
+
+            <div v-if="runsLoadFailed" class="app-alert app-alert-danger flex items-center justify-between gap-3">
+                <span>{{ t('runs.loadFailed') }}</span>
+                <button type="button" class="app-btn app-btn-soft shrink-0 !py-1.5" @click="refreshRuns()">{{ t('common.retry') }}</button>
+            </div>
+
+            <div v-if="runsPending && !runRows.length" class="space-y-2">
+                <div v-for="i in 5" :key="i" class="app-skeleton h-24" />
+            </div>
+
+            <div v-else-if="runRows.length" class="space-y-2">
+                <NuxtLink
+                    v-for="run in runRows"
+                    :key="run.id"
+                    :to="`/runs/${encodeURIComponent(run.id)}`"
+                    class="app-card app-card-hover flex flex-col gap-2 p-4"
+                >
+                    <div class="flex items-start gap-3">
+                        <span class="text-lg">{{ run.agentEmoji || '🤖' }}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-strong truncate text-sm font-bold">{{ run.scheduleTitle }}</span>
+                                <span class="app-badge" :class="runStatusClass(run.status)">{{ runStatusLabel(run.status) }}</span>
+                                <span class="app-chip !text-[10px]">{{ runTriggerLabel(run.trigger) }}</span>
+                            </div>
+                            <p class="text-faint mt-1 line-clamp-1 text-[11px]">{{ run.prompt }}</p>
+                        </div>
+                        <span class="text-faint shrink-0 text-[10px]">{{ formatDateTime(run.startedAt) }}</span>
+                    </div>
+                    <div class="text-faint flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                        <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="run.spaceName ? 'app-chip-brand' : ''">
+                            {{ run.spaceName || t('knowledge.global') }}
+                        </span>
+                        <span>{{ run.agentName || t('runs.agent') }}</span>
+                        <span>{{ t('runs.duration') }} · {{ runDurationLabel(run.durationMs) }}</span>
+                        <span v-if="run.outputConversationId" class="text-brand font-medium">{{ t('runs.openOutput') }}</span>
+                    </div>
+                    <p v-if="run.status === 'failed' && run.error" class="app-help-error line-clamp-2">{{ run.error }}</p>
+                </NuxtLink>
+
+                <div v-if="(runsData?.totalPages ?? 1) > 1" class="flex items-center justify-center gap-2 pt-2">
+                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="runPage <= 1" @click="runPage--">←</button>
+                    <span class="text-faint text-[11px]">{{ runPage }} / {{ runsData?.totalPages }}</span>
                     <button
                         type="button"
-                        role="switch"
-                        class="app-switch mt-0.5 shrink-0"
-                        :aria-checked="row.enabled"
-                        :aria-label="t('adminForm.enable')"
-                        :aria-busy="toggling.has(row.id)"
-                        :disabled="toggling.has(row.id)"
-                        :title="row.enabled ? t('common.enabled') : t('common.disabled')"
-                        @click="toggleEnabled(row)"
-                    />
-                    <div class="min-w-0 flex-1">
-                        <button type="button" class="block w-full truncate text-left text-sm font-bold" :title="row.title" @click="openEdit(row.id)">
-                            {{ row.title }}
-                        </button>
-                        <p class="text-faint mt-1 line-clamp-2 text-[11px]">{{ row.prompt }}</p>
-                    </div>
-                    <div class="app-hover-reveal flex shrink-0 items-center gap-1">
-                        <button
-                            type="button"
-                            class="app-btn app-btn-ghost app-btn-icon app-btn-sm"
-                            :disabled="running.has(row.id) || row.lastStatus === 'running'"
-                            :aria-label="t('work.runNow')"
-                            :title="t('work.runNow')"
-                            @click="runNow(row)"
-                        >
-                            <AppIcon name="play-circle-outline" :size="14" />
-                        </button>
-                        <button type="button" class="app-btn app-btn-ghost app-btn-icon app-btn-sm" :aria-label="t('common.edit')" @click="openEdit(row.id)">
-                            <AppIcon name="pencil-outline" :size="14" />
-                        </button>
-                        <button
-                            type="button"
-                            class="app-btn app-btn-ghost app-btn-icon app-btn-sm"
-                            :aria-label="t('common.delete')"
-                            @click="remove(row.id, row.title)"
-                        >
-                            <AppIcon name="trash-can-outline" :size="14" />
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
-                    <span class="text-brand flex items-center gap-1 font-medium">
-                        <AppIcon name="timer-outline" :size="12" />
-                        {{ scheduleSummary(row, t, weekdayName) }}
-                    </span>
-                    <span class="text-faint flex items-center gap-1">
-                        <span class="text-lg leading-none">{{ row.agentEmoji }}</span>
-                        {{ row.agentName }}
-                    </span>
-                    <span class="app-chip shrink-0 !px-1.5 !py-0 !text-[9px]" :class="row.spaceName ? 'app-chip-brand' : ''">
-                        {{ row.spaceName || t('work.globalSpace') }}
-                    </span>
-                    <span class="text-faint flex items-center gap-1">
-                        {{ t('work.nextRun') }}
-                        <b class="text-strong font-medium">{{
-                            row.enabled ? `${relativeDayLabel(row.nextRunAt, today, t, formatDateTime)} ${formatTime(row.nextRunAt)}` : t('work.paused')
-                        }}</b>
-                    </span>
-                    <span v-if="row.lastStatus" class="app-badge" :class="scheduleStatusTone(row.lastStatus)">
-                        {{
-                            row.lastStatus === 'running'
-                                ? t('work.statusRunning')
-                                : row.lastStatus === 'success'
-                                  ? t('work.statusSuccess')
-                                  : t('work.statusFailed')
-                        }}
-                    </span>
-                    <span v-if="row.lastRunAt" class="text-faint">{{ formatDateTime(row.lastRunAt) }}</span>
-                    <NuxtLink
-                        v-if="row.lastConversationId"
-                        :to="`/chat/${encodeURIComponent(row.agentId)}?c=${encodeURIComponent(row.lastConversationId)}`"
-                        class="text-hover-brand font-medium"
+                        class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs"
+                        :disabled="runPage >= (runsData?.totalPages ?? 1)"
+                        @click="runPage++"
                     >
-                        {{ t('work.openRunResult') }}
-                    </NuxtLink>
+                        →
+                    </button>
                 </div>
+            </div>
 
-                <!-- 失败原因贴着这一行说：它是「为什么今天没出结果」的唯一线索，藏在详情里等于没有 -->
-                <p v-if="row.lastStatus === 'failed' && row.lastError" class="app-help-error">{{ row.lastError }}</p>
-            </li>
-        </ul>
-
-        <div v-else-if="!loadFailed" class="app-empty">
-            <AppIcon name="timer-outline" :size="30" class="app-empty-icon" />
-            <p class="app-empty-title">{{ keyword || enabledFilter ? t('work.noSchedulesMatch') : t('work.noSchedulesYet') }}</p>
-            <p class="app-empty-desc">{{ t('work.noSchedulesHint') }}</p>
-        </div>
+            <div v-else-if="!runsLoadFailed" class="app-empty">
+                <AppIcon name="history" :size="30" class="app-empty-icon" />
+                <p class="app-empty-title">{{ t('runs.empty') }}</p>
+                <p class="app-empty-desc">{{ t('runs.emptyHint') }}</p>
+            </div>
+        </template>
 
         <AdminDrawer :open="drawerOpen" :title="editingId ? t('common.edit') : t('work.newSchedule')" width-class="sm:max-w-2xl" @close="drawerOpen = false">
             <div class="space-y-3">

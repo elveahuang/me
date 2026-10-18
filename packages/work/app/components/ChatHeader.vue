@@ -15,6 +15,7 @@ withDefaults(
         mcpCount?: number;
         switchable?: boolean;
         hasMessages?: boolean;
+        inspectorOpen?: boolean;
     }>(),
     {
         description: '',
@@ -27,6 +28,7 @@ withDefaults(
         mcpCount: 0,
         switchable: false,
         hasMessages: false,
+        inspectorOpen: false,
     },
 );
 
@@ -35,6 +37,7 @@ const emit = defineEmits<{
     'open-agent-picker': [];
     export: [];
     'new-chat': [];
+    'toggle-inspector': [];
 }>();
 
 const { t } = useI18n();
@@ -99,6 +102,17 @@ const { t } = useI18n();
             <button v-if="hasMessages" type="button" class="app-btn app-btn-outline !px-2.5 !py-1.5" :title="t('chat.exportMarkdown')" @click="emit('export')">
                 <span>📥</span>
                 <span class="hidden sm:inline">{{ t('chat.exportMarkdown') }}</span>
+            </button>
+            <button
+                type="button"
+                class="app-btn !px-2.5 !py-1.5"
+                :class="inspectorOpen ? 'app-btn-soft' : 'app-btn-outline'"
+                :title="t('chat.inspectorToggle')"
+                :aria-pressed="inspectorOpen"
+                @click="emit('toggle-inspector')"
+            >
+                <AppIcon name="view-dashboard-outline" :size="15" />
+                <span class="hidden lg:inline">{{ t('chat.inspectorToggle') }}</span>
             </button>
             <button type="button" class="app-btn app-btn-ghost !px-2.5 !py-1.5" :title="t('chat.newChat')" @click="emit('new-chat')">＋</button>
         </div>

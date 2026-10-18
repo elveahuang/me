@@ -1,21 +1,22 @@
 import { eq, sql } from 'drizzle-orm';
-import { attachments, conversations, DEFAULT_SPACE_ID, kbDocuments, knowledgeBases, schedules, spaces } from '../../db/schema';
+import { agents, attachments, conversations, DEFAULT_SPACE_ID, kbDocuments, knowledgeBases, schedules, spaces } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
 import { routeId } from '../../utils/route-id';
-import { normalizeSpaceInput } from '../../utils/spaces';
+import { ensureDefaultSpace, normalizeSpaceInput } from '../../utils/spaces';
 
 export default defineEventHandler(async (event) => {
     await capBody(event);
     const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
+    await ensureDefaultSpace();
     const id = routeId(event, 'id', '工作空间');
     const [row] = await db.select().from(spaces).where(eq(spaces.id, id));
     if (!row) throw createError({ statusCode: 404, statusMessage: '工作空间不存在' });
 
     if (method === 'GET') {
-        const [[conv], [sched], [files], [kbs], [docs]] = await Promise.all([
+        const [[conv], [sched], [files], [kbs], [docs], defaultAgentRows] = await Promise.all([
             db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(conversations)
@@ -37,9 +38,15 @@ export default defineEventHandler(async (event) => {
                 .from(kbDocuments)
                 .innerJoin(knowledgeBases, eq(knowledgeBases.id, kbDocuments.kbId))
                 .where(eq(knowledgeBases.spaceId, id)),
+            row.defaultAgentId
+                ? db.select({ id: agents.id, name: agents.name, emoji: agents.emoji }).from(agents).where(eq(agents.id, row.defaultAgentId))
+                : Promise.resolve([]),
         ]);
+        const defaultAgent = defaultAgentRows[0];
         return {
             ...row,
+            defaultAgentName: defaultAgent?.name ?? null,
+            defaultAgentEmoji: defaultAgent?.emoji ?? null,
             conversationCount: Number(conv?.count ?? 0),
             scheduleCount: Number(sched?.count ?? 0),
             attachmentCount: Number(files?.count ?? 0),
@@ -55,7 +62,20 @@ export default defineEventHandler(async (event) => {
             description: row.description,
             icon: row.icon,
             instructions: row.instructions,
+            defaultAgentId: row.defaultAgentId ?? null,
+            localRoot: row.localRoot ?? '',
         });
+        let defaultAgentName: string | null = null;
+        let defaultAgentEmoji: string | null = null;
+        if (input.defaultAgentId) {
+            const [agentRow] = await db
+                .select({ id: agents.id, name: agents.name, emoji: agents.emoji })
+                .from(agents)
+                .where(eq(agents.id, input.defaultAgentId));
+            if (!agentRow) throw createError({ statusCode: 400, statusMessage: '默认智能体不存在' });
+            defaultAgentName = agentRow.name;
+            defaultAgentEmoji = agentRow.emoji;
+        }
         const patch: Record<string, unknown> = { ...input, updatedAt: new Date() };
         if (body.archived !== undefined) {
             const archived = normalizeAdminBoolean(body.archived, 'archived', row.archived);
@@ -65,7 +85,11 @@ export default defineEventHandler(async (event) => {
             patch.archived = archived;
         }
         const [updated] = await db.update(spaces).set(patch).where(eq(spaces.id, id)).returning();
-        return updated;
+        return {
+            ...updated,
+            defaultAgentName,
+            defaultAgentEmoji,
+        };
     }
 
     if (id === DEFAULT_SPACE_ID) {

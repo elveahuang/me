@@ -9,8 +9,15 @@ const { t } = useI18n();
 
 const props = defineProps<{ message: { id?: string; role: string; parts: any[] } }>();
 
+const emit = defineEmits<{
+    'save-knowledge': [payload: { text: string; role: string }];
+    'create-schedule': [payload: { text: string; role: string }];
+    'inspect-artifact': [payload: { text: string }];
+}>();
+
 const isUser = computed(() => props.message.role === 'user');
 const reasoningExpanded = ref(false);
+const expandedToolIdx = ref<number | null>(null);
 const copied = ref(false);
 const copyFailed = ref(false);
 let copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -18,13 +25,31 @@ let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 // json-render 插件：把 Markdown 中的 ```json-render 代码块渲染成生成式 UI 组件
 const plugins = [jsonRender()];
 
+type ToolDetail = {
+    name: string;
+    label: string;
+    failed: boolean;
+    inputText: string;
+    outputText: string;
+};
+
 type Segment =
     | { kind: 'text'; value: string }
     | { kind: 'reasoning'; value: string }
-    | { kind: 'tool'; value: string }
+    | { kind: 'tool'; value: string; detail: ToolDetail }
     | { kind: 'file'; value: string; url: string; mediaType: string; isImage: boolean };
 
 const asText = (v: unknown) => (typeof v === 'string' ? v : '');
+
+function formatToolPayload(v: unknown): string {
+    if (v == null) return '';
+    if (typeof v === 'string') return v.slice(0, 1200);
+    try {
+        return JSON.stringify(v, null, 2).slice(0, 1200);
+    } catch {
+        return String(v).slice(0, 1200);
+    }
+}
 
 const segments = computed<Segment[]>(() => {
     const out: Segment[] = [];
@@ -36,8 +61,6 @@ const segments = computed<Segment[]>(() => {
             const text = asText(part.reasoning) || asText(part.text);
             if (text.trim()) out.push({ kind: 'reasoning', value: text });
         } else if (part?.type === 'file' || part?.type === 'image') {
-            // 用户发送的附件：历史里存的是稳定地址（公开桶公网地址或站内下载路径）。
-            // 此前不处理 file/image，附件消息会渲染成空白。
             const url = typeof part.url === 'string' ? part.url : '';
             if (!url) continue;
             const mediaType = typeof part.mediaType === 'string' ? part.mediaType : 'application/octet-stream';
@@ -51,22 +74,33 @@ const segments = computed<Segment[]>(() => {
         } else if (typeof part?.type === 'string' && part.type.startsWith('tool-')) {
             const name = part.toolName || part.type.slice(5);
             const failed = part.state === 'output-error' || part.state === 'error';
-            out.push({ kind: 'tool', value: failed ? t('chat.toolFailed', { name }) : name });
+            const label = failed ? t('chat.toolFailed', { name }) : name;
+            out.push({
+                kind: 'tool',
+                value: label,
+                detail: {
+                    name,
+                    label,
+                    failed,
+                    inputText: formatToolPayload(part.input ?? part.args),
+                    outputText: formatToolPayload(part.output ?? part.result ?? part.errorText),
+                },
+            });
         }
     }
     return out;
 });
 
-const toolNames = computed(() => [...new Set(segments.value.filter((s) => s.kind === 'tool').map((s) => s.value))]);
-const hasText = computed(() => segments.value.some((s) => s.kind === 'text'));
-/** 仅有附件、没有文字时也要渲染消息体与操作栏 */
-const fileSegments = computed(() => segments.value.filter((s): s is Extract<Segment, { kind: 'file' }> => s.kind === 'file'));
+const toolDetails = computed(() => segments.value.filter((s): s is Extract<Segment, { kind: 'tool' }> => s.kind === 'tool').map((s) => s.detail));
+const fullText = computed(() =>
+    segments.value
+        .filter((s): s is { kind: 'text'; value: string } => s.kind === 'text')
+        .map((s) => s.value)
+        .join('\n'),
+);
+const hasText = computed(() => Boolean(fullText.value));
 
 const imagePreview = ref('');
-/**
- * 预览层的行为收敛到 useDrawerFocus：它自带 Esc 关闭，还补上了这里原来没有的
- * Tab 圈闭、body 滚动锁与关闭后焦点归还（原来焦点会留在已被隐藏的缩略图上）。
- */
 const previewPanel = ref<HTMLElement | null>(null);
 useDrawerFocus(
     () => !!imagePreview.value,
@@ -88,22 +122,19 @@ function flashCopy(ok: boolean) {
 }
 
 async function copyMessageText() {
-    const texts = segments.value
-        .filter((s): s is { kind: 'text'; value: string } => s.kind === 'text')
-        .map((s) => s.value)
-        .join('\n');
-    if (!texts) return;
+    if (!fullText.value) return;
     try {
-        await navigator.clipboard.writeText(texts);
+        await navigator.clipboard.writeText(fullText.value);
         flashCopy(true);
     } catch {
-        // 剪贴板在非安全上下文或被拒权限下会直接 reject（https 之外的域名、部分内网部署）。
-        // 静默吞掉的界面表现是「点了完全没反应」，用户只会反复点，所以失败也要回一声。
         flashCopy(false);
     }
 }
 
-// 组件卸载（如切换会话/清空记录）时清理，避免定时器在销毁后回写已失效状态
+function toggleToolDetail(idx: number) {
+    expandedToolIdx.value = expandedToolIdx.value === idx ? null : idx;
+}
+
 onBeforeUnmount(() => {
     if (copiedTimer) clearTimeout(copiedTimer);
 });
@@ -122,9 +153,33 @@ onBeforeUnmount(() => {
         </div>
 
         <div :class="['relative max-w-[85%] px-4 py-3 text-sm leading-relaxed', isUser ? 'app-bubble-user' : 'app-bubble-assistant']">
-            <!-- 工具调用标记 -->
-            <div v-if="!isUser && toolNames.length" class="mb-2.5 flex flex-wrap gap-1.5">
-                <span v-for="name in toolNames" :key="name" class="app-chip !text-[10px]"> 🔧 {{ name }} </span>
+            <!-- 工具调用标记（可点击展开查看入参/出参） -->
+            <div v-if="!isUser && toolDetails.length" class="mb-2.5 space-y-1.5">
+                <div class="flex flex-wrap gap-1.5">
+                    <button
+                        v-for="(item, idx) in toolDetails"
+                        :key="idx"
+                        type="button"
+                        class="app-chip !text-[10px] transition-opacity hover:opacity-90"
+                        :class="expandedToolIdx === idx ? 'app-chip-brand' : ''"
+                        @click="toggleToolDetail(idx)"
+                    >
+                        <span>🔧 {{ item.label }}</span>
+                        <span class="text-[9px] opacity-70">{{ expandedToolIdx === idx ? '▲' : '▼' }}</span>
+                    </button>
+                </div>
+                <div
+                    v-if="expandedToolIdx !== null && toolDetails[expandedToolIdx]"
+                    class="rounded-xl border p-2.5 font-mono text-[11px] leading-relaxed"
+                    style="border-color: var(--line); background-color: var(--surface)"
+                >
+                    <p v-if="toolDetails[expandedToolIdx]?.inputText" class="text-faint mb-1 whitespace-pre-wrap">
+                        <strong class="text-strong">Input:</strong> {{ toolDetails[expandedToolIdx]?.inputText }}
+                    </p>
+                    <p v-if="toolDetails[expandedToolIdx]?.outputText" class="text-soft whitespace-pre-wrap">
+                        <strong class="text-strong">Output:</strong> {{ toolDetails[expandedToolIdx]?.outputText }}
+                    </p>
+                </div>
             </div>
 
             <template v-for="(seg, i) in segments" :key="i">
@@ -192,27 +247,56 @@ onBeforeUnmount(() => {
                 </div>
             </template>
 
-            <!-- 复制操作按钮（在消息上悬停展示） -->
-            <button
-                v-if="hasText"
-                type="button"
-                :class="[
-                    'app-hover-reveal absolute -bottom-3 flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all',
-                    isUser ? 'left-2' : 'right-2',
-                ]"
-                :style="
-                    copied
-                        ? { borderColor: 'var(--success)', backgroundColor: 'var(--surface)', color: 'var(--success)' }
-                        : copyFailed
-                          ? { borderColor: 'var(--danger)', backgroundColor: 'var(--surface)', color: 'var(--danger)' }
-                          : { borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }
-                "
-                :title="copyFailed ? t('common.copyFailed') : t('common.copy')"
-                @click="copyMessageText"
-            >
-                <span>{{ copied ? '✓' : copyFailed ? '!' : '📋' }}</span>
-                <span>{{ copied ? t('common.copied') : copyFailed ? t('common.copyFailed') : t('common.copy') }}</span>
-            </button>
+            <!-- 悬停操作栏：复制 / 存为知识 / 固化为自动化 / 侧栏预览 -->
+            <div v-if="hasText" :class="['app-hover-reveal absolute -bottom-3 flex flex-wrap items-center gap-1', isUser ? 'left-2' : 'right-2']">
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all"
+                    :style="
+                        copied
+                            ? { borderColor: 'var(--success)', backgroundColor: 'var(--surface)', color: 'var(--success)' }
+                            : copyFailed
+                              ? { borderColor: 'var(--danger)', backgroundColor: 'var(--surface)', color: 'var(--danger)' }
+                              : { borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }
+                    "
+                    :title="copyFailed ? t('common.copyFailed') : t('common.copy')"
+                    @click="copyMessageText"
+                >
+                    <span>{{ copied ? '✓' : copyFailed ? '!' : '📋' }}</span>
+                    <span>{{ copied ? t('common.copied') : copyFailed ? t('common.copyFailed') : t('common.copy') }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all hover:opacity-90"
+                    :style="{ borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }"
+                    :title="t('chat.saveToKnowledge')"
+                    @click="emit('save-knowledge', { text: fullText, role: props.message.role })"
+                >
+                    <span>📚</span>
+                    <span>{{ t('chat.saveToKnowledge') }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all hover:opacity-90"
+                    :style="{ borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }"
+                    :title="t('chat.turnIntoSchedule')"
+                    @click="emit('create-schedule', { text: fullText, role: props.message.role })"
+                >
+                    <span>⏰</span>
+                    <span>{{ t('chat.turnIntoSchedule') }}</span>
+                </button>
+                <button
+                    v-if="!isUser"
+                    type="button"
+                    class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium shadow-xs transition-all hover:opacity-90"
+                    :style="{ borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--content-muted)' }"
+                    :title="t('chat.openInArtifact')"
+                    @click="emit('inspect-artifact', { text: fullText })"
+                >
+                    <span>🪟</span>
+                    <span>{{ t('chat.openInArtifact') }}</span>
+                </button>
+            </div>
 
             <span v-if="!segments.length" class="text-faint">…</span>
         </div>

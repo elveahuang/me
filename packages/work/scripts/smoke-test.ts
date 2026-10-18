@@ -562,8 +562,18 @@ async function runSmokeTests() {
     const workbenchTools = buildWorkbenchTools('00000000-0000-4000-8000-000000000000');
     const toolNames = Object.keys(workbenchTools).sort();
     assert(
-        toolNames.join(',') === ['work_create_schedule', 'work_list_schedules', 'work_today'].join(','),
-        '三个工作台动作全部注册为模型可见工具，且没有多出的（笔记与整机检索随页面删除，留着就是模型每轮都能调一个必然失败的旧动作）',
+        toolNames.join(',') ===
+            [
+                'work_create_schedule',
+                'work_list_runs',
+                'work_list_schedules',
+                'work_save_knowledge',
+                'work_search',
+                'work_today',
+                'work_update_schedule',
+                'work_update_space_memory',
+            ].join(','),
+        '八个工作台动作全部注册为模型可见工具，且没有多出的未声明动作',
     );
     assert(
         toolNames.every((name) => WORKBENCH_TOOL_SUMMARY.includes(name)),
@@ -572,6 +582,13 @@ async function runSmokeTests() {
     assert(
         Object.values(workbenchTools).every((item: any) => typeof item.description === 'string' && item.description.length > 10 && item.inputSchema),
         '每个工具都带描述与入参 schema（缺描述时模型只会瞎猜参数）',
+    );
+    const { isTextLikeAttachment } = await import('../server/utils/kb-ingest');
+    assert(
+        isTextLikeAttachment('notes.md', 'application/octet-stream') &&
+            isTextLikeAttachment('data.bin', 'text/plain; charset=utf-8') &&
+            !isTextLikeAttachment('photo.png', 'image/png'),
+        'isTextLikeAttachment 准确识别文本/代码附件与非文本图片',
     );
 
     // 16. locales 对齐（zh/en 键集合、空值、插值名）——一次性探针的常驻版

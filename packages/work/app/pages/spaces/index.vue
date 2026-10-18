@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { extractApiError } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import type { WorkSpace } from '../utils/work';
+import type { WorkSpace } from '../../utils/work';
 
 /**
- * 工作空间：会话、资料与自动化的长期上下文。
+ * 工作空间：会话、资料与自动化的长期上下文（Project / Cowork 容器）。
  *
- * 空间是容器：点「进入空间」打开 /spaces/:id 的空间主页，
- * 在主页里再选择「在空间中新建对话」。侧栏的最近对话始终是全局列表。
+ * 每个空间可绑定：专属指令（instructions）、默认智能体（defaultAgentId）与本机工作目录（localRoot）。
  */
 const { t } = useI18n();
-const { refreshSpaces } = useChatSidebar();
+const { agents, refreshSpaces } = useChatSidebar();
 
 const spaces = ref<WorkSpace[]>([]);
 const keyword = ref('');
@@ -30,7 +29,7 @@ const filteredSpaces = computed(() => {
     const q = keyword.value.trim().toLowerCase();
     return spaces.value.filter((space) => {
         if (scope.value === 'active' ? space.archived : !space.archived) return false;
-        return !q || space.name.toLowerCase().includes(q) || space.description.toLowerCase().includes(q);
+        return !q || space.name.toLowerCase().includes(q) || space.description.toLowerCase().includes(q) || (space.localRoot ?? '').toLowerCase().includes(q);
     });
 });
 
@@ -39,6 +38,8 @@ const form = reactive({
     description: '',
     icon: '🗂️',
     instructions: '',
+    defaultAgentId: '',
+    localRoot: '',
 });
 
 async function load() {
@@ -57,7 +58,7 @@ async function load() {
 onMounted(load);
 
 function resetForm() {
-    Object.assign(form, { name: '', description: '', icon: '🗂️', instructions: '' });
+    Object.assign(form, { name: '', description: '', icon: '🗂️', instructions: '', defaultAgentId: '', localRoot: '' });
     formError.value = '';
 }
 
@@ -69,7 +70,14 @@ function openCreate() {
 
 function openEdit(space: WorkSpace) {
     editingId.value = space.id;
-    Object.assign(form, { name: space.name, description: space.description, icon: space.icon, instructions: space.instructions });
+    Object.assign(form, {
+        name: space.name,
+        description: space.description,
+        icon: space.icon,
+        instructions: space.instructions,
+        defaultAgentId: space.defaultAgentId ?? '',
+        localRoot: space.localRoot ?? '',
+    });
     formError.value = '';
     drawerOpen.value = true;
 }
@@ -85,7 +93,14 @@ async function save() {
     formError.value = '';
     actionError.value = '';
     try {
-        const body = { name, description: form.description.trim(), icon: form.icon.trim() || '🗂️', instructions: form.instructions.trim() };
+        const body = {
+            name,
+            description: form.description.trim(),
+            icon: form.icon.trim() || '🗂️',
+            instructions: form.instructions.trim(),
+            defaultAgentId: form.defaultAgentId || null,
+            localRoot: form.localRoot.trim(),
+        };
         if (editingId.value) {
             await $fetch(`/api/spaces/${encodeURIComponent(editingId.value)}`, { method: 'PATCH', body });
         } else {
@@ -118,6 +133,15 @@ async function remove(space: WorkSpace) {
 async function openSpace(space: WorkSpace) {
     if (space.archived) return;
     await navigateTo(`/spaces/${encodeURIComponent(space.id)}`);
+}
+
+async function openSpaceChat(space: WorkSpace) {
+    if (space.archived) return;
+    if (space.defaultAgentId) {
+        await navigateTo(`/chat/${encodeURIComponent(space.defaultAgentId)}?space=${encodeURIComponent(space.id)}`);
+        return;
+    }
+    await navigateTo(`/chat?space=${encodeURIComponent(space.id)}`);
 }
 
 async function toggleArchive(space: WorkSpace) {
@@ -194,12 +218,19 @@ async function toggleArchive(space: WorkSpace) {
                 <div class="flex items-start gap-3">
                     <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--surface-3)] text-2xl">{{ space.icon }}</span>
                     <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-1.5">
                             <h2 class="text-strong truncate text-sm font-black">{{ space.name }}</h2>
                             <span v-if="space.id === 'default'" class="app-chip app-chip-brand !text-[9px]">{{ t('spaces.defaultBadge') }}</span>
                             <span v-if="space.archived" class="app-badge app-badge-neutral !text-[9px]">{{ t('spaces.archived') }}</span>
+                            <span v-if="space.defaultAgentName" class="app-chip !px-1.5 !py-0 !text-[9px]">
+                                {{ space.defaultAgentEmoji || '🤖' }} {{ space.defaultAgentName }}
+                            </span>
                         </div>
                         <p class="text-faint mt-1 line-clamp-2 text-xs">{{ space.description || t('common.none') }}</p>
+                        <p v-if="space.localRoot" class="text-faint mt-1.5 flex items-center gap-1 truncate font-mono text-[10px]" :title="space.localRoot">
+                            <AppIcon name="folder-outline" :size="12" class="shrink-0" />
+                            <span class="truncate">{{ space.localRoot }}</span>
+                        </p>
                     </div>
                 </div>
 
@@ -214,6 +245,9 @@ async function toggleArchive(space: WorkSpace) {
                 <div class="mt-auto flex flex-wrap items-center gap-2 pt-5">
                     <button v-if="!space.archived" type="button" class="app-btn app-btn-primary app-btn-sm" @click="openSpace(space)">
                         {{ t('spaces.openSpace') }}
+                    </button>
+                    <button v-if="!space.archived" type="button" class="app-btn app-btn-soft app-btn-sm" @click="openSpaceChat(space)">
+                        {{ t('spaces.openChat') }}
                     </button>
                     <button v-else type="button" class="app-btn app-btn-primary app-btn-sm" @click="toggleArchive(space)">{{ t('spaces.restore') }}</button>
                     <button type="button" class="app-btn app-btn-outline app-btn-sm" @click="openEdit(space)">{{ t('common.edit') }}</button>
@@ -259,6 +293,21 @@ async function toggleArchive(space: WorkSpace) {
                     <label class="block">
                         <span class="app-dropdown-label !px-0">{{ t('spaces.description') }}</span>
                         <input v-model="form.description" class="app-input" maxlength="500" :placeholder="t('spaces.descPlaceholder')" />
+                    </label>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="block">
+                        <span class="app-dropdown-label !px-0">{{ t('spaces.defaultAgent') }}</span>
+                        <select v-model="form.defaultAgentId" class="app-input">
+                            <option value="">{{ t('spaces.defaultAgentNone') }}</option>
+                            <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.emoji || '🤖' }} {{ agent.name }}</option>
+                        </select>
+                        <span class="text-faint mt-1 block text-[11px]">{{ t('spaces.defaultAgentHint') }}</span>
+                    </label>
+                    <label class="block">
+                        <span class="app-dropdown-label !px-0">{{ t('spaces.localRoot') }}</span>
+                        <input v-model="form.localRoot" class="app-input !font-mono !text-xs" maxlength="500" :placeholder="t('spaces.localRootPlaceholder')" />
+                        <span class="text-faint mt-1 block text-[11px]">{{ t('spaces.localRootHint') }}</span>
                     </label>
                 </div>
                 <label class="block">

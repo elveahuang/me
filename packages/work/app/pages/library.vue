@@ -128,6 +128,111 @@ function refreshAll() {
     void refreshKbs();
 }
 
+const uploadSuccess = ref('');
+
+// ── 直接在资料库新建知识库 ────────────────────────────────────
+const showCreateKb = ref(false);
+const savingKb = ref(false);
+const kbFormError = ref('');
+const kbForm = reactive({
+    name: '',
+    description: '',
+    spaceId: '',
+    embeddingModel: 'text-embedding-3-small',
+});
+
+function openCreateKb() {
+    kbForm.name = '';
+    kbForm.description = '';
+    kbForm.spaceId = spaceFilter.value || '';
+    kbForm.embeddingModel = 'text-embedding-3-small';
+    kbFormError.value = '';
+    showCreateKb.value = true;
+}
+
+async function createKb() {
+    if (!kbForm.name.trim()) return;
+    savingKb.value = true;
+    kbFormError.value = '';
+    try {
+        await $fetch('/api/settings/knowledge-bases', {
+            method: 'POST',
+            body: {
+                name: kbForm.name.trim(),
+                description: kbForm.description.trim(),
+                spaceId: kbForm.spaceId || null,
+                embeddingModel: kbForm.embeddingModel.trim() || 'text-embedding-3-small',
+            },
+        });
+        showCreateKb.value = false;
+        await refreshKbs();
+    } catch (e) {
+        kbFormError.value = extractApiError(e, t('common.saveFailed'));
+    } finally {
+        savingKb.value = false;
+    }
+}
+
+// ── 一键将文本/代码附件转入知识库索引 ──────────────────────────
+const TEXT_EXT_RE =
+    /\.(txt|md|markdown|json|jsonl|csv|tsv|yaml|yml|xml|html|htm|css|scss|js|jsx|ts|tsx|mjs|cjs|vue|py|rb|go|rs|java|kt|c|cpp|h|hpp|cs|php|sql|sh|bash|ps1|toml|ini|conf|log|env)$/i;
+
+function canIngestFile(file: { filename: string; mimeType: string; isImage?: boolean }): boolean {
+    if (file.isImage) return false;
+    const mime = (file.mimeType || '').toLowerCase();
+    if (
+        mime.startsWith('text/') ||
+        mime.includes('json') ||
+        mime.includes('xml') ||
+        mime.includes('yaml') ||
+        mime.includes('javascript') ||
+        mime.includes('csv')
+    ) {
+        return true;
+    }
+    return TEXT_EXT_RE.test(file.filename || '');
+}
+
+const ingestingFile = ref<{ id: string; filename: string } | null>(null);
+const targetKbId = ref('');
+const ingestTitle = ref('');
+const ingestBusy = ref(false);
+const ingestError = ref('');
+
+function openIngestModal(file: { id: string; filename: string }) {
+    ingestingFile.value = file;
+    ingestTitle.value = file.filename;
+    targetKbId.value = kbRows.value[0]?.id ?? '';
+    ingestError.value = '';
+}
+
+async function submitIngestAttachment() {
+    if (!ingestingFile.value || !targetKbId.value) return;
+    ingestBusy.value = true;
+    ingestError.value = '';
+    uploadSuccess.value = '';
+    try {
+        await $fetch(`/api/settings/knowledge-bases/${encodeURIComponent(targetKbId.value)}/ingest-attachment`, {
+            method: 'POST',
+            body: {
+                attachmentId: ingestingFile.value.id,
+                title: ingestTitle.value.trim() || ingestingFile.value.filename,
+            },
+        });
+        const targetKb = kbRows.value.find((k) => k.id === targetKbId.value);
+        uploadSuccess.value = t('library.ingestSuccess', {
+            name: ingestingFile.value.filename,
+            kb: targetKb?.name ?? '',
+        });
+        ingestingFile.value = null;
+        await refreshKbs();
+    } catch (e) {
+        ingestError.value = extractApiError(e, t('library.ingestFailed'));
+    } finally {
+        ingestBusy.value = false;
+    }
+}
+
 async function uploadFile(event: Event) {
     const el = event.target as HTMLInputElement;
     const file = el.files?.[0];
@@ -135,6 +240,7 @@ async function uploadFile(event: Event) {
     if (!file) return;
     uploading.value = true;
     uploadError.value = '';
+    uploadSuccess.value = '';
     try {
         const form = new FormData();
         form.append('file', file);
@@ -176,6 +282,10 @@ async function removeFile(file: { id: string; filename: string }) {
                     <span>{{ uploading ? t('library.uploading') : t('library.upload') }}</span>
                 </button>
                 <input ref="fileInput" type="file" class="hidden" @change="uploadFile" />
+                <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" @click="openCreateKb">
+                    <AppIcon name="plus" :size="14" />
+                    <span>{{ t('knowledge.newBtn') }}</span>
+                </button>
                 <NuxtLink to="/chat" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs">
                     <AppIcon name="paperclip" :size="14" />
                     <span>{{ t('library.uploadFromChat') }}</span>
@@ -190,6 +300,13 @@ async function removeFile(file: { id: string; filename: string }) {
         <div v-if="uploadError" class="app-alert app-alert-danger flex items-center justify-between gap-3">
             <span>{{ uploadError }}</span>
             <button type="button" class="app-btn app-btn-ghost !px-2 !py-1" @click="uploadError = ''">✕</button>
+        </div>
+        <div
+            v-if="uploadSuccess"
+            class="app-alert flex items-center justify-between gap-3 border-[color:var(--brand)]/30 bg-[color:var(--brand-soft)] text-[color:var(--brand)]"
+        >
+            <span class="text-xs font-semibold">{{ uploadSuccess }}</span>
+            <button type="button" class="app-btn app-btn-ghost !px-2 !py-1" @click="uploadSuccess = ''">✕</button>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-3">
@@ -251,44 +368,58 @@ async function removeFile(file: { id: string; filename: string }) {
                     <h2 class="text-sm font-black">{{ t('library.files') }}</h2>
                     <span class="text-faint text-[11px]">{{ attachments.length }} / {{ attachmentData?.total ?? 0 }}</span>
                 </div>
-                <div v-if="attachments.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    <div v-for="file in attachments" :key="file.id" class="app-card flex flex-col gap-3 p-4">
-                        <a
-                            :href="file.url || undefined"
-                            target="_blank"
-                            rel="noreferrer"
-                            class="flex flex-col gap-3"
-                            :class="!file.url ? 'pointer-events-none opacity-70' : ''"
-                        >
-                            <div class="flex items-start gap-3">
-                                <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--surface-3)]">
-                                    <img v-if="file.isImage && file.url" :src="file.url" :alt="file.filename" class="h-full w-full object-cover" />
-                                    <AppIcon v-else :name="file.isImage ? 'file-image-outline' : 'file-outline'" :size="21" />
-                                </span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-strong truncate text-xs font-bold" :title="file.filename">{{ file.filename }}</p>
-                                    <p class="text-faint mt-1 text-[10px]">{{ file.mimeType || t('common.none') }}</p>
+                <template v-if="attachments.length">
+                    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <div v-for="file in attachments" :key="file.id" class="app-card flex flex-col gap-3 p-4">
+                            <a
+                                :href="file.url || undefined"
+                                target="_blank"
+                                rel="noreferrer"
+                                class="flex flex-col gap-3"
+                                :class="!file.url ? 'pointer-events-none opacity-70' : ''"
+                            >
+                                <div class="flex items-start gap-3">
+                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[color:var(--surface-3)]">
+                                        <img v-if="file.isImage && file.url" :src="file.url" :alt="file.filename" class="h-full w-full object-cover" />
+                                        <AppIcon v-else :name="file.isImage ? 'file-image-outline' : 'file-outline'" :size="21" />
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-strong truncate text-xs font-bold" :title="file.filename">{{ file.filename }}</p>
+                                        <p class="text-faint mt-1 text-[10px]">{{ file.mimeType || t('common.none') }}</p>
+                                    </div>
                                 </div>
+                                <div class="text-faint flex items-center justify-between gap-2 text-[10px]">
+                                    <span>{{ formatBytes(file.size) }}</span>
+                                    <span>{{ formatDateTime(file.createdAt) }}</span>
+                                </div>
+                            </a>
+                            <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <button
+                                    v-if="canIngestFile(file)"
+                                    type="button"
+                                    class="app-btn app-btn-soft app-btn-sm !px-2.5 !py-1 !text-[10px]"
+                                    @click="openIngestModal(file)"
+                                >
+                                    <AppIcon name="book-open-page-variant-outline" :size="12" />
+                                    <span>{{ t('library.ingestToKb') }}</span>
+                                </button>
+                                <span v-else />
+                                <button
+                                    type="button"
+                                    class="app-btn app-btn-ghost app-btn-sm !px-2 !py-1 !text-[10px] !text-[color:var(--danger)]"
+                                    @click="removeFile(file)"
+                                >
+                                    {{ t('common.delete') }}
+                                </button>
                             </div>
-                            <div class="text-faint flex items-center justify-between gap-2 text-[10px]">
-                                <span>{{ formatBytes(file.size) }}</span>
-                                <span>{{ formatDateTime(file.createdAt) }}</span>
-                            </div>
-                        </a>
-                        <button
-                            type="button"
-                            class="app-btn app-btn-ghost app-btn-sm self-start !px-2 !py-1 !text-[10px] !text-[color:var(--danger)]"
-                            @click="removeFile(file)"
-                        >
-                            {{ t('common.delete') }}
-                        </button>
+                        </div>
                     </div>
-                </div>
-                <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
-                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page <= 1" @click="page--">←</button>
-                    <span class="text-faint text-[11px]">{{ page }} / {{ totalPages }}</span>
-                    <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page >= totalPages" @click="page++">→</button>
-                </div>
+                    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
+                        <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page <= 1" @click="page--">←</button>
+                        <span class="text-faint text-[11px]">{{ page }} / {{ totalPages }}</span>
+                        <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="page >= totalPages" @click="page++">→</button>
+                    </div>
+                </template>
                 <div v-else class="app-empty">
                     <AppIcon name="file-outline" :size="28" class="app-empty-icon" />
                     <p class="app-empty-title">{{ t('library.noFiles') }}</p>
@@ -299,7 +430,10 @@ async function removeFile(file: { id: string; filename: string }) {
             <section v-if="showKnowledge" class="space-y-3">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-sm font-black">{{ t('library.knowledge') }}</h2>
-                    <NuxtLink to="/settings/knowledge" class="text-hover-brand text-[11px] font-bold">{{ t('library.manageKnowledge') }}</NuxtLink>
+                    <div class="flex items-center gap-3">
+                        <button type="button" class="text-hover-brand text-[11px] font-bold" @click="openCreateKb">+ {{ t('knowledge.newBtn') }}</button>
+                        <NuxtLink to="/settings/knowledge" class="text-hover-brand text-[11px] font-bold">{{ t('library.manageKnowledge') }}</NuxtLink>
+                    </div>
                 </div>
                 <div v-if="kbs.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <NuxtLink
@@ -329,5 +463,103 @@ async function removeFile(file: { id: string; filename: string }) {
                 </div>
             </section>
         </template>
+
+        <!-- 一键转入知识库抽屉 -->
+        <Teleport to="body">
+            <div
+                v-if="ingestingFile"
+                class="app-overlay fixed inset-0 z-50 flex justify-end"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="t('library.ingestToKb')"
+                @click.self="ingestingFile = null"
+            >
+                <form class="app-drawer flex h-full w-full max-w-md flex-col" @submit.prevent="submitIngestAttachment">
+                    <div class="border-subtle flex items-center justify-between border-b px-6 py-4">
+                        <h2 class="text-sm font-black">{{ t('library.ingestModalTitle') }}</h2>
+                        <button type="button" class="app-btn app-btn-ghost !px-2 !py-1" @click="ingestingFile = null">✕</button>
+                    </div>
+                    <div class="flex-1 space-y-4 overflow-y-auto p-6">
+                        <p class="text-muted text-xs leading-relaxed">{{ t('library.ingestModalHint') }}</p>
+                        <div v-if="ingestError" class="app-alert app-alert-danger">{{ ingestError }}</div>
+                        <div v-if="!kbRows.length" class="app-alert">
+                            <p class="text-xs">{{ t('library.ingestNoKb') }}</p>
+                            <button
+                                type="button"
+                                class="app-btn app-btn-primary mt-2 !px-3 !py-1 !text-xs"
+                                @click="
+                                    ingestingFile = null;
+                                    openCreateKb();
+                                "
+                            >
+                                {{ t('knowledge.newBtn') }}
+                            </button>
+                        </div>
+                        <template v-else>
+                            <div>
+                                <label class="app-label">{{ t('library.ingestTargetKb') }} *</label>
+                                <select v-model="targetKbId" required class="app-input">
+                                    <option v-for="kb in kbRows" :key="kb.id" :value="kb.id">{{ kb.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="app-label">{{ t('library.ingestDocTitle') }}</label>
+                                <input v-model="ingestTitle" class="app-input" maxlength="200" :placeholder="ingestingFile.filename" />
+                            </div>
+                        </template>
+                    </div>
+                    <div class="border-subtle flex justify-end gap-2 border-t px-6 py-4">
+                        <button type="button" class="app-btn app-btn-outline" @click="ingestingFile = null">{{ t('common.cancel') }}</button>
+                        <button v-if="kbRows.length" type="submit" :disabled="ingestBusy || !targetKbId" class="app-btn app-btn-primary">
+                            {{ ingestBusy ? t('library.ingesting') : t('library.ingestConfirm') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Teleport>
+
+        <!-- 直接新建知识库抽屉 -->
+        <Teleport to="body">
+            <div
+                v-if="showCreateKb"
+                class="app-overlay fixed inset-0 z-50 flex justify-end"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="t('knowledge.newTitle')"
+                @click.self="showCreateKb = false"
+            >
+                <form class="app-drawer flex h-full w-full max-w-md flex-col" @submit.prevent="createKb">
+                    <div class="border-subtle flex items-center justify-between border-b px-6 py-4">
+                        <h2 class="text-sm font-black">{{ t('knowledge.newTitle') }}</h2>
+                        <button type="button" class="app-btn app-btn-ghost !px-2 !py-1" @click="showCreateKb = false">✕</button>
+                    </div>
+                    <div class="flex-1 space-y-4 overflow-y-auto p-6">
+                        <div v-if="kbFormError" class="app-alert app-alert-danger">{{ kbFormError }}</div>
+                        <div>
+                            <label class="app-label">{{ t('knowledge.name') }} *</label>
+                            <input v-model="kbForm.name" required maxlength="100" class="app-input" :placeholder="t('knowledge.namePlaceholder')" />
+                        </div>
+                        <div>
+                            <label class="app-label">{{ t('knowledge.description') }}</label>
+                            <textarea v-model="kbForm.description" rows="2" class="app-input" :placeholder="t('knowledge.descPlaceholder')" />
+                        </div>
+                        <div>
+                            <label class="app-label">{{ t('knowledge.space') }}</label>
+                            <select v-model="kbForm.spaceId" class="app-input">
+                                <option value="">{{ t('knowledge.globalSpace') }}</option>
+                                <option v-for="space in spaces" :key="space.id" :value="space.id">{{ space.icon }} {{ space.name }}</option>
+                            </select>
+                            <p class="text-faint mt-1 text-[11px]">{{ t('knowledge.spaceHint') }}</p>
+                        </div>
+                    </div>
+                    <div class="border-subtle flex justify-end gap-2 border-t px-6 py-4">
+                        <button type="button" class="app-btn app-btn-outline" @click="showCreateKb = false">{{ t('common.cancel') }}</button>
+                        <button type="submit" :disabled="savingKb" class="app-btn app-btn-primary">
+                            {{ savingKb ? t('common.saving') : t('common.save') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Teleport>
     </div>
 </template>

@@ -1,5 +1,5 @@
 import { asc, eq, max, sql } from 'drizzle-orm';
-import { attachments, conversations, kbDocuments, knowledgeBases, schedules, spaces } from '../db/schema';
+import { agents, attachments, conversations, kbDocuments, knowledgeBases, schedules, spaces } from '../db/schema';
 import { db } from '../utils/db';
 import { requireMethod } from '../utils/method';
 import { LOCAL_OWNER } from '../utils/owner';
@@ -19,21 +19,44 @@ export default defineEventHandler(async (event) => {
         if (!limited.ok) throw createError({ statusCode: 429, statusMessage: `创建过于频繁，请 ${limited.retryAfterSec} 秒后再试` });
         const body = (await readCappedJsonBody<Record<string, unknown>>(event)) ?? {};
         const input = normalizeSpaceInput(body);
+        let defaultAgentName: string | null = null;
+        let defaultAgentEmoji: string | null = null;
+        if (input.defaultAgentId) {
+            const [agentRow] = await db
+                .select({ id: agents.id, name: agents.name, emoji: agents.emoji })
+                .from(agents)
+                .where(eq(agents.id, input.defaultAgentId));
+            if (!agentRow) throw createError({ statusCode: 400, statusMessage: '默认智能体不存在' });
+            defaultAgentName = agentRow.name;
+            defaultAgentEmoji = agentRow.emoji;
+        }
         const id = crypto.randomUUID();
         const [row] = await db
             .insert(spaces)
             .values({ id, ...input })
             .returning();
-        return { ...row, conversationCount: 0, scheduleCount: 0, lastConversationAt: null };
+        return {
+            ...row,
+            defaultAgentName,
+            defaultAgentEmoji,
+            conversationCount: 0,
+            scheduleCount: 0,
+            enabledScheduleCount: 0,
+            attachmentCount: 0,
+            knowledgeBaseCount: 0,
+            documentCount: 0,
+            lastConversationAt: null,
+        };
     }
 
     const includeArchived = stringParam(getQuery(event).includeArchived) === '1';
-    const [spaceRows, conversationStats, scheduleStats, attachmentStats, kbStats, docStats] = await Promise.all([
+    const [spaceRows, agentRows, conversationStats, scheduleStats, attachmentStats, kbStats, docStats] = await Promise.all([
         db
             .select()
             .from(spaces)
             .where(includeArchived ? undefined : eq(spaces.archived, false))
             .orderBy(asc(spaces.createdAt)),
+        db.select({ id: agents.id, name: agents.name, emoji: agents.emoji }).from(agents),
         db
             .select({
                 spaceId: conversations.spaceId,
@@ -65,6 +88,7 @@ export default defineEventHandler(async (event) => {
             .groupBy(knowledgeBases.spaceId),
     ]);
 
+    const agentMap = new Map(agentRows.map((row) => [row.id, row]));
     const conversationMap = new Map(conversationStats.map((row) => [row.spaceId, row]));
     const scheduleMap = new Map(scheduleStats.map((row) => [row.spaceId, row]));
     const attachmentMap = new Map(attachmentStats.map((row) => [row.spaceId, row.count]));
@@ -74,8 +98,11 @@ export default defineEventHandler(async (event) => {
     return spaceRows.map((space) => {
         const conv = conversationMap.get(space.id);
         const sched = scheduleMap.get(space.id);
+        const defaultAgent = space.defaultAgentId ? agentMap.get(space.defaultAgentId) : undefined;
         return {
             ...space,
+            defaultAgentName: defaultAgent?.name ?? null,
+            defaultAgentEmoji: defaultAgent?.emoji ?? null,
             conversationCount: Number(conv?.conversationCount ?? 0),
             scheduleCount: Number(sched?.scheduleCount ?? 0),
             enabledScheduleCount: Number(sched?.enabledScheduleCount ?? 0),
