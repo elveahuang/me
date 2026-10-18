@@ -15,10 +15,23 @@ export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
  *
  * 显式 import h3 的理由同其它 utils：`pnpm work:test` 用 tsx 直跑，没有 Nitro 自动导入。
  */
-export function routeId(event: H3Event, name = 'id', label = name): string {
-    const value = getRouterParam(event, name) ?? '';
+export function normalizeRouteId(raw: unknown, label = 'id', allowedLiterals: readonly string[] = []): string {
+    const value = typeof raw === 'string' ? raw : '';
+    if (allowedLiterals.includes(value)) return value;
     if (!UUID_PATTERN.test(value)) {
         throw createError({ statusCode: 400, statusMessage: `${label}不是合法的 id` });
     }
     return value;
+}
+
+export function routeId(event: H3Event, name = 'id', label = name): string {
+    return normalizeRouteId(getRouterParam(event, name), label);
+}
+
+/**
+ * 路径参数除了 UUID 还允许少量固定字面量（例如默认空间 id='default'）。
+ * 字面量必须显式列出，不能把它放宽成「任意字符串」。
+ */
+export function routeIdAllowing(event: H3Event, allowedLiterals: readonly string[], name = 'id', label = name): string {
+    return normalizeRouteId(getRouterParam(event, name), label, allowedLiterals);
 }

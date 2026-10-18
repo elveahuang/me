@@ -4,14 +4,14 @@ import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { capBody, readCappedJsonBody } from '../../utils/request-body';
-import { routeId } from '../../utils/route-id';
+import { routeIdAllowing } from '../../utils/route-id';
 import { ensureDefaultSpace, normalizeSpaceInput } from '../../utils/spaces';
 
 export default defineEventHandler(async (event) => {
     await capBody(event);
     const method = requireMethod(event, ['GET', 'PATCH', 'DELETE']);
     await ensureDefaultSpace();
-    const id = routeId(event, 'id', '工作空间');
+    const id = routeIdAllowing(event, [DEFAULT_SPACE_ID], 'id', '工作空间');
     const [row] = await db.select().from(spaces).where(eq(spaces.id, id));
     if (!row) throw createError({ statusCode: 404, statusMessage: '工作空间不存在' });
 

@@ -304,6 +304,7 @@ async function runSmokeTests() {
     // 11. 工作台写入归一与北京日口径（定时任务的写入与「今天」的算法共用同一套规则）
     console.log('\n11. 测试工作台写入归一与北京日口径');
     const { WORK_TITLE_MAX, normalizeWorkDate, normalizeWorkId, normalizeWorkText } = await import('../server/utils/work-input');
+    const { normalizeRouteId } = await import('../server/utils/route-id');
     const { safeTrim, stripNull } = await import('../server/utils/pg-text');
     const { shanghaiDateKey, shanghaiDayRange } = await import('../server/utils/work-day');
 
@@ -320,6 +321,12 @@ async function runSmokeTests() {
     assert(
         threw400(() => normalizeWorkId('not-a-uuid', 'agentId')),
         'id 形状不对回 400（省一次无谓查库）',
+    );
+    assert(
+        normalizeRouteId('default', '工作空间', ['default']) === 'default' &&
+            normalizeRouteId('123e4567-e89b-12d3-a456-426614174000', '工作空间') === '123e4567-e89b-12d3-a456-426614174000' &&
+            threw400(() => normalizeRouteId('default', '工作空间')),
+        '空间路径允许默认空间字面量，但其他非 UUID 仍回 400',
     );
     assert(
         threw400(() => normalizeWorkDate('2026-02-30', 'startsAt')) && threw400(() => normalizeWorkDate('2025-02-29', 'startsAt')),
