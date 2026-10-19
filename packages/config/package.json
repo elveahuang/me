@@ -16,11 +16,11 @@
         "./commitlint/base": "./src/commitlint/commitlint.config.mjs"
     },
     "dependencies": {
-        "@commitlint/cli": "^21.2.3",
-        "@commitlint/config-conventional": "^21.2.3",
+        "@commitlint/cli": "^21.2.4",
+        "@commitlint/config-conventional": "^21.2.4",
         "@eslint/js": "^10.0.1",
         "@eslint/markdown": "^8.0.3",
-        "@intlify/unplugin-vue-i18n": "^11.2.6",
+        "@intlify/unplugin-vue-i18n": "^11.2.7",
         "@typescript-eslint/eslint-plugin": "^8.71.2",
         "@typescript-eslint/parser": "^8.71.2",
         "@vue/eslint-config-prettier": "^10.2.0",
