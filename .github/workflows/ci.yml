@@ -6,6 +6,30 @@ on:
         tags: ['*']
 
 jobs:
+    verify:
+        runs-on: ubuntu-26.04
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v7
+            - name: Setup Node & pnpm
+              uses: pnpm/action-setup@v6
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Typecheck Work
+              run: pnpm --filter @repo/work typecheck
+            - name: Smoke test Work
+              run: pnpm --filter @repo/work test
+            - name: Build Work
+              run: pnpm --filter @repo/work build
+            - name: Typecheck Webapp
+              run: pnpm --filter @repo/webapp typecheck
+
     build-and-push:
         runs-on: ubuntu-26.04
         permissions:

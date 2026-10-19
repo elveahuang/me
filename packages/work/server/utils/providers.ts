@@ -4,6 +4,7 @@ import { createError } from 'h3';
 import type { Provider } from '../db/schema';
 import { providers } from '../db/schema';
 import { db } from './db';
+import { openSecret, sealSecret } from './secret-box';
 import { lockDefaultSlot } from './unique-default';
 
 /**
@@ -76,7 +77,10 @@ export async function ensureDefaultProvider() {
             .from(providers)
             .where(and(eq(providers.apiKey, ''), eq(providers.isDefault, true)));
         for (const row of emptyKeyDefaults.filter((item) => isDeepSeekEndpoint(item.baseUrl))) {
-            await db.update(providers).set({ apiKey: usableKey, updatedAt: new Date() }).where(eq(providers.id, row.id));
+            await db
+                .update(providers)
+                .set({ apiKey: sealSecret(usableKey), updatedAt: new Date() })
+                .where(eq(providers.id, row.id));
             console.info(`[providers] 已用环境变量回填供应商「${row.name}」的 API Key`);
         }
         return;
@@ -97,7 +101,7 @@ export async function ensureDefaultProvider() {
             id: crypto.randomUUID(),
             name: 'DeepSeek',
             baseUrl: DEEPSEEK_BASE_URL,
-            apiKey: usableKey,
+            apiKey: sealSecret(usableKey),
             models: ['deepseek-chat', 'deepseek-reasoner'],
             enabled: true,
             isDefault: true,
@@ -106,7 +110,8 @@ export async function ensureDefaultProvider() {
 }
 
 export async function getEnabledProviders(): Promise<Provider[]> {
-    return db.select().from(providers).where(eq(providers.enabled, true)).orderBy(asc(providers.createdAt));
+    const rows = await db.select().from(providers).where(eq(providers.enabled, true)).orderBy(asc(providers.createdAt));
+    return rows.map((row) => ({ ...row, apiKey: openSecret(row.apiKey) }));
 }
 
 /**
@@ -134,7 +139,8 @@ export async function resolveModel(providerId?: string | null, modelId?: string 
 
     let provider: Provider | undefined;
     if (providerId) {
-        [provider] = await db.select().from(providers).where(eq(providers.id, providerId));
+        const [row] = await db.select().from(providers).where(eq(providers.id, providerId));
+        if (row) provider = { ...row, apiKey: openSecret(row.apiKey) };
     }
     if (!provider || !provider.enabled) {
         const enabled = await getEnabledProviders();

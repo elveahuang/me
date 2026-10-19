@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { mcpServers } from '../../../../db/schema';
 import { db } from '../../../../utils/db';
 import { gateExpensiveCalls } from '../../../../utils/expensive-gate';
-import { closeMcpConnections, connectMcpServer, MCP_TOOL_LIST_BUDGET_MS, mcpToolNamespace } from '../../../../utils/mcp';
+import { closeMcpConnections, connectMcpServer, MCP_TOOL_LIST_BUDGET_MS, mcpToolNamespace, openHeaders } from '../../../../utils/mcp';
 import { requireMethod } from '../../../../utils/method';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../../utils/request-body';
 import { routeId } from '../../../../utils/route-id';
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
 
     let connection;
     try {
-        connection = await connectMcpServer(server);
+        connection = await connectMcpServer({ ...server, headers: openHeaders(server.headers) });
     } catch (error) {
         return { ok: false, message: `连接失败：${error instanceof Error ? error.message : String(error)}`, tools: [] };
     }

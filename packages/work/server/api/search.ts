@@ -56,14 +56,14 @@ export default defineEventHandler(async (event) => {
                 agentName: agents.name,
                 spaceName: spaces.name,
                 role: messages.role,
-                snippet: sql<string>`left(coalesce(${messages.parts}->0->>'text', ''), 180)`,
+                snippet: sql<string>`left(coalesce(nullif(${messages.contentText}, ''), ${messages.parts}->0->>'text'), 180)`,
                 createdAt: messages.createdAt,
             })
             .from(messages)
             .innerJoin(conversations, eq(conversations.id, messages.conversationId))
             .innerJoin(agents, eq(agents.id, conversations.agentId))
             .leftJoin(spaces, eq(spaces.id, conversations.spaceId))
-            .where(sql`${messages.parts}::text ILIKE ${pattern}`)
+            .where(ilike(messages.contentText, pattern))
             .orderBy(desc(messages.seq))
             .limit(GROUP_LIMIT),
         db

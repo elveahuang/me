@@ -2,6 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import { agentKnowledgeBases, agentMcpServers, agentSkills, agentTools, agents, knowledgeBases, mcpServers, providers, skills, tools } from '../../db/schema';
 import {
+    normalizeAgentApprovalMode,
     normalizeAgentIdList,
     normalizeAgentMaxSteps,
     normalizeAgentMaxTokens,
@@ -44,6 +45,7 @@ async function createAgent(event: H3Event) {
             temperature: normalizeAgentTemperature(body.temperature, 0.7),
             maxTokens: normalizeAgentMaxTokens(body.maxTokens),
             maxSteps: normalizeAgentMaxSteps(body.maxSteps, 6),
+            approvalMode: normalizeAgentApprovalMode(body.approvalMode),
         });
         await replaceAgentSkills(id, normalizeAgentIdList(body.skillIds, 'skillIds'), tx);
         await replaceAgentTools(id, normalizeAgentIdList(body.toolIds, 'toolIds'), tx);

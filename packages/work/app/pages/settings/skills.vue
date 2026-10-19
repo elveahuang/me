@@ -150,6 +150,25 @@ async function remove(id: string) {
         fail(e, t('adminForm.deleteFailed'));
     }
 }
+
+/** 从 WORK_SKILL_ROOTS 扫描 SKILL.md / *.md；只增改，不删手工技能 */
+const syncing = ref(false);
+async function syncFromFiles() {
+    if (syncing.value) return;
+    syncing.value = true;
+    error.value = '';
+    try {
+        const result = await $fetch<{ scanned: number; created: number; updated: number; skipped: number }>('/api/settings/skills/sync', {
+            method: 'POST',
+        });
+        flashSuccess(t('adminForm.skillSyncDone', result));
+        await load();
+    } catch (e) {
+        fail(e, t('adminForm.skillSyncFailed'));
+    } finally {
+        syncing.value = false;
+    }
+}
 </script>
 
 <template>
@@ -165,6 +184,9 @@ async function remove(id: string) {
                 <p class="app-page-subtitle">{{ t('adminForm.skillSubtitle') }}</p>
             </div>
             <div class="app-page-actions">
+                <button class="app-btn app-btn-secondary app-btn-sm" :disabled="syncing" @click="syncFromFiles">
+                    {{ syncing ? t('common.loading') : t('adminForm.skillSyncFiles') }}
+                </button>
                 <button class="app-btn app-btn-primary app-btn-sm" @click="openCreate">{{ t('adminForm.skillNew') }}</button>
             </div>
         </div>

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { agents, schedules, spaces } from '../db/schema';
 import { normalizeAdminBoolean } from '../utils/admin-boolean';
 import { db } from '../utils/db';
@@ -31,6 +31,7 @@ const listColumns = {
     days: schedules.days,
     startsAt: schedules.startsAt,
     enabled: schedules.enabled,
+    revision: schedules.revision,
     nextRunAt: schedules.nextRunAt,
     lastRunAt: schedules.lastRunAt,
     lastStatus: schedules.lastStatus,
@@ -95,7 +96,7 @@ export default defineEventHandler(async (event) => {
         return row;
     }
 
-    const where: SQL[] = [];
+    const where: SQL[] = [isNull(schedules.deletedAt)];
     const enabled = stringParam(query.enabled);
     if (enabled === '1') where.push(eq(schedules.enabled, true));
     if (enabled === '0') where.push(eq(schedules.enabled, false));

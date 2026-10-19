@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { schedules } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { gateExpensiveCalls } from '../../../utils/expensive-gate';
@@ -31,10 +31,13 @@ export default defineEventHandler(async (event) => {
     const [claimed] = await db
         .update(schedules)
         .set({ lastStatus: 'running', lastRunAt: new Date(), lastError: '' })
-        .where(and(eq(schedules.id, id), notRunningNow(runningStaleBefore())))
+        .where(and(eq(schedules.id, id), isNull(schedules.deletedAt), notRunningNow(runningStaleBefore())))
         .returning();
     if (!claimed) {
-        const exists = await db.select({ id: schedules.id }).from(schedules).where(eq(schedules.id, id));
+        const exists = await db
+            .select({ id: schedules.id })
+            .from(schedules)
+            .where(and(eq(schedules.id, id), isNull(schedules.deletedAt)));
         if (!exists.length) throw createError({ statusCode: 404, statusMessage: '定时任务不存在' });
         throw createError({ statusCode: 409, statusMessage: '这一条正在执行，请等它跑完' });
     }

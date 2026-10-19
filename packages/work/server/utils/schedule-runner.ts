@@ -1,33 +1,24 @@
 import { generateText, stepCountIs } from 'ai';
-import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm';
-import {
-    agentKnowledgeBases,
-    agentMcpServers,
-    agentSkills,
-    agentTools,
-    agents,
-    automationRuns,
-    conversations,
-    knowledgeBases,
-    messages,
-    schedules,
-    skills,
-    spaces,
-    tools as toolsTable,
-    type Schedule,
-} from '../db/schema';
+import { and, asc, desc, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { wrapToolsWithApproval } from '../agent/policy/approval';
+import { loadAgentCapabilities } from '../agent/runtime';
+import { clipEventValue, toolErrorSummary } from '../agent/session/event-values';
+import { appendSessionEventsBestEffort } from '../agent/session/events';
+import { estimateTokens } from '../agent/session/token-meter';
+import { applyToolRegistry } from '../agent/tool-registry';
+import { agents, automationRuns, conversations, messages, schedules, type Schedule } from '../db/schema';
+import { buildAssistTools } from './assist-tools';
 import { db } from './db';
 import { retrieveContext } from './embedding';
-import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from './local-tools';
+import { buildJobTools } from './job-tools';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from './mcp';
-import { resolveModel } from './providers';
 import { lockAgentRow } from './ref-lock';
 import { planOf } from './schedule-store';
+import { buildSkillTools, matchSkillDirective, skillDirectiveSection } from './skill-tools';
+import { buildSubagentTools } from './subagents';
 import { buildSystemPrompt } from './system-prompt';
-import { buildToolSet } from './tools';
 import { shanghaiDateKey } from './work-day';
 import { computeNextRunAt } from './work-schedule';
-import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from './workbench-tools';
 
 /**
  * 定时任务的执行侧：到点自动跑一轮智能体，把结果落成一条会话。
@@ -66,6 +57,28 @@ const RUNNING_STALE_MS = RUN_TOTAL_BUDGET_MS + 2 * 60_000;
  * 下一分钟的唤醒自然会接上剩下的。
  */
 let tickInFlight = false;
+
+/**
+ * 正在本进程执行的运行记录 → 中断句柄。
+ *
+ * 取消是进程内能力：`automation_runs.status='running'` 可能是上一进程遗留（启动自愈会收口），
+ * 此时库里看着在跑、却没有东西可中断。接口据此返回 409，而不是把一行历史改成失败。
+ */
+const activeScheduleRuns = new Map<string, AbortController>();
+
+/** 取消一轮正在执行的定时任务；返回 false 表示它不在本进程里跑。 */
+export function cancelScheduleRun(runId: string): boolean {
+    const controller = activeScheduleRuns.get(runId);
+    if (!controller) return false;
+    // 已经按过取消就保持幂等：第二次点击不该报「不在本进程执行」
+    if (!controller.signal.aborted) controller.abort();
+    return true;
+}
+
+/** 供接口区分「不在跑」与「在跑但属于别的进程」。 */
+export function isScheduleRunActive(runId: string): boolean {
+    return activeScheduleRuns.has(runId);
+}
 
 export type ScheduleRunResult = { ok: boolean; conversationId?: string; error?: string; runId?: string };
 
@@ -163,7 +176,7 @@ async function claimDue(now: Date): Promise<Schedule[]> {
         const due = await tx
             .select()
             .from(schedules)
-            .where(and(eq(schedules.enabled, true), lte(schedules.nextRunAt, now), notRunningNow(runningStaleBefore(now))))
+            .where(and(eq(schedules.enabled, true), isNull(schedules.deletedAt), lte(schedules.nextRunAt, now), notRunningNow(runningStaleBefore(now))))
             .orderBy(asc(schedules.nextRunAt))
             .limit(RUNS_PER_TICK)
             .for('update', { skipLocked: true });
@@ -190,6 +203,9 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
     let mcpConnections: McpConnections = [];
     let conversationId: string | null = null;
     const runId = crypto.randomUUID();
+    const runStartedAt = new Date();
+    const cancelController = new AbortController();
+    activeScheduleRuns.set(runId, cancelController);
     try {
         await db.insert(automationRuns).values({
             id: runId,
@@ -197,49 +213,17 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
             status: 'running',
             trigger,
             scheduledFor: trigger === 'schedule' ? at : null,
-            startedAt: new Date(),
+            startedAt: runStartedAt,
             prompt: row.prompt,
         });
         const [agent] = await db.select().from(agents).where(eq(agents.id, row.agentId));
         if (!agent) return { ok: false, runId, error: '智能体已被删除' };
         if (!agent.enabled) return { ok: false, runId, error: '智能体已停用' };
 
-        const [boundSkillRows, boundToolRows, boundKbIds, boundMcpIds] = await Promise.all([
-            db
-                .select({ skill: skills })
-                .from(agentSkills)
-                .innerJoin(skills, eq(skills.id, agentSkills.skillId))
-                .where(and(eq(agentSkills.agentId, row.agentId), eq(skills.enabled, true))),
-            db
-                .select({ tool: toolsTable })
-                .from(agentTools)
-                .innerJoin(toolsTable, eq(toolsTable.id, agentTools.toolId))
-                .where(and(eq(agentTools.agentId, row.agentId), eq(toolsTable.enabled, true))),
-            db
-                .select({ kbId: agentKnowledgeBases.kbId })
-                .from(agentKnowledgeBases)
-                .where(eq(agentKnowledgeBases.agentId, row.agentId))
-                .then((rows) => rows.map((r) => r.kbId)),
-            db
-                .select({ mcpServerId: agentMcpServers.mcpServerId })
-                .from(agentMcpServers)
-                .where(eq(agentMcpServers.agentId, row.agentId))
-                .then((rows) => rows.map((r) => r.mcpServerId)),
-        ]);
-
-        const spaceKbIds = boundKbIds.length
-            ? (
-                  await db
-                      .select({ id: knowledgeBases.id })
-                      .from(knowledgeBases)
-                      .where(
-                          and(
-                              inArray(knowledgeBases.id, boundKbIds),
-                              row.spaceId ? or(eq(knowledgeBases.spaceId, row.spaceId), isNull(knowledgeBases.spaceId)) : isNull(knowledgeBases.spaceId),
-                          ),
-                      )
-              ).map((item) => item.id)
-            : [];
+        // 能力装配与 /api/chat 共用一份（server/agent/runtime.ts），避免「聊天加了工具、定时任务没加」
+        const runtime = await loadAgentCapabilities(agent, row.spaceId);
+        const { space, spaceKbIds } = runtime;
+        let toolSet = runtime.toolSet;
 
         let knowledgeContext: string | null = null;
         if (spaceKbIds.length && row.prompt.trim()) {
@@ -278,62 +262,92 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
             }
         }
 
-        const [space] = row.spaceId
-            ? await db
-                  .select({ name: spaces.name, instructions: spaces.instructions, localRoot: spaces.localRoot })
-                  .from(spaces)
-                  .where(eq(spaces.id, row.spaceId))
-            : [];
-        const { model } = await resolveModel(agent.providerId, agent.model);
-
-        const localTools = buildLocalFileTools(space?.localRoot || undefined);
-        let toolSet = {
-            ...buildWorkbenchTools(row.agentId, row.spaceId),
-            ...localTools,
-            ...buildToolSet(boundToolRows.map((r) => r.tool)),
-        };
-        const toolSummary = [
-            WORKBENCH_TOOL_SUMMARY,
-            ...(Object.keys(localTools).length ? [LOCAL_TOOL_SUMMARY] : []),
-            ...boundToolRows.filter((r) => r.tool.enabled).map((r) => `- ${r.tool.name}：${r.tool.description}`),
-        ].join('\n');
-        mcpConnections = await connectEnabledMcpServers(boundMcpIds);
+        mcpConnections = await connectEnabledMcpServers(runtime.mcpServerIds);
         if (mcpConnections.length) toolSet = mergeMcpTools(toolSet, mcpConnections);
+        const toolSummary = [runtime.toolSummary, ...mcpConnections.map((connection) => `- [MCP] ${connection.serverName}`)].join('\n');
 
         // 闭包里用局部 const：外层 `conversationId` 是 `string | null`（finally 里还要读它判断
         // 「这一轮有没有留下会话」），TS 不会把回调里的赋值算作收窄，直接插会报 id 可为 null。
         const conversationRowId = crypto.randomUUID();
+        const userMessageId = `cmsg_${crypto.randomUUID()}`;
         const title = `${row.title} · ${shanghaiDateKey(at)}`;
         await db.transaction(async (tx) => {
             await lockAgentRow(tx, row.agentId);
             await tx.insert(conversations).values({ id: conversationRowId, agentId: row.agentId, spaceId: row.spaceId, title });
             await tx.insert(messages).values({
-                id: `cmsg_${crypto.randomUUID()}`,
+                id: userMessageId,
                 conversationId: conversationRowId,
                 role: 'user',
                 parts: [{ type: 'text', text: row.prompt }],
+                contentText: row.prompt,
             });
         });
         conversationId = conversationRowId;
 
-        const systemPromptText = buildSystemPrompt(
-            agent,
-            boundSkillRows.map((r) => r.skill),
-            knowledgeContext,
-            toolSummary,
-            undefined,
-            space,
-        );
+        // 定时任务与聊天共用同一套事件口径；写失败不影响这一轮执行。
+        await appendSessionEventsBestEffort(conversationRowId, [
+            {
+                type: 'user/message',
+                turnId: runId,
+                data: { id: userMessageId, parts: [{ type: 'text', text: row.prompt }] },
+            },
+            {
+                type: 'run/start',
+                turnId: runId,
+                data: { runId, trigger, scheduleId: row.id, agentId: row.agentId, source: 'schedule' },
+            },
+        ]);
+
+        // 后台没有审批界面：ask 模式下的写/执行工具立即失败关闭，auto 模式仍按风险自动放行
+        toolSet = { ...toolSet, ...buildJobTools({ conversationId: conversationRowId, agentId: row.agentId }) };
+        toolSet = { ...toolSet, ...buildAssistTools(conversationRowId) };
+        toolSet = { ...toolSet, ...buildSkillTools(runtime.skills) };
+        toolSet = { ...toolSet, ...buildSubagentTools({ agentId: row.agentId, spaceId: row.spaceId }) };
+        toolSet = applyToolRegistry(toolSet);
+        toolSet = wrapToolsWithApproval(toolSet, {
+            conversationId: conversationRowId,
+            runId,
+            mode: (agent.approvalMode as 'auto' | 'ask' | 'never') ?? 'auto',
+            noAnswerer: true,
+        });
+
+        const baseSystemPrompt = buildSystemPrompt(agent, runtime.skills, knowledgeContext, toolSummary, undefined, space);
+        const scheduledSkill = matchSkillDirective(row.prompt, runtime.skills);
+        const systemPromptText = scheduledSkill ? `${baseSystemPrompt}\n\n${skillDirectiveSection(scheduledSkill)}` : baseSystemPrompt;
 
         let generatedText = '';
+        let finalUsage = { steps: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, reasoningTokens: 0 };
+        let sawToolExecution = false;
         for (let attempt = 1; attempt <= 2; attempt++) {
             try {
                 if (attempt > 1) {
                     await db.update(automationRuns).set({ attempt }).where(eq(automationRuns.id, runId));
                     await new Promise((r) => setTimeout(r, 1500));
+                    // 等退避的这 1.5 秒里用户可能已经点了取消，不能醒来再打一次供应商
+                    if (cancelController.signal.aborted) throw new RunFailure('用户已取消');
                 }
-                const { text } = await generateText({
-                    model,
+                await appendSessionEventsBestEffort(conversationRowId, [
+                    {
+                        type: 'request/header',
+                        turnId: runId,
+                        data: {
+                            model: agent.model,
+                            providerId: agent.providerId,
+                            maxSteps: agent.maxSteps ?? 6,
+                            messageCount: 1,
+                            estimatedContextTokens: estimateTokens(systemPromptText) + estimateTokens(row.prompt),
+                            toolNames: Object.keys(toolSet),
+                            systemChars: systemPromptText.length,
+                            temperature: agent.temperature ?? null,
+                            maxOutputTokens: agent.maxTokens ?? null,
+                            trigger,
+                            attempt,
+                        },
+                    },
+                ]);
+
+                const result = await generateText({
+                    model: runtime.model,
                     system: systemPromptText,
                     prompt: row.prompt,
                     tools: toolSet,
@@ -341,18 +355,110 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
                     temperature: agent.temperature ?? undefined,
                     maxOutputTokens: agent.maxTokens ?? undefined,
                     timeout: { firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: CHUNK_TIMEOUT_MS, toolMs: TOOL_TIMEOUT_MS },
-                    abortSignal: AbortSignal.timeout(RUN_TOTAL_BUDGET_MS),
+                    abortSignal: AbortSignal.any([cancelController.signal, AbortSignal.timeout(RUN_TOTAL_BUDGET_MS)]),
+                    onToolExecutionStart: async ({ toolCall }) => {
+                        sawToolExecution = true;
+                        await appendSessionEventsBestEffort(conversationRowId, [
+                            {
+                                type: 'tool/call',
+                                turnId: runId,
+                                stepId: `attempt-${attempt}`,
+                                data: { toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, input: clipEventValue(toolCall.input) },
+                            },
+                        ]);
+                    },
+                    onToolExecutionEnd: async ({ toolCall, toolOutput, toolExecutionMs }) => {
+                        const isError = toolOutput.type === 'tool-error';
+                        const raw = isError ? toolOutput.error : toolOutput.output;
+                        await appendSessionEventsBestEffort(conversationRowId, [
+                            {
+                                type: 'tool/result',
+                                turnId: runId,
+                                stepId: `attempt-${attempt}`,
+                                data: {
+                                    toolCallId: toolCall.toolCallId,
+                                    toolName: toolCall.toolName,
+                                    isError,
+                                    output: isError ? toolErrorSummary(raw) : clipEventValue(raw),
+                                    durationMs: toolExecutionMs,
+                                },
+                            },
+                        ]);
+                    },
+                    onStepEnd: async (step) => {
+                        const stepUsage = {
+                            inputTokens: step.usage.inputTokens ?? 0,
+                            outputTokens: step.usage.outputTokens ?? 0,
+                            totalTokens: step.usage.totalTokens ?? 0,
+                            cachedInputTokens: step.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+                            reasoningTokens: step.usage.outputTokenDetails?.reasoningTokens ?? 0,
+                        };
+                        const parts: Record<string, unknown>[] = [];
+                        if (step.text) parts.push({ type: 'text', text: step.text });
+                        for (const call of step.toolCalls) {
+                            const toolResult = step.toolResults.find((item) => item.toolCallId === call.toolCallId);
+                            parts.push({
+                                type: `tool-${call.toolName}`,
+                                toolCallId: call.toolCallId,
+                                input: clipEventValue(call.input),
+                                state: toolResult ? 'output-available' : 'input-available',
+                                ...(toolResult ? { output: clipEventValue(toolResult.output) } : {}),
+                            });
+                        }
+                        if (!parts.length) return;
+                        await appendSessionEventsBestEffort(conversationRowId, [
+                            {
+                                type: 'assistant/message',
+                                turnId: runId,
+                                stepId: String(step.stepNumber),
+                                data: {
+                                    id: `checkpoint:${runId}:${attempt}:${step.stepNumber}`,
+                                    checkpoint: true,
+                                    stepNumber: step.stepNumber,
+                                    attempt,
+                                    finishReason: step.finishReason,
+                                    usage: stepUsage,
+                                    parts,
+                                },
+                            },
+                        ]);
+                    },
                 });
-                generatedText = text.trim().slice(0, RESULT_TEXT_MAX);
+                generatedText = result.text.trim().slice(0, RESULT_TEXT_MAX);
                 if (!generatedText) throw new RunFailure('模型没有返回可用正文');
+                finalUsage = {
+                    steps: result.steps.length,
+                    inputTokens: result.usage.inputTokens ?? 0,
+                    outputTokens: result.usage.outputTokens ?? 0,
+                    totalTokens: result.usage.totalTokens ?? 0,
+                    cachedInputTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+                    reasoningTokens: result.usage.outputTokenDetails?.reasoningTokens ?? 0,
+                };
                 break;
             } catch (err) {
-                if (attempt >= 2) throw err;
+                // 已经执行过工具就不再整轮重试：工具可能有外部副作用（发消息、写文件），
+                // 重试等于让副作用发生两次；宁可把这一轮判失败，让用户手动重跑。
+                if (attempt >= 2 || sawToolExecution || cancelController.signal.aborted) throw err;
             }
         }
         const content = generatedText;
-        await db.insert(messages).values({ id: `cmsg_${crypto.randomUUID()}`, conversationId, role: 'assistant', parts: [{ type: 'text', text: content }] });
+        const assistantMessageId = `cmsg_${crypto.randomUUID()}`;
+        await db
+            .insert(messages)
+            .values({ id: assistantMessageId, conversationId, role: 'assistant', parts: [{ type: 'text', text: content }], contentText: content });
         await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
+        await appendSessionEventsBestEffort(conversationRowId, [
+            {
+                type: 'assistant/message',
+                turnId: runId,
+                data: { id: assistantMessageId, parts: [{ type: 'text', text: content }], final: true, usage: finalUsage },
+            },
+            {
+                type: 'run/end',
+                turnId: runId,
+                data: { runId, status: 'completed', reason: null, durationMs: Math.max(0, Date.now() - runStartedAt.getTime()), usage: finalUsage },
+            },
+        ]);
         return { ok: true, conversationId, runId };
     } catch (error) {
         // 这一条 catch 是整个执行侧的收尾保证：`resolveModel`、MCP 建连、两条 insert 都在外呼之前，
@@ -361,8 +467,25 @@ async function executeSchedule(row: Schedule, at: Date, trigger: 'schedule' | 'm
         // 原因本身走 describeRunError：这个字段会被列表渲染、也会被 work_today 发给外部供应商，
         // 原始 message 里装着 drizzle 的整条 SQL 与绑定参数（也就是这条排期的 prompt 正文）。
         const id = conversationId;
-        return { ok: false, runId, ...(id ? { conversationId: id } : {}), error: describeRunError(error) };
+        const reasonText = cancelController.signal.aborted ? '用户已取消' : describeRunError(error);
+        if (id) {
+            await appendSessionEventsBestEffort(id, [
+                {
+                    type: 'run/end',
+                    turnId: runId,
+                    data: {
+                        runId,
+                        status: 'failed',
+                        reason: 'schedule_failed',
+                        durationMs: Math.max(0, Date.now() - runStartedAt.getTime()),
+                        error: reasonText,
+                    },
+                },
+            ]);
+        }
+        return { ok: false, runId, ...(id ? { conversationId: id } : {}), error: reasonText };
     } finally {
+        activeScheduleRuns.delete(runId);
         // 连接必须在任何分支下关掉：定时任务没有「请求结束」这个时刻，漏掉的 MCP 子进程会一直挂在进程里
         await closeMcpConnections(mcpConnections).catch((error) => console.error('[schedules] 关闭 MCP 连接失败:', error));
     }

@@ -1,6 +1,7 @@
 import { createError } from 'h3';
-import { readdir, readFile, realpath, stat } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
  * 本地文件只读工具的安全边界。
@@ -103,6 +104,111 @@ export async function readLocalFile(rawPath: unknown, maxBytesRaw: unknown = 60_
     const buffer = await readFile(file);
     if (buffer.includes(0)) fail('拒绝读取二进制文件');
     return buffer.subarray(0, maxBytes).toString('utf8');
+}
+
+/* ---------------- 写能力（P2-1）：默认关闭，开启后仍受 WORK_FILE_ROOTS 限制 ---------------- */
+
+const MAX_WRITE_BYTES = 200_000;
+
+export function isLocalWriteEnabled(): boolean {
+    const value = (process.env.WORK_FILE_WRITE || '').trim().toLowerCase();
+    return value === '1' || value === 'true' || value === 'yes';
+}
+
+function sha256(text: string): string {
+    return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16);
+}
+
+async function assertInsideRoots(realTarget: string): Promise<void> {
+    const roots = parseLocalRoots();
+    if (!roots.length) fail('没有配置本地文件目录，请先在 .env 设置 WORK_FILE_ROOTS');
+    const realRoots = await Promise.all(roots.map((root) => realpath(root).catch(() => resolve(root))));
+    if (!realRoots.some((root) => isPathInside(root, realTarget))) fail('路径不在 WORK_FILE_ROOTS 允许的目录内', 403);
+}
+
+/**
+ * 解析「允许写」的路径。文件可以尚不存在，但父目录必须已存在且真实路径在根目录内；
+ * 已存在的目标再 realpath 一次，防止最后一段是符号链接把写入带出白名单。
+ */
+export async function resolveWritablePath(raw: unknown): Promise<string> {
+    if (!isLocalWriteEnabled()) fail('本地写入未开启，请先在 .env 设置 WORK_FILE_WRITE=1', 403);
+    if (typeof raw !== 'string' || !raw.trim()) fail('path 必须是非空字符串');
+    if (!isAbsolute(raw.trim())) fail('path 必须是绝对路径');
+    const target = resolve(raw.trim());
+    const parent = dirname(target);
+    let realParent: string;
+    try {
+        realParent = await realpath(parent);
+    } catch {
+        fail('父目录不存在', 404);
+    }
+    await assertInsideRoots(realParent);
+    const candidate = join(realParent, basename(target));
+    let realTarget: string | null = null;
+    try {
+        realTarget = await realpath(candidate);
+    } catch {
+        realTarget = null;
+    }
+    if (realTarget) {
+        await assertInsideRoots(realTarget);
+        return realTarget;
+    }
+    await assertInsideRoots(candidate);
+    return candidate;
+}
+
+export interface LocalWriteResult {
+    path: string;
+    bytes: number;
+    version: string;
+    previousVersion: string | null;
+}
+
+export async function writeLocalFile(rawPath: unknown, contentRaw: unknown, expectedVersion?: unknown): Promise<LocalWriteResult> {
+    if (typeof contentRaw !== 'string') fail('content 必须是字符串');
+    const bytes = Buffer.byteLength(contentRaw, 'utf8');
+    if (bytes > MAX_WRITE_BYTES) fail(`写入内容超过 ${Math.round(MAX_WRITE_BYTES / 1000)}KB 上限`);
+    const target = await resolveWritablePath(rawPath);
+
+    let previous: string | null = null;
+    try {
+        previous = await readFile(target, 'utf8');
+    } catch {
+        previous = null;
+    }
+    const previousVersion = previous === null ? null : sha256(previous);
+    if (typeof expectedVersion === 'string' && expectedVersion && expectedVersion !== (previousVersion ?? 'missing')) {
+        throw createError({ statusCode: 409, statusMessage: `FS_STALE_VERSION: 文件已被修改（当前 ${previousVersion ?? 'missing'}）` });
+    }
+
+    // 同目录临时文件 + rename：崩溃时不会留下半截正文；Windows 覆盖已存在文件失败时再回退到删后改名
+    const temp = join(dirname(target), `.${basename(target)}.${crypto.randomUUID()}.tmp`);
+    await writeFile(temp, contentRaw, 'utf8');
+    try {
+        await rename(temp, target);
+    } catch {
+        await rm(target, { force: true });
+        await rename(temp, target);
+    }
+    return { path: target, bytes, version: sha256(contentRaw), previousVersion };
+}
+
+export async function editLocalFile(rawPath: unknown, oldTextRaw: unknown, newTextRaw: unknown, expectedVersion?: unknown): Promise<LocalWriteResult> {
+    const oldText = typeof oldTextRaw === 'string' ? oldTextRaw : '';
+    const newText = typeof newTextRaw === 'string' ? newTextRaw : '';
+    if (!oldText) fail('oldText 不能为空');
+    const content = await readLocalFile(rawPath, MAX_READ_BYTES);
+    const index = content.indexOf(oldText);
+    if (index < 0) fail('oldText 在文件中不存在（必须逐字匹配，含缩进）');
+    const next = content.slice(0, index) + newText + content.slice(index + oldText.length);
+    return writeLocalFile(rawPath, next, expectedVersion);
+}
+
+export async function makeLocalDirectory(rawPath: unknown): Promise<{ path: string }> {
+    const target = await resolveWritablePath(rawPath);
+    await mkdir(target);
+    return { path: target };
 }
 
 export interface LocalSearchHit {

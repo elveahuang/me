@@ -33,6 +33,7 @@ interface AgentItem {
     temperature?: number | null;
     maxTokens?: number | null;
     maxSteps?: number | null;
+    approvalMode: 'auto' | 'ask' | 'never';
     skillIds: string[];
     skills: SkillItem[];
     toolIds: string[];
@@ -103,6 +104,7 @@ const form = reactive({
     temperature: 0.7,
     maxTokens: null as number | null,
     maxSteps: 6,
+    approvalMode: 'auto' as 'auto' | 'ask' | 'never',
     skillIds: [] as string[],
     toolIds: [] as string[],
     kbIds: [] as string[],
@@ -176,6 +178,7 @@ function openCreate() {
         temperature: 0.7,
         maxTokens: null,
         maxSteps: 6,
+        approvalMode: 'auto',
         skillIds: [],
         toolIds: [],
         kbIds: [],
@@ -199,6 +202,7 @@ function openEdit(agent: AgentItem) {
         temperature: agent.temperature ?? 0.7,
         maxTokens: agent.maxTokens ?? null,
         maxSteps: agent.maxSteps ?? 6,
+        approvalMode: agent.approvalMode ?? 'auto',
         skillIds: [...agent.skillIds],
         toolIds: [...(agent.toolIds ?? [])],
         kbIds: [...agent.kbIds],
@@ -425,6 +429,15 @@ async function remove(id: string) {
                             class="app-input !font-mono"
                         />
                     </div>
+                </div>
+                <div>
+                    <label class="app-label" for="agent-approval-mode">{{ t('adminForm.approvalModeLabel') }}</label>
+                    <select id="agent-approval-mode" v-model="form.approvalMode" class="app-input">
+                        <option value="auto">{{ t('adminForm.approvalModeAuto') }}</option>
+                        <option value="ask">{{ t('adminForm.approvalModeAsk') }}</option>
+                        <option value="never">{{ t('adminForm.approvalModeNever') }}</option>
+                    </select>
+                    <p class="text-faint mt-1 text-[11px]">{{ t('adminForm.approvalModeHint') }}</p>
                 </div>
                 <div class="text-soft flex items-center gap-4 text-sm">
                     <label class="flex items-center gap-1.5">

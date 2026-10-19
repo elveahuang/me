@@ -8,11 +8,13 @@ import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { routeId } from '../../../utils/route-id';
+import { openSecret, sealSecret } from '../../../utils/secret-box';
 import { lockDefaultSlot } from '../../../utils/unique-default';
 
 function maskKey(key: string) {
-    if (!key) return '';
-    return key.length <= 8 ? '****' : `${key.slice(0, 4)}****${key.slice(-4)}`;
+    const plain = openSecret(key);
+    if (!plain) return '';
+    return plain.length <= 8 ? '****' : `${plain.slice(0, 4)}****${plain.slice(-4)}`;
 }
 
 export default defineEventHandler(async (event) => {
@@ -63,7 +65,7 @@ export default defineEventHandler(async (event) => {
     if (incomingKey) {
         const [current] = await db.select({ apiKey: providers.apiKey }).from(providers).where(eq(providers.id, id));
         if (!current) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
-        if (incomingKey !== maskKey(current.apiKey)) patch.apiKey = incomingKey;
+        if (incomingKey !== maskKey(current.apiKey)) patch.apiKey = sealSecret(incomingKey);
     }
 
     const becomesDefault = patch.isDefault === true;

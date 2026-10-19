@@ -8,11 +8,13 @@ import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { safeTrim, stripNull } from '../../utils/pg-text';
 import { ensureDefaultProvider } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
+import { openSecret, sealSecret } from '../../utils/secret-box';
 import { lockDefaultSlot } from '../../utils/unique-default';
 
 function maskKey(key: string) {
-    if (!key) return '';
-    return key.length <= 8 ? '****' : `${key.slice(0, 4)}****${key.slice(-4)}`;
+    const plain = openSecret(key);
+    if (!plain) return '';
+    return plain.length <= 8 ? '****' : `${plain.slice(0, 4)}****${plain.slice(-4)}`;
 }
 
 export default defineEventHandler(async (event) => {
@@ -51,7 +53,7 @@ export default defineEventHandler(async (event) => {
                 id,
                 name,
                 baseUrl,
-                apiKey: body.apiKey === undefined ? '' : stripNull(body.apiKey as string),
+                apiKey: body.apiKey === undefined ? '' : sealSecret(stripNull(body.apiKey as string)),
                 models,
                 enabled,
                 isDefault,

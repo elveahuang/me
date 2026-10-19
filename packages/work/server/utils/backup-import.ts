@@ -5,21 +5,30 @@ import {
     agentSkills,
     agentTools,
     agents,
+    approvals,
+    artifacts,
     attachments,
     automationRuns,
     conversations,
+    goals,
+    jobChunks,
+    jobs,
     kbDocuments,
     knowledgeBases,
     mcpServers,
     messages,
     providers,
     schedules,
+    sessionEvents,
+    sessionRuns,
     skills,
     spaces,
     storageConfigs,
     systemSettings,
+    todos,
     tools,
 } from '../db/schema';
+import { backupChecksum } from './backup-checksum';
 import { db } from './db';
 import { ensureDefaultSpace } from './spaces';
 
@@ -44,11 +53,19 @@ const DATE_COLUMNS: Record<string, string[]> = {
     storageConfigs: ['createdAt', 'updatedAt'],
     agents: ['createdAt', 'updatedAt'],
     conversations: ['createdAt', 'updatedAt'],
-    schedules: ['startsAt', 'nextRunAt', 'lastRunAt', 'createdAt', 'updatedAt'],
+    schedules: ['startsAt', 'nextRunAt', 'lastRunAt', 'deletedAt', 'createdAt', 'updatedAt'],
     kbDocuments: ['createdAt'],
     messages: ['createdAt'],
+    sessionRuns: ['startedAt', 'finishedAt'],
+    sessionEvents: ['createdAt'],
+    approvals: ['createdAt', 'decidedAt'],
+    jobs: ['createdAt', 'finishedAt'],
+    jobChunks: ['createdAt'],
+    todos: ['updatedAt'],
+    goals: ['createdAt', 'updatedAt'],
     automationRuns: ['scheduledFor', 'startedAt', 'finishedAt', 'createdAt'],
     attachments: ['createdAt'],
+    artifacts: ['createdAt'],
     systemSettings: ['updatedAt'],
 };
 
@@ -76,7 +93,7 @@ function reviveRows(key: string, rows: Record<string, unknown>[]): Record<string
             }
         }
         // messages.seq 是 bigserial；导入时让序列自己生成，避免与现有序列冲突。
-        if (key === 'messages') delete copy.seq;
+        if (key === 'messages' || key === 'jobChunks') delete copy.seq;
         return copy;
     });
 }
@@ -109,12 +126,17 @@ export async function importWorkBackup(payload: unknown): Promise<BackupImportRe
     }
     const body = payload as Record<string, unknown>;
     if (body.format !== 'work.backup') throw createError({ statusCode: 400, statusMessage: '不是 work 备份文件' });
-    if (body.version !== 1 && body.version !== 2) throw createError({ statusCode: 400, statusMessage: '不支持的备份版本' });
+    if (body.version !== 1 && body.version !== 2 && body.version !== 3 && body.version !== 4 && body.version !== 5) {
+        throw createError({ statusCode: 400, statusMessage: '不支持的备份版本' });
+    }
     if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
         throw createError({ statusCode: 400, statusMessage: '备份缺少 data 对象' });
     }
 
     const data = body.data as Record<string, unknown>;
+    if (typeof body.checksum === 'string' && body.checksum && body.checksum !== backupChecksum(data)) {
+        throw createError({ statusCode: 400, statusMessage: '备份校验和不匹配，文件可能被截断或修改' });
+    }
     const result: BackupImportResult = { inserted: {}, skipped: {}, warnings: [] };
     const settings = data.systemSettings;
     if (settings !== null && settings !== undefined) {
@@ -135,6 +157,13 @@ export async function importWorkBackup(payload: unknown): Promise<BackupImportRe
             await importRows(tx, 'storageConfigs', storageConfigs, data, result);
             await importRows(tx, 'agents', agents, data, result);
             await importRows(tx, 'conversations', conversations, data, result);
+            await importRows(tx, 'approvals', approvals, data, result);
+            await importRows(tx, 'jobs', jobs, data, result);
+            await importRows(tx, 'jobChunks', jobChunks, data, result);
+            await importRows(tx, 'todos', todos, data, result);
+            await importRows(tx, 'goals', goals, data, result);
+            await importRows(tx, 'sessionRuns', sessionRuns, data, result);
+            await importRows(tx, 'sessionEvents', sessionEvents, data, result);
             await importRows(tx, 'schedules', schedules, data, result);
             await importRows(tx, 'kbDocuments', kbDocuments, data, result);
             await importRows(tx, 'messages', messages, data, result);
@@ -144,6 +173,7 @@ export async function importWorkBackup(payload: unknown): Promise<BackupImportRe
             await importRows(tx, 'agentMcpServers', agentMcpServers, data, result);
             await importRows(tx, 'agentKnowledgeBases', agentKnowledgeBases, data, result);
             await importRows(tx, 'attachments', attachments, data, result);
+            await importRows(tx, 'artifacts', artifacts, data, result);
 
             if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
                 const revived = reviveRows('systemSettings', [settings as Record<string, unknown>])[0]!;

@@ -1,11 +1,36 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { createError } from 'h3';
 import type { KnowledgeBase, Provider } from '../db/schema';
 import { kbChunks, knowledgeBases, providers } from '../db/schema';
 import { db } from './db';
 import { readCappedResponseText } from './outbound';
+import { openSecret } from './secret-box';
 
-/** RAG：嵌入 + 暴力余弦检索（数据量小够用，后续可平滑切换 pgvector）。 */
+/** RAG：嵌入 + 检索。1536 维向量走 pgvector HNSW；其余维度/不可用时回退 JSONB 余弦。 */
+
+/** pgvector 可用性开关：`WORK_VECTOR_BACKEND=jsonb` 强制旧路径，默认尝试 pgvector。 */
+function pgvectorEnabled(): boolean {
+    return (process.env.WORK_VECTOR_BACKEND || '').trim().toLowerCase() !== 'jsonb';
+}
+
+let pgvectorWarned = false;
+
+async function pgvectorHits(kbId: string, vector: number[], limit: number): Promise<{ score: number; content: string; documentId: string; kbId: string }[]> {
+    const literal = `[${vector.join(',')}]`;
+    const rows = await db.execute(sql`
+        select id, kb_id, document_id, content, 1 - (embedding_v <=> ${literal}::vector) as score
+        from kb_chunks
+        where kb_id = ${kbId} and embedding_v is not null
+        order by embedding_v <=> ${literal}::vector
+        limit ${limit}
+    `);
+    return (rows as unknown as { kb_id: string; document_id: string; content: string; score: number | string }[]).map((row) => ({
+        score: Number(row.score),
+        content: row.content,
+        documentId: row.document_id,
+        kbId: row.kb_id,
+    }));
+}
 
 /** 失败响应只需要前 200 字符拼进错误文案，多留余量给多字节文本 */
 const EMBED_ERROR_BODY_MAX_BYTES = 2_000;
@@ -118,6 +143,39 @@ interface RetrievedChunk {
     kbId: string;
 }
 
+/**
+ * 关键词通道的权重（P3-3 混合检索）。
+ *
+ * 余弦与 bigram 重叠率不是同一种分数：余弦 0.3 已是可用结果，而 bigram 0.3 只算沾边。
+ * 先压到 0.8 再相加，让语义命中优先、但强关键词命中仍能挤进前列；同一片段两路都命中时
+ * 分数相加并封顶 1，避免重复占用 topK。
+ */
+export const HYBRID_KEYWORD_WEIGHT = 0.8;
+
+export function fuseHybridHits(vectorHits: RetrievedChunk[], keywordHits: RetrievedChunk[], topK = 5): RetrievedChunk[] {
+    const merged = new Map<string, { chunk: RetrievedChunk; vector: number; keyword: number }>();
+    const keyOf = (hit: RetrievedChunk) => `${hit.kbId}\u0000${hit.documentId}\u0000${hit.content}`;
+    for (const hit of vectorHits) {
+        const key = keyOf(hit);
+        const entry = merged.get(key);
+        if (entry) entry.vector = Math.max(entry.vector, hit.score);
+        else merged.set(key, { chunk: hit, vector: hit.score, keyword: 0 });
+    }
+    for (const hit of keywordHits) {
+        const key = keyOf(hit);
+        const entry = merged.get(key);
+        if (entry) entry.keyword = Math.max(entry.keyword, hit.score);
+        else merged.set(key, { chunk: hit, vector: 0, keyword: hit.score });
+    }
+    return [...merged.values()]
+        .map(({ chunk, vector, keyword }) => ({
+            ...chunk,
+            score: Math.min(1, vector + HYBRID_KEYWORD_WEIGHT * keyword),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK);
+}
+
 /** 提取文本的 bigram 集合（用于无 embedding 时的关键词重叠率匹配） */
 export function bigrams(text: string): Set<string> {
     const normalized = text.toLowerCase().replace(/[\s\p{P}]+/gu, '');
@@ -175,11 +233,14 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
     // 用户看到的现象是 B 库的知识永远检索不出来，而日志里什么都没有。
     // 均摊后每个库都有自己的一份扫描额度，总量仍受 CHUNK_SCAN_BUDGET 约束；单库扫描靠 kb_id 索引提前停止，
     // 不需要在库里做一次全量排序。
+    // P3-3 起改为**按需**加载：pgvector 命中的库完全不读 JSONB 分块，只有回退旧路径的库才消耗扫描额度。
     const scanLimitPerKb = Math.max(1, Math.floor(CHUNK_SCAN_BUDGET / kbs.length));
     const chunksByKb = new Map<string, { id: string; kbId: string; documentId: string; content: string; embedding: number[] }[]>();
     let scanned = 0;
-    for (const kb of kbs) {
-        if (scanned >= CHUNK_SCAN_BUDGET) break;
+    const loadChunks = async (kbId: string) => {
+        const cached = chunksByKb.get(kbId);
+        if (cached) return cached;
+        if (scanned >= CHUNK_SCAN_BUDGET) return [];
         const rows = await db
             .select({
                 id: kbChunks.id,
@@ -189,16 +250,16 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
                 embedding: kbChunks.embedding,
             })
             .from(kbChunks)
-            .where(eq(kbChunks.kbId, kb.id))
+            .where(eq(kbChunks.kbId, kbId))
             .limit(Math.min(scanLimitPerKb, CHUNK_SCAN_BUDGET - scanned));
-        if (rows.length) chunksByKb.set(kb.id, rows);
+        chunksByKb.set(kbId, rows);
         scanned += rows.length;
-    }
-    if (!chunksByKb.size) return { context: '', hits: [] };
+        return rows;
+    };
 
     // 多知识库可能配置了不同的嵌入模型/供应商，必须按知识库分别生成查询向量，
     // 否则跨模型向量比对（维度与语义空间都不同）会得到无意义的相关度。
-    const providerRows = await db.select().from(providers);
+    const providerRows = (await db.select().from(providers)).map((row) => ({ ...row, apiKey: openSecret(row.apiKey) }));
     const byId = new Map(providerRows.map((p) => [p.id, p]));
     const enabledProviders = providerRows.filter((p) => p.enabled);
     const defaultProvider = enabledProviders.find((p) => p.isDefault) ?? enabledProviders[0];
@@ -211,7 +272,6 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
     const groups: { provider: Provider; model: string; kbIds: string[] }[] = [];
     const groupIndex = new Map<string, number>();
     for (const kb of kbs as KnowledgeBase[]) {
-        if (!(chunksByKb.get(kb.id) ?? []).length) continue;
         const provider = (kb.embeddingProviderId ? byId.get(kb.embeddingProviderId) : undefined) ?? defaultProvider;
         if (!provider?.apiKey) {
             fallbackKbIds.push(kb.id);
@@ -257,7 +317,21 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
             continue;
         }
         for (const kbId of group.kbIds) {
-            const candidates = (chunksByKb.get(kbId) ?? []).filter((c) => Array.isArray(c.embedding) && c.embedding.length > 0);
+            if (queryVector.length === 1536 && pgvectorEnabled()) {
+                try {
+                    const hits = await pgvectorHits(kbId, queryVector, Math.max(topK * 2, 10));
+                    if (hits.length) {
+                        vectorHits.push(...hits);
+                        continue;
+                    }
+                } catch (error) {
+                    if (!pgvectorWarned) {
+                        pgvectorWarned = true;
+                        console.warn('[rag] pgvector 检索失败，本次降级为 JSONB 余弦：', error);
+                    }
+                }
+            }
+            const candidates = (await loadChunks(kbId)).filter((c) => Array.isArray(c.embedding) && c.embedding.length > 0);
             // 维度不同的分块不进候选集（而不是拿 0 分去和 minScore 比）：否则像检索测试那样
             // 传 minScore=0 时，不可比的向量仍会作为「相关度 0.00」的片段挤掉真正可用的结果。
             const comparable = candidates.filter((c) => c.embedding.length === queryVector.length);
@@ -283,13 +357,14 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
         }
     }
 
-    // 向量不可用（或该库没有向量）时，用 Bigram 关键词打分兜底
+    // 关键词通道：向量不可用的库、或向量全部低于 minScore 的库走 Bigram 打分；
+    // 结果不再只是「兜底」——有向量命中时也会参与融合（P3-3）。
     const fallbackHits: RetrievedChunk[] = [];
     // 查询侧的 bigram 集合只算一次，理由见 bigramScore 的注释（按分块重算实测是百倍差距）
     const queryBigrams = bigrams(searchQuery);
     if (queryBigrams.size) {
         for (const kbId of fallbackKbIds) {
-            for (const c of chunksByKb.get(kbId) ?? []) {
+            for (const c of await loadChunks(kbId)) {
                 const score = bigramScore(queryBigrams, c.content);
                 if (score >= 0.08) {
                     fallbackHits.push({ score, content: c.content, documentId: c.documentId, kbId: c.kbId });
@@ -298,8 +373,10 @@ export async function retrieveContext(kbIds: string[], query: string, topK = 5, 
         }
     }
 
-    // 有向量结果时以向量为准（关键词结果仅在完全没有向量命中时兜底），避免两套打分混排
-    const hits = (vectorHits.length ? vectorHits : fallbackHits).sort((a, b) => b.score - a.score).slice(0, topK);
+    // 有向量结果时不再整批丢掉关键词结果：不同知识库可能一半走 pgvector、一半只有 Bigram，
+    // 原先的 `vectorHits.length ? vectorHits : fallbackHits` 会让没有嵌入供应商的库在混合场景里静默消失。
+    // 两路按权重融合（见 fuseHybridHits），只有一路时就退化成该路本身。
+    const hits = fuseHybridHits(vectorHits, fallbackHits, topK);
 
     const context = hits.map((h, i) => `[片段 ${i + 1} | 相关度 ${h.score.toFixed(2)}]\n${h.content}`).join('\n\n');
     return { context, hits };

@@ -1,5 +1,22 @@
-import { relations } from 'drizzle-orm';
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
+import { bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+
+/** pgvector 列：维度固定 1536（text-embedding-3-small / 常见兼容模型）。 */
+const vector1536 = customType<{ data: number[]; driverData: string }>({
+    dataType() {
+        return 'vector(1536)';
+    },
+    toDriver(value) {
+        return `[${value.join(',')}]`;
+    },
+    fromDriver(value) {
+        return String(value)
+            .replace(/^\[|\]$/g, '')
+            .split(',')
+            .filter(Boolean)
+            .map(Number);
+    },
+});
 
 // ==========================================
 // MODEL PROVIDERS（自定义供应商，OpenAI 兼容）
@@ -50,6 +67,9 @@ export const skills = pgTable('skills', {
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+export const APPROVAL_MODES = ['auto', 'ask', 'never'] as const;
+export type ApprovalMode = (typeof APPROVAL_MODES)[number];
+
 export const agents = pgTable('agents', {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
@@ -62,6 +82,8 @@ export const agents = pgTable('agents', {
     temperature: real('temperature').default(0.7),
     maxTokens: integer('max_tokens'),
     maxSteps: integer('max_steps').notNull().default(6),
+    /** auto：读与空间内写自动；ask：写/执行询问；never：只读助手，拒绝一切非读工具 */
+    approvalMode: text('approval_mode').$type<ApprovalMode>().notNull().default('auto'),
     // 允许智能体通过 self-config 工具自主调整模型与 Skill
     selfConfig: boolean('self_config').notNull().default(false),
     enabled: boolean('enabled').notNull().default(true),
@@ -180,18 +202,21 @@ export const knowledgeBases = pgTable(
     (t) => [index('knowledge_bases_space_idx').on(t.spaceId)],
 );
 
-export const kbDocuments = pgTable('kb_documents', {
-    id: text('id').primaryKey(),
-    kbId: text('kb_id')
-        .notNull()
-        .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    content: text('content').notNull(),
-    chunkCount: integer('chunk_count').notNull().default(0),
-    status: text('status').notNull().default('ready'), // processing | ready | failed
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-});
-
+export const kbDocuments = pgTable(
+    'kb_documents',
+    {
+        id: text('id').primaryKey(),
+        kbId: text('kb_id')
+            .notNull()
+            .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+        title: text('title').notNull(),
+        content: text('content').notNull(),
+        chunkCount: integer('chunk_count').notNull().default(0),
+        status: text('status').notNull().default('ready'), // processing | ready | failed
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => [index('kb_documents_title_trgm_idx').using('gin', sql`${table.title} gin_trgm_ops`)],
+);
 export const kbChunks = pgTable(
     'kb_chunks',
     {
@@ -204,6 +229,8 @@ export const kbChunks = pgTable(
             .references(() => kbDocuments.id, { onDelete: 'cascade' }),
         content: text('content').notNull(),
         embedding: jsonb('embedding').$type<number[]>().notNull().default([]),
+        /** pgvector 影子列（P3-3）；只有 1536 维向量写入，非 1536 维仍走 JSONB */
+        embeddingV: vector1536('embedding_v'),
         createdAt: timestamp('created_at').notNull().defaultNow(),
     },
     (table) => [index('kb_chunks_kb_id_idx').on(table.kbId), index('kb_chunks_document_id_idx').on(table.documentId)],
@@ -231,10 +258,16 @@ export const conversations = pgTable(
             .notNull()
             .references(() => agents.id, { onDelete: 'cascade' }),
         spaceId: text('space_id').references(() => spaces.id, { onDelete: 'set null' }),
+        /** 计划模式：本轮只出计划并等待确认；由输入框旁开关或 exit_plan_mode 关闭 */
+        planMode: boolean('plan_mode').notNull().default(false),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at').notNull().defaultNow(),
     },
-    (table) => [index('conversations_agent_id_idx').on(table.agentId), index('conversations_space_updated_idx').on(table.spaceId, table.updatedAt)],
+    (table) => [
+        index('conversations_agent_id_idx').on(table.agentId),
+        index('conversations_space_updated_idx').on(table.spaceId, table.updatedAt),
+        index('conversations_title_trgm_idx').using('gin', sql`${table.title} gin_trgm_ops`),
+    ],
 );
 
 export const messages = pgTable(
@@ -248,10 +281,15 @@ export const messages = pgTable(
             .references(() => conversations.id, { onDelete: 'cascade' }),
         role: text('role').notNull(), // 'user' | 'assistant'
         parts: jsonb('parts').$type<unknown[]>().notNull().default([]),
+        /** parts 中 text 的拼接，供 pg_trgm 检索；写入时维护，旧行由 backfill 脚本补齐 */
+        contentText: text('content_text').notNull().default(''),
         createdAt: timestamp('created_at').notNull().defaultNow(),
     },
     // 会话内消息按 seq 排序读取（窗口历史 / 分页），复合索引同时覆盖 conversation_id 等值过滤
-    (table) => [index('messages_conversation_seq_idx').on(table.conversationId, table.seq)],
+    (table) => [
+        index('messages_conversation_seq_idx').on(table.conversationId, table.seq),
+        index('messages_content_text_trgm_idx').using('gin', sql`${table.contentText} gin_trgm_ops`),
+    ],
 );
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -265,6 +303,164 @@ export const messagesRelations = relations(messages, ({ one }) => ({
         references: [conversations.id],
     }),
 }));
+
+// ==========================================
+// 会话运行台账（跨进程的「生成中」权威）
+// ==========================================
+// chat-runs.ts 的内存缓冲只覆盖「同一个 Nitro 进程还活着」的场景：重启、崩溃、或未来
+// 多进程部署时，侧栏的「生成中」与启动清理都需要一个落库的来源。这张表只记运行生命周期，
+// 不存正文/分片（正文仍由 messages 落库），因此可以安全地随整机备份导出。
+export const SESSION_RUN_STATUSES = ['running', 'completed', 'failed', 'aborted', 'interrupted'] as const;
+export type SessionRunStatus = (typeof SESSION_RUN_STATUSES)[number];
+
+export const sessionRuns = pgTable(
+    'session_runs',
+    {
+        id: text('id').primaryKey(),
+        conversationId: text('conversation_id')
+            .notNull()
+            .references(() => conversations.id, { onDelete: 'cascade' }),
+        /** 触发来源：chat（/api/chat）| schedule（预留；定时任务目前仍以 automation_runs 为权威） */
+        trigger: text('trigger').notNull().default('chat'),
+        status: text('status').notNull().default('running'),
+        /** 请求关联 id，由 request-id 中间件注入；旧客户端/脚本可能为空 */
+        requestId: text('request_id').notNull().default(''),
+        /** 失败时的稳定错误码（不是供应商原文），便于日志与界面归类 */
+        errorCode: text('error_code'),
+        startedAt: timestamp('started_at').notNull().defaultNow(),
+        finishedAt: timestamp('finished_at'),
+    },
+    (table) => [
+        index('session_runs_conversation_started_idx').on(table.conversationId, table.startedAt),
+        index('session_runs_status_idx').on(table.status),
+        // P3-1 真正并发的同 requestId：应用层「先查再插」只能缓解，两个请求仍可同时通过检查。
+        // 只对「在途/已完成 + 非空 requestId」建唯一索引：失败/中止的轮次允许用同一个 id 重试，
+        // 旧客户端不带 requestId 的多轮（空串）也互不冲突。
+        uniqueIndex('session_runs_request_active_idx')
+            .on(table.conversationId, table.requestId)
+            .where(sql`${table.requestId} <> '' AND ${table.status} IN ('running', 'completed')`),
+    ],
+);
+
+// ==========================================
+// 事件源会话（P1：append-only 事件日志）
+// ==========================================
+// `messages` 仍是当前的读模型；这张表先做「只追加的权威记录」，用于崩溃解释、审计与投影对账。
+// 不把 `next_seq` 放到 conversations 上：首版用会话行锁 + max(seq) 分配，少一次迁移面；
+// 等 P1-2 把写路径全部切过来时再决定是否物化计数器。
+export const SESSION_EVENT_TYPES = [
+    'user/message',
+    'assistant/message',
+    'system/message',
+    'tool/call',
+    'tool/result',
+    'request/header',
+    'run/start',
+    'run/end',
+    'compaction/start',
+    'compaction/summary',
+    'compaction/end',
+    'approval/asked',
+    'approval/decided',
+    'todo/updated',
+    'goal/updated',
+    'plan/proposed',
+    'plan/approved',
+] as const;
+export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
+
+export type SessionSurfaceOp = { op: 'append' } | { op: 'replace'; fromSeq: number; toSeq: number };
+
+// ==========================================
+// APPROVALS（P1-4：危险工具审批）
+// ==========================================
+export const APPROVAL_RISKS = ['read', 'write', 'network', 'execute'] as const;
+export type ApprovalRisk = (typeof APPROVAL_RISKS)[number];
+export const APPROVAL_STATUSES = ['pending', 'allowed', 'rejected', 'cancelled', 'expired'] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+export const approvals = pgTable(
+    'approvals',
+    {
+        id: text('id').primaryKey(),
+        conversationId: text('conversation_id')
+            .notNull()
+            .references(() => conversations.id, { onDelete: 'cascade' }),
+        runId: text('run_id'),
+        toolCallId: text('tool_call_id'),
+        toolName: text('tool_name').notNull(),
+        risk: text('risk').$type<ApprovalRisk>().notNull(),
+        payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+        status: text('status').$type<ApprovalStatus>().notNull().default('pending'),
+        reason: text('reason').notNull().default(''),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        decidedAt: timestamp('decided_at'),
+    },
+    (table) => [
+        index('approvals_conversation_status_idx').on(table.conversationId, table.status),
+        index('approvals_status_created_idx').on(table.status, table.createdAt),
+    ],
+);
+
+// ==========================================
+// JOBS（P2-3：后台命令）
+// ==========================================
+export const JOB_STATUSES = ['running', 'completed', 'failed', 'killed', 'interrupted'] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+export const jobs = pgTable(
+    'jobs',
+    {
+        id: text('id').primaryKey(),
+        conversationId: text('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+        agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+        command: text('command').notNull(),
+        cwd: text('cwd').notNull(),
+        status: text('status').$type<JobStatus>().notNull().default('running'),
+        pid: integer('pid'),
+        exitCode: integer('exit_code'),
+        error: text('error').notNull().default(''),
+        outputBytes: integer('output_bytes').notNull().default(0),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        finishedAt: timestamp('finished_at'),
+    },
+    (table) => [index('jobs_status_created_idx').on(table.status, table.createdAt), index('jobs_conversation_idx').on(table.conversationId, table.createdAt)],
+);
+
+export const jobChunks = pgTable(
+    'job_chunks',
+    {
+        id: text('id').primaryKey(),
+        jobId: text('job_id')
+            .notNull()
+            .references(() => jobs.id, { onDelete: 'cascade' }),
+        seq: bigserial('seq', { mode: 'number' }).notNull(),
+        stream: text('stream').$type<'stdout' | 'stderr'>().notNull().default('stdout'),
+        content: text('content').notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => [index('job_chunks_job_seq_idx').on(table.jobId, table.seq)],
+);
+
+export const sessionEvents = pgTable(
+    'session_events',
+    {
+        conversationId: text('conversation_id')
+            .notNull()
+            .references(() => conversations.id, { onDelete: 'cascade' }),
+        /** 单会话内严格递增、无空洞；由写入事务里的会话行锁保证串行 */
+        seq: bigint('seq', { mode: 'number' }).notNull(),
+        type: text('type').notNull(),
+        turnId: text('turn_id'),
+        stepId: text('step_id'),
+        /** append 可省略；replace 表示该区间被压缩摘要遮蔽（原事件仍保留） */
+        surfaceOp: jsonb('surface_op').$type<SessionSurfaceOp | null>(),
+        /** 事件负载；消息类事件至少含 `id` 与 `parts`（或 `text`） */
+        data: jsonb('data').$type<Record<string, unknown>>().notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => [primaryKey({ columns: [table.conversationId, table.seq] }), index('session_events_type_idx').on(table.type)],
+);
 
 // ==========================================
 // OBJECT STORAGE（S3 协议：RustFS / MinIO / AWS S3 / 阿里云 OSS 等）
@@ -310,6 +506,27 @@ export const attachments = pgTable(
         createdAt: timestamp('created_at').notNull().defaultNow(),
     },
     (t) => [index('attachments_created_at_idx').on(t.createdAt), index('attachments_space_created_idx').on(t.spaceId, t.createdAt)],
+);
+
+// ==========================================
+// 会话交付物（P3-2）
+// ==========================================
+// 模型用 present 工具把本地白名单目录里的文件登记到当前会话。只存路径与元数据，
+// 不复制二进制；下载时重新走 resolveAllowedPath，旧记录在目录被移出白名单后自动失效。
+export const artifacts = pgTable(
+    'artifacts',
+    {
+        id: text('id').primaryKey(),
+        conversationId: text('conversation_id')
+            .notNull()
+            .references(() => conversations.id, { onDelete: 'cascade' }),
+        title: text('title').notNull(),
+        path: text('path').notNull(),
+        mimeType: text('mime_type').notNull().default('application/octet-stream'),
+        size: integer('size').notNull().default(0),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (t) => [index('artifacts_conversation_created_idx').on(t.conversationId, t.createdAt)],
 );
 
 // ==========================================
@@ -379,6 +596,10 @@ export const schedules = pgTable(
         /** 首次生效时刻；once 就是它自己 */
         startsAt: timestamp('starts_at').notNull(),
         enabled: boolean('enabled').notNull().default(true),
+        /** 乐观锁：PATCH 携带的 revision 与库内不一致时 409；每次成功写入 +1 */
+        revision: integer('revision').notNull().default(0),
+        /** 软删除标记：列表、详情、调度认领都过滤掉；运行记录仍保留 */
+        deletedAt: timestamp('deleted_at'),
         nextRunAt: timestamp('next_run_at').notNull(),
         lastRunAt: timestamp('last_run_at'),
         lastStatus: text('last_status').$type<ScheduleStatus | ''>().notNull().default(''),
@@ -439,6 +660,46 @@ export const automationRunsRelations = relations(automationRuns, ({ one }) => ({
 }));
 
 // ==========================================
+// TODOS / GOALS（P2-7：会话级待办与目标）
+// ==========================================
+export const TODO_STATUSES = ['pending', 'in_progress', 'completed'] as const;
+export type TodoStatus = (typeof TODO_STATUSES)[number];
+export interface TodoItem {
+    id: string;
+    title: string;
+    status: TodoStatus;
+    note?: string;
+}
+
+/** 一个会话一份待办清单，`todo_write` 整表替换。 */
+export const todos = pgTable('todos', {
+    conversationId: text('conversation_id')
+        .primaryKey()
+        .references(() => conversations.id, { onDelete: 'cascade' }),
+    items: jsonb('items').$type<TodoItem[]>().notNull().default([]),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const GOAL_STATUSES = ['active', 'paused', 'completed', 'blocked'] as const;
+export type GoalStatus = (typeof GOAL_STATUSES)[number];
+
+/** 一个会话最多一个目标；revision 做乐观并发，`expectedRevision` 不匹配返回 409。 */
+export const goals = pgTable('goals', {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+        .notNull()
+        .unique()
+        .references(() => conversations.id, { onDelete: 'cascade' }),
+    objective: text('objective').notNull(),
+    status: text('status').$type<GoalStatus>().notNull().default('active'),
+    revision: integer('revision').notNull().default(1),
+    round: integer('round').notNull().default(0),
+    maxRounds: integer('max_rounds').notNull().default(10),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ==========================================
 // INFERRED TYPES
 // ==========================================
 export type Agent = typeof agents.$inferSelect;
@@ -457,3 +718,5 @@ export type SystemSetting = typeof systemSettings.$inferSelect;
 export type Schedule = typeof schedules.$inferSelect;
 export type Space = typeof spaces.$inferSelect;
 export type AutomationRun = typeof automationRuns.$inferSelect;
+export type Todo = typeof todos.$inferSelect;
+export type Goal = typeof goals.$inferSelect;

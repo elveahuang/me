@@ -47,7 +47,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 
 ## 3. 常用命令与验证边界
 
-以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.11.2`（CI 的 `pnpm/action-setup` 不带版本、跟随它；`tools/deploy/dockerfile` 的 corepack 仍钉 12.5.1，两处尚未对齐，升级时三处一起改）；CI
+以下命令从仓库根目录执行。根 `package.json` 的 `packageManager` 当前为 `pnpm@12.14.0`（CI 的 `pnpm/action-setup` 不带版本、跟随它；`tools/deploy/dockerfile` 的 corepack 仍钉 12.5.1，两处尚未对齐，升级时三处一起改）；CI
 使用 Node 24，但依赖升级后仍需检查各依赖的 engines，不能把 CI 配置视为兼容性证明。
 
 | 命令                                                     | 实际作用 / 前提                                                                                |
@@ -77,8 +77,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
 - 业务变更按涉及包执行类型检查和构建；改共享代码须考虑双端。检查失败时区分本次回归与既有问题，不通过删代码或削弱检查掩盖失败。
 - `packages/webapp/scripts/smoke-test.ts` 主要直接调用模块/断言；数据库不可用可仅警告跳过，局部算法断言也不代表真实接口、计费或数据库事务已通过。
-- CI（`.github/workflows/ci.yml`）当前 **只做镜像构建与推送**（Build & Push Docker Image to ACR：checkout → pnpm（版本跟随根 `packageManager`）+ Node 24 → `pnpm install` →
-  `docker build -f tools/deploy/dockerfile` → push）， **不运行 lint/typecheck/构建/冒烟**；这些校验必须在提交前本地执行。CI 在 runner 上生成的
+- CI（`.github/workflows/ci.yml`）当前有 **两个 job**：`verify` 跑 Work 的 `typecheck` / `test` / `build` 与 Webapp 的 `typecheck`（DB 不可用时 smoke 的 DB 段自动跳过）；`build-and-push` 仍只做镜像构建与推送（checkout → pnpm（版本跟随根 `packageManager`）+ Node 24 → `pnpm install` → `docker build -f tools/deploy/dockerfile` → push）。**Work 的回归不再只靠本地自觉**；Webapp/Mobile 的全量构建仍建议提交前本地执行。CI 在 runner 上生成的
   `packages/webapp/.env` 不会进镜像（`.dockerignore` 的 `**/.env` 已将其排除出构建上下文），运行时配置一律由容器运行环境注入。
 
 ## 4. 环境、数据与危险脚本
@@ -92,13 +91,13 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   `problems` 在生产环境直接拒绝启动（示例 secret、过短的 secret/口令、`BETTER_AUTH_URL`、`POSTGRES_URL` 未设置——后者缺失时 `db.ts` 会静默回落到写死的
   `postgres:postgres@localhost`），示例管理员口令只进 `warnings`：seed 已不再信任它的字面值，用它拒绝启动会把「管理员早已存在、只是沿用示例文件」的存量部署下次重启直接变砖。
 - 跨域配置同时关系到 CORS 和认证可信来源；修改 API 域名、Web 域名或原生回调协议时一起核对，不要只改客户端地址。
-- **`packages/webapp` 只能显式声明精确钉死的 `h3: "1.15.11"`（无 `^`），并在根 `package.json` 的 `pnpm.overrides.h3` 钉同值护栏，绝不可改成 `^2`**：Nitro 2.x 运行的是
+- **`packages/webapp` 与 `packages/work` 只能显式声明精确钉死的 `h3: "1.15.11"`（无 `^`），并在根 `pnpm-workspace.yaml` 的 `overrides.h3` 钉同值护栏（pnpm 12 已不读 `package.json` 的 `pnpm` 字段），绝不可改成 `^2`**：Nitro 2.x 运行的是
   h3 1.x，`defineEventHandler` 交给 handler 的 `event` 就是 h3 v1 的 `H3Event`。一旦解析到 `h3@^2`（依赖升级脚本很容易顺手带进来），server 里那些
   `import { createError } from 'h3'` / `import type { H3Event } from 'h3'` 会全部解析到 v2，与 Nitro 的 v1 类型互不兼容——`requireUser(event)`、
   `requireAdmin(event, …)` 之类的调用点会一次性炸出两百多个 typecheck 错误，`event.node` 在 v2 里还可能未定义（把 v1 实例当 v2 用不只是类型问题，运行时形状就不一样）；overrides
-  让即使有人写了 `^2` 也解析到 1.15.11，是这条禁令的结构化护栏（此回归已发生两次：R221 修复后被 `33cb016` 加回、R257 再删）。 **当前仓库正处于未修复的第三次回归**：`b2292cc deps`
-  把 webapp 与 work 的声明都改成了 `^2.0.2`，根 overrides 也已不存在；2026-10-17 实测 typecheck 仍绿，只是因为 `.nuxt/tsconfig*.json` 的 `paths.h3` 还指着 Nitro 自带的
-  1.15.11，别把这份缓存当兼容性证明，动依赖时把声明与 overrides 一起恢复。 **「完全不声明 h3」同样是错的（R257→R268
+  让即使有人写了 `^2` 也解析到 1.15.11，是这条禁令的结构化护栏（此回归已发生两次：R221 修复后被 `33cb016` 加回、R257 再删）。 **第三次回归已在本轮修复**：`b2292cc deps`
+  曾把 webapp 与 work 的声明都改成 `^2.0.2`、根 overrides 也已不存在；现在两个包都精确声明 `1.15.11`，`pnpm-workspace.yaml` 的 `overrides.h3` 与锁文件 importer 也已对齐。
+  2026-10-17 修复前 typecheck 仍绿，只是因为 `.nuxt/tsconfig*.json` 的 `paths.h3` 还指着 Nitro 自带的 1.15.11——别把这份缓存当兼容性证明，动依赖后仍要 `nuxt prepare`。 **「完全不声明 h3」同样是错的（R257→R268
   的教训）**：`pnpm test`（tsx 直跑 `scripts/smoke-test.ts`）导入 `server/utils/embedding → outbound` 的 `createError` 时走的是纯 node 解析链，拿不到 Nitro 构建期才提供的
   h3，webapp 没有本地依赖就 `ERR_MODULE_NOT_FOUND`——而更早冒烟测试「能通过」恰恰因为本地装着违规的 v2，测试通过本身依赖错误状态；精确的 1.15.11 与 Nitro
   自带那份同版本，构建与脚本两侧一致。 **依赖变动后若 typecheck 表现成「代码没错、两百多个错误一条不少」**，先查 `.nuxt/tsconfig*.json` 的 `paths.h3`——Nuxt 把它硬编码到
@@ -247,7 +246,13 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **它没有账号体系**：fork 时刻意不带 Better Auth、订单与会员表，`server/db/schema.ts` 里的工作台表 **没有归属列**（冒烟测试第 13 节把「没有
   user_id」和「没有订单/会员表」都当不变量钉住）。唯一的跨站写防护是 `server/utils/local-origin.ts` 的 `blocksWrite(method, origin)`（外站 Origin 的写请求 403，读不拦）+
   `server/plugins/env-guard.ts` 要求回环绑定（`NITRO_HOST=127.0.0.1`；非回环绑定只有显式 `WORK_ALLOW_PUBLIC_BIND=true` 才降为告警，因为 nitro 的 node preset 只认
-  `NITRO_HOST/HOST`，不解析 `--host`）。写接口另配 `rateLimit`，会外呼的再过 `gateExpensiveCalls`。 **想把 work 暴露到公网 = 必须先给它加鉴权**，只做绑定/反代那一步等于把可写库敞开。
+  `NITRO_HOST/HOST`，不解析 `--host`）。写接口另配 `rateLimit`，会外呼的再过 `gateExpensiveCalls`。限流指标在 `rateLimit()` 内部按 key 第一段聚合（`export`/`chat`/`kb-reindex`），`GET /api/metrics/rate-limit` 只读暴露 `calls/allowed/blocked/memoryFallback/redisErrors`；族数上限 200、超出归 `other`，**不要把完整 key（含知识库/排期 id）当指标标签**，也不要在指标端点里调 `rateLimit()`（会自己给自己计数）。指标是进程内、重启清零，多实例各一份。本机负载基线用 `pnpm --filter @repo/work bench -- --n=15`（[bench.ts](packages/work/scripts/bench.ts)，串行 HTTP + 1000 事件投影，只用于同机改动前后对比，不是容量证明）。 **想把 work 暴露到公网 = 必须先给它加鉴权**，只做绑定/反代那一步等于把可写库敞开。
+- **数据库内敏感字段（供应商 API Key、对象存储 secret）用 AES-256-GCM 加密**：`server/utils/secret-box.ts`，格式 `enc:v1:<iv>:<tag>:<ct>`，主密钥 `WORK_SECRET_KEY`（64 位 hex 或 base64 32 字节），轮换用 `WORK_SECRET_KEY_OLD` 双读。未配置主密钥时保持明文（兼容旧库），密文缺密钥时读取直接 500。所有读路径（供应商列表/解析模型/嵌入/KB 摄入/S3 客户端）必须先 `openSecret` 再使用，掩码也基于明文；**新增读写 `apiKey` / `secretAccessKey` 的代码不要绕过它**。历史明文用 `pnpm --filter @repo/work secrets:encrypt`（先加 `-- --dry-run`）批量加密，实现是 [secret-migration.ts](packages/work/server/utils/secret-migration.ts)：只处理明文、已加密行跳过、写前自校验，未配置主密钥不写库；**故意不做启动自动迁移**，避免钥配错时把整库一次性写坏。MCP headers 也走同一套：`mcp.ts` 的 `sealHeaders/openHeaders` 逐项加解密，DB 里是密文，编辑回传 `****` 由 `mergeHeaders` 保留原密文；建连前必须 `openHeaders`，否则把 `enc:v1:…` 当请求头发出去。
+- **请求关联与稳定错误码**：`server/middleware/00-request-id.ts` 给每个请求分配/透传 `x-request-id`（只接受 8–128 位 `[A-Za-z0-9._-]`，否则重新生成），写进
+  `event.context.requestId` 并回写响应头；`server/error.ts`（`nitro.errorHandler`，不是 `error` hook）在默认处理器序列化**之前**同步补 `data.code` / `data.requestId` 与
+  `x-work-error-code`，映射表在 `server/utils/api-error.ts`（`validation_failed / forbidden / not_found / method_not_allowed / conflict / payload_too_large / rate_limited / internal_error / upstream_failed`）。
+  别改回 `plugins/*` 的 `error` hook：Nitro 的 `captureError` 用 `callHookParallel` 且不 await，实测 404 响应里根本来不及出现 `data`。中文 `statusMessage` 仍是界面读的字段，
+  **不要为了结构化把它删掉**；SSE 流内错误不走 JSON 错误通道，靠响应头 id 与 `session_runs.request_id` 对齐日志。
 - 数据入口：`/api/schedules`（列表 `?keyword=&enabled=&spaceId=&limit=`，页面 URL 侧对应 `?q=`；新建限 30 次/分）与 `/api/schedules/{id}`（读/改/删）、
   `/api/schedules/{id}/run`（手动跑一次，回 `started` 后立刻返回、不等模型，按排期 id 限 5 次/分）、`/api/spaces` 与 `/api/spaces/{id}`（工作空间 CRUD）、
   `/api/runs` 与 `/api/runs/{id}`（自动化运行记录）、`/api/overview`（今日页聚合）、`/api/agents`、`/api/chat*`、`/api/conversations*`。
@@ -260,19 +265,24 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
       两份代码的漂移由冒烟测试第 19 节常驻对账：`SCHEDULE_KINDS`/`SCHEDULE_PROMPT_MAX`/`INTERVAL_MINUTES_*`/`WORK_TITLE_MAX` 逐值比，`composeStartsAt()` 与
       服务端 `fromShanghaiParts()` 拿同一批输入（闰日、跨年、午夜、23:59）逐点比，日历上不存在的日期（2026-02-29）两侧都必须 **拒绝** 而不是顺延成别的一天。
       界面里「只跑一次」还多一条与同口径的本地预检：**过去的时刻直接不收**（`work.onceAlreadyPassed`）——`once` 存进过去等于永远不会触发，服务端同样 400，两侧都要挡。
-- **`GET /api/export` 是这台机器唯一的整机备份通道**（`server/api/export.get.ts`）：单文件 JSON、20 张表里除 `kb_chunks` 外的 19 张在内存里序列化、`content-disposition`
+- **`GET /api/export` 是这台机器唯一的整机备份通道**（`server/api/export.get.ts`）：单文件 JSON、28 张表里除 `kb_chunks` 外的 27 张在内存里序列化、`content-disposition`
   触发下载，限流 6 次/分。它刻意 **不进侧栏**，入口只有存储设置页那张「数据备份」卡。三条口径写死在这里：`providers.api_key` 与 `storage_configs.secret_access_key` **置空**
   （备份文件是要能随手拷走的，密钥漏进去等于泄露）、`kb_chunks` **整表丢弃**（向量是可再生的派生数据，换嵌入模型后老向量本就不可比）、附件只带元数据与
-  objectKey，**对象存储里的二进制不在文件里**。因此恢复不是导入这个文件就能完事：知识库要逐库调 `/api/settings/knowledge-bases/{kbId}/reindex` 重建向量，
-  供应商与存储的密钥要手填，桶要另行备份。新增表时记得补进 `builders`（每张表一个键，加表就加一个键），漏表不会有报错，只会静默少一份数据——
-  冒烟测试第 13 节把这件事从「记得」变成断言：从 schema 里枚举出所有 `PgTable` 与 export 里 `.from(x)` 出现过的表名对账，漏一张直接测红。
-  恢复入口是 `POST /api/import`（`server/api/import.post.ts` + `server/utils/backup-import.ts`）：导出版本为 2、导入兼容 1/2，最大 20MB，合并导入、同主键行跳过，按外键依赖顺序在单个事务里执行；
-  `messages.seq` 由序列重新生成，timestamp 字符串在导入前转成 Date。密钥、附件二进制与向量索引仍不在备份里，导入后要重新填密钥并重建索引。
+  objectKey，**对象存储里的二进制不在文件里**。因此恢复不是导入这个文件就能完事：知识库要逐库 `POST /api/settings/knowledge-bases/{kbId}/reindex` 重建向量（后台任务，202 后轮询同路径 `GET` 看 `processed/total`；并发第二次 409），
+  供应商与存储的密钥要手填，桶要另行备份。表清单与脱敏口径在 [backup-builders.ts](packages/work/server/utils/backup-builders.ts)，JSON 与 NDJSON 共用；新增表时只改这里，
+  漏表不会有报错，只会静默少一份数据——冒烟测试第 13 节把这件事从「记得」变成断言：从 schema 里枚举出所有 `PgTable` 与 builders 里 `.from(x)` 出现过的表名对账，漏一张直接测红。
+  **流式导出**是 `GET /api/export/ndjson`（`server/api/export/ndjson.get.ts`）：`application/x-ndjson`，`meta → table/row/tableEnd → end` 逐行写出，`end.checksum` 是全部 row 行的 sha256；
+  整机模式仍是每张表一次性 `db.select()`；带 `?table=&after=&limit=` 时走 [backup-pages.ts](packages/work/server/utils/backup-pages.ts) 的主键游标分页（默认 500、上限 2000，`tableEnd` 回 `hasMore/nextAfter`，复合主键按列字典序比较、游标列数不匹配直接 400），单表峰值降到一页；`backupTables` 必须与 `backupBuilders` 键一一对应。**NDJSON 导入**是 `POST /api/import/ndjson`（[backup-import-ndjson.ts](packages/work/server/utils/backup-import-ndjson.ts)）：只接受 `mode=all` 整机导出，逐行校验 `meta/table/row/tableEnd/end`、表名、行数与 `end.checksum`（按 `{type:'row',table,row}\n` 重算），再重组为 JSON 形状复用 `importWorkBackup()`；单表分片会 400（缺其余表）。ZIP、50MB 自动分片、事件分片与导出前 flush 活会话未做。
+  恢复入口是 `POST /api/import`（`server/api/import.post.ts` + `server/utils/backup-import.ts`）：导出版本为 5、导入兼容 1–5，最大 20MB，合并导入、同主键行跳过，按外键依赖顺序在单个事务里执行；导出带 `checksum`（顶层键排序后的 sha256），导入若带该字段则先校验，不匹配 400；
+  `messages.seq` 由序列重新生成，timestamp 字符串在导入前转成 Date。密钥、附件二进制与向量索引仍不在备份里，导入后要重新填密钥并重建索引。空库迁移演练（备份 → 新建空库 → `drizzle-kit migrate` 18 条迁移 → 导入整份 JSON → 校验计数 → 删库）已在本机真实执行过一次。
 - **本地文件工具默认关闭**：只有 `.env` 配置 `WORK_FILE_ROOTS`（多个目录用英文分号分隔）时才向模型注入 `local_roots / local_list_files / local_read_file / local_search_files`。
   全部只读；路径必须绝对路径，`local-files.ts` 会先 `realpath` 再判断是否位于白名单内，符号链接不能越界。聊天与定时任务共用 `buildLocalFileTools()`；未配置时这些工具完全不出现。
-- AI 工具桥在 `server/utils/workbench-tools.ts`：`buildWorkbenchTools(agentId, spaceId)` 现在只暴露三个动作 `work_today / work_list_schedules / work_create_schedule`，三者都按当前空间收窄
-  （待办与日程那四个工具 `work_list_tasks / work_create_task / work_update_task / work_create_event` 随那三张表删除，`work_create_note` 与 `work_search`
-  随笔记整机删除——留一个模型每轮都能调、却必然失败的旧动作比少一个工具更糟），`WORKBENCH_TOOL_SUMMARY`
+  **写能力再叠一层开关**：`WORK_FILE_WRITE=1` 才注入 `local_write_file / local_edit_file / local_mkdir`，写入仍是同目录临时文件 + rename，`expectedVersion` 不匹配返回 409 `FS_STALE_VERSION`，单文件上限 200KB。
+- **文件系统技能导入（P2-5）**：配置 `WORK_SKILL_ROOTS`（多个目录按系统路径分隔符）后，可在「设置 → 技能 → 从目录同步」触发 `POST /api/settings/skills/sync`；[skill-files.ts](packages/work/server/utils/skill-files.ts) 递归（最多 4 层、200 个文件、单文件 200KB）读取 `SKILL.md`/`*.md`，解析 frontmatter 的 name/description、正文作 instructions，以路径哈希为 id 幂等 upsert（只增改不删，不覆盖 enabled）。**按需披露**在 [skill-tools.ts](packages/work/server/utils/skill-tools.ts)：系统提示词只列 `/技能名 + 描述`（160 字），`skill_load(name)` 取正文；聊天/定时任务的 prompt 以 `/技能名` 开头时直接把正文追加进本轮 system。删除文件不会删库行，这是已知差距。
+- **命令、后台作业、子代理、网页工具都是默认关闭的显式能力**：`WORK_COMMAND_ENABLED=1` 才注入 `run_command / start_job / job_output / job_kill / job_list`；cwd 必须在 `WORK_FILE_ROOTS` 内、只透传基础环境变量、超时杀整棵进程树，输出落 `jobs / job_chunks`（启动插件把遗留 `running` 标 `interrupted`），前端入口 `/jobs`。`spawn_subagent` 由聊天/定时任务动态加入，只把只读工具交给子级（最多 8 步 / 120s）。`WEB_TOOL_ENABLED=1` 才注入 `web_fetch`，拒绝回环/私网地址并逐跳复核重定向；配 `TAVILY_API_KEY` 或 `BRAVE_SEARCH_API_KEY`（`WEB_SEARCH_PROVIDER=tavily|brave` 可显式指定）才注入 `web_search`。以上写/执行/联网工具都进审批，`auto` 模式下 `run_command/start_job/job_kill` 仍要人工放行。
+- AI 工具桥在 `server/utils/workbench-tools.ts`：`buildWorkbenchTools(agentId, spaceId)` 现在暴露八个动作 `work_today / work_list_schedules / work_create_schedule / work_update_schedule / work_list_runs / work_search / work_save_knowledge / work_update_space_memory`，全部按当前空间收窄：
+  `work_today` 是今日概览，`work_list_*` 只读，`work_create_schedule` / `work_update_schedule` 写排期，`work_list_runs` 查运行记录，`work_search` 跨会话/知识库文档/排期检索，`work_save_knowledge` 把本轮结论沉淀进知识库并建索引，`work_update_space_memory` 更新当前空间指令。
+  待办/日程/项目/笔记/简报那几套旧工具随表删除，不要再按旧名字找；`WORKBENCH_TOOL_SUMMARY`
   是注入系统提示词的 **同源**清单（冒烟测试第 15 节断言两边名字一一对应）。写动作各自有每分钟 20 次的 `gateWrite`。
   `work_create_schedule` 收的是「`kind` + `time`(HH:mm 北京时间) / `days` / `intervalMinutes` + `startsAt`」这种 **相对描述**，落库的 `nextRunAt` 由
   `resolveSchedulePlan()` 现算：模型自己跨时区推「下一次」必错，而新排期一律挂在 **当前这个智能体与当前工作空间** 名下，不需要它挑 agent 或 space。
@@ -280,7 +290,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **后台生成（切页面/切会话/刷新都不打断）**：权威在服务端，`server/utils/chat-runs.ts` 给每轮持一份内存副本（`RUN_BUFFER_MAX_BYTES=512KB`、`RUN_MAX_COUNT=12`、结束后
   `RUN_FINISHED_GRACE_MS=60s` 宽限期、无收尾 `RUN_STALE_MS=5min` 判陈旧）。三条接口：`GET /api/chat/{会话 id}/stream` 是 `Chat.resume()` 约定的重连地址（AI SDK 的
   `resumeStreamIsReplay` 默认真，客户端吃的是 **从头回放**再转实时，所以路径段必须等于实例 id＝会话 id；没有可回放时回 **204** 而不是 404，让客户端复位成 ready
-  并回源数据库历史——缓冲溢出正是走这条路）；`GET /api/chat/runs` 只回 `ids`（刷新后本地一个实例都没有，侧栏的「生成中」只能问服务端，不带标题正文）；
+  并回源数据库历史——缓冲溢出正是走这条路）；`GET /api/chat/runs` 只回 `ids`（刷新后本地一个实例都没有，侧栏的「生成中」只能问服务端，不带标题正文），返回的是内存 Map 与
+  `session_runs` 台账的并集：每次生成前写一条 `running`、`onFinish`/`onError` 收尾，启动插件把上次进程遗留的 `running` 标成 `interrupted`，所以重启后不会永久误报；
   `POST /api/chat/{会话 id}/stop` 把 abort 送到 `streamText({abortSignal})`—— **没有它，「停止」只撕浏览器那侧的 fetch，模型照读完、照烧额度**（这一轮 `onFinish`
   仍保存已产出的部分回复，接口幂等：刚好跑完时回 `stopped:false`）。客户端一侧是 `useChatRuns`：Chat 实例登记在模块级 Map（实例只被组件 `shallowRef`
   持有的话，卸载后连「跑到哪了」都无处可寻），`INSTANCE_LIMIT=12` 按「最久没被碰过」淘汰且 **正在生成的那一轮不丢**（丢掉引用等于没人再读那条流，界面永远停在半句）；远端在途列表只在确实有在途
@@ -288,6 +299,14 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   id。完成提示与未读点在布局：`finishedNotice`（12 秒瞬时浮层，正在看这一条时不打扰，判据是 `isChatSurface` + `activeConversationId`）与 `useChatReadState`
   （localStorage `work_conversation_read` 的 `{initialized, seen}` 表，`updatedAt` 不等即未读）。两个坑已踩过：`ensureSeeded` **空列表不播种**
   （否则「请求还在飞」被当成「这台机器没有历史」，满屏未读点）；改名等 `changed` 事件 **必须带 id 并回写已读**（PATCH 无条件顶 `updatedAt`，否则用户改个标题就把那条点成未读）。
+- **事件源会话与压缩（P1-2/P1-3）**：`server/agent/session/events.ts` + [projection.ts](packages/work/server/agent/session/projection.ts) 把每轮 user/assistant 消息、`run/start|end`、`request/header`、`tool/call|result` 追加进
+  `session_events`（append-only，`seq` 在会话行锁内按 `max(seq)+1` 分配）。`/api/chat` 与 `schedule-runner` 两条链路都写事件；事件写失败只记日志、不影响聊天。`deriveMessages()` 是纯函数，
+  已对 `surface_op=replace` 做区间遮蔽；`pairToolEvents()/unpairedToolCalls()` 按 `toolCallId` 审计工具配对。`pnpm --filter @repo/work events:backfill` 幂等回填旧消息并逐会话对账。
+  工具入参/输出裁剪到 20K 字符；每步写 `assistant/message` 检查点（有最终消息时投影丢弃），`run/end` 带累计 usage；[token-meter.ts](packages/work/server/agent/session/token-meter.ts) 提供 4 字符/token 估算与 128K×0.7 预算，`request/header` 记 `estimatedContextTokens` 与 `contextSource`。
+  压缩在 [compaction.ts](packages/work/server/agent/session/compaction.ts)：`POST /api/conversations/{id}/compact` 写 `compaction/start → system/message(compaction) → compaction/end(surface_op=replace)`，摘要排到保留消息之前；**`/api/chat` 每轮取历史后会按 `shouldAutoCompact()` 自动压缩**（窗口估算 > 70% 预算或达到 24 条读取上限），压缩成功再重读上下文，失败只记日志、本轮继续用原窗口；`WORK_AUTO_COMPACT=0` 可关闭，手动压缩接口不受影响。`GET …/context` 给 UI 返回预算占用。[context.ts](packages/work/server/agent/session/context.ts) **仅在存在 `compaction/end` 标记时**切事件投影，其余会话继续读 `messages`——不要在没有压缩的会话上强制切读路径。启动时 `recoverInterruptedToolCalls()` 只给「有 run/start、无 run/end」的未配对工具补 `TOOL_OUTCOME_UNKNOWN` + `system/message`，不自动重跑。**会话 API v2（P3-1 部分）**：`server/api/sessions/` 提供列表/创建、`snapshot`（`asOfSeq` 截断投影）、`events` 分页、`follow`（SSE 先 snapshot 后按 `id: seq` 推事件，1.5s 轮询、支持 `Last-Event-ID`）与 `fork`（按 seq 把投影消息复制到新会话，并把分叉点之前的 `session_runs` 一并复制；源运行仍 `running` 时复制为 `interrupted` + `FORKED_RUNNING`）；`prompt/stop/compact` 只是 307 到旧端点；`/api/chat` 支持正文 `requestId`（8–128 位字母数字/`._-`），同会话同 id 的 running/completed 轮次返回 409，不重复调用模型，failed/aborted/interrupted 可重试；`0017` 的 `session_runs_request_active_idx` 是**部分唯一索引**（仅非空 requestId + running/completed），真正并发的同 id 请求由数据库拦成 409，`startSessionRun` 在装配工具前先占位，把 SQLSTATE 23505 转成同样的 409。**不要删掉应用层预检**——它负责快速返回已有的 runId，唯一索引只兜真正的并发窗口。
+- **工具审批（P1-4）**：`agents.approval_mode` 三档 `auto/ask/never`（默认 auto）；[approval.ts](packages/work/server/agent/policy/approval.ts) 按工具名推导 `read/write/network/execute`，`ask` 下非读工具写 `approvals` 行 + `approval/asked` 事件并挂起 execute，`POST /api/approvals/{id}/decide` 更新行/唤醒；超时或进程重启失败关闭。聊天在 MCP 合并后统一 `wrapToolsWithApproval()`，定时任务传 `noAnswerer:true`（ask 模式的非读工具立即 `TOOL_DENIED`，不让后台等 5 分钟）。前端 [ApprovalCard.vue](packages/work/app/components/ApprovalCard.vue) 轮询 `GET /api/approvals?conversationId=`，Enter 允许 / Esc 拒绝。`approvals`、`jobs`、`job_chunks`、`todos`、`goals` 已进 export/import（备份版本 5）。
+- **工具注册表（P1-5）**：[tool-registry.ts](packages/work/server/agent/tool-registry.ts) 的 `applyToolRegistry()` 在 `loadAgentCapabilities` 装配完内置/本地/命令/网页/绑定工具后包一层，聊天与定时任务在 MCP、子代理合并后再包一次；`Symbol.for('work.tool-registry.wrapped')` 防重复。每工具统一 60s 超时（与调用方 `abortSignal` 合并）、20KB JSON 输出截断（`{truncated,preview}`）、`TOOL_TIMEOUT/TOOL_ABORTED/TOOL_FAILED` 错误码与进程内指标，`GET /api/tools/metrics` 只读暴露。**工具忽略 abort 而迟到返回时按超时处理，不能把迟到结果当成功**。输入校验仍由 AI SDK `inputSchema`、审批仍由外层 `wrapToolsWithApproval` 负责；新增工具不需要再写超时/截断。
+- **待办/目标/计划模式（P2-7）**：`todos` 一个会话一份、`goals` 一个会话最多一条（`0011`），`conversations.plan_mode` 是 `0012` 的布尔开关。工具在 [assist-tools.ts](packages/work/server/utils/assist-tools.ts)、存储与归一在 [session-assist.ts](packages/work/server/utils/session-assist.ts)：`todo_read/todo_write` 整表替换，`goal_get/goal_create/goal_update/goal_continue`，`exit_plan_mode`。`updateGoal` 的 CAS 是 `WHERE id AND revision=读取值`，冲突（含显式 `expectedRevision`）返回 409；`createGoal` 靠唯一约束 + `onConflictDoNothing` 也返回 409。计划模式**只有系统提示词约束**，不硬拦工具；`exit_plan_mode` 写 `plan/proposed` 事件并关闭开关，没有计划审批卡，确认仍是下一条消息。UI 在 ChatPane 右侧检视栏第三个「待办」tab。第四个「时间线」tab 由 [SessionTimeline.vue](packages/work/app/components/SessionTimeline.vue) 实现（P1-6/P3-2）：按 `session_events.seq` 渲染消息、工具调用（配对结果后的状态/耗时/输出大小）、审批、压缩、run 起止与请求配置；没有 `run/end` 的轮次标「未收尾」，孤立 `tool/result` 仍显示；`local_edit_file` 从 `tool/call` 入参提取 oldText/newText 渲染 red/green diff（2000 字符截断）；首屏只取最近 100 条，`GET /api/sessions/{id}/events?before=<seq>` 反向分页，界面「加载更早事件」前插并补偿滚动位置。同一工具集还有 `present`（P3-2）：把 `WORK_FILE_ROOTS` 内已存在的文件登记为会话交付物（`artifacts`，`0015`），只存路径/大小/mime，下载时重新校验白名单。聊天错误在原始文案下追加可操作提示（[chat-error.ts](packages/work/app/utils/chat-error.ts) 把 `TOOL_TIMEOUT/TOOL_ABORTED/TOOL_DENIED/FS_STALE_VERSION/429/413/供应商/白名单/403` 映射成下一步建议，识别不了就不加），不改写原始错误。
 - **定时任务 / 自动化（到点自动跑一轮智能体，结果落成一条会话）**：`schedules` 表存 `space_id`、`kind = daily/weekly/interval/once` + `timeText/days/intervalMinutes`
     - `startsAt` + `enabled` + **绝对 `nextRunAt`**（btree `(enabled, next_run_at)` 就是给认领用的）+ `lastRunAt/lastStatus/lastError/lastConversationId`；`agent_id`
       是 `onDelete: cascade`，`last_conversation_id` 是 `set null`。唤醒是 `nuxt.config.ts` 的 `nitro.scheduledTasks` 里 `'* * * * *': 'schedules:run-due'`（
@@ -300,7 +319,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
       每一轮执行在调用模型前先写一条 `automation_runs`（status/trigger/prompt/started_at），收尾时回填 finished_at/duration_ms/output_conversation_id/error；`schedules.last_*` 只是列表摘要缓存，
       `/runs` 与 `/runs/{id}` 从 `automation_runs` 读完整历史。会话与那条 user 消息在调用模型 **之前** 落库，所以失败的一轮也留得下「用户那句 prompt」和 `lastError`，`/tasks` 列表那一行的「打开运行结果」有的可解释。手动运行（
       `POST /api/schedules/{id}/run`）复用同一个 `runScheduleNow()`，认领是带 `lastStatus <> 'running'` 条件的 UPDATE——两个标签页同时点不会双双通过跑出两条会话，后到的那个拿 409；
-      `void` 之后 **必须自带 catch**，否则 rejection 撞上 `plugins/error-guard.ts` 就是一次整进程退出（用户点一下「立即运行」把工作台弄挂）。MCP 连接在 `finally` 里关闭：
+      `void` 之后 **必须自带 catch**，否则 rejection 撞上 `plugins/error-guard.ts` 就是一次整进程退出（用户点一下「立即运行」把工作台弄挂）。**取消**：每轮在 `activeScheduleRuns` 登记 `AbortController`，与 5 分钟预算 `AbortSignal.any` 合并后传给 `generateText`；`POST /api/runs/{id}/cancel` 只对本进程正在跑的 run 有效（重启遗留的 `running` 行返回 409，由启动自愈收口），取消后 `lastError` 是「用户已取消」。**轮内重试只允许在还没执行过工具时重试一次**——工具可能有外部副作用，重试会让它发生两次；退避结束也要先检查是否已取消。MCP 连接在 `finally` 里关闭：
       定时任务没有「请求结束」这个时刻，漏掉的子进程会一直挂在进程里。边界要说清——**Nitro 调度只在进程活着时跑**，本机没有守护进程，`pnpm work:start` 关着的时候什么都不会执行（旧的日程提醒链同理已删：
       工作台既没有守护进程也没有推送，`useEventReminders` 与 `events` 表一起移除）。
 - **`sql` 模板里不能出现 JS `Date`**（work 的 postgres-js 特有）：`count(*) filter (where last_run_at >= ${start})` 这种写法会在 `Buffer.from(date)` 上直接抛错——裸参数编码器只吃
@@ -310,7 +329,19 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - **迁移现状与「无 TTY 时怎么生成」**：`server/db/migrations` 目前是 `0000_superb_the_captain.sql`（初版表）+ `0001_schedules.sql` + `0002_drop_notes_briefs.sql`
     - `0003_amusing_green_goblin.sql`（新增 `spaces` / `automation_runs`，并给 `conversations`、`schedules` 加 `space_id`；默认空间在迁移里先插入再建外键）
     - `0004_equal_rumiko_fujikawa.sql`（给 `attachments`、`knowledge_bases` 加 `space_id`，旧行回填默认空间）
-    - `0005_known_robbie_robertson.sql`（把 `conversations/schedules/attachments/knowledge_bases.space_id` 改为可空，外键改为 `on delete set null`；`null` 表示独立对话或全局资料/自动化），**六条都已应用到本机 work 库**，被删的旧表数据是刻意丢弃的
+    - `0005_known_robbie_robertson.sql`（把 `conversations/schedules/attachments/knowledge_bases.space_id` 改为可空，外键改为 `on delete set null`；`null` 表示独立对话或全局资料/自动化）
+    - `0006_fixed_lockjaw.sql`（给 `spaces` 增加 `default_agent_id` 与 `local_root`）
+    - `0007_skinny_roughhouse.sql`（新增 `session_runs`：跨进程的会话运行台账，启动时把遗留 `running` 标成 `interrupted`）
+    - `0008_closed_ego.sql`（新增 `session_events`：append-only 事件日志；`seq` 在会话行锁内按 `max(seq)+1` 分配，无 `conversations.next_seq` 列）
+    - `0009_fancy_phalanx.sql`（新增 `approvals` 审批表与 `agents.approval_mode`，默认 auto）
+    - `0010_stormy_toro.sql`（新增 `jobs` / `job_chunks`：后台命令与按 seq 分块的输出）
+    - `0011_goofy_red_ghost.sql`（新增 `todos` / `goals`：会话待办与目标，目标 `conversation_id` 唯一）
+    - `0012_powerful_gunslinger.sql`（给 `conversations` 加 `plan_mode` 布尔开关，默认 false）
+    - `0013_abandoned_mac_gargan.sql`（`messages.content_text` 检索列 + `pg_trgm` 扩展与 messages/content、会话标题、知识库文档标题三个 GIN 索引；旧行用 `pnpm --filter @repo/work messages:backfill`）
+    - `0014_woozy_molly_hayes.sql`（`schedules.revision` 乐观锁 + `deleted_at` 软删除；PATCH 的 revision 可选，DELETE 不再物理删行）
+    - `0015_parched_marvel_apes.sql`（`artifacts`：会话交付物元数据，`conversation_id` cascade；`present` 工具登记，下载时重新校验 `WORK_FILE_ROOTS`）
+    - `0016_flippant_wolfpack.sql`（`CREATE EXTENSION vector` + `kb_chunks.embedding_v vector(1536)` + HNSW cosine 索引；1536 维双写，旧行走 `embeddings:backfill`，检索优先 pgvector、`WORK_VECTOR_BACKEND=jsonb` 可强制回退；向量与 Bigram 关键词结果由 `fuseHybridHits()` 按 `vector + 0.8×keyword` 融合、去重封顶 1，**不要退回「有向量命中就整批丢关键词」**——跨库时没有嵌入供应商的知识库会静默消失；关键词通道仍是 Bigram，不是 SQL trgm）
+    - `0017_living_sir_ram.sql`（`session_runs_request_active_idx` 部分唯一索引：同会话 + 非空 requestId 的 running/completed 只允许一条，兜真正并发的幂等请求；失败/中止可重试，空 requestId 不参与），**十七条迁移现已应用到本机 work 库**；`0006` 的两个列此前已被手工加过、迁移表却没记录，因此改成 `ADD COLUMN IF NOT EXISTS` 做幂等对账，正常新库与既有库都能继续向前。被删的旧表数据是刻意丢弃的
       （用户确认，整机备份在仓库外）。`drizzle-kit generate` 在「同一批里既有新增表又有删除表」时必然弹交互选择（`promptNamedWithSchemasConflict`），而本机的 shell 起不了 TTY、
       `winpty` 又找不到 pnpm，所以 `0001` 是走 `drizzle-kit/api` 的 `generateDrizzleJson()` + `generateMigration(prev, cur)` **分两步**（第一步只加、第二步只删）产出 SQL
       再手工合并 `meta/0001_snapshot.json` 与 `meta/_journal.json` 条目的；`0002` 只有删除，`pnpm work:db:generate` 一次就过了，不需要走 API。**只要批次里混进新增表，就得回到那套两步法。**
@@ -326,7 +357,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   智能体广场在 **`/agents`**，刻意不占侧栏一项——入口是 `/chat` 头部的智能体切换器与 `[agentId]` 页找不到智能体时的返回链接。
   旧日历、项目、笔记（`notes`、`notes/[id]`）仍保持删除；附件总览不再是单独一套后台页面，而是 `/library` 的用户入口，聊天附件链路（`attachments` 表、presign/complete、
   `chat-parts`、`[id]/url`、`[id]/raw`、ImagePicker 与 ChatPane 的 📎）完整保留。
-- **左侧栏（Codex 式层级）**：顶部是「新建对话」+ 首页 / 运行记录 / 资料库 / 自动化；中间是空间列表与全局最近对话；底部只保留系统设置。
+- **左侧栏（Codex 式层级）**：顶部是「新建对话」+ 首页 / 工作空间 / 资料库 / 自动化 / 后台命令（`/runs` 是运行中心，不在顶部导航）；中间是空间列表与全局最近对话；底部只保留系统设置。
   `WORK_NAV_LINKS` 仍是唯一导航表，layout 把 `/spaces` 从顶部导航过滤掉、直接渲染为空间列表；底部不再重复工作台工具。
   不再有全局空间筛选器；最近对话每项带空间徽标或「独立对话」。设置区使用独立 layout，不会出现工作台侧栏。
   侧栏 Logo 下方有命令面板入口，`Ctrl/Cmd+K` 搜索会话、消息、自动化、空间、附件、知识库。

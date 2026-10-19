@@ -22,4 +22,5 @@ export const WORK_NAV_LINKS: WorkNavLink[] = [
     { to: '/spaces', labelKey: 'nav.spaces', icon: 'folder-outline', match: '/spaces' },
     { to: '/library', labelKey: 'nav.library', icon: 'bookshelf', match: '/library' },
     { to: '/tasks', labelKey: 'nav.schedules', icon: 'timer-outline', match: '/tasks' },
+    { to: '/jobs', labelKey: 'nav.jobs', icon: 'play-circle-outline', match: '/jobs' },
 ];

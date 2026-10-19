@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { extractApiError, formatDateTime } from '@commons/contract';
 import { useI18n } from 'vue-i18n';
-import type { KnowledgeBaseItem, KnowledgeDocumentItem, KnowledgeSearchHit } from '../../../../utils/knowledge';
+import type { KnowledgeBaseItem, KnowledgeDocumentItem, KnowledgeReindexJob, KnowledgeSearchHit } from '../../../../utils/knowledge';
 
 definePageMeta({ layout: 'settings' });
 
@@ -30,10 +30,77 @@ const searching = ref(false);
 const searchRan = ref(false);
 const searchError = ref('');
 
-const reindexing = ref(false);
+const reindexJob = ref<KnowledgeReindexJob | null>(null);
+const reindexing = computed(() => reindexJob.value?.status === 'running');
+const reindexPercent = computed(() => {
+    const job = reindexJob.value;
+    if (!job || !job.total) return 0;
+    return Math.min(100, Math.round((job.processed / job.total) * 100));
+});
 const docTotal = computed(() => kb.value?.documentCount ?? 0);
 const chunkTotal = computed(() => kb.value?.chunkCount ?? 0);
 let loadToken = 0;
+let reindexTimer: ReturnType<typeof setTimeout> | null = null;
+
+function stopReindexPoll() {
+    if (reindexTimer) {
+        clearTimeout(reindexTimer);
+        reindexTimer = null;
+    }
+}
+
+function scheduleReindexPoll() {
+    if (reindexTimer) return;
+    reindexTimer = setTimeout(() => {
+        reindexTimer = null;
+        void pollReindex();
+    }, 1000);
+}
+
+async function finishReindex(job: KnowledgeReindexJob) {
+    stopReindexPoll();
+    if (job.status === 'failed') {
+        actionMessage.value = '';
+        actionError.value = t('adminForm.kbReindexFailed') + (job.lastError ? t('adminForm.kbReindexReason', { reason: job.lastError.slice(0, 160) }) : '');
+    } else {
+        actionError.value = '';
+        actionMessage.value =
+            t('adminForm.kbReindexDone', { updated: job.updated, total: job.total, failed: job.failed, provider: job.provider ?? '—' }) +
+            (job.lastError ? t('adminForm.kbReindexReason', { reason: job.lastError.slice(0, 160) }) : '');
+    }
+    await load();
+}
+
+async function pollReindex() {
+    const id = kbId.value;
+    try {
+        const res = await $fetch<{ job: KnowledgeReindexJob | null }>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}/reindex`);
+        if (id !== kbId.value) return;
+        const wasRunning = reindexJob.value?.status === 'running';
+        reindexJob.value = res.job;
+        if (res.job?.status === 'running') {
+            scheduleReindexPoll();
+        } else if (wasRunning && res.job) {
+            await finishReindex(res.job);
+        }
+    } catch {
+        // 轮询失败不打断界面：下一轮再试，任务在服务端照跑
+        if (id === kbId.value) scheduleReindexPoll();
+    }
+}
+
+/** 页面首次进入/切换知识库时接上已有任务（刷新后仍能看到进度）。 */
+async function refreshReindexJob() {
+    const id = kbId.value;
+    try {
+        const res = await $fetch<{ job: KnowledgeReindexJob | null }>(`/api/settings/knowledge-bases/${encodeURIComponent(id)}/reindex`);
+        if (id !== kbId.value) return;
+        reindexJob.value = res.job;
+        if (res.job?.status === 'running') scheduleReindexPoll();
+    } catch {
+        // 状态接口失败不影响知识库详情本身
+    }
+}
 
 async function load() {
     const token = ++loadToken;
@@ -58,9 +125,16 @@ async function load() {
     }
 }
 
-onMounted(load);
+onMounted(() => {
+    void load();
+    void refreshReindexJob();
+});
+
+onBeforeUnmount(stopReindexPoll);
 
 watch(kbId, () => {
+    stopReindexPoll();
+    reindexJob.value = null;
     editOpen.value = false;
     searchOpen.value = false;
     searchQuery.value = '';
@@ -70,6 +144,7 @@ watch(kbId, () => {
     actionMessage.value = '';
     actionError.value = '';
     void load();
+    void refreshReindexJob();
 });
 
 function openEdit() {
@@ -119,22 +194,28 @@ async function saveEdit() {
 async function reindex() {
     if (!kb.value || reindexing.value) return;
     if (!confirm(t('adminForm.kbReindexConfirm', { name: kb.value.name, chunks: chunkTotal.value }))) return;
-    reindexing.value = true;
     actionError.value = '';
-    actionMessage.value = t('adminForm.kbReindexing');
+    actionMessage.value = t('adminForm.kbReindexStarted');
     try {
-        const res = await $fetch<{ updated: number; failed: number; total: number; lastError?: string | null; knowledgeBase: { provider: string } }>(
-            `/api/settings/knowledge-bases/${encodeURIComponent(kb.value.id)}/reindex`,
-            { method: 'POST' },
-        );
-        actionMessage.value =
-            t('adminForm.kbReindexDone', { updated: res.updated, total: res.total, failed: res.failed, provider: res.knowledgeBase.provider }) +
-            (res.lastError ? t('adminForm.kbReindexReason', { reason: res.lastError.slice(0, 160) }) : '');
-        await load();
+        const res = await $fetch<{ started: boolean; job: KnowledgeReindexJob }>(`/api/settings/knowledge-bases/${encodeURIComponent(kb.value.id)}/reindex`, {
+            method: 'POST',
+        });
+        reindexJob.value = res.job;
+        scheduleReindexPoll();
     } catch (e) {
-        actionError.value = extractApiError(e, t('adminForm.kbReindexFailed'));
-    } finally {
-        reindexing.value = false;
+        // 409 表示服务端已有任务在跑：不要报错，接上它的进度就是用户想要的
+        const remote = await $fetch<{ job: KnowledgeReindexJob | null }>(`/api/settings/knowledge-bases/${encodeURIComponent(kb.value.id)}/reindex`).catch(
+            () => null,
+        );
+        if (remote?.job?.status === 'running') {
+            reindexJob.value = remote.job;
+            actionError.value = '';
+            actionMessage.value = t('adminForm.kbReindexRunning');
+            scheduleReindexPoll();
+        } else {
+            actionMessage.value = '';
+            actionError.value = extractApiError(e, t('adminForm.kbReindexFailed'));
+        }
     }
 }
 
@@ -209,7 +290,7 @@ async function runSearch() {
                     </NuxtLink>
                     <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" @click="openEdit">{{ t('adminForm.edit') }}</button>
                     <button type="button" class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs" :disabled="reindexing" @click="reindex">
-                        {{ t('adminForm.kbReindex') }}
+                        {{ reindexing ? t('adminForm.kbReindexing') : t('adminForm.kbReindex') }}
                     </button>
                     <button type="button" class="app-btn app-btn-ghost !px-3 !py-1.5 !text-xs !text-[color:var(--danger)]" @click="removeKb">
                         {{ t('common.delete') }}
@@ -219,6 +300,23 @@ async function runSearch() {
 
             <div v-if="actionMessage" class="app-alert app-alert-success">{{ actionMessage }}</div>
             <div v-if="actionError" class="app-alert app-alert-danger">{{ actionError }}</div>
+
+            <div v-if="reindexJob && reindexing" class="app-alert app-alert-info">
+                <div class="flex items-center justify-between gap-2">
+                    <span>{{
+                        t('adminForm.kbReindexProgress', {
+                            processed: reindexJob.processed,
+                            total: reindexJob.total,
+                            updated: reindexJob.updated,
+                            failed: reindexJob.failed,
+                        })
+                    }}</span>
+                    <span class="font-mono text-[10px]">{{ reindexPercent }}%</span>
+                </div>
+                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--surface-3)]">
+                    <div class="h-full rounded-full bg-[color:var(--brand)] transition-[width] duration-500" :style="{ width: `${reindexPercent}%` }" />
+                </div>
+            </div>
 
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div class="app-card p-4">

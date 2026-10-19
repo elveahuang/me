@@ -1,5 +1,6 @@
-import { desc, eq } from 'drizzle-orm';
-import { conversations, messages } from '../../../db/schema';
+import { eq } from 'drizzle-orm';
+import { loadConversationContext } from '../../../agent/session/context';
+import { conversations } from '../../../db/schema';
 import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { intParam } from '../../../utils/query';
@@ -19,8 +20,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: '会话不存在' });
     }
 
-    // 取最近 N 条后按 seq 正序返回，避免超长会话一次性拉全量
-    const recent = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(desc(messages.seq)).limit(limit);
-    const rows = recent.reverse();
-    return rows.map((m) => ({ id: m.id, role: m.role, parts: m.parts }));
+    // 默认读 messages；存在压缩标记时由 context 层改写为事件投影，旧区间被摘要遮蔽。
+    const loaded = await loadConversationContext(id, limit);
+    return loaded.messages.map((message) => ({ id: message.id, role: message.role, parts: message.parts }));
 });

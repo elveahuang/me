@@ -26,7 +26,26 @@ interface RunDetail {
 const { t } = useI18n();
 const route = useRoute();
 const id = computed(() => route.params.id as string);
-const { data, error } = await useFetch<RunDetail>(() => `/api/runs/${encodeURIComponent(id.value)}`);
+const { data, error, refresh } = await useFetch<RunDetail>(() => `/api/runs/${encodeURIComponent(id.value)}`);
+
+const cancelling = ref(false);
+const cancelError = ref('');
+
+async function cancelRun() {
+    if (!data.value || cancelling.value) return;
+    cancelling.value = true;
+    cancelError.value = '';
+    try {
+        await $fetch(`/api/runs/${encodeURIComponent(data.value.id)}/cancel`, { method: 'POST' });
+        await refresh();
+        // 中断信号刚发出时这一轮还在收尾（落库、关 MCP），稍后再取一次状态即可看到结论
+        setTimeout(() => void refresh(), 1500);
+    } catch (e: any) {
+        cancelError.value = e?.data?.statusMessage || e?.statusMessage || (e instanceof Error ? e.message : String(e));
+    } finally {
+        cancelling.value = false;
+    }
+}
 
 const statusLabel = computed(() =>
     data.value?.status === 'success' ? t('runs.success') : data.value?.status === 'failed' ? t('runs.failed') : t('runs.running'),
@@ -65,14 +84,27 @@ const durationLabel = computed(() => {
                     </h1>
                     <p class="app-page-subtitle">{{ data.spaceName || '' }} · {{ data.agentEmoji || '🤖' }} {{ data.agentName || data.scheduleTitle }}</p>
                 </div>
-                <NuxtLink
-                    v-if="data.outputConversationId"
-                    :to="`/chat/${encodeURIComponent(data.agentId)}?c=${encodeURIComponent(data.outputConversationId)}`"
-                    class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs"
-                >
-                    {{ t('runs.openOutput') }}
-                </NuxtLink>
+                <div class="flex shrink-0 items-center gap-2">
+                    <button
+                        v-if="data.status === 'running'"
+                        type="button"
+                        class="app-btn app-btn-outline !px-3 !py-1.5 !text-xs"
+                        :disabled="cancelling"
+                        @click="cancelRun"
+                    >
+                        {{ cancelling ? t('runs.cancelling') : t('runs.cancel') }}
+                    </button>
+                    <NuxtLink
+                        v-if="data.outputConversationId"
+                        :to="`/chat/${encodeURIComponent(data.agentId)}?c=${encodeURIComponent(data.outputConversationId)}`"
+                        class="app-btn app-btn-primary !px-3 !py-1.5 !text-xs"
+                    >
+                        {{ t('runs.openOutput') }}
+                    </NuxtLink>
+                </div>
             </div>
+
+            <div v-if="cancelError" class="app-alert app-alert-danger !text-[11px]">{{ cancelError }}</div>
 
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="app-card p-4">

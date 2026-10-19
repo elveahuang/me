@@ -84,11 +84,13 @@ export function buildSystemPrompt(
         sections.push(`# 工作空间\n\n${lines.join('\n')}`);
     }
 
-    // 可用技能（Skill 指令块）
+    // 可用技能（只列名称与描述，正文按需由 skill_load 取回）
     const enabledSkills = agentSkillList.filter((s) => s.enabled && s.instructions?.trim());
     if (enabledSkills.length > 0) {
         sections.push(
-            `# 可用技能（Skills）\n\n${enabledSkills.map((s) => `## 技能：${s.name}\n${interpolateVariables(s.instructions.trim(), vars)}`).join('\n\n')}`,
+            `# 可用技能（Skills）\n\n这里只列名称与描述，正文没有预先注入。确定要用某个技能时，先调用 skill_load(name) 取回完整说明再照做；用户消息以 /技能名 开头时，对应正文已直接注入。\n\n${enabledSkills
+                .map((s) => `- /${s.name}：${(s.description ?? '').trim().slice(0, 160) || '无描述'}`)
+                .join('\n')}`,
         );
     }
 

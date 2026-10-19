@@ -1,37 +1,35 @@
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, stepCountIs, streamText, type UIMessage } from 'ai';
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
-import {
-    agentKnowledgeBases,
-    agentMcpServers,
-    agentSkills,
-    agentTools,
-    agents,
-    attachments as attachmentsTable,
-    conversations,
-    knowledgeBases,
-    messages as messagesTable,
-    skills,
-    spaces,
-    tools as toolsTable,
-} from '../db/schema';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { wrapToolsWithApproval } from '../agent/policy/approval';
+import { loadAgentCapabilities } from '../agent/runtime';
+import { compactConversation, shouldAutoCompact } from '../agent/session/compaction';
+import { loadConversationContext } from '../agent/session/context';
+import { clipEventValue, toolErrorSummary } from '../agent/session/event-values';
+import { appendSessionEventsBestEffort } from '../agent/session/events';
+import { estimateMessageTokens, estimateTokens } from '../agent/session/token-meter';
+import { applyToolRegistry } from '../agent/tool-registry';
+import { agents, attachments as attachmentsTable, conversations, messages as messagesTable, sessionRuns } from '../db/schema';
+import { buildAssistTools } from '../utils/assist-tools';
 import { beginChatRun, endChatRun, tapChatRun, type ChatRun } from '../utils/chat-runs';
 import { retrieveContext } from '../utils/embedding';
+import { buildJobTools } from '../utils/job-tools';
 import { JSONB_MAX_DEPTH, exceedsJsonDepth } from '../utils/jsonb-input';
 import { isTextLikeAttachment, readAttachmentBuffer } from '../utils/kb-ingest';
-import { LOCAL_TOOL_SUMMARY, buildLocalFileTools } from '../utils/local-tools';
 import { closeMcpConnections, connectEnabledMcpServers, mergeMcpTools } from '../utils/mcp';
+import { partsToPlainText } from '../utils/message-text';
 import { requireMethod } from '../utils/method';
 import { LOCAL_OWNER } from '../utils/owner';
 import { stripNull, stripNullDeep } from '../utils/pg-text';
-import { resolveModel } from '../utils/providers';
 import { rateLimit } from '../utils/rate-limit';
 import { lockAgentRow } from '../utils/ref-lock';
 import { capBody, readCappedJsonBody } from '../utils/request-body';
+import { getRequestId, normalizeRequestId } from '../utils/request-id';
 import { buildSelfConfigTool } from '../utils/self-config';
+import { finishSessionRun, startSessionRun } from '../utils/session-runs';
+import { buildSkillTools, matchSkillDirective, skillDirectiveSection } from '../utils/skill-tools';
 import { resolveOptionalSpaceId } from '../utils/spaces';
+import { buildSubagentTools } from '../utils/subagents';
 import { buildSystemPrompt } from '../utils/system-prompt';
-import { buildToolSet } from '../utils/tools';
-import { WORKBENCH_TOOL_SUMMARY, buildWorkbenchTools } from '../utils/workbench-tools';
 
 /** 发送给模型的上下文窗口（最近 N 条消息），控制长会话的 token 成本 */
 const MAX_CONTEXT_MESSAGES = 24;
@@ -228,6 +226,7 @@ function partsToText(parts: unknown): string {
         .join('');
 }
 
+/** 事件日志单值上限：工具输出可能是整个文件/网页，不能原样塞进 jsonb */
 export default defineEventHandler(async (event) => {
     requireMethod(event, ['POST']);
     await capBody(event, MAX_CHAT_BODY_BYTES);
@@ -246,10 +245,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 413, statusMessage: '请求体过大（上限 512KB 消息内容）' });
     }
 
-    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown; spaceId?: unknown }>(event, MAX_CHAT_BODY_BYTES);
+    const body = await readCappedJsonBody<{ messages: unknown; conversationId?: unknown; agentId?: unknown; spaceId?: unknown; requestId?: unknown }>(
+        event,
+        MAX_CHAT_BODY_BYTES,
+    );
     const incoming = normalizeIncomingMessages(body?.messages);
     const agentId = typeof body?.agentId === 'string' ? body.agentId : '';
     const conversationId = typeof body?.conversationId === 'string' ? body.conversationId : '';
+    // 显式 requestId（v2 prompt 透传正文）优先于中间件生成的头；格式不合法直接 400，
+    // 不静默换成新 id——那样客户端以为幂等生效，实际每一轮都会重复调用模型。
+    const clientRequestId = body?.requestId === undefined ? null : normalizeRequestId(typeof body.requestId === 'string' ? body.requestId : null);
+    if (body?.requestId !== undefined && !clientRequestId) {
+        throw createError({ statusCode: 400, statusMessage: 'requestId 必须是 8–128 位字母、数字或 ._-' });
+    }
+    const turnRequestId = clientRequestId ?? getRequestId(event);
     const requestedSpaceId = typeof body?.spaceId === 'string' ? body.spaceId : undefined;
 
     // 必须带一条 user 消息（内容能否落库由 1.5 判定）：只传 assistant 消息同样会走完校验与生成，
@@ -318,33 +327,7 @@ export default defineEventHandler(async (event) => {
 
     // 3. 入参、附件引用与「本轮有没有内容」都已在上面判完；work 没有按次计费环节，直接进能力加载
 
-    // 4. 加载智能体绑定的 Skills / Tools / 知识库 / MCP 服务器
-    const boundSkills = await db
-        .select({
-            id: skills.id,
-            name: skills.name,
-            description: skills.description,
-            instructions: skills.instructions,
-            enabled: skills.enabled,
-        })
-        .from(agentSkills)
-        .innerJoin(skills, eq(skills.id, agentSkills.skillId))
-        .where(and(eq(agentSkills.agentId, agentId), eq(skills.enabled, true)));
-
-    const boundTools = await db
-        .select({ tool: toolsTable })
-        .from(agentTools)
-        .innerJoin(toolsTable, eq(toolsTable.id, agentTools.toolId))
-        .where(and(eq(agentTools.agentId, agentId), eq(toolsTable.enabled, true)));
-
-    const boundKbIds = (await db.select({ kbId: agentKnowledgeBases.kbId }).from(agentKnowledgeBases).where(eq(agentKnowledgeBases.agentId, agentId))).map(
-        (r) => r.kbId,
-    );
-    const boundMcpIds = (await db.select({ mcpServerId: agentMcpServers.mcpServerId }).from(agentMcpServers).where(eq(agentMcpServers.agentId, agentId))).map(
-        (r) => r.mcpServerId,
-    );
-
-    // 5. 会话处理
+    // 4. 会话处理（能力装配要按会话所属空间收窄，所以放在会话解析之后）
     let row = conversationId ? (await db.select().from(conversations).where(eq(conversations.id, conversationId)))[0] : undefined;
 
     // 标题与 RAG 检索词都取「本轮真正落库的那条」：从原始 incoming 取会给一条被整条丢弃的消息
@@ -384,55 +367,104 @@ export default defineEventHandler(async (event) => {
         row.title = autoTitle;
     }
     const conversation = row!;
-    const [space] = conversation.spaceId
-        ? await db
-              .select({ name: spaces.name, instructions: spaces.instructions, localRoot: spaces.localRoot })
-              .from(spaces)
-              .where(eq(spaces.id, conversation.spaceId))
-        : [];
-    const spaceKbIds = boundKbIds.length
-        ? (
-              await db
-                  .select({ id: knowledgeBases.id })
-                  .from(knowledgeBases)
-                  .where(
-                      and(
-                          inArray(knowledgeBases.id, boundKbIds),
-                          conversation.spaceId
-                              ? or(eq(knowledgeBases.spaceId, conversation.spaceId), isNull(knowledgeBases.spaceId))
-                              : isNull(knowledgeBases.spaceId),
-                      ),
-                  )
-          ).map((item) => item.id)
-        : [];
+    /** 事件日志的轮次 id：同一轮的 user/assistant 事件用它关联；与内存 run id 无关 */
+    const turnId = crypto.randomUUID();
+    // 幂等：同一会话 + 同一显式 requestId 的在途/已完成轮次不再调用模型。
+    // 只拦 running/completed；failed/aborted/interrupted 允许用同一个 id 重试。
+    if (clientRequestId) {
+        const [existing] = await db
+            .select({ id: sessionRuns.id, status: sessionRuns.status })
+            .from(sessionRuns)
+            .where(
+                and(
+                    eq(sessionRuns.conversationId, conversation.id),
+                    eq(sessionRuns.requestId, clientRequestId),
+                    inArray(sessionRuns.status, ['running', 'completed']),
+                ),
+            )
+            .orderBy(desc(sessionRuns.startedAt))
+            .limit(1);
+        if (existing) {
+            throw createError({
+                statusCode: 409,
+                statusMessage: existing.status === 'running' ? '同一 requestId 正在处理中' : '同一 requestId 已完成，未重复调用模型',
+                data: { code: 'conflict', duplicate: true, clientRequestId, runId: existing.id, status: existing.status },
+            });
+        }
+    }
+    const turnStartedAt = Date.now();
+    // 5. 加载智能体能力（与定时任务共用 server/agent/runtime.ts，避免两条链路的工具/知识库装配漂移）
+    const runtime = await loadAgentCapabilities(agent, conversation.spaceId);
+    const { space, spaceKbIds } = runtime;
 
     // 6. 落库客户端消息（按消息 id 幂等）
     //    清洗、附件存在性过滤与「本轮无可落库内容」的判定都在建会话之前完成（见步骤 1.5），
     //    这里只把已定形的消息挂上会话并写入。
     //    只接受 user 角色：服务端历史是上下文唯一事实来源，
     //    否则客户端可以伪造 assistant 回复与 tool 结果污染后续所有轮次。
-    const rowsToInsert = userMessages.map((m) => ({ id: m.id, conversationId: conversation.id, role: 'user' as const, parts: m.parts }));
+    const rowsToInsert = userMessages.map((m) => ({
+        id: m.id,
+        conversationId: conversation.id,
+        role: 'user' as const,
+        parts: m.parts,
+        contentText: partsToPlainText(m.parts),
+    }));
 
     // 消息与会话 updatedAt 必须原子推进：批量写消息 + bump 会话时间放同一事务。
+    let insertedUserMessageIds: string[] = [];
     await db.transaction(async (tx) => {
-        await tx.insert(messagesTable).values(rowsToInsert).onConflictDoNothing();
+        const inserted = await tx.insert(messagesTable).values(rowsToInsert).onConflictDoNothing().returning({ id: messagesTable.id });
+        insertedUserMessageIds = inserted.map((row) => row.id);
         await tx.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversation.id));
     });
 
-    // 7. 从数据库取权威历史（最近 MAX_CONTEXT_MESSAGES 条，按 seq 稳定排序），
-    //    既控制长会话 Token 成本，也避免客户端传入的历史污染上下文
-    const windowed = (
-        await db
-            .select({ role: messagesTable.role, parts: messagesTable.parts })
-            .from(messagesTable)
-            .where(eq(messagesTable.conversationId, conversation.id))
-            .orderBy(desc(messagesTable.seq))
-            .limit(MAX_CONTEXT_MESSAGES)
-    ).reverse();
+    // 旁路事件：只记这次真正插入的用户消息，客户端重试同一 id 时不会重复追加。
+    const insertedUserMessageIdSet = new Set(insertedUserMessageIds);
+    await appendSessionEventsBestEffort(
+        conversation.id,
+        rowsToInsert
+            .filter((row) => insertedUserMessageIdSet.has(row.id))
+            .map((row) => ({
+                type: 'user/message',
+                turnId,
+                data: { id: row.id, parts: row.parts },
+            })),
+    );
 
-    // 滑动窗口开头必须是完整的用户消息，避免截断出的孤立工具响应破坏上下文
+    // 运行边界：即使这条 user 消息是重试（没有新插入），这一轮仍然有一次真实生成，run/start 照写。
+    await appendSessionEventsBestEffort(conversation.id, [
+        { type: 'run/start', turnId, data: { runId: turnId, trigger: 'chat', agentId: conversation.agentId } },
+    ]);
+
+    // 7. 从权威读模型取历史（默认 messages；存在压缩标记时走事件投影），
+    //    既控制长会话 Token 成本，也避免客户端传入的历史污染上下文
+    let loadedContext = await loadConversationContext(conversation.id, MAX_CONTEXT_MESSAGES);
+
+    // 自动压缩：窗口接近预算或已经顶到窗口上限时，先让压缩器把旧前缀折叠成一条摘要。
+    // 失败/低于阈值都只是跳过，本轮继续用原窗口，绝不能因为压缩失败让聊天 500。
+    // `WORK_AUTO_COMPACT=0` 可关闭（手动压缩接口不受影响）。
+    if (process.env.WORK_AUTO_COMPACT !== '0') {
+        const pressure = loadedContext.messages.reduce((sum, message) => sum + estimateTokens(JSON.stringify(message.parts)) + 4, 0);
+        const autoBudget = 128_000 * 0.7;
+        if (shouldAutoCompact(pressure, loadedContext.messages.length, MAX_CONTEXT_MESSAGES, autoBudget)) {
+            try {
+                const result = await compactConversation(conversation.id, {
+                    model: runtime.model,
+                    reason: 'auto',
+                    modelName: agent.model,
+                    budgetTokens: autoBudget,
+                });
+                if (result.compacted) loadedContext = await loadConversationContext(conversation.id, MAX_CONTEXT_MESSAGES);
+            } catch (error) {
+                console.error('[chat] 自动压缩失败，继续使用原上下文:', error);
+            }
+        }
+    }
+    const windowed = loadedContext.messages.map(({ role, parts }) => ({ role, parts }));
+
+    // 滑动窗口开头必须是完整的用户消息或压缩摘要，避免截断出的孤立工具响应破坏上下文
     let startIndex = 0;
-    while (startIndex < windowed.length && windowed[startIndex]?.role !== 'user') {
+    while (startIndex < windowed.length && windowed[startIndex]?.role !== 'user' && windowed[startIndex]?.role !== 'system') {
         startIndex++;
     }
     const trimmedWindow = startIndex < windowed.length ? windowed.slice(startIndex) : windowed;
@@ -450,6 +482,13 @@ export default defineEventHandler(async (event) => {
                         ...part,
                         output: toolPart.output.slice(0, MAX_HISTORICAL_TOOL_OUTPUT) + '\n...[早期工具结果已压缩]',
                     };
+                }
+            }
+            // 旧图不再重发给供应商：保留可读占位，避免每轮把历史图片的 base64 重新计费
+            if (part && typeof part === 'object' && 'type' in part && part.type === 'file') {
+                const filePart = part as { mediaType?: string; filename?: string };
+                if (typeof filePart.mediaType === 'string' && filePart.mediaType.toLowerCase().startsWith('image/')) {
+                    return { type: 'text', text: `[图片已卸载：${filePart.filename || '历史图片'}]` };
                 }
             }
             return part;
@@ -483,23 +522,19 @@ export default defineEventHandler(async (event) => {
         }
     }
 
-    // 9. 供应商与模型解析
-    const { model } = await resolveModel(agent.providerId, agent.model);
-
-    // 10. 工具集与 MCP 连接
+    // 9. 工具集与 MCP 连接
     //     工作台内置工具恒常挂载（不依赖智能体绑定）：这是本机私人事物，
     //     用户说「每天九点跑一遍」「今天有什么安排」时不该取决于所选智能体恰好绑了哪几行工具。
     //     agentId 是新建定时任务的归属：到点执行哪个智能体由「用户在哪段对话里提的」决定，而不是让模型挑。
-    const localTools = buildLocalFileTools(space?.localRoot || undefined);
-    let toolSet = {
-        ...buildWorkbenchTools(agentId, conversation.spaceId),
-        ...localTools,
-        ...buildToolSet(boundTools.map((row) => row.tool)),
-    };
+    let toolSet = runtime.toolSet;
     if (agent.selfConfig) {
-        toolSet['self-config'] = buildSelfConfigTool(agentId);
+        toolSet = { ...toolSet, 'self-config': buildSelfConfigTool(agentId) };
     }
-    const mcpConnections = await connectEnabledMcpServers(boundMcpIds);
+    toolSet = { ...toolSet, ...buildJobTools({ conversationId: conversation.id, agentId: agent.id }) };
+    toolSet = { ...toolSet, ...buildAssistTools(conversation.id) };
+    toolSet = { ...toolSet, ...buildSkillTools(runtime.skills) };
+    toolSet = { ...toolSet, ...buildSubagentTools({ agentId: agent.id, spaceId: conversation.spaceId ?? null }) };
+    const mcpConnections = await connectEnabledMcpServers(runtime.mcpServerIds);
 
     // onError 与 onFinish 可能都触发（流被 cancel 时 onFinish 同样会跑，不是「断开就什么都不跑」）；
     // 用一次性闭包保证 MCP 连接恰好关闭一次，避免重复 close 抛错或连接泄漏。
@@ -515,20 +550,51 @@ export default defineEventHandler(async (event) => {
     // 只有流已建立后才有机会触发。任一处抛出都会让 handler 直接 500，不先关闭就把整批
     // MCP 连接（及其子进程/长连接）永久漏在进程里。
     let activeRun: ChatRun | null = null;
+    /**
+     * 运行台账 id（`session_runs`）：与内存缓冲互补。内存缓冲负责「重连回放」，
+     * 台账负责「进程重启后仍能解释上一轮是完成、失败还是被中断」。写失败时为 null，
+     * 绝不能让它把这一轮对话变成 500。
+     */
+    let sessionRunId: string | null = null;
+
+    /** 本轮累计 usage：onStepEnd 每个 step 加一次，最终写进 run/end，供后续 token 计量复用 */
+    const turnUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, reasoningTokens: 0, steps: 0 };
+    let runEndPromise: Promise<void> | null = null;
+    const recordRunEnd = (status: 'completed' | 'aborted' | 'failed', reason: string | null = null): Promise<void> => {
+        // onError 与 onFinish 可能先后触发：复用同一个 promise，onFinish 的 await 才真的等到落库。
+        if (runEndPromise) return runEndPromise;
+        runEndPromise = appendSessionEventsBestEffort(conversation.id, [
+            {
+                type: 'run/end',
+                turnId,
+                data: { runId: turnId, status, reason, durationMs: Date.now() - turnStartedAt, usage: turnUsage },
+            },
+        ]).then(() => undefined);
+        return runEndPromise;
+    };
     try {
+        // 先占运行台账再装配工具/拼提示词：同 requestId 的并发请求要在调用模型前就被唯一索引拦下，
+        // 不能等 MCP 建连、审批包装都做完才插入那条唯一行。
+        sessionRunId = await startSessionRun({ conversationId: conversation.id, trigger: 'chat', requestId: turnRequestId });
         if (mcpConnections.length) {
             toolSet = mergeMcpTools(toolSet, mcpConnections);
         }
+        toolSet = applyToolRegistry(toolSet);
+        toolSet = wrapToolsWithApproval(toolSet, {
+            conversationId: conversation.id,
+            runId: turnId,
+            mode: (agent.approvalMode as 'auto' | 'ask' | 'never') ?? 'auto',
+        });
 
         // 11. 组装系统提示词
-        const toolSummary = [
-            WORKBENCH_TOOL_SUMMARY,
-            ...(Object.keys(localTools).length ? [LOCAL_TOOL_SUMMARY] : []),
-            ...boundTools.map((row) => `- ${row.tool.name}（${row.tool.type === 'http' ? 'HTTP 工具' : '内置工具'}）：${row.tool.description}`),
-            ...mcpConnections.map((c) => `- [MCP] ${c.serverName}`),
-        ].join('\n');
+        const toolSummary = [runtime.toolSummary, ...mcpConnections.map((c) => `- [MCP] ${c.serverName}`)].join('\n');
 
-        const system = buildSystemPrompt(agent, boundSkills as any, knowledgeContext, toolSummary.trim() ? toolSummary : null, undefined, space);
+        const systemBase = buildSystemPrompt(agent, runtime.skills, knowledgeContext, toolSummary.trim() ? toolSummary : null, undefined, space);
+        const requestedSkill = matchSkillDirective(lastUserText, runtime.skills);
+        const systemWithSkill = requestedSkill ? `${systemBase}\n\n${skillDirectiveSection(requestedSkill)}` : systemBase;
+        const system = conversation.planMode
+            ? `${systemWithSkill}\n\n## 计划模式（已开启）\n这一轮只输出可执行的计划，不要调用写文件、跑命令、起作业等会产生副作用的工具，也不要假装已经执行。计划写完后必须调用 exit_plan_mode 提交，然后停下来等待用户确认；用户确认前不要继续。`
+            : systemWithSkill;
 
         // 12. 流式生成（带温度、Token 限制与思维链传递）
         /**
@@ -591,6 +657,27 @@ export default defineEventHandler(async (event) => {
 
         const modelMessages = await convertToModelMessages(resolvedWindow, { ignoreIncompleteToolCalls: true });
         const maxSteps = agent.maxSteps ?? 6;
+        const estimatedContextTokens = estimateMessageTokens(modelMessages);
+
+        // 调模型前的请求快照：只记元数据，不把完整 system/tools 定义重复存一份（那些可从配置与 request/header 的 toolNames 还原）。
+        await appendSessionEventsBestEffort(conversation.id, [
+            {
+                type: 'request/header',
+                turnId,
+                data: {
+                    model: agent.model ?? null,
+                    providerId: agent.providerId ?? null,
+                    maxSteps,
+                    messageCount: modelMessages.length,
+                    estimatedContextTokens,
+                    contextSource: loadedContext.source,
+                    toolNames: Object.keys(toolSet),
+                    systemChars: system.length,
+                    temperature: agent.temperature ?? null,
+                    maxOutputTokens: agent.maxTokens ?? null,
+                },
+            },
+        ]);
 
         /**
          * 每一轮生成先开一条内存回放缓冲（`utils/chat-runs.ts`），让「切会话 / 切页面 / 刷新」后的
@@ -602,7 +689,7 @@ export default defineEventHandler(async (event) => {
         const run = beginChatRun(conversation.id);
         activeRun = run;
         const result = streamText({
-            model,
+            model: runtime.model,
             system: system || undefined,
             messages: modelMessages,
             tools: toolSet,
@@ -611,6 +698,77 @@ export default defineEventHandler(async (event) => {
             stopWhen: stepCountIs(maxSteps),
             timeout: { toolMs: TOOL_TIMEOUT_MS, firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: CHUNK_TIMEOUT_MS },
             abortSignal: run.controller.signal,
+            onStepEnd: async (step) => {
+                const stepUsage = {
+                    inputTokens: step.usage.inputTokens ?? 0,
+                    outputTokens: step.usage.outputTokens ?? 0,
+                    totalTokens: step.usage.totalTokens ?? 0,
+                    cachedInputTokens: step.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+                    reasoningTokens: step.usage.outputTokenDetails?.reasoningTokens ?? 0,
+                };
+                turnUsage.steps++;
+                turnUsage.inputTokens += stepUsage.inputTokens;
+                turnUsage.outputTokens += stepUsage.outputTokens;
+                turnUsage.totalTokens += stepUsage.totalTokens;
+                turnUsage.cachedInputTokens += stepUsage.cachedInputTokens;
+                turnUsage.reasoningTokens += stepUsage.reasoningTokens;
+
+                // 逐 step 检查点：崩溃时至少能看到已生成的正文；正常完成时投影会用它被 onFinish 的最终消息替换。
+                const parts: Record<string, unknown>[] = [];
+                if (step.text) parts.push({ type: 'text', text: step.text });
+                for (const call of step.toolCalls) {
+                    const result = step.toolResults.find((item) => item.toolCallId === call.toolCallId);
+                    parts.push({
+                        type: `tool-${call.toolName}`,
+                        toolCallId: call.toolCallId,
+                        input: clipEventValue(call.input),
+                        state: result ? 'output-available' : 'input-available',
+                        ...(result ? { output: clipEventValue(result.output) } : {}),
+                    });
+                }
+                if (!parts.length) return;
+                await appendSessionEventsBestEffort(conversation.id, [
+                    {
+                        type: 'assistant/message',
+                        turnId,
+                        stepId: String(step.stepNumber),
+                        data: {
+                            id: `checkpoint:${turnId}:${step.stepNumber}`,
+                            checkpoint: true,
+                            stepNumber: step.stepNumber,
+                            finishReason: step.finishReason,
+                            usage: stepUsage,
+                            parts,
+                        },
+                    },
+                ]);
+            },
+            onToolExecutionStart: async ({ toolCall }) => {
+                await appendSessionEventsBestEffort(conversation.id, [
+                    {
+                        type: 'tool/call',
+                        turnId,
+                        data: { toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, input: clipEventValue(toolCall.input) },
+                    },
+                ]);
+            },
+            onToolExecutionEnd: async ({ toolCall, toolOutput, toolExecutionMs }) => {
+                const isError = toolOutput.type === 'tool-error';
+                const raw = isError ? toolOutput.error : toolOutput.output;
+                await appendSessionEventsBestEffort(conversation.id, [
+                    {
+                        type: 'tool/result',
+                        turnId,
+                        data: {
+                            toolCallId: toolCall.toolCallId,
+                            toolName: toolCall.toolName,
+                            isError,
+                            output: isError ? toolErrorSummary(raw) : clipEventValue(raw),
+                            durationMs: toolExecutionMs,
+                        },
+                    },
+                ]);
+            },
         });
 
         const responseStream = createUIMessageStream({
@@ -619,6 +777,8 @@ export default defineEventHandler(async (event) => {
             },
             onError: (error) => {
                 void closeMcpOnce();
+                void finishSessionRun(sessionRunId, 'failed', 'generation_failed');
+                void recordRunEnd('failed', 'generation_failed');
                 // 不把供应商/SQL 的原始错误文本透给终端用户，仅在服务端日志保留细节。
                 console.error('[chat] 生成失败:', error);
                 return '生成回复时出错，请稍后重试';
@@ -627,15 +787,29 @@ export default defineEventHandler(async (event) => {
                 try {
                     const assistantMessage = [...responseMessages].reverse().find((m) => m.role === 'assistant' && m.parts?.length);
                     if (assistantMessage) {
-                        await db
+                        const assistantId = assistantMessage.id || crypto.randomUUID();
+                        const parts = stripNullDeep(assistantMessage.parts ?? []);
+                        const inserted = await db
                             .insert(messagesTable)
                             .values({
-                                id: assistantMessage.id || crypto.randomUUID(),
+                                id: assistantId,
                                 conversationId: conversation.id,
                                 role: 'assistant',
-                                parts: stripNullDeep(assistantMessage.parts ?? []),
+                                parts,
+                                contentText: partsToPlainText(parts),
                             })
-                            .onConflictDoNothing();
+                            .onConflictDoNothing()
+                            .returning({ id: messagesTable.id });
+                        // 事件与物化消息分开写：事件是旁路，失败只记日志。
+                        if (inserted.length) {
+                            await appendSessionEventsBestEffort(conversation.id, [
+                                {
+                                    type: 'assistant/message',
+                                    turnId,
+                                    data: { id: assistantId, parts, isAborted, final: true },
+                                },
+                            ]);
+                        }
                         if (isAborted) {
                             console.info(`[chat] 用户中断生成，已保存已产出的部分回复（conversation=${conversation.id}）`);
                         }
@@ -649,6 +823,9 @@ export default defineEventHandler(async (event) => {
                     // 回复丢了可以重来，一条 SQL 原文泄出去收不回来，所以这里只记日志。
                     console.error('[chat] 保存助手回复失败:', error);
                 } finally {
+                    // 无论助手消息是否落库，这一轮都必须收尾；否则台账会一直显示「生成中」。
+                    await finishSessionRun(sessionRunId, isAborted ? 'aborted' : 'completed', isAborted ? 'user_aborted' : null);
+                    await recordRunEnd(isAborted ? 'aborted' : 'completed', isAborted ? 'user_aborted' : null);
                     try {
                         await closeMcpOnce();
                     } catch (error) {
@@ -671,6 +848,8 @@ export default defineEventHandler(async (event) => {
         // 流还没交出去就抛错（合并工具、拼提示词、转换历史都可能）：onFinish/onError 都还没机会跑，
         // 不把这一轮收尾就会留一条永远「在途」的缓冲，侧栏角标一直亮到 5 分钟 stale 兜底。
         if (activeRun) endChatRun(activeRun);
+        await finishSessionRun(sessionRunId, 'failed', 'stream_setup_failed');
+        await recordRunEnd('failed', 'stream_setup_failed');
         await closeMcpOnce();
         throw error;
     }

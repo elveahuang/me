@@ -5,6 +5,7 @@ import { createError } from 'h3';
 import { mcpServers } from '../db/schema';
 import { db } from './db';
 import { stripNull } from './pg-text';
+import { openSecret, sealSecret } from './secret-box';
 
 /**
  * MCP 工具接入：把后台配置的 MCP Server（http/sse）连接起来，
@@ -99,7 +100,7 @@ export async function connectEnabledMcpServers(serverIds: string[]) {
         .from(mcpServers)
         .where(and(inArray(mcpServers.id, [...new Set(serverIds)]), eq(mcpServers.enabled, true)));
     // 并发建连：每个服务器的失败已被单独捕获，互不影响，串行会把连接延迟线性累加到首 token 前。
-    const settled = await Promise.allSettled(rows.map((row) => connectMcpServer(row)));
+    const settled = await Promise.allSettled(rows.map((row) => connectMcpServer({ ...row, headers: openHeaders(row.headers) })));
     for (const [i, row] of rows.entries()) {
         const result = settled[i]!;
         if (result.status === 'fulfilled') connections.push(result.value);
@@ -228,6 +229,27 @@ export function maskHeaders(headers: Record<string, string> | null | undefined):
         masked[key] = value ? MASKED_HEADER_VALUE : '';
     }
     return masked;
+}
+
+/**
+ * MCP headers 与供应商 apiKey 同级（P4）：整段值逐项 AES-256-GCM 加密后再落 jsonb。
+ * 键名保留明文，管理端掩码只需要知道「有没有值」；旧库的明文值原样兼容，下一次保存即完成加密。
+ */
+export function sealHeaders(headers: Record<string, string> | null | undefined): Record<string, string> {
+    const sealed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers ?? {})) {
+        sealed[key] = value ? sealSecret(value) : value;
+    }
+    return sealed;
+}
+
+/** 建连前解密；未配置主密钥或历史明文原样返回，密文缺钥时抛 500（由调用方按单台服务器失败处理）。 */
+export function openHeaders(headers: Record<string, string> | null | undefined): Record<string, string> {
+    const opened: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers ?? {})) {
+        opened[key] = value ? openSecret(value) : value;
+    }
+    return opened;
 }
 
 /**

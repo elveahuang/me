@@ -1,6 +1,15 @@
 import { tool, type ToolSet } from 'ai';
 import * as zod from 'zod';
-import { listLocalFiles, parseLocalRoots, readLocalFile, searchLocalFiles } from './local-files';
+import {
+    editLocalFile,
+    isLocalWriteEnabled,
+    listLocalFiles,
+    makeLocalDirectory,
+    parseLocalRoots,
+    readLocalFile,
+    searchLocalFiles,
+    writeLocalFile,
+} from './local-files';
 
 /**
  * 本地文件只读工具。
@@ -14,6 +23,12 @@ export const LOCAL_TOOL_SUMMARY = [
     '- local_list_files：列出目录内容（只读，最多三层）',
     '- local_read_file：读取文本文件（只读，单文件上限 120KB）',
     '- local_search_files：按文件名或正文搜索本地目录（只读）',
+].join('\n');
+
+export const LOCAL_WRITE_TOOL_SUMMARY = [
+    '- local_write_file：写入白名单内的文本文件（需 WORK_FILE_WRITE=1；支持 expectedVersion 防覆盖）',
+    '- local_edit_file：按 oldText 精确替换一次并写回（需 WORK_FILE_WRITE=1）',
+    '- local_mkdir：在白名单内创建目录（需 WORK_FILE_WRITE=1）',
 ].join('\n');
 
 function explain(error: unknown): string {
@@ -95,6 +110,56 @@ export function buildLocalFileTools(defaultRoot?: string | null): ToolSet {
             }
         },
     });
+
+    if (isLocalWriteEnabled()) {
+        set.local_write_file = tool({
+            description:
+                '写入白名单目录内的文本文件。默认覆盖；带 expectedVersion 时若文件已被改动会返回 FS_STALE_VERSION。单文件上限 200KB，父目录必须已存在。',
+            inputSchema: zod.object({
+                path: zod.string().describe('绝对路径，必须在 local_roots 返回的目录内'),
+                content: zod.string().describe('完整文件内容'),
+                expectedVersion: zod.string().optional().describe('可选：上一次 local_write_file 返回的 version；不匹配则拒绝写入'),
+            }),
+            execute: async (input) => {
+                try {
+                    return await writeLocalFile(input.path, input.content, input.expectedVersion);
+                } catch (error) {
+                    return explain(error);
+                }
+            },
+        });
+
+        set.local_edit_file = tool({
+            description: '在文件里把 oldText 精确替换成 newText（只替换第一次出现），适合小改动；大改动用 local_write_file。',
+            inputSchema: zod.object({
+                path: zod.string().describe('绝对路径，必须在 local_roots 返回的目录内'),
+                oldText: zod.string().describe('要替换的原文，必须逐字匹配（含缩进）'),
+                newText: zod.string().describe('替换后的文本'),
+                expectedVersion: zod.string().optional().describe('可选：文件版本；不匹配则拒绝写入'),
+            }),
+            execute: async (input) => {
+                try {
+                    return await editLocalFile(input.path, input.oldText, input.newText, input.expectedVersion);
+                } catch (error) {
+                    return explain(error);
+                }
+            },
+        });
+
+        set.local_mkdir = tool({
+            description: '在白名单目录内创建一个新目录；父目录必须已存在。',
+            inputSchema: zod.object({
+                path: zod.string().describe('要创建的绝对目录路径，必须位于 local_roots 范围内'),
+            }),
+            execute: async (input) => {
+                try {
+                    return await makeLocalDirectory(input.path);
+                } catch (error) {
+                    return explain(error);
+                }
+            },
+        });
+    }
 
     return set as ToolSet;
 }

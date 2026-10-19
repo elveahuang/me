@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { agents, schedules, spaces } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
@@ -19,7 +19,11 @@ export default defineEventHandler(async (event) => {
     const id = routeId(event, 'id', '定时任务');
 
     if (method === 'DELETE') {
-        const deleted = await db.delete(schedules).where(eq(schedules.id, id)).returning({ id: schedules.id });
+        const deleted = await db
+            .update(schedules)
+            .set({ deletedAt: new Date(), enabled: false, updatedAt: new Date(), revision: sql`${schedules.revision} + 1` })
+            .where(and(eq(schedules.id, id), isNull(schedules.deletedAt)))
+            .returning({ id: schedules.id });
         if (!deleted.length) throw createError({ statusCode: 404, statusMessage: '定时任务不存在' });
         return { ok: true };
     }
@@ -39,6 +43,7 @@ export default defineEventHandler(async (event) => {
         days: schedules.days,
         startsAt: schedules.startsAt,
         enabled: schedules.enabled,
+        revision: schedules.revision,
         nextRunAt: schedules.nextRunAt,
         lastRunAt: schedules.lastRunAt,
         lastStatus: schedules.lastStatus,
@@ -54,7 +59,7 @@ export default defineEventHandler(async (event) => {
             .from(schedules)
             .leftJoin(agents, eq(schedules.agentId, agents.id))
             .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
-            .where(eq(schedules.id, id));
+            .where(and(eq(schedules.id, id), isNull(schedules.deletedAt)));
         if (!row) throw createError({ statusCode: 404, statusMessage: '定时任务不存在' });
         return row;
     }
@@ -79,7 +84,14 @@ export default defineEventHandler(async (event) => {
     // 合并出的 plan 与算出的 nextRunAt 才来自同一份旧值，不会一个改星期、一个改钟点互相覆盖。
     const updated = await db.transaction(async (tx) => {
         const [current] = await tx.select().from(schedules).where(eq(schedules.id, id)).for('update');
-        if (!current) return false;
+        if (!current || current.deletedAt) return false;
+        if (body.revision !== undefined && body.revision !== null) {
+            const expected = Number(body.revision);
+            if (!Number.isInteger(expected) || expected !== current.revision) {
+                throw createError({ statusCode: 409, statusMessage: '定时任务已被其他窗口修改，请刷新后重试' });
+            }
+        }
+        patch.revision = current.revision + 1;
         // `enabled` 与 `agentId` 也在锁内落定：前者要把「传了 null」当成「保持现状」，只有拿到旧行才有那个现值
         // （写成固定 `true` 的话，一次本想清空勾选的 PATCH 会变成「把已停用的任务重新启用并补跑一轮」）；
         // 后者需要在同一笔事务里对智能体行取 FOR SHARE，否则并发删除会把这条排期级联带走。
@@ -106,7 +118,7 @@ export default defineEventHandler(async (event) => {
         .from(schedules)
         .leftJoin(agents, eq(schedules.agentId, agents.id))
         .leftJoin(spaces, eq(schedules.spaceId, spaces.id))
-        .where(eq(schedules.id, id));
+        .where(and(eq(schedules.id, id), isNull(schedules.deletedAt)));
     // 与 POST 同一道闸门：事务提交后到这次回读之间行被级联带走时，不能回 200 空体（表单会以为改成功了）
     if (!row) throw createError({ statusCode: 409, statusMessage: '这条定时任务在保存后立刻被删掉了（它指向的智能体可能刚被删除），请重新保存' });
     return row;

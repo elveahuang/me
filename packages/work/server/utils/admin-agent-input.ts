@@ -52,6 +52,13 @@ export function normalizeAgentMaxSteps(raw: unknown, fallback: number): number {
     return Math.min(50, Math.max(1, Math.floor(raw)));
 }
 
+/** 审批模式只有三档；未知值直接 400，不能静默回退成 auto（那等于悄悄放宽权限） */
+export function normalizeAgentApprovalMode(raw: unknown): 'auto' | 'ask' | 'never' {
+    if (raw === undefined || raw === null || raw === '') return 'auto';
+    if (raw === 'auto' || raw === 'ask' || raw === 'never') return raw;
+    throw createError({ statusCode: 400, statusMessage: 'approvalMode 必须是 auto / ask / never' });
+}
+
 /** 一次请求最多能提交的绑定项数：绑定量级本就是个位数到几十，超大列表只会把 inArray 的参数撑爆（PG 上限 65535） */
 const AGENT_ID_LIST_MAX = 500;
 

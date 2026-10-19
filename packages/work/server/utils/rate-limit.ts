@@ -12,6 +12,84 @@ export interface RateLimitResult {
     retryAfterSec: number;
 }
 
+/**
+ * 限流指标（P4）。
+ *
+ * 只按 key 的第一段聚合（`export` / `chat` / `kb-reindex`），不按完整 key：
+ * 完整 key 里有知识库 id、排期 id，几千个实体就是几千个基数，指标本身会变成内存泄漏。
+ * 进程内、重启清零；Redis 模式下由 Lua 返回的结果记账，不额外发一次网络请求。
+ */
+export interface RateLimitFamilyMetric {
+    family: string;
+    calls: number;
+    allowed: number;
+    blocked: number;
+    memoryFallback: number;
+    redisErrors: number;
+}
+
+const rateLimitMetrics = {
+    calls: 0,
+    allowed: 0,
+    blocked: 0,
+    memoryFallback: 0,
+    redisErrors: 0,
+    families: new Map<string, RateLimitFamilyMetric>(),
+};
+const MAX_METRIC_FAMILIES = 200;
+
+function metricFamily(key: string): string {
+    return key.split(':')[0]?.trim() || 'other';
+}
+
+function bucketFor(key: string): RateLimitFamilyMetric {
+    let family = metricFamily(key);
+    let bucket = rateLimitMetrics.families.get(family);
+    if (bucket) return bucket;
+    if (rateLimitMetrics.families.size >= MAX_METRIC_FAMILIES) {
+        bucket = rateLimitMetrics.families.get('other');
+        if (bucket) return bucket;
+        family = 'other';
+    }
+    bucket = { family, calls: 0, allowed: 0, blocked: 0, memoryFallback: 0, redisErrors: 0 };
+    rateLimitMetrics.families.set(family, bucket);
+    return bucket;
+}
+
+function recordRateLimit(key: string, result: RateLimitResult, memory: boolean): void {
+    rateLimitMetrics.calls += 1;
+    if (result.ok) rateLimitMetrics.allowed += 1;
+    else rateLimitMetrics.blocked += 1;
+    if (memory) rateLimitMetrics.memoryFallback += 1;
+
+    const bucket = bucketFor(key);
+    bucket.calls += 1;
+    if (result.ok) bucket.allowed += 1;
+    else bucket.blocked += 1;
+    if (memory) bucket.memoryFallback += 1;
+}
+
+function recordRedisError(key: string): void {
+    rateLimitMetrics.redisErrors += 1;
+    bucketFor(key).redisErrors += 1;
+}
+
+/** 只读快照；families 按调用量降序，便于直接看出哪条入口被刷。 */
+export function getRateLimitMetrics(): Omit<RateLimitFamilyMetric, 'family'> & { families: RateLimitFamilyMetric[] } {
+    const { families, ...totals } = rateLimitMetrics;
+    return { ...totals, families: [...families.values()].sort((a, b) => b.calls - a.calls) };
+}
+
+/** 只给测试用：清空进程内计数，避免上一条断言污染下一条。 */
+export function resetRateLimitMetrics(): void {
+    rateLimitMetrics.calls = 0;
+    rateLimitMetrics.allowed = 0;
+    rateLimitMetrics.blocked = 0;
+    rateLimitMetrics.memoryFallback = 0;
+    rateLimitMetrics.redisErrors = 0;
+    rateLimitMetrics.families.clear();
+}
+
 // 内存滑窗降级存储
 const memoryBuckets = new Map<string, number[]>();
 const MAX_MEMORY_BUCKETS = 10_000;
@@ -83,7 +161,9 @@ export async function rateLimit(key: string, limit: number, windowMs: number): P
     try {
         const client = await getRedisClient();
         if (!client) {
-            return memoryRateLimit(key, limit, windowMs);
+            const result = memoryRateLimit(key, limit, windowMs);
+            recordRateLimit(key, result, true);
+            return result;
         }
 
         const now = Date.now();
@@ -102,15 +182,22 @@ export async function rateLimit(key: string, limit: number, windowMs: number): P
             const parsedTime = oldestMember ? Number(oldestMember.split(':')[0]) : windowStart;
             const oldestTime = Number.isNaN(parsedTime) ? windowStart : parsedTime;
             const retryAfterMs = Math.max(1000, windowMs - (now - oldestTime));
-            return {
+            const blocked = {
                 ok: false,
                 retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
             };
+            recordRateLimit(key, blocked, false);
+            return blocked;
         }
 
-        return { ok: true, retryAfterSec: 0 };
+        const passed = { ok: true, retryAfterSec: 0 };
+        recordRateLimit(key, passed, false);
+        return passed;
     } catch (err) {
         console.warn(`[rate-limit] Redis 限流操作异常，自动降级内存限流:`, (err as Error)?.message);
-        return memoryRateLimit(key, limit, windowMs);
+        recordRedisError(key);
+        const result = memoryRateLimit(key, limit, windowMs);
+        recordRateLimit(key, result, true);
+        return result;
     }
 }

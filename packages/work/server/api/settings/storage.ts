@@ -6,6 +6,7 @@ import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { stripNull } from '../../utils/pg-text';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
+import { sealSecret } from '../../utils/secret-box';
 import {
     invalidateStorageConfigCache,
     MAX_FILE_SIZE_MB_LIMIT,
@@ -67,7 +68,7 @@ function buildPatch(body: Record<string, unknown>): Record<string, unknown> {
     // 非字符串同样要 400（原样忽略等于把一次字段名/类型写错存成「密钥没变」），空串与掩码占位符保留原值
     if (body.secretAccessKey !== undefined && body.secretAccessKey !== null) {
         const secret = normalizeStorageText(body.secretAccessKey, 'secretAccessKey');
-        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = secret;
+        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = sealSecret(secret);
     }
     return patch;
 }

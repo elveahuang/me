@@ -9,6 +9,7 @@ import { stripNull } from '../../../utils/pg-text';
 import { flagParam } from '../../../utils/query';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { routeId } from '../../../utils/route-id';
+import { sealSecret } from '../../../utils/secret-box';
 import {
     invalidateStorageConfigCache,
     MAX_FILE_SIZE_MB_LIMIT,
@@ -55,7 +56,7 @@ async function patchStorageConfig(event: H3Event, id: string) {
     // 与 POST 同口径：非字符串 400；空串与掩码占位符保留原密钥
     if (body.secretAccessKey !== undefined && body.secretAccessKey !== null) {
         const secret = normalizeStorageText(body.secretAccessKey, 'secretAccessKey');
-        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = secret;
+        if (secret && secret !== SECRET_PLACEHOLDER) patch.secretAccessKey = sealSecret(secret);
     }
 
     if (patch.name !== undefined && !String(patch.name).trim()) {

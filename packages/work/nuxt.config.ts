@@ -42,6 +42,11 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
+        /**
+         * 自定义错误处理器只为给响应补 `data.code` / `data.requestId`；它同步执行，
+         * 能赶在默认处理器序列化之前改到 `error.data`（`error` hook 是异步并行，来不及）。
+         */
+        errorHandler: '~~/server/error.ts',
         experimental: {
             tasks: true,
         },

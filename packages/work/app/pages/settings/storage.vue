@@ -15,6 +15,8 @@ interface BackupImportResult {
     inserted: Record<string, number>;
     skipped: Record<string, number>;
     warnings: string[];
+    tables?: number;
+    rows?: number;
 }
 
 const importInput = ref<HTMLInputElement | null>(null);
@@ -40,6 +42,17 @@ async function onImportFile(event: Event) {
     importing.value = true;
     try {
         const text = await file.text();
+        const isNdjson = /\.ndjson$/i.test(file.name) || /^\s*\{[^\n]*"type"\s*:\s*"meta"[^\n]*\n/.test(text);
+        if (isNdjson) {
+            const rows = text.split(/\r?\n/).filter((line) => /"type"\s*:\s*"row"/.test(line)).length;
+            if (!confirm(t('settings.dataImportConfirmRows', { n: rows }))) return;
+            importResult.value = await $fetch<BackupImportResult>('/api/import/ndjson', {
+                method: 'POST',
+                body: text,
+                headers: { 'content-type': 'application/x-ndjson' },
+            });
+            return;
+        }
         let payload: Record<string, unknown>;
         try {
             payload = JSON.parse(text) as Record<string, unknown>;
@@ -87,11 +100,15 @@ async function onImportFile(event: Event) {
                     <AppIcon name="download-outline" :size="15" />
                     <span>{{ t('settings.dataBackupAction') }}</span>
                 </a>
+                <a href="/api/export/ndjson" download class="app-btn app-btn-outline">
+                    <AppIcon name="download-outline" :size="15" />
+                    <span>{{ t('settings.dataBackupNdjson') }}</span>
+                </a>
                 <button type="button" class="app-btn app-btn-soft" :disabled="importing" @click="importInput?.click()">
                     <AppIcon name="tray-arrow-up" :size="15" />
                     <span>{{ importing ? t('settings.dataImporting') : t('settings.dataImportAction') }}</span>
                 </button>
-                <input ref="importInput" type="file" accept="application/json,.json" class="hidden" @change="onImportFile" />
+                <input ref="importInput" type="file" accept="application/json,.json,application/x-ndjson,.ndjson" class="hidden" @change="onImportFile" />
             </div>
             <p class="text-faint text-[11px]">{{ t('settings.dataBackupNote') }}</p>
             <p class="text-faint text-[11px]">{{ t('settings.dataImportHint') }}</p>

@@ -13,6 +13,11 @@ import { createError } from 'h3';
 import { attachments, storageConfigs, type StorageConfig } from '../db/schema';
 import { db } from './db';
 import { LOCAL_OWNER } from './owner';
+import { openSecret } from './secret-box';
+
+function withOpenSecret(row: StorageConfig): StorageConfig {
+    return { ...row, secretAccessKey: openSecret(row.secretAccessKey) };
+}
 
 /**
  * 对象存储（S3 协议）适配层。
@@ -38,7 +43,7 @@ export function invalidateStorageConfigCache() {
 export async function resolveStorageConfig(preferredId?: string | null): Promise<StorageConfig> {
     if (preferredId) {
         const [row] = await db.select().from(storageConfigs).where(eq(storageConfigs.id, preferredId));
-        if (row && row.enabled) return row;
+        if (row && row.enabled) return withOpenSecret(row);
     }
     if (defaultConfigCache && Date.now() - defaultConfigCache.at < CONFIG_CACHE_TTL) {
         if (defaultConfigCache.value) return defaultConfigCache.value;
@@ -48,7 +53,7 @@ export async function resolveStorageConfig(preferredId?: string | null): Promise
         .from(storageConfigs)
         .where(eq(storageConfigs.enabled, true))
         .orderBy(desc(storageConfigs.isDefault), desc(storageConfigs.createdAt));
-    const value = rows[0] ?? null;
+    const value = rows[0] ? withOpenSecret(rows[0]) : null;
     defaultConfigCache = { value, at: Date.now() };
     if (!value) {
         throw createError({ statusCode: 503, statusMessage: '尚未配置对象存储，请在「设置 → 存储配置」中添加一份配置' });
@@ -73,7 +78,7 @@ export async function resolveStoredStorageConfig(storageConfigId: string | null 
     if (!row) {
         throw createError({ statusCode: 503, statusMessage: '附件所属的存储配置已被删除，无法访问' });
     }
-    return row;
+    return withOpenSecret(row);
 }
 
 /** 内部哨兵 key：表示这一行的 `storage_config_id` 为空（不该发生，见下方注释） */

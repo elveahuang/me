@@ -4,6 +4,7 @@ import { attachments, kbChunks, kbDocuments, knowledgeBases, providers } from '.
 import { db } from './db';
 import { chunkText, embedTexts, INDEX_EMBED_BUDGET_MS } from './embedding';
 import { stripNull } from './pg-text';
+import { openSecret } from './secret-box';
 import { getObject, resolveStoredStorageConfig } from './storage';
 
 export const MAX_KB_DOCUMENT_BYTES = 2 * 1024 * 1024;
@@ -105,10 +106,11 @@ export async function ingestDocumentIntoKb(params: { kbId: string; title: string
 
     let provider = undefined;
     if (kb.embeddingProviderId) {
-        [provider] = await db.select().from(providers).where(eq(providers.id, kb.embeddingProviderId));
+        const [row] = await db.select().from(providers).where(eq(providers.id, kb.embeddingProviderId));
+        if (row) provider = { ...row, apiKey: openSecret(row.apiKey) };
     }
     if (!provider) {
-        const rows = await db.select().from(providers).where(eq(providers.enabled, true));
+        const rows = (await db.select().from(providers).where(eq(providers.enabled, true))).map((row) => ({ ...row, apiKey: openSecret(row.apiKey) }));
         provider = rows.find((p) => p.isDefault) ?? rows[0];
     }
 
@@ -154,6 +156,7 @@ export async function ingestDocumentIntoKb(params: { kbId: string; title: string
                     documentId: docId,
                     content: content_,
                     embedding: vectors[i + j] ?? [],
+                    embeddingV: (vectors[i + j]?.length ?? 0) === 1536 ? vectors[i + j] : null,
                 })),
             );
         }

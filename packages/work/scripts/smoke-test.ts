@@ -56,12 +56,20 @@ async function runSmokeTests() {
 
     // 1. RAG 兜底算法：向量缺失时靠 Bigram 重叠打分
     console.log('1. 测试 Bigram 关键词检索算法');
-    const { bigrams, bigramScore, chunkText } = await import('../server/utils/embedding');
+    const { bigrams, bigramScore, chunkText, fuseHybridHits } = await import('../server/utils/embedding');
     const bg1 = bigrams('你好世界');
     assert(bg1.has('你好') && bg1.has('好世') && bg1.has('世界'), '正确提取中文 Bigram 集合');
 
     const doc = '项目周报模板：本周里程碑、风险与下周计划';
     assert(bigramScore('周报里程碑', doc) > bigramScore('今天天气怎么样', doc) && bigramScore('周报里程碑', doc) > 0.5, '关键词重叠率精准打分');
+    const hybrid = fuseHybridHits(
+        [{ score: 0.5, content: 'a', documentId: 'd1', kbId: 'k1' }],
+        [{ score: 0.9, content: 'b', documentId: 'd2', kbId: 'k2' }],
+        2,
+    );
+    assert(hybrid.length === 2 && hybrid[0]!.content === 'b' && Math.abs(hybrid[0]!.score - 0.72) < 1e-9, '混合检索按权重让强关键词命中压过弱向量命中');
+    const both = fuseHybridHits([{ score: 0.5, content: 'a', documentId: 'd1', kbId: 'k1' }], [{ score: 0.9, content: 'a', documentId: 'd1', kbId: 'k1' }], 5);
+    assert(both.length === 1 && both[0]!.score === 1, '同一片段两路命中合并去重并封顶 1');
 
     // 2. 知识库分块：长度与重叠量决定检索粒度
     console.log('\n2. 测试 RAG 知识库切块算法');
@@ -84,6 +92,18 @@ async function runSmokeTests() {
     const r4 = await rateLimit(testId, 3, 60_000);
     assert(!r4.ok && r4.retryAfterSec > 0, '达到 3 次限额后精准拦截');
 
+    const { getRateLimitMetrics, resetRateLimitMetrics } = await import('../server/utils/rate-limit');
+    resetRateLimitMetrics();
+    const metricKey = `smoke:${testId}`;
+    await rateLimit(metricKey, 1, 60_000);
+    await rateLimit(metricKey, 1, 60_000);
+    const rateMetrics = getRateLimitMetrics();
+    const metricFamily = rateMetrics.families.find((item) => item.family === 'smoke');
+    assert(
+        rateMetrics.calls === 2 && rateMetrics.allowed === 1 && rateMetrics.blocked === 1 && metricFamily?.calls === 2 && metricFamily.blocked === 1,
+        '限流指标按 key 前缀聚合，通过/拦截各记一次且不把完整 key 当基数',
+    );
+
     // 4. 系统提示词装配
     console.log('\n4. 测试 System Prompt 变量替换');
     const { buildSystemPrompt } = await import('../server/utils/system-prompt');
@@ -98,6 +118,76 @@ async function runSmokeTests() {
     );
     const withSpace = buildSystemPrompt(mockAgent, [], null, null, undefined, { name: '写作空间', instructions: '保持简洁，先给结论。' });
     assert(withSpace.includes('# 工作空间') && withSpace.includes('写作空间') && withSpace.includes('保持简洁'), '工作空间名称与长期指令注入系统提示词');
+
+    const { partsToPlainText } = await import('../server/utils/message-text');
+    assert(
+        partsToPlainText([
+            { type: 'text', text: '第一段' },
+            { type: 'file', filename: 'a.txt' },
+            { type: 'text', text: '第二段' },
+        ]) === '第一段\n第二段',
+        '检索列只拼 text part，忽略附件/工具结构',
+    );
+
+    const { backupChecksum } = await import('../server/utils/backup-checksum');
+    const sumA = backupChecksum({ messages: [{ id: 'm1', text: 'a' }], todos: [] });
+    const sumB = backupChecksum({ todos: [], messages: [{ id: 'm1', text: 'a' }] });
+    const sumC = backupChecksum({ messages: [{ id: 'm1', text: 'b' }], todos: [] });
+    assert(sumA === sumB && sumA !== sumC && /^[0-9a-f]{64}$/.test(sumA), '备份校验和按顶层键排序，内容变化会改变摘要');
+
+    const previousKey = process.env.WORK_SECRET_KEY;
+    process.env.WORK_SECRET_KEY = '00'.repeat(32);
+    const { isSealed, openSecret, sealSecret } = await import('../server/utils/secret-box');
+    const sealed = sealSecret('sk-smoke-secret');
+    assert(isSealed(sealed) && sealed !== 'sk-smoke-secret' && openSecret(sealed) === 'sk-smoke-secret', 'AES-GCM 加密后再解密还原明文');
+    assert(openSecret('plain-key') === 'plain-key' && sealSecret('') === '', '未加密值/空串原样透传，兼容旧数据');
+    let tampered = false;
+    try {
+        openSecret(`${sealed.slice(0, -2)}xx`);
+    } catch {
+        tampered = true;
+    }
+    assert(tampered, '密文被篡改时 GCM 校验失败，不会返回错误明文');
+    const { maskHeaders, mergeHeaders, openHeaders, sealHeaders } = await import('../server/utils/mcp');
+    const sealedHeaders = sealHeaders({ Authorization: 'Bearer mcp-smoke', 'X-Trace': '' });
+    assert(
+        isSealed(sealedHeaders.Authorization!) &&
+            sealedHeaders.Authorization !== 'Bearer mcp-smoke' &&
+            openHeaders(sealedHeaders).Authorization === 'Bearer mcp-smoke',
+        'MCP headers 逐项加密，建连前再解密还原',
+    );
+    assert(sealedHeaders['X-Trace'] === '' && openHeaders({ Authorization: 'Bearer legacy' }).Authorization === 'Bearer legacy', '空值与原明文 headers 兼容');
+    assert(maskHeaders(sealedHeaders).Authorization === '****' && !JSON.stringify(maskHeaders(sealedHeaders)).includes('Bearer'), '列表掩码不泄露密文或明文');
+    const kept = mergeHeaders(sealedHeaders, { Authorization: '****' });
+    assert(
+        kept.Authorization === sealedHeaders.Authorization && openHeaders(kept).Authorization === 'Bearer mcp-smoke',
+        '编辑时回传掩码保留原密文，不把真实值覆盖成 ****',
+    );
+    if (previousKey === undefined) delete process.env.WORK_SECRET_KEY;
+    else process.env.WORK_SECRET_KEY = previousKey;
+
+    const { encryptLegacySecrets } = await import('../server/utils/secret-migration');
+    if (!process.env.WORK_SECRET_KEY) {
+        const migration = await encryptLegacySecrets();
+        assert(!migration.keyConfigured && migration.total === 0, '未配置主密钥时批量加密直接返回，不写任何表');
+    }
+
+    const skillRows: any[] = [
+        { id: 's1', name: 'smoke-skill', description: '冒烟技能说明', instructions: 'SECRET-BODY 技能正文', enabled: true },
+        { id: 's2', name: 'off-skill', description: '未启用', instructions: '不应出现', enabled: false },
+    ];
+    const withSkills = buildSystemPrompt(mockAgent, skillRows, null, null);
+    assert(
+        withSkills.includes('/smoke-skill') && withSkills.includes('冒烟技能说明') && !withSkills.includes('SECRET-BODY') && !withSkills.includes('off-skill'),
+        '技能按需披露：提示词只列名称与描述，不注入正文，也不列停用技能',
+    );
+    const { matchSkillDirective, skillDirectiveSection, buildSkillTools } = await import('../server/utils/skill-tools');
+    assert(matchSkillDirective('/smoke-skill 帮我写', skillRows)?.name === 'smoke-skill', '/技能名 能匹配到已启用技能');
+    assert(matchSkillDirective('/off-skill 帮我写', skillRows) === null, '停用技能不能被 /技能名 命中');
+    assert(skillDirectiveSection(skillRows[0]!).includes('SECRET-BODY'), '显式 /技能名 会把正文注入这一轮');
+    const skillTools = buildSkillTools(skillRows) as Record<string, { execute: (input: { name: string }) => Promise<any> }>;
+    assert((await skillTools.skill_load!.execute({ name: 'smoke-skill' })).instructions.includes('SECRET-BODY'), 'skill_load 能按名称取回完整正文');
+    assert((await skillTools.skill_load!.execute({ name: 'missing' })).error.code === 'SKILL_NOT_FOUND', 'skill_load 对未知名称返回 SKILL_NOT_FOUND');
 
     // 5. 会话导出（共享契约，两端同一份序列化）
     console.log('\n5. 测试会话 Markdown 导出序列化');
@@ -282,6 +372,181 @@ async function runSmokeTests() {
         assert(packageText.includes('"name"'), '白名单目录可以读取文本文件');
         const hits = await searchLocalFiles('@repo/work', localRoot, 5);
         assert(hits.length > 0, '白名单目录可以按正文搜索');
+
+        const { mkdtemp, rm } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const { editLocalFile, writeLocalFile } = await import('../server/utils/local-files');
+        const tempDir = await mkdtemp(join(localRoot, '.tmp-smoke-write-'));
+        process.env.WORK_FILE_WRITE = '1';
+        try {
+            const first = await writeLocalFile(join(tempDir, 'a.txt'), 'hello');
+            assert(first.bytes === 5 && first.version.length > 0, '开启写入后可以在白名单内新建文件');
+            assert((await readLocalFile(join(tempDir, 'a.txt'))) === 'hello', '写入内容可以被读回');
+            let stale = false;
+            try {
+                await writeLocalFile(join(tempDir, 'a.txt'), 'changed', `${first.version}-wrong`);
+            } catch (error) {
+                stale = (error as { statusCode?: number }).statusCode === 409;
+            }
+            assert(stale, 'expectedVersion 不匹配时返回 409，拒绝覆盖并发修改');
+            await editLocalFile(join(tempDir, 'a.txt'), 'hello', 'world', first.version);
+            assert((await readLocalFile(join(tempDir, 'a.txt'))) === 'world', 'local_edit_file 按 oldText 精确替换');
+        } finally {
+            delete process.env.WORK_FILE_WRITE;
+            await rm(tempDir, { recursive: true, force: true });
+        }
+
+        const { runControlledCommand } = await import('../server/utils/command-tools');
+        process.env.WORK_COMMAND_ENABLED = '1';
+        try {
+            const echoed = await runControlledCommand({ command: 'echo work-command-ok', cwd: localRoot, timeoutSec: 10 });
+            assert(echoed.exitCode === 0 && echoed.stdout.includes('work-command-ok'), '受控命令在 cwd 内执行并回传 stdout');
+            const sleepCommand = process.platform === 'win32' ? 'ping -n 6 127.0.0.1 >nul' : 'sleep 5';
+            const timed = await runControlledCommand({ command: sleepCommand, cwd: localRoot, timeoutSec: 1 });
+            assert(timed.timedOut && timed.exitCode !== 0, '命令超时会杀进程并标记 timedOut');
+
+            const { killBackgroundJob, readJobOutput, startBackgroundJob } = await import('../server/utils/jobs');
+            const job = await startBackgroundJob({ command: 'echo work-job-ok', cwd: localRoot });
+            let output = await readJobOutput(job.id, 0, 100);
+            for (let i = 0; i < 30 && !output.done; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                output = await readJobOutput(job.id, 0, 100);
+            }
+            assert(output.done && output.job.status === 'completed', '后台作业完成后状态落库为 completed');
+            assert(
+                output.chunks.some((chunk) => chunk.content.includes('work-job-ok')),
+                '后台作业输出按块落库并可增量读取',
+            );
+
+            const longJob = await startBackgroundJob({ command: process.platform === 'win32' ? 'ping -n 30 127.0.0.1 >nul' : 'sleep 30', cwd: localRoot });
+            assert(await killBackgroundJob(longJob.id), '运行中的后台作业可以被终止');
+            assert((await readJobOutput(longJob.id, 0, 10)).job.status === 'killed', '终止后状态为 killed');
+
+            const { db } = await import('../server/utils/db');
+            const { eq } = await import('drizzle-orm');
+            const { jobChunks, jobs } = await import('../server/db/schema');
+            await db.delete(jobChunks).where(eq(jobChunks.jobId, job.id));
+            await db.delete(jobChunks).where(eq(jobChunks.jobId, longJob.id));
+            await db.delete(jobs).where(eq(jobs.id, job.id));
+            await db.delete(jobs).where(eq(jobs.id, longJob.id));
+        } finally {
+            delete process.env.WORK_COMMAND_ENABLED;
+        }
+
+        const { fetchWebPage } = await import('../server/utils/web-tools');
+        process.env.WEB_TOOL_ENABLED = '1';
+        try {
+            let blocked = false;
+            try {
+                await fetchWebPage('http://127.0.0.1:3001/api/health');
+            } catch (error) {
+                blocked = (error as { statusCode?: number }).statusCode === 403;
+            }
+            assert(blocked, 'web_fetch 拒绝 localhost/回环地址（SSRF 护栏）');
+            let protocolBlocked = false;
+            try {
+                await fetchWebPage('file:///C:/Windows/win.ini');
+            } catch (error) {
+                protocolBlocked = (error as { statusCode?: number }).statusCode === 400;
+            }
+            assert(protocolBlocked, 'web_fetch 只接受 http/https');
+        } finally {
+            delete process.env.WEB_TOOL_ENABLED;
+        }
+
+        const { resolveWebSearchProvider, hasWebSearch, searchWeb, buildWebTools } = await import('../server/utils/web-tools');
+        delete process.env.TAVILY_API_KEY;
+        delete process.env.BRAVE_SEARCH_API_KEY;
+        delete process.env.WEB_SEARCH_PROVIDER;
+        process.env.WEB_TOOL_ENABLED = '1';
+        try {
+            assert(!hasWebSearch() && resolveWebSearchProvider() === null, '没有搜索 key 时不注入 web_search');
+            let notConfigured = false;
+            try {
+                await searchWeb('test');
+            } catch (error) {
+                notConfigured = (error as { statusCode?: number }).statusCode === 501;
+            }
+            assert(notConfigured, '没有搜索供应商时 searchWeb 返回 501 而不是空结果');
+            process.env.TAVILY_API_KEY = 'tvly-smoke';
+            assert(resolveWebSearchProvider()?.provider === 'tavily' && hasWebSearch(), '只有 TAVILY_API_KEY 时自动选择 tavily');
+            assert('web_search' in (buildWebTools() as Record<string, unknown>), '配置搜索 key 后注入 web_search');
+            process.env.BRAVE_SEARCH_API_KEY = 'brave-smoke';
+            process.env.WEB_SEARCH_PROVIDER = 'brave';
+            assert(resolveWebSearchProvider()?.provider === 'brave', 'WEB_SEARCH_PROVIDER 可显式指定供应商');
+        } finally {
+            delete process.env.WEB_TOOL_ENABLED;
+            delete process.env.TAVILY_API_KEY;
+            delete process.env.BRAVE_SEARCH_API_KEY;
+            delete process.env.WEB_SEARCH_PROVIDER;
+        }
+
+        const { normalizeTodoItems, createGoal, updateGoal, continueGoal, writeTodoState, readTodoState, getGoal } =
+            await import('../server/utils/session-assist');
+        const { db } = await import('../server/utils/db');
+        const normalized = normalizeTodoItems([
+            { title: '  一  ', status: 'in_progress' },
+            { title: '二', status: 'done' },
+        ]);
+        assert(normalized.length === 2 && normalized[0]?.title === '一' && normalized[0]?.status === 'in_progress', '待办归一化保留合法状态并 trim');
+        assert(normalized[1]?.status === 'pending' && normalized[0]?.id !== normalized[1]?.id, '未知状态回落 pending，缺省 id 自动生成');
+
+        const { agents, conversations, goals, todos } = await import('../server/db/schema');
+        const [agentRow] = await db.select({ id: agents.id }).from(agents).limit(1);
+        if (agentRow) {
+            const conversationId = `smoke-assist-${Date.now()}`;
+            await db.insert(conversations).values({ id: conversationId, agentId: agentRow.id, title: 'smoke-assist' });
+            try {
+                await writeTodoState(conversationId, [{ title: '验证待办', status: 'pending' }]);
+                const todoState = await readTodoState(conversationId);
+                assert(todoState.items.length === 1 && todoState.items[0]?.title === '验证待办', 'todo_write 整表替换并可按会话读回');
+
+                const created = await createGoal(conversationId, '完成 P2-7 的验收', 5);
+                assert(created.revision === 1 && created.round === 0 && created.status === 'active', '目标创建后 revision=1/round=0');
+                let conflict = false;
+                try {
+                    await updateGoal(conversationId, { status: 'paused', expectedRevision: 999 });
+                } catch (error) {
+                    conflict = (error as { statusCode?: number }).statusCode === 409;
+                }
+                assert(conflict, '目标 revision 冲突返回 409');
+                const updated = await updateGoal(conversationId, { status: 'paused', expectedRevision: 1 });
+                assert(updated.status === 'paused' && updated.revision === 2, '带正确 revision 的目标更新成功并递增');
+                const continued = await continueGoal(conversationId);
+                assert(continued.round === 1 && continued.status === 'active' && continued.revision === 3, '继续目标只推进 round 并恢复 active');
+                assert((await getGoal(conversationId))?.round === 1, '目标推进后可按会话读回');
+            } finally {
+                const { eq } = await import('drizzle-orm');
+                await db.delete(todos).where(eq(todos.conversationId, conversationId));
+                await db.delete(goals).where(eq(goals.conversationId, conversationId));
+                await db.delete(conversations).where(eq(conversations.id, conversationId));
+            }
+        } else {
+            console.log('⚠️  没有智能体，跳过待办/目标数据库断言');
+        }
+
+        const { parseSkillMarkdown, syncSkillsFromFiles } = await import('../server/utils/skill-files');
+        const parsed = parseSkillMarkdown('---\nname: smoke-skill\ndescription: 冒烟技能\n---\n# 标题\n正文', 'fallback');
+        assert(
+            parsed.name === 'smoke-skill' && parsed.description === '冒烟技能' && parsed.instructions.includes('正文'),
+            'SKILL.md frontmatter 解析 name/description/正文',
+        );
+        const { writeFile } = await import('node:fs/promises');
+        const { skills } = await import('../server/db/schema');
+        const skillDir = await mkdtemp(join(localRoot, '.tmp-smoke-skill-'));
+        await writeFile(join(skillDir, 'SKILL.md'), '---\nname: smoke-skill\ndescription: 冒烟技能\n---\n# 规则\n只做测试', 'utf8');
+        process.env.WORK_SKILL_ROOTS = skillDir;
+        try {
+            const firstSync = await syncSkillsFromFiles();
+            assert(firstSync.created === 1 && firstSync.scanned === 1, '从 WORK_SKILL_ROOTS 扫描并导入 Markdown 技能');
+            const secondSync = await syncSkillsFromFiles();
+            assert(secondSync.created === 0 && secondSync.updated === 0, '重复同步技能是幂等的');
+        } finally {
+            delete process.env.WORK_SKILL_ROOTS;
+            const { eq } = await import('drizzle-orm');
+            await db.delete(skills).where(eq(skills.name, 'smoke-skill'));
+            await rm(skillDir, { recursive: true, force: true });
+        }
     } finally {
         if (previousRoots === undefined) delete process.env.WORK_FILE_ROOTS;
         else process.env.WORK_FILE_ROOTS = previousRoots;
@@ -520,7 +785,7 @@ async function runSmokeTests() {
         .filter(([, value]) => is(value, PgTable))
         .map(([key]) => key)
         .sort();
-    const exportText = readFileSync(resolve(HERE, '../server/api/export.get.ts'), 'utf8');
+    const exportText = readFileSync(resolve(HERE, '../server/utils/backup-builders.ts'), 'utf8');
     const builtTables = new Set([...exportText.matchAll(/\.from\(\s*([A-Za-z]+)\s*\)/g)].map((matched) => matched[1]!));
     // 刻意不进备份的派生数据：知识库分块与向量可重建（导入后「重建索引」），文件里也丢掉了
     const SKIPPED_TABLES = new Set(['kbChunks']);
@@ -528,6 +793,48 @@ async function runSmokeTests() {
     assert(
         schemaTables.length >= 17 && uncovered.length === 0,
         `export 覆盖 schema 的全部 ${schemaTables.length} 张表（未覆盖：${uncovered.join(', ') || '无'}；派生数据除外）`,
+    );
+    const ndjsonText = readFileSync(resolve(HERE, '../server/api/export/ndjson.get.ts'), 'utf8');
+    assert(ndjsonText.includes('backupBuilders') && ndjsonText.includes('sendStream'), 'NDJSON 导出复用同一份表清单并流式发送');
+    const { backupBuilders, backupTables } = await import('../server/utils/backup-builders');
+    assert(
+        Object.keys(backupBuilders).sort().join(',') === Object.keys(backupTables).sort().join(','),
+        'NDJSON 分页表映射与整表 builder 键一一对应（新增表时两处都要补）',
+    );
+    const { parseNdjsonBackup } = await import('../server/utils/backup-import-ndjson');
+    const { createHash } = await import('node:crypto');
+    const ndjsonRow = { type: 'row', table: 'spaces', row: { id: 'smoke-kb', name: 'smoke' } };
+    const ndjsonRowLine = `${JSON.stringify(ndjsonRow)}\n`;
+    const ndjsonChecksum = createHash('sha256').update(ndjsonRowLine).digest('hex');
+    const ndjsonLines = (mode = 'all', checksum = ndjsonChecksum) =>
+        [
+            JSON.stringify({ type: 'meta', format: 'work.backup.ndjson', version: 1, backupVersion: 5, mode }),
+            JSON.stringify({ type: 'table', table: 'spaces' }),
+            JSON.stringify(ndjsonRow),
+            JSON.stringify({ type: 'tableEnd', table: 'spaces', count: 1 }),
+            JSON.stringify({ type: 'end', checksum }),
+        ].join('\n') + '\n';
+    const parsedNdjson = parseNdjsonBackup(ndjsonLines());
+    assert(
+        parsedNdjson.tables === 1 &&
+            parsedNdjson.rows === 1 &&
+            (parsedNdjson.payload.data as any).spaces[0].id === 'smoke-kb' &&
+            parsedNdjson.payload.format === 'work.backup',
+        'NDJSON 重组为 JSON 备份形状：表/行计数正确，可直接复用单事务导入',
+    );
+    const ndjsonRejects = (text: string): boolean => {
+        try {
+            parseNdjsonBackup(text);
+            return false;
+        } catch (error) {
+            return (error as { statusCode?: number }).statusCode === 400;
+        }
+    };
+    assert(
+        ndjsonRejects(ndjsonLines().replace(/\{"type":"end"[^\n]*\n/, '')) &&
+            ndjsonRejects(ndjsonLines('all', '0'.repeat(64))) &&
+            ndjsonRejects(ndjsonLines('table')),
+        'NDJSON 截断、校验和不符、单表分片三种输入都拒绝，不会静默导入半份备份',
     );
     /*
      * 覆盖之外还要对「脱敏口径」：备份文件是这台机器唯一会被拷走的东西，
@@ -852,6 +1159,72 @@ async function runSmokeTests() {
             const [row] = await db.select({ count: sql<number>`count(*)` }).from(table);
             assert(Number(row?.count ?? 0) >= 0, `${name} 表可正常查询`);
         }
+        const indexRows = (await db.execute(sql`SELECT indexdef FROM pg_indexes WHERE indexname = 'session_runs_request_active_idx'`)) as unknown as {
+            indexdef: string;
+        }[];
+        assert(indexRows.length === 1 && /UNIQUE/i.test(indexRows[0]!.indexdef), 'requestId 幂等唯一索引已落库');
+
+        const { eq } = await import('drizzle-orm');
+        const { startSessionRun } = await import('../server/utils/session-runs');
+        const agentId = 'smoke-idx-agent';
+        const agentId2 = 'smoke-idx-agent-2';
+        const conversationId = 'smoke-idx-conversation';
+        const requestId = `smoke-idem-${Date.now()}`;
+        try {
+            await db.insert(schema.agents).values({ id: agentId, name: 'smoke-index-agent' }).onConflictDoNothing();
+            await db.insert(schema.agents).values({ id: agentId2, name: 'smoke-index-agent-2' }).onConflictDoNothing();
+            await db.insert(schema.conversations).values({ id: conversationId, title: 'smoke-index', agentId }).onConflictDoNothing();
+            const first = await startSessionRun({ conversationId, requestId });
+            let conflict = false;
+            try {
+                await startSessionRun({ conversationId, requestId });
+            } catch (error: any) {
+                conflict = error?.statusCode === 409 && error?.data?.duplicate === true;
+            }
+            assert(Boolean(first) && conflict, '并发同 requestId 的第二次写入被唯一索引拦成 409');
+
+            // 真正并发：6 个请求同时插入同一 (conversation, requestId)，只应有一个成功
+            const raceRequestId = `smoke-race-${Date.now()}`;
+            const race = await Promise.allSettled(Array.from({ length: 6 }, () => startSessionRun({ conversationId, requestId: raceRequestId })));
+            const raceWon = race.filter((item) => item.status === 'fulfilled').length;
+            const raceConflicts = race.filter(
+                (item) => item.status === 'rejected' && (item.reason as any)?.statusCode === 409 && (item.reason as any)?.data?.duplicate === true,
+            ).length;
+            assert(raceWon === 1 && raceConflicts === 5, `并发 6 个同 requestId 只成功 1 个（实际成功 ${raceWon}、409 ${raceConflicts}）`);
+
+            const { appendSessionEvents, readSessionEventsBefore } = await import('../server/agent/session/events');
+            const seqs = await appendSessionEvents(
+                conversationId,
+                Array.from({ length: 5 }, (_, index) => ({ type: 'system/message' as const, data: { text: `before-page-${index + 1}` } })),
+            );
+            const latest = await readSessionEventsBefore(conversationId, 999, 2);
+            const middle = await readSessionEventsBefore(conversationId, 3, 1);
+            assert(
+                seqs.length === 5 && latest.rows.map((row) => row.seq).join(',') === '4,5' && latest.hasMore,
+                '反向分页取最近一页并按 seq 升序返回，同时报告还有更早事件',
+            );
+            assert(middle.rows.map((row) => row.seq).join(',') === '2' && middle.hasMore, 'before 精确排除边界并正确报告还有更早事件');
+
+            const { buildBackupPage } = await import('../server/utils/backup-pages');
+            const page1 = await buildBackupPage('agents', null, 1);
+            const page2 = await buildBackupPage('agents', page1.nextAfter, 1);
+            assert(
+                page1.rows.length === 1 && page1.hasMore && page2.rows.length === 1 && page1.rows[0]!.id !== page2.rows[0]!.id,
+                'NDJSON 单表分页按主键游标取下一页，不重复上一页的行',
+            );
+            let cursorRejected = false;
+            try {
+                await buildBackupPage('sessionEvents', ['only-one-column'], 1);
+            } catch {
+                cursorRejected = true;
+            }
+            assert(cursorRejected, '复合主键表的单列游标被拒绝，不会静默跳行');
+        } finally {
+            await db.delete(schema.sessionRuns).where(eq(schema.sessionRuns.requestId, requestId));
+            await db.delete(schema.conversations).where(eq(schema.conversations.id, conversationId));
+            await db.delete(schema.agents).where(eq(schema.agents.id, agentId));
+            await db.delete(schema.agents).where(eq(schema.agents.id, agentId2));
+        }
     } catch (e: any) {
         console.warn('  ⚠️ 数据库未运行或无法连接，跳过真实 DB 查询:', e?.message);
     }
@@ -930,7 +1303,8 @@ async function runSmokeTests() {
     );
 
     console.log('\n20. 测试执行结论的对外口径（lastError 有两条出口：列表渲染与 work_today 的工具结果）');
-    const { RunFailure, describeRunError } = await import('../server/utils/schedule-runner');
+    const { RunFailure, describeRunError, cancelScheduleRun, isScheduleRunActive } = await import('../server/utils/schedule-runner');
+    assert(!cancelScheduleRun('no-such-run') && !isScheduleRunActive('no-such-run'), '取消未知运行返回 false，不把历史行误报成已中断');
     const sqlFailure = Object.assign(new Error('Failed query: insert into "messages" ("id","conversation_id","parts") values ($1, $2, $3) - duplicate key'), {
         name: 'QueryFailedError',
         query: 'insert into "messages" ...',
@@ -958,6 +1332,168 @@ async function runSmokeTests() {
     assert(
         describeRunError({ statusCode: 404, statusMessage: '智能体不存在', message: '智能体不存在' }) === '智能体不存在',
         'h3 createError 的形状（statusCode + statusMessage）算「我们自己的结论」，不被误判成上游错误',
+    );
+
+    console.log('\n21. 测试事件投影（P1：session_events → messages）');
+    const { deriveMessages } = await import('../server/agent/session/projection');
+    const baseEvent = { createdAt: new Date(0), surfaceOp: null };
+    const projected = deriveMessages([
+        { ...baseEvent, seq: 1, type: 'user/message', data: { id: 'u1', parts: [{ type: 'text', text: '问题一' }] } },
+        { ...baseEvent, seq: 2, type: 'assistant/message', data: { id: 'a1', parts: [{ type: 'text', text: '回答一' }] } },
+        { ...baseEvent, seq: 3, type: 'request/header', data: { model: 'm' } },
+        { ...baseEvent, seq: 4, type: 'system/message', data: { text: '系统注入' } },
+        { ...baseEvent, seq: 5, type: 'run/end', data: { status: 'completed' } },
+    ]);
+    assert(
+        projected.map((message) => message.id).join(',') === 'u1,a1,system:4' && projected.map((message) => message.role).join(',') === 'user,assistant,system',
+        '只折叠 user/assistant/system 事件，request/header 与 run/* 不进入历史',
+    );
+    assert(
+        JSON.stringify(projected[2]?.parts) === JSON.stringify([{ type: 'text', text: '系统注入' }]),
+        'system/message 的 text 回退成 text part，不丢系统注入',
+    );
+    const compacted = deriveMessages([
+        { ...baseEvent, seq: 1, type: 'user/message', data: { id: 'u1', parts: [{ type: 'text', text: '问题一' }] } },
+        { ...baseEvent, seq: 2, type: 'assistant/message', data: { id: 'a1', parts: [{ type: 'text', text: '回答一' }] } },
+        { ...baseEvent, seq: 3, type: 'system/message', data: { id: 'summary', text: '摘要', compaction: true } },
+        { ...baseEvent, seq: 4, type: 'user/message', data: { id: 'u4', parts: [{ type: 'text', text: '近期问题' }] } },
+        { ...baseEvent, seq: 5, type: 'assistant/message', data: { id: 'a5', parts: [{ type: 'text', text: '近期回答' }] } },
+        { ...baseEvent, seq: 6, type: 'compaction/end', surfaceOp: { op: 'replace', fromSeq: 1, toSeq: 2 }, data: {} },
+    ]);
+    assert(
+        compacted.map((message) => message.id).join(',') === 'summary,u4,a5',
+        'surface_op=replace 的区间被摘要遮蔽；压缩摘要排到保留消息之前，原事件仍保留可审计',
+    );
+
+    const checkpointed = deriveMessages([
+        { ...baseEvent, seq: 1, type: 'user/message', turnId: 't1', data: { id: 'u1', parts: [{ type: 'text', text: '问题一' }] } },
+        {
+            ...baseEvent,
+            seq: 2,
+            type: 'assistant/message',
+            turnId: 't1',
+            data: { id: 'checkpoint:t1:0', checkpoint: true, parts: [{ type: 'text', text: '半截' }] },
+        },
+        { ...baseEvent, seq: 3, type: 'assistant/message', turnId: 't1', data: { id: 'a1', parts: [{ type: 'text', text: '完整回答' }] } },
+        { ...baseEvent, seq: 4, type: 'user/message', turnId: 't2', data: { id: 'u2', parts: [{ type: 'text', text: '问题二' }] } },
+        {
+            ...baseEvent,
+            seq: 5,
+            type: 'assistant/message',
+            turnId: 't2',
+            data: { id: 'checkpoint:t2:0', checkpoint: true, parts: [{ type: 'text', text: '中断前正文' }] },
+        },
+    ]);
+    assert(
+        checkpointed.map((message) => message.id).join(',') === 'u1,a1,u2,checkpoint:t2:0',
+        '最终 assistant 消息存在时丢弃同轮检查点；崩溃轮次保留检查点供 UI 显示半截回复',
+    );
+
+    const { estimateMessageTokens, estimateTokens, measureSurface } = await import('../server/agent/session/token-meter');
+    assert(estimateTokens('abcdefgh') === 2 && estimateTokens('') === 0, 'token 估算按 4 字符/token，空串为 0');
+    assert(
+        estimateMessageTokens([
+            { role: 'user', content: 'abcd' },
+            { role: 'assistant', content: 'efgh' },
+        ]) === 10,
+        '消息窗口估算含每条 4 token 的角色开销',
+    );
+    assert(measureSurface([{ role: 'user', content: 'abcd' }], 1000, 0.7).budget === 700, '上下文预算 = 窗口 × 0.7');
+
+    const { buildCompactionPrompt, planCompaction, shouldAutoCompact } = await import('../server/agent/session/compaction');
+    const compactionMessages = Array.from({ length: 6 }, (_, index) => ({
+        id: `m${index + 1}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        parts: [{ type: 'text', text: `第${index + 1}条，${'x'.repeat(400)}` }],
+        seq: index + 1,
+        createdAt: new Date(),
+    }));
+    const plan = planCompaction(compactionMessages, 100);
+    assert(plan?.fromSeq === 1 && plan?.toSeq === 4 && plan?.messages === 4, '压缩计划只取前缀，至少保留最近两条消息');
+    assert(planCompaction(compactionMessages.slice(0, 2), 100) === null, '短会话不触发压缩');
+    assert(buildCompactionPrompt(compactionMessages).includes('【user】'), '压缩提示词按角色拼接旧消息');
+    assert(shouldAutoCompact(70_001, 4, 24, 100_000) && !shouldAutoCompact(70_000, 4, 24, 100_000), '自动压缩只在超过 70% 预算时触发');
+    assert(shouldAutoCompact(1, 24, 24, 100_000), '窗口顶到 24 条时也触发自动压缩');
+    const { extractFileDiff } = await import('../app/utils/timeline');
+    const diff = extractFileDiff('local_edit_file', { oldText: 'const a = 1;', newText: 'const a = 2;' });
+    assert(diff?.oldText === 'const a = 1;' && diff?.newText === 'const a = 2;' && diff?.truncated === false, '时间线从 local_edit_file 入参提取 diff');
+    assert(extractFileDiff('local_read_file', { oldText: 'a', newText: 'b' }) === null, '只读工具不产生 diff');
+    const longDiff = extractFileDiff('local_edit_file', { oldText: 'x'.repeat(2100), newText: 'y' });
+    assert(longDiff?.truncated === true && longDiff.oldText.length === 2001 && longDiff.oldText.endsWith('…'), '过长的 diff 截到 2000 字符并标记');
+    const { chatErrorHintKey } = await import('../app/utils/chat-error');
+    assert(chatErrorHintKey({ data: { code: 'TOOL_TIMEOUT' } }) === 'chat.errorHintTimeout', '错误码 TOOL_TIMEOUT 映射到超时提示');
+    assert(chatErrorHintKey(new Error('文件已被修改，请重新读取')) === 'chat.errorHintStaleFile', '错误文案命中文件版本冲突提示');
+    assert(chatErrorHintKey({ status: 429, message: '请求过于频繁' }) === 'chat.errorHintRateLimited', '429 映射到限流提示');
+    assert(chatErrorHintKey('invalid requestId') === null, '未知错误不硬套提示');
+
+    const { getKbReindexJob, resetKbReindexJobs, startKbReindex } = await import('../server/utils/kb-reindex');
+    resetKbReindexJobs();
+    const missingKbId = '00000000-0000-4000-8000-000000000000';
+    let missingKbStatus = 0;
+    try {
+        await startKbReindex(missingKbId);
+    } catch (error) {
+        missingKbStatus = (error as { statusCode?: number }).statusCode ?? 0;
+    }
+    const failedReindex = getKbReindexJob(missingKbId);
+    assert(
+        missingKbStatus === 404 && failedReindex?.status === 'failed' && failedReindex.kbId === missingKbId,
+        '重建任务先占位再校验：不存在的知识库返回 404，任务快照落为 failed 而不是消失',
+    );
+    assert(getKbReindexJob('00000000-0000-4000-8000-000000000001') === null, '没有任务的知识库返回 null，不伪造进度');
+    resetKbReindexJobs();
+
+    const { requiresApproval, riskOfTool } = await import('../server/agent/policy/approval');
+    assert(riskOfTool('work_today') === 'read' && riskOfTool('work_create_schedule') === 'write', '工具风险按读写分类');
+    assert(riskOfTool('run_command') === 'execute' && riskOfTool('mcp_github') === 'network', '执行与网络工具单独分类');
+
+    const { applyToolRegistry, getToolMetrics, resetToolMetrics, wrapToolWithRegistry } = await import('../server/agent/tool-registry');
+    resetToolMetrics();
+    const registry = applyToolRegistry({
+        registry_big: { description: 'big', inputSchema: {}, execute: async () => ({ blob: 'x'.repeat(30_000) }) } as any,
+        registry_ok: { description: 'ok', inputSchema: {}, execute: async () => ({ ok: true }) } as any,
+        registry_slow: { description: 'slow', inputSchema: {}, execute: () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200)) } as any,
+    });
+    assert(((await (registry.registry_big as any).execute({}, {})) as any).truncated === true, '工具输出超限时返回 truncated 预览');
+    assert(((await (registry.registry_ok as any).execute({}, {})) as any).ok === true, '未超限输出原样返回');
+    let timeoutCode = '';
+    try {
+        await (
+            wrapToolWithRegistry(
+                'registry_slow',
+                { description: 'slow', inputSchema: {}, execute: () => new Promise((resolve) => setTimeout(resolve, 200)) } as any,
+                { timeoutMs: 20 },
+            ) as any
+        ).execute({}, {});
+    } catch (error) {
+        timeoutCode = (error as { code?: string }).code ?? '';
+    }
+    assert(timeoutCode === 'TOOL_TIMEOUT', '工具超时映射为 TOOL_TIMEOUT');
+    const metrics = getToolMetrics();
+    assert(metrics.registry_big?.calls === 1 && metrics.registry_big?.truncated === 1, '注册表按工具累计调用与截断');
+    assert(metrics.registry_slow?.timeouts === 1, '注册表累计超时');
+    resetToolMetrics();
+    assert(requiresApproval('auto', 'write') === false && requiresApproval('auto', 'execute') === true, 'auto 模式写自动、执行需审批');
+    assert(
+        requiresApproval('ask', 'write') === true && requiresApproval('ask', 'read') === false && requiresApproval('never', 'write') === true,
+        'ask 询问非读工具，never 拒绝非读工具',
+    );
+
+    const { pairToolEvents, unpairedToolCalls } = await import('../server/agent/session/projection');
+    const toolEvents = [
+        { ...baseEvent, seq: 1, type: 'tool/call', data: { toolCallId: 'c1', toolName: 'work_today', input: {} } },
+        { ...baseEvent, seq: 2, type: 'tool/result', data: { toolCallId: 'c1', toolName: 'work_today', output: 'ok', isError: false } },
+        { ...baseEvent, seq: 3, type: 'tool/call', data: { toolCallId: 'c2', toolName: 'local_read_file', input: { path: 'x' } } },
+    ];
+    assert(
+        pairToolEvents(toolEvents).length === 2 && pairToolEvents(toolEvents)[0]?.resultSeq === 2 && pairToolEvents(toolEvents)[0]?.isError === false,
+        'tool/call 与 tool/result 按 toolCallId 成对，结果 seq 记在 call 上',
+    );
+    assert(
+        unpairedToolCalls(toolEvents)
+            .map((pair) => pair.toolCallId)
+            .join(',') === 'c2',
+        '有 call 无 result 的工具被单独列出：崩溃恢复只能标未知，不能自动重跑',
     );
 
     console.log(`\n========================================`);

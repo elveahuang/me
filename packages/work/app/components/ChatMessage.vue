@@ -92,6 +92,38 @@ const segments = computed<Segment[]>(() => {
 });
 
 const toolDetails = computed(() => segments.value.filter((s): s is Extract<Segment, { kind: 'tool' }> => s.kind === 'tool').map((s) => s.detail));
+
+/** `present` 的产物直接在消息里出现，用户不必先打开右侧检视栏才知道有文件可下载。 */
+type ArtifactCard = { id: string; title: string; size: string; mimeType: string };
+const artifactCards = computed<ArtifactCard[]>(() => {
+    const seen = new Set<string>();
+    const out: ArtifactCard[] = [];
+    for (const part of props.message.parts ?? []) {
+        if (typeof part?.type !== 'string' || !part.type.startsWith('tool-')) continue;
+        const name = part.toolName || part.type.slice(5);
+        if (name !== 'present') continue;
+        const output = part.output ?? part.result;
+        if (!output || typeof output !== 'object') continue;
+        const value = output as Record<string, unknown>;
+        if (typeof value.id !== 'string' || !value.id) continue;
+        if (seen.has(value.id)) continue;
+        seen.add(value.id);
+        out.push({
+            id: value.id,
+            title: typeof value.title === 'string' && value.title ? value.title : t('chat.artifactUntitled'),
+            size: formatBytes(value.size),
+            mimeType: typeof value.mimeType === 'string' ? value.mimeType : 'application/octet-stream',
+        });
+    }
+    return out;
+});
+
+function formatBytes(value: unknown): string {
+    const bytes = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 const fullText = computed(() =>
     segments.value
         .filter((s): s is { kind: 'text'; value: string } => s.kind === 'text')
@@ -180,6 +212,25 @@ onBeforeUnmount(() => {
                         <strong class="text-strong">Output:</strong> {{ toolDetails[expandedToolIdx]?.outputText }}
                     </p>
                 </div>
+            </div>
+
+            <!-- present 登记的交付物：消息内直接给下载卡片，不要求用户先打开右侧检视栏 -->
+            <div v-if="!isUser && artifactCards.length" class="mb-2.5 space-y-1.5">
+                <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.artifactsTitle') }}</p>
+                <a
+                    v-for="item in artifactCards"
+                    :key="item.id"
+                    :href="`/api/artifacts/${encodeURIComponent(item.id)}/download`"
+                    class="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-opacity hover:opacity-90"
+                    style="border-color: var(--line); background-color: var(--surface)"
+                    :title="`${item.title} (${item.mimeType})`"
+                    download
+                >
+                    <AppIcon name="file-outline" :size="15" />
+                    <span class="min-w-0 flex-1 truncate font-medium">{{ item.title }}</span>
+                    <span class="text-faint text-[10px]">{{ item.size }}</span>
+                    <span class="app-chip !py-0.5 !text-[9px]">{{ t('chat.downloadFile') }}</span>
+                </a>
             </div>
 
             <template v-for="(seg, i) in segments" :key="i">

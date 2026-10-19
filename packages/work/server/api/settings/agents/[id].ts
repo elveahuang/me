@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { agents, conversations } from '../../../db/schema';
 import {
+    normalizeAgentApprovalMode,
     normalizeAgentIdList,
     normalizeAgentMaxSteps,
     normalizeAgentMaxTokens,
@@ -66,6 +67,7 @@ export default defineEventHandler(async (event) => {
     if (body.temperature !== undefined) patch.temperature = normalizeAgentTemperature(body.temperature, 0.7);
     if (body.maxTokens !== undefined) patch.maxTokens = normalizeAgentMaxTokens(body.maxTokens);
     if (body.maxSteps !== undefined) patch.maxSteps = normalizeAgentMaxSteps(body.maxSteps, 6);
+    if (body.approvalMode !== undefined) patch.approvalMode = normalizeAgentApprovalMode(body.approvalMode);
     if (body.selfConfig !== undefined) patch.selfConfig = normalizeAdminBoolean(body.selfConfig, 'selfConfig', false);
     if (body.providerId !== undefined) patch.providerId = await assertProviderExists(body.providerId);
 

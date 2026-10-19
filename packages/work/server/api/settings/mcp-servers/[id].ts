@@ -10,6 +10,7 @@ import {
     normalizeMcpHeaders,
     normalizeMcpName,
     normalizeMcpTransport,
+    sealHeaders,
 } from '../../../utils/mcp';
 import { requireMethod } from '../../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
@@ -45,7 +46,7 @@ export default defineEventHandler(async (event) => {
     if (body.transport !== undefined) patch.transport = normalizeMcpTransport(body.transport);
     if (body.enabled !== undefined) patch.enabled = normalizeAdminBoolean(body.enabled, 'enabled', existing.enabled);
     if (body.url !== undefined) patch.url = assertAbsoluteHttpUrl('url', body.url);
-    if (body.headers !== undefined) patch.headers = mergeHeaders(existing.headers, normalizeMcpHeaders(body.headers));
+    if (body.headers !== undefined) patch.headers = sealHeaders(mergeHeaders(existing.headers, normalizeMcpHeaders(body.headers)));
 
     if (renamed) {
         // server 名用作运行时工具前缀（mcp_<name>_<tool>），重名会导致工具集合并时静默覆盖。

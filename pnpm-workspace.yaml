@@ -3,6 +3,9 @@ minimumReleaseAge: 0
 packages:
     - packages/*
 
+overrides:
+    h3: 1.15.11
+
 allowBuilds:
     '@capacitor/background-runner': true
     '@parcel/watcher': true

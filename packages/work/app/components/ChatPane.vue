@@ -6,6 +6,7 @@ import type { AgentDetail, AgentSummary, AttachmentRecord, AttachmentsResponse }
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from 'ai';
 import { useI18n } from 'vue-i18n';
 import { downloadMarkdownFile, formatConversationMarkdown } from '@commons/markdown-export';
+import { chatErrorHintKey } from '../utils/chat-error';
 
 /**
  * 对话主视窗：`/chat`（可切换智能体）与 `/chat/:agentId`（固定智能体）共用。
@@ -80,6 +81,221 @@ watch(
 const input = ref('');
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
+
+/**
+ * 工具审批（P1-4）：审批在服务端把工具 execute 挂起，前端只轮询当前会话的 pending 行。
+ * 只轮询「有具体会话」的面板，空闲时不发请求；流结束后没有 pending 也会自然停在一张卡片上。
+ */
+interface PendingApproval {
+    id: string;
+    toolName: string;
+    risk: string;
+    payload?: Record<string, unknown> | null;
+    createdAt?: string;
+}
+const pendingApproval = ref<PendingApproval | null>(null);
+let approvalTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshApproval() {
+    if (!props.conversationId) {
+        pendingApproval.value = null;
+        return;
+    }
+    try {
+        const data = await $fetch<{ approvals: PendingApproval[] }>('/api/approvals', {
+            query: { conversationId: props.conversationId, status: 'pending', limit: 1 },
+        });
+        pendingApproval.value = data.approvals[0] ?? null;
+    } catch {
+        // 审批轮询失败不能打断聊天；下一轮再试
+    }
+}
+
+function stopApprovalPolling() {
+    if (approvalTimer) clearInterval(approvalTimer);
+    approvalTimer = null;
+}
+
+function startApprovalPolling() {
+    stopApprovalPolling();
+    if (!import.meta.client || !props.conversationId) return;
+    void refreshApproval();
+    approvalTimer = setInterval(() => void refreshApproval(), 2000);
+}
+
+function onApprovalDecided() {
+    pendingApproval.value = null;
+    void refreshApproval();
+}
+
+watch(() => props.conversationId, startApprovalPolling, { immediate: true });
+onUnmounted(stopApprovalPolling);
+
+interface ContextInfo {
+    source: 'events' | 'messages';
+    compacted: boolean;
+    messageCount: number;
+    estimatedTokens: number;
+    budget: number;
+    percent: number;
+}
+const contextInfo = ref<ContextInfo | null>(null);
+const compacting = ref(false);
+const compactNotice = ref('');
+
+async function refreshContext() {
+    if (!props.conversationId || import.meta.server) return;
+    try {
+        contextInfo.value = await $fetch<ContextInfo>(`/api/conversations/${encodeURIComponent(props.conversationId)}/context`);
+    } catch {
+        // 上下文面板是观测信息，失败不打断聊天
+    }
+}
+
+interface TodoItem {
+    id: string;
+    title: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    note?: string;
+}
+interface GoalInfo {
+    id: string;
+    objective: string;
+    status: 'active' | 'paused' | 'completed' | 'blocked';
+    revision: number;
+    round: number;
+    maxRounds: number;
+}
+const todoItems = ref<TodoItem[]>([]);
+const goal = ref<GoalInfo | null>(null);
+const planMode = ref(false);
+const assistBusy = ref(false);
+const todoError = ref('');
+
+async function refreshAssist() {
+    if (!props.conversationId || import.meta.server) return;
+    const id = encodeURIComponent(props.conversationId);
+    try {
+        const [todo, goalResult] = await Promise.all([
+            $fetch<{ items: TodoItem[] }>(`/api/conversations/${id}/todos`),
+            $fetch<{ goal: GoalInfo | null; planMode: boolean }>(`/api/conversations/${id}/goal`),
+        ]);
+        todoItems.value = todo.items ?? [];
+        goal.value = goalResult.goal ?? null;
+        planMode.value = goalResult.planMode ?? false;
+    } catch {
+        // 待办/目标是辅助信息，失败不打断聊天
+    }
+}
+
+async function togglePlanMode() {
+    if (!props.conversationId || assistBusy.value) return;
+    assistBusy.value = true;
+    todoError.value = '';
+    try {
+        const result = await $fetch<{ planMode: boolean }>(`/api/conversations/${encodeURIComponent(props.conversationId)}/plan-mode`, {
+            method: 'PUT',
+            body: { enabled: !planMode.value },
+        });
+        planMode.value = result.planMode;
+    } catch (error) {
+        todoError.value = extractApiError(error, t('chat.planModeFailed'));
+    } finally {
+        assistBusy.value = false;
+    }
+}
+
+async function saveTodos(items: TodoItem[]) {
+    if (!props.conversationId || assistBusy.value) return;
+    assistBusy.value = true;
+    todoError.value = '';
+    try {
+        const result = await $fetch<{ items: TodoItem[] }>(`/api/conversations/${encodeURIComponent(props.conversationId)}/todos`, {
+            method: 'PUT',
+            body: { items },
+        });
+        todoItems.value = result.items ?? [];
+    } catch (error) {
+        todoError.value = extractApiError(error, t('chat.todoSaveFailed'));
+    } finally {
+        assistBusy.value = false;
+    }
+}
+
+function toggleTodo(item: TodoItem) {
+    const status = item.status === 'completed' ? 'pending' : 'completed';
+    void saveTodos(todoItems.value.map((entry) => (entry.id === item.id ? { ...entry, status } : entry)));
+}
+
+async function continueGoal() {
+    if (!props.conversationId || assistBusy.value || !goal.value) return;
+    assistBusy.value = true;
+    try {
+        const result = await $fetch<{ goal: GoalInfo }>(`/api/conversations/${encodeURIComponent(props.conversationId)}/goal/continue`, {
+            method: 'POST',
+        });
+        goal.value = result.goal;
+    } catch (error) {
+        todoError.value = extractApiError(error, t('chat.goalContinueFailed'));
+    } finally {
+        assistBusy.value = false;
+    }
+}
+
+async function compactConversation() {
+    if (!props.conversationId || compacting.value) return;
+    compacting.value = true;
+    compactNotice.value = '';
+    try {
+        const result = await $fetch<{ compacted: boolean; reason?: string; tokensBefore?: number; tokensAfter?: number }>(
+            `/api/conversations/${encodeURIComponent(props.conversationId)}/compact`,
+            { method: 'POST' },
+        );
+        if (!result.compacted) {
+            compactNotice.value =
+                result.reason === 'below_threshold'
+                    ? t('chat.compactBelow')
+                    : result.reason === 'already_running'
+                      ? t('chat.compactRunning')
+                      : t('chat.compactFailed');
+            return;
+        }
+        compactNotice.value = t('chat.compactDone', { before: result.tokensBefore ?? 0, after: result.tokensAfter ?? 0 });
+        // 强制回源：缓存实例里还是压缩前的消息，不换实例就看不到摘要
+        await loadConversation(props.conversationId, true);
+        await refreshContext();
+    } catch (error) {
+        compactNotice.value = extractApiError(error, t('chat.compactFailed'));
+    } finally {
+        compacting.value = false;
+    }
+}
+
+watch(
+    () => props.conversationId,
+    (id) => {
+        contextInfo.value = null;
+        compactNotice.value = '';
+        todoItems.value = [];
+        goal.value = null;
+        planMode.value = false;
+        todoError.value = '';
+        if (id) {
+            void refreshContext();
+            void refreshAssist();
+        }
+    },
+    { immediate: true },
+);
+watch(
+    () => chat.value?.status,
+    (status) => {
+        if (status === 'ready') {
+            void refreshContext();
+            void refreshAssist();
+        }
+    },
+);
 
 /**
  * 外部草稿（`/chat?ask=`）：放进输入框并聚焦，让用户改两个字再发。
@@ -183,7 +399,7 @@ function handleRegenerate() {
 /**
  * 打开一段会话：优先接管登记表里的实例，否则拉历史新建。
  */
-async function loadConversation(id: string) {
+async function loadConversation(id: string, force = false) {
     // 只在客户端拉历史：SSR 阶段 `$fetch` 不带请求 cookie，服务端渲染时拉取会 401。
     // 父级因此在 onMounted 之后才决定要打开哪个会话。
     if (import.meta.server) return;
@@ -194,7 +410,7 @@ async function loadConversation(id: string) {
      * 登记表里有实例就直接接管：它的 messages 已经包含这一轮在途的部分，比数据库历史更新，
      * 再发一次历史请求反而会把正在写的实例换掉（transport 里的 agentId 也要跟着换成当前这个）。
      */
-    const cached = adoptChatRun(id);
+    const cached = force ? null : adoptChatRun(id);
     if (cached) {
         loadToken += 1;
         loadError.value = '';
@@ -364,6 +580,14 @@ const errorText = computed(() =>
         rateLimited: t('common.errorRateLimited'),
     }),
 );
+const errorHint = computed(() => {
+    const key = chatErrorHintKey(chat.value?.error);
+    return key ? t(key) : '';
+});
+const localErrorHint = computed(() => {
+    const key = chatErrorHintKey(submitError.value || loadError.value);
+    return key ? t(key) : '';
+});
 
 watch(
     () => chat.value?.messages.length,
@@ -625,9 +849,44 @@ const starterPrompts = computed(() => [t('chat.starterPrompts.0'), t('chat.start
 
 const router = useRouter();
 const inspectorOpen = ref(false);
-const inspectorTab = ref<'context' | 'artifact'>('context');
+const inspectorTab = ref<'context' | 'artifact' | 'todo' | 'timeline'>('context');
 const inspectedText = ref('');
 const artifactCopied = ref(false);
+interface ArtifactItem {
+    id: string;
+    title: string;
+    path: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+}
+const artifacts = ref<ArtifactItem[]>([]);
+
+async function loadArtifacts() {
+    if (import.meta.server || !props.conversationId) {
+        artifacts.value = [];
+        return;
+    }
+    try {
+        const result = await $fetch<{ artifacts: ArtifactItem[] }>(`/api/conversations/${encodeURIComponent(props.conversationId)}/artifacts`);
+        artifacts.value = Array.isArray(result.artifacts) ? result.artifacts : [];
+    } catch {
+        artifacts.value = [];
+    }
+}
+
+function selectInspectorTab(tab: 'context' | 'artifact' | 'todo' | 'timeline') {
+    inspectorTab.value = tab;
+    if (tab === 'artifact') void loadArtifacts();
+}
+
+watch(
+    () => props.conversationId,
+    () => {
+        artifacts.value = [];
+        if (inspectorOpen.value && inspectorTab.value === 'artifact') void loadArtifacts();
+    },
+);
 
 const latestAssistantText = computed(() => {
     const msgs = chat.value?.messages ?? [];
@@ -651,6 +910,7 @@ function openArtifactInspector(payload: { text: string }) {
     inspectedText.value = payload.text;
     inspectorTab.value = 'artifact';
     inspectorOpen.value = true;
+    void loadArtifacts();
 }
 
 async function copyArtifactText() {
@@ -773,7 +1033,7 @@ async function submitSaveKnowledge() {
 }
 
 function insertSkillPrompt(skillName: string) {
-    const prefix = `[${skillName}] `;
+    const prefix = `/${skillName} `;
     if (!input.value.startsWith(prefix)) {
         input.value = `${prefix}${input.value}`;
     }
@@ -845,6 +1105,7 @@ function onInputKeydown(event: KeyboardEvent) {
                                 <span>{{ errorText }}</span>
                                 <button class="font-bold underline" @click="handleRegenerate">{{ t('common.retry') }}</button>
                             </div>
+                            <p v-if="errorHint" class="text-faint mt-1.5">{{ errorHint }}</p>
                         </div>
                     </template>
 
@@ -887,6 +1148,7 @@ function onInputKeydown(event: KeyboardEvent) {
                             {{ t('common.retry') }}
                         </button>
                     </div>
+                    <p v-if="localErrorHint" class="text-faint mt-1.5 text-xs">{{ localErrorHint }}</p>
                 </div>
 
                 <!-- 输入栏（多行自适应 + 快捷上下文与技能条） -->
@@ -907,6 +1169,9 @@ function onInputKeydown(event: KeyboardEvent) {
                             <span>🧩 /{{ sk.name }}</span>
                         </button>
                     </div>
+
+                    <!-- 工具审批：服务端工具 execute 正在等待这一次决定 -->
+                    <ApprovalCard v-if="pendingApproval" :approval="pendingApproval" @decided="onApprovalDecided" />
 
                     <!-- 待发送附件 -->
                     <div v-if="pendingAttachments.length" class="mb-2 flex flex-wrap gap-2">
@@ -985,7 +1250,7 @@ function onInputKeydown(event: KeyboardEvent) {
                             type="button"
                             class="app-chip !text-[11px]"
                             :class="inspectorTab === 'context' ? 'app-chip-brand' : ''"
-                            @click="inspectorTab = 'context'"
+                            @click="selectInspectorTab('context')"
                         >
                             {{ t('chat.inspectorContext') }}
                         </button>
@@ -993,9 +1258,25 @@ function onInputKeydown(event: KeyboardEvent) {
                             type="button"
                             class="app-chip !text-[11px]"
                             :class="inspectorTab === 'artifact' ? 'app-chip-brand' : ''"
-                            @click="inspectorTab = 'artifact'"
+                            @click="selectInspectorTab('artifact')"
                         >
                             {{ t('chat.inspectorArtifact') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="app-chip !text-[11px]"
+                            :class="inspectorTab === 'todo' ? 'app-chip-brand' : ''"
+                            @click="selectInspectorTab('todo')"
+                        >
+                            {{ t('chat.inspectorTodo') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="app-chip !text-[11px]"
+                            :class="inspectorTab === 'timeline' ? 'app-chip-brand' : ''"
+                            @click="selectInspectorTab('timeline')"
+                        >
+                            {{ t('chat.inspectorTimeline') }}
                         </button>
                     </div>
                     <button type="button" class="text-faint text-hover-strong text-xs" :aria-label="t('common.close')" @click="inspectorOpen = false">✕</button>
@@ -1003,6 +1284,42 @@ function onInputKeydown(event: KeyboardEvent) {
 
                 <!-- Tab 1: 上下文与挂载能力 -->
                 <div v-if="inspectorTab === 'context'" class="flex-1 space-y-4 overflow-y-auto p-4 text-xs">
+                    <div class="app-card space-y-2 p-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.contextTitle') }}</p>
+                            <span class="app-chip !py-0.5 text-[10px]">
+                                {{ contextInfo?.source === 'events' ? t('chat.contextEvents') : t('chat.contextMessages') }}
+                            </span>
+                        </div>
+                        <p class="text-strong font-bold">
+                            {{
+                                t('chat.contextUsage', {
+                                    used: contextInfo?.estimatedTokens ?? 0,
+                                    budget: contextInfo?.budget ?? 89600,
+                                })
+                            }}
+                        </p>
+                        <div class="h-1.5 overflow-hidden rounded-full" style="background-color: var(--line)">
+                            <div
+                                class="h-full rounded-full transition-all"
+                                :style="{ width: `${contextInfo?.percent ?? 0}%`, backgroundColor: 'var(--brand)' }"
+                            />
+                        </div>
+                        <div class="text-faint flex items-center justify-between text-[10px]">
+                            <span>{{ t('chat.contextMessagesCount', { n: contextInfo?.messageCount ?? 0 }) }}</span>
+                            <span v-if="contextInfo?.compacted">✅ {{ t('chat.contextCompacted') }}</span>
+                        </div>
+                        <button
+                            type="button"
+                            class="app-btn app-btn-outline w-full !py-1.5 !text-[11px]"
+                            :disabled="!props.conversationId || compacting || chat?.status === 'streaming' || chat?.status === 'submitted'"
+                            @click="compactConversation"
+                        >
+                            {{ compacting ? t('chat.compacting') : t('chat.compactNow') }}
+                        </button>
+                        <p v-if="compactNotice" class="text-faint text-[10px] leading-relaxed">{{ compactNotice }}</p>
+                    </div>
+
                     <div class="app-card space-y-1.5 p-3">
                         <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.inspectorSpace') }}</p>
                         <p class="text-strong font-bold">{{ props.spaceName || t('chat.independentChat') }}</p>
@@ -1061,7 +1378,24 @@ function onInputKeydown(event: KeyboardEvent) {
                 </div>
 
                 <!-- Tab 2: 产物阅读与沉淀画布 -->
-                <div v-else class="flex flex-1 flex-col overflow-hidden">
+                <div v-else-if="inspectorTab === 'artifact'" class="flex flex-1 flex-col overflow-hidden">
+                    <div v-if="artifacts.length" class="space-y-1.5 border-b px-3.5 py-2.5" style="border-color: var(--line)">
+                        <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.artifactsTitle') }}</p>
+                        <a
+                            v-for="item in artifacts"
+                            :key="item.id"
+                            :href="`/api/artifacts/${encodeURIComponent(item.id)}/download`"
+                            class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[11px] hover:bg-[var(--surface-2)]"
+                        >
+                            <span class="truncate">📎 {{ item.title }}</span>
+                            <span class="text-faint shrink-0">{{ Math.max(1, Math.ceil(item.size / 1024)) }} KB</span>
+                        </a>
+                    </div>
+                    <div v-if="artifacts.length" class="px-3.5 pb-2">
+                        <button type="button" class="app-btn app-btn-outline !px-2 !py-1 !text-[11px]" @click="loadArtifacts">
+                            {{ t('common.retry') }}
+                        </button>
+                    </div>
                     <div v-if="effectiveArtifactText" class="flex items-center justify-between gap-2 border-b px-3.5 py-2" style="border-color: var(--line)">
                         <div class="flex items-center gap-1.5">
                             <button type="button" class="app-btn app-btn-outline !px-2 !py-1 !text-[11px]" @click="copyArtifactText">
@@ -1087,6 +1421,77 @@ function onInputKeydown(event: KeyboardEvent) {
                     </div>
                     <div v-else class="text-faint flex flex-1 items-center justify-center p-6 text-center text-xs">
                         {{ t('chat.inspectorArtifactEmpty') }}
+                    </div>
+                </div>
+
+                <!-- Tab 4: 事件时间线（消息 / 工具 / 审批 / 压缩 / 运行） -->
+                <div v-else-if="inspectorTab === 'timeline'" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <SessionTimeline :conversation-id="loadedConversationId" :refresh-key="chat?.status === 'ready' ? chat.messages.length : chat?.status" />
+                </div>
+
+                <!-- Tab 3: 会话待办与目标 -->
+                <div v-else-if="inspectorTab === 'todo'" class="flex-1 space-y-4 overflow-y-auto p-4 text-xs">
+                    <div v-if="todoError" class="app-alert app-alert-danger !text-[11px]">{{ todoError }}</div>
+
+                    <div class="app-card space-y-2 p-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.planModeTitle') }}</p>
+                            <input type="checkbox" class="accent-[var(--brand)]" :checked="planMode" :disabled="assistBusy" @change="togglePlanMode" />
+                        </div>
+                        <p class="text-faint text-[10px] leading-relaxed">{{ t('chat.planModeHint') }}</p>
+                        <p v-if="planMode" class="text-[10px] font-semibold" style="color: var(--brand)">
+                            {{ t('chat.planModeOn') }}
+                        </p>
+                    </div>
+
+                    <div class="app-card space-y-2 p-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.todoTitle') }}</p>
+                            <span class="app-chip !py-0.5 text-[10px]">{{ todoItems.length }}</span>
+                        </div>
+                        <ul v-if="todoItems.length" class="space-y-1.5">
+                            <li v-for="item in todoItems" :key="item.id" class="flex items-start gap-2">
+                                <input
+                                    type="checkbox"
+                                    class="mt-0.5 accent-[var(--brand)]"
+                                    :checked="item.status === 'completed'"
+                                    :disabled="assistBusy"
+                                    @change="toggleTodo(item)"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-strong leading-snug" :class="item.status === 'completed' ? 'line-through opacity-60' : ''">
+                                        {{ item.title }}
+                                    </p>
+                                    <p v-if="item.status === 'in_progress'" class="text-[10px]" style="color: var(--brand)">
+                                        {{ t('chat.todoInProgress') }}
+                                    </p>
+                                    <p v-if="item.note" class="text-faint text-[10px] leading-snug">{{ item.note }}</p>
+                                </div>
+                            </li>
+                        </ul>
+                        <p v-else class="text-faint text-[11px] leading-relaxed">{{ t('chat.todoEmpty') }}</p>
+                    </div>
+
+                    <div class="app-card space-y-2 p-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-faint text-[10px] font-bold uppercase">{{ t('chat.goalTitle') }}</p>
+                            <span v-if="goal" class="app-chip !py-0.5 text-[10px]">{{ t(`chat.goalStatus.${goal.status}`) }}</span>
+                        </div>
+                        <template v-if="goal">
+                            <p class="text-strong leading-relaxed font-bold">{{ goal.objective }}</p>
+                            <p class="text-faint text-[10px]">
+                                {{ t('chat.goalRound', { round: goal.round, max: goal.maxRounds, revision: goal.revision }) }}
+                            </p>
+                            <button
+                                type="button"
+                                class="app-btn app-btn-outline w-full !py-1.5 !text-[11px]"
+                                :disabled="assistBusy || goal.status === 'completed' || goal.status === 'blocked' || goal.round >= goal.maxRounds"
+                                @click="continueGoal"
+                            >
+                                {{ t('chat.goalContinue') }}
+                            </button>
+                        </template>
+                        <p v-else class="text-faint text-[11px] leading-relaxed">{{ t('chat.goalEmpty') }}</p>
                     </div>
                 </div>
             </aside>

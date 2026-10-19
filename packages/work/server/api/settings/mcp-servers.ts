@@ -2,7 +2,15 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { mcpServers } from '../../db/schema';
 import { normalizeAdminBoolean } from '../../utils/admin-boolean';
 import { db } from '../../utils/db';
-import { findMcpNamespaceConflict, maskHeaders, mcpToolNamespace, normalizeMcpHeaders, normalizeMcpName, normalizeMcpTransport } from '../../utils/mcp';
+import {
+    findMcpNamespaceConflict,
+    maskHeaders,
+    mcpToolNamespace,
+    normalizeMcpHeaders,
+    normalizeMcpName,
+    normalizeMcpTransport,
+    sealHeaders,
+} from '../../utils/mcp';
 import { requireMethod } from '../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
@@ -19,7 +27,7 @@ export default defineEventHandler(async (event) => {
         // enabled 非布尔直写 boolean 列成 500，name 也没有长度上限。
         const name = normalizeMcpName(body.name);
         const url = assertAbsoluteHttpUrl('url', body.url);
-        const headers = normalizeMcpHeaders(body.headers);
+        const headers = sealHeaders(normalizeMcpHeaders(body.headers));
         const enabled = normalizeAdminBoolean(body.enabled, 'enabled', true);
         const id = crypto.randomUUID();
         // name 会被用作运行时工具前缀（mcp_<name>_<tool>），重名会静默覆盖彼此的工具。
