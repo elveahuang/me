@@ -68,6 +68,8 @@
 
 验证：`pnpm --filter @repo/work typecheck` 通过；`pnpm exec eslint packages/work/server packages/work/app` 0 错误；`pnpm --filter @repo/work test` **243 项通过、0 失败**；`pnpm --filter @repo/work build` 成功（41.7s，15.9MB）。没有运行时行为、表结构或页面交互变更；唯一的外部契约变化是上述 3 个未使用别名端点被移除。
 
+第二轮评估见 [simplification-round2.md](simplification-round2.md)：结论是继续删文件的收益已经很小，建议只清理未使用的 NDJSON 单表游标（约 100 行），会话 API v2 的收缩需要单独确认；`conversations/{id}/messages` 不是重复接口，不能按死代码删除。
+
 **本轮验证**：
 
 - `pnpm install`、`pnpm --filter @repo/work exec nuxt prepare`、`pnpm --filter @repo/webapp exec nuxt prepare`。
