@@ -1,7 +1,6 @@
 import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import { conversations, sessionEvents, type SessionEventType, type SessionSurfaceOp } from '../../db/schema';
 import { db } from '../../utils/db';
-import { deriveMessages, type DerivedSessionMessage } from './projection';
 
 export { deriveMessages, type DerivedSessionMessage } from './projection';
 
@@ -124,9 +123,4 @@ export async function readAllSessionEvents(conversationId: string, max = 50_000)
         if (page.length < 5000) break;
     }
     return all;
-}
-
-/** 从库里的完整事件流派生消息（P1-1 只用于对账/回填，不接读路径）。 */
-export async function projectSessionMessages(conversationId: string): Promise<DerivedSessionMessage[]> {
-    return deriveMessages(await readSessionEvents(conversationId));
 }

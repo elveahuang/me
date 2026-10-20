@@ -1,5 +1,3 @@
-import { createError } from 'h3';
-
 /**
  * work 的错误码是**稳定契约**，中文 `statusMessage` 只是给人看的。
  *
@@ -33,13 +31,4 @@ export function workErrorCode(statusCode: number): WorkErrorCode {
     if (statusCode === 502 || statusCode === 503 || statusCode === 504) return WORK_ERROR_CODES.UPSTREAM_FAILED;
     if (statusCode >= 400 && statusCode < 500) return WORK_ERROR_CODES.VALIDATION_FAILED;
     return WORK_ERROR_CODES.INTERNAL;
-}
-
-/** 带稳定错误码的 createError；异常路径统一用它，避免每条接口各造一个字符串。 */
-export function workError(statusCode: number, statusMessage: string, details?: Record<string, unknown>) {
-    return createError({
-        statusCode,
-        statusMessage,
-        data: { code: workErrorCode(statusCode), ...details },
-    });
 }

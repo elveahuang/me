@@ -49,12 +49,24 @@
 | P2-6 联网工具                | **完成**                                                                | 新增 [web-tools.ts](../server/utils/web-tools.ts) 的 `web_fetch`（`WEB_TOOL_ENABLED=1`）：只允许 http/https、DNS 解析后拒绝回环/私网/链路本地、重定向逐跳复核、2MB/15s 上限、去脚本样式后截断；**`web_search` 已补**：`TAVILY_API_KEY` 或 `BRAVE_SEARCH_API_KEY`（`WEB_SEARCH_PROVIDER=tavily                                                                                                                                                                                                                                                                                                                                                                                                                                                                | brave` 显式指定），返回标题/URL/摘要，无 key 时不注入工具                                                                                                                                                                                                                                                                  |
 | P2-7 待办、计划、目标        | **完成（轻量）**                                                        | `todos` / `goals`（`0011_goofy_red_ghost.sql`）与 [session-assist.ts](../server/utils/session-assist.ts)、[assist-tools.ts](../server/utils/assist-tools.ts)：`todo_read/todo_write` 整表替换、`goal_get/create/update/continue`，revision 乐观锁冲突 409；`GET/PUT /api/conversations/{id}/todos`、`GET/POST/PATCH …/goal`、`POST …/goal/continue`；右侧栏新增「待办」tab（清单勾选、目标轮次、继续按钮）。计划模式为 `conversations.plan_mode` 开关（`0012_powerful_gunslinger.sql`）：系统提示只出计划，`exit_plan_mode` 写 `plan/proposed` 事件并退出；只做提示词约束、没有独立计划审批卡                                                                                                                                                                |
 | P2-8 会话检索工具            | **完成（已有能力）**                                                    | 现有 `work_search` 已跨会话/知识库文档/排期检索，命令面板 `/api/search` 也覆盖会话、消息、自动化、空间、附件、知识库；本轮未改                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| P3-1 会话 API v2             | **基本完成（读路径 + fork + requestId 幂等 + 唯一索引 + follow 续传）** | 新增 `GET/POST /api/sessions`、`GET /api/sessions/{id}/snapshot?asOfSeq=`、`GET …/events?after=&limit=`、`GET …/follow`（SSE 先 snapshot 后按 `id: seq` 推事件，支持 `Last-Event-ID`，30 分钟上限）、`POST …/fork`（按 asOfSeq 复制投影消息、事件与分叉点之前的 `session_runs`）。`prompt/stop/compact` 是 307 适配到旧端点；`prompt` 正文原样转发，`/api/chat` 接受显式 `requestId`，同会话同 id 的 running/completed 轮次返回 409 不重复调用模型（failed/aborted/interrupted 可重试）。`0017` 的 `session_runs_request_active_idx` 是部分唯一索引（仅非空 requestId + running/completed），真正并发的同 id 请求由数据库拦成 409；运行台账在装配工具前先占位。**未做**：follow 用 LISTEN/NOTIFY 而非 1.5s 轮询、浏览器端 `Chat.resume` 与 follow 的联动实测 |
+| P3-1 会话 API v2             | **基本完成（读路径 + fork + requestId 幂等 + 唯一索引 + follow 续传）** | 新增 `GET/POST /api/sessions`、`GET /api/sessions/{id}/snapshot?asOfSeq=`、`GET …/events?after=&limit=`、`GET …/follow`（SSE 先 snapshot 后按 `id: seq` 推事件，支持 `Last-Event-ID`，30 分钟上限）、`POST …/fork`（按 asOfSeq 复制投影消息、事件与分叉点之前的 `session_runs`）。发送/停止/压缩继续只用旧端点 `/api/chat`、`/api/chat/{id}/stop`、`/api/conversations/{id}/compact`，不再保留 307 适配层；`/api/chat` 接受显式 `requestId`，同会话同 id 的 running/completed 轮次返回 409 不重复调用模型（failed/aborted/interrupted 可重试）。`0017` 的 `session_runs_request_active_idx` 是部分唯一索引（仅非空 requestId + running/completed），真正并发的同 id 请求由数据库拦成 409；运行台账在装配工具前先占位。**未做**：follow 用 LISTEN/NOTIFY 而非 1.5s 轮询、浏览器端 `Chat.resume` 与 follow 的联动实测 |
 | P3-2 交付物                  | **完成（注册/下载/面板/时间线/diff/错误引导）**                         | 新增 `artifacts` 表（`0015`）与 [assist-tools.ts](../server/utils/assist-tools.ts) 的 `present`：路径经 `resolveAllowedPath` 白名单/realpath 校验、单文件 50MB，只登记元数据不复制；`GET /api/conversations/{id}/artifacts` 列表、`GET /api/artifacts/{id}/download` 下载（下载时重新校验白名单）；右侧「产物与预览」tab 显示会话交付物；「时间线」tab 统一展示工具/审批/压缩/运行事件，`local_edit_file` 显示 red/green 变更前后（2000 字符截断）；消息内附件 `file` part 已有图片内联与文件下载卡；聊天错误按稳定错误码/文案追加可操作提示（[chat-error.ts](../app/utils/chat-error.ts)）。**保留差异**：不新增独立 `file/diff` 事件（从 `tool/call` 入参提取）                                                                                            |
 | P3-5 备份完整性和流式        | **部分完成（checksum + NDJSON 流式 + 单表游标分页 + NDJSON 导入）**     | 导出顶层增加 `checksum`（[backup-checksum.ts](../server/utils/backup-checksum.ts) 按顶层键排序的 sha256）；导入若带 checksum 则校验，不匹配 400。新增 `GET /api/export/ndjson`：`meta → table/row/tableEnd → end` 逐行写出，边读边发，脱敏与 JSON 备份共用 [backup-builders.ts](../server/utils/backup-builders.ts)，`end.checksum` 是全部 row 行的 sha256。`?table=&after=&limit=` 支持单表按主键游标分页，`tableEnd` 回 `hasMore/nextAfter`，复合主键表拒绝单列游标；每页最多 2000 行、默认 500。`POST /api/import/ndjson` 接受整机 NDJSON，校验 checksum/表清单后重组为 JSON 形状，复用同一事务合并导入；存储设置页可直接选 `.ndjson` 文件。**未做**：ZIP、50MB 自动分片、事件分片、导出前 flush 活会话                                                   |
 | P3-3 知识库 pgvector         | **部分完成（1536 维双写 + HNSW + 混合加权 + 后台重建进度）**            | `0016` 启用 `vector` 扩展、`kb_chunks.embedding_v vector(1536)` 与 HNSW cosine 索引；摄入时对 1536 维向量双写，旧行用 `pnpm --filter @repo/work embeddings:backfill` 回填；检索对 1536 维查询优先 `embedding_v <=> query`，`WORK_VECTOR_BACKEND=jsonb` 或维度不符/查询失败时回退原 JSONB 余弦；向量结果与 Bigram 关键词结果按 `fuseHybridHits()` 加权融合（关键词权重 0.8、同片段去重封顶 1），不再出现「有向量命中就把关键词库整批丢掉」；重建索引改为进程内后台任务，POST 立即回 202、GET 轮询 `processed/total` 进度，页面显示进度条且刷新/切页后可接回。**未做**：非 1536 维分表/分区、trgm 关键词通道（现为 Bigram）、P95 压测                                                                                                                          |
 | P3-6 搜索索引                | **完成（基础版）**                                                      | `messages.content_text`（写入时由 [message-text.ts](../server/utils/message-text.ts) 维护，旧行用 `pnpm --filter @repo/work messages:backfill` 回填）+ `messages/conversations.title/kb_documents.title` 的 pg_trgm GIN 索引（`0013`，扩展 `pg_trgm`）；`/api/search` 的消息检索改查 `content_text`，`parts::text ILIKE` 回退仍保留在片段表达式里。没有生成列、没有向量混合检索；中文 2 字与 P95 未实测                                                                                                                                                                                                                                                                                                                                                      |
 | P3-4 调度加固                | **部分完成（乐观锁 + 软删除 + 取消）**                                  | `schedules.revision` / `deleted_at`（`0014`）：PATCH 带 `revision` 且不匹配返回 409；成功写入 `revision+1`；DELETE 改为软删除并置 `enabled=false`，列表、详情、认领、手动运行都过滤 `deleted_at`。`POST /api/runs/{id}/cancel` 通过进程内 `AbortController` 中断正在执行的 `generateText`，运行详情页有「取消这一轮」；中断后 `lastError` 记为「用户已取消」。轮内重试只允许「还没执行过工具」的失败重试一次（固定 1.5s 退避），避免工具副作用重复。**未做**：每任务时区、可配置 `max_attempts`/指数退避/dead-letter、多进程 advisory lock（取消也只对本进程有效）                                                                                                                                                                                           |
+
+### 0.2 代码级精简（2026-10-20）
+
+本轮只做「不删用户可见能力」的瘦身，不动数据库表、迁移与页面功能：
+
+- **删掉 3 个未使用的 307 适配端点**：`/api/sessions/{id}/prompt|stop|compact`。发送/停止/压缩继续走 `/api/chat`、`/api/chat/{id}/stop`、`/api/conversations/{id}/compact`，减少一套重复 API 表面；全仓无 UI/脚本消费者。
+- **删除 5 个无引用导出**：`hasCompaction()`、`projectSessionMessages()`、`workError()`、`hasLocalFileTools()`、`SanitizedStorageConfig`。逻辑分别已在 `context.ts`、`deriveMessages()`、`workErrorCode()`、`buildLocalFileTools()`、`sanitizeStorageConfig()` 内联或另有入口。
+- **删除 9 个未使用的 Drizzle relations**：全仓没有 `db.query.*` 关系查询，保留只会让 schema 多一层看似可用的关系图；表、索引、外键与迁移均未改。
+- **移除 work 未直接使用的 `@tiptap/*` 依赖**：work 只用 `@comark/vue` 渲染 Markdown，没有编辑器组件；锁文件同步后生产构建从 17.4MB 降到 15.9MB（3.91MB gzip）。
+- **修复依赖提交的 h3 声明回归**：`1673e49 deps` 把 webapp/work 的声明又改成 `2.0.5`（根 `overrides.h3=1.15.11` 让实际安装仍是 1.15.11，但声明已违反护栏）；现已恢复为精确 `1.15.11`，锁文件 importer 同步。
+
+验证：`pnpm --filter @repo/work typecheck` 通过；`pnpm exec eslint packages/work/server packages/work/app` 0 错误；`pnpm --filter @repo/work test` **243 项通过、0 失败**；`pnpm --filter @repo/work build` 成功（41.7s，15.9MB）。没有运行时行为、表结构或页面交互变更；唯一的外部契约变化是上述 3 个未使用别名端点被移除。
 
 **本轮验证**：
 
@@ -454,7 +466,7 @@ packages/work/
     ```
 
 - 执行 `pnpm --filter @repo/work exec nuxt prepare` 重新生成 `.nuxt/tsconfig*.json`，否则 typecheck 仍可能读旧缓存。
-- 清理未使用依赖：`pg`、`@types/pg`、`@ai-sdk/deepseek`（work 内无 import；`providers.ts` 用 `@ai-sdk/openai`）；确认 `@nuxt/ui`、`@tiptap/*` 是否真的被 work 使用，未用则移除（`@tiptap` 在 commons 有消费者，work 是否直接需要要单独确认）。
+- 清理未使用依赖：`pg`、`@types/pg`、`@ai-sdk/deepseek`（work 内无 import；`providers.ts` 用 `@ai-sdk/openai`）；`@tiptap/*` 已从 work 直接依赖移除（编辑器组件与课程内容在 webapp，work 只用 Markdown 渲染）；`@nuxt/ui` 仍保留，用于 color-mode/appConfig 模块与主题变量。
 - 验收：`pnpm install --frozen-lockfile` 后 `pnpm --filter @repo/work typecheck` 与 `pnpm --filter @repo/work build` 通过；`rg '"h3": "\^' packages` 无结果。
 
 #### P0-3 CI 增加 work 校验
@@ -925,9 +937,6 @@ create table job_chunks (
 | `GET`  | `/api/sessions/{id}/snapshot?asOfSeq=` | 投影快照                             |
 | `GET`  | `/api/sessions/{id}/events?after=`     | 事件分页                             |
 | `GET`  | `/api/sessions/{id}/follow`            | SSE，`id: seq`，支持 `Last-Event-ID` |
-| `POST` | `/api/sessions/{id}/prompt`            | 发送消息（幂等 `requestId`）         |
-| `POST` | `/api/sessions/{id}/stop`              | 取消当前 run                         |
-| `POST` | `/api/sessions/{id}/compact`           | 手动压缩                             |
 | `POST` | `/api/sessions/{id}/fork`              | 从 `asOfSeq` 分叉                    |
 | `POST` | `/api/approvals/{id}/decide`           | 允许/拒绝                            |
 | `GET`  | `/api/jobs` / `/api/jobs/{id}`         | 作业列表/输出                        |
@@ -1334,9 +1343,6 @@ GET    /api/sessions
 GET    /api/sessions/{id}/snapshot
 GET    /api/sessions/{id}/events
 GET    /api/sessions/{id}/follow
-POST   /api/sessions/{id}/prompt
-POST   /api/sessions/{id}/stop
-POST   /api/sessions/{id}/compact
 POST   /api/sessions/{id}/fork
 POST   /api/approvals/{id}/decide
 GET    /api/jobs

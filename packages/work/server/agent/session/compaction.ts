@@ -93,17 +93,6 @@ export function buildCompactionPrompt(messages: DerivedSessionMessage[]): string
     ].join('\n');
 }
 
-/** 是否已有压缩标记；读路径据此决定用事件投影还是 messages。 */
-export async function hasCompaction(conversationId: string): Promise<boolean> {
-    try {
-        const events = await readAllSessionEvents(conversationId);
-        return events.some((event) => event.type === 'compaction/end');
-    } catch (error) {
-        console.error('[compaction] 查询压缩标记失败，回退 messages 读路径:', error);
-        return false;
-    }
-}
-
 const compacting = new Set<string>();
 
 export interface CompactConversationOptions {

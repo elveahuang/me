@@ -36,10 +36,6 @@ function explain(error: unknown): string {
     return `本地文件操作失败：${record?.statusMessage || '请检查路径与目录白名单'}`;
 }
 
-export function hasLocalFileTools(): boolean {
-    return parseLocalRoots().length > 0;
-}
-
 export function buildLocalFileTools(defaultRoot?: string | null): ToolSet {
     const roots = parseLocalRoots();
     if (!roots.length) return {} as ToolSet;

@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /** pgvector 列：维度固定 1536（text-embedding-3-small / 常见兼容模型）。 */
@@ -158,30 +158,6 @@ export const agentMcpServers = pgTable(
     (table) => [primaryKey({ columns: [table.agentId, table.mcpServerId] })],
 );
 
-export const agentsRelations = relations(agents, ({ many }) => ({
-    agentSkills: many(agentSkills),
-    agentTools: many(agentTools),
-    conversations: many(conversations),
-}));
-
-export const skillsRelations = relations(skills, ({ many }) => ({
-    agentSkills: many(agentSkills),
-}));
-
-export const agentSkillsRelations = relations(agentSkills, ({ one }) => ({
-    agent: one(agents, { fields: [agentSkills.agentId], references: [agents.id] }),
-    skill: one(skills, { fields: [agentSkills.skillId], references: [skills.id] }),
-}));
-
-export const toolsRelations = relations(tools, ({ many }) => ({
-    agentTools: many(agentTools),
-}));
-
-export const agentToolsRelations = relations(agentTools, ({ one }) => ({
-    agent: one(agents, { fields: [agentTools.agentId], references: [agents.id] }),
-    tool: one(tools, { fields: [agentTools.toolId], references: [tools.id] }),
-}));
-
 // ==========================================
 // RAG KNOWLEDGE BASES
 // ==========================================
@@ -291,18 +267,6 @@ export const messages = pgTable(
         index('messages_content_text_trgm_idx').using('gin', sql`${table.contentText} gin_trgm_ops`),
     ],
 );
-
-export const conversationsRelations = relations(conversations, ({ one, many }) => ({
-    agent: one(agents, { fields: [conversations.agentId], references: [agents.id] }),
-    messages: many(messages),
-}));
-
-export const messagesRelations = relations(messages, ({ one }) => ({
-    conversation: one(conversations, {
-        fields: [messages.conversationId],
-        references: [conversations.id],
-    }),
-}));
 
 // ==========================================
 // 会话运行台账（跨进程的「生成中」权威）
@@ -613,10 +577,6 @@ export const schedules = pgTable(
     (t) => [index('schedules_enabled_next_idx').on(t.enabled, t.nextRunAt), index('schedules_space_idx').on(t.spaceId)],
 );
 
-export const schedulesRelations = relations(schedules, ({ one }) => ({
-    agent: one(agents, { fields: [schedules.agentId], references: [agents.id] }),
-}));
-
 // ==========================================
 // AUTOMATION RUNS（自动化运行记录）
 // ==========================================
@@ -653,11 +613,6 @@ export const automationRuns = pgTable(
         index('automation_runs_status_started_idx').on(table.status, table.startedAt),
     ],
 );
-
-export const automationRunsRelations = relations(automationRuns, ({ one }) => ({
-    schedule: one(schedules, { fields: [automationRuns.scheduleId], references: [schedules.id] }),
-    outputConversation: one(conversations, { fields: [automationRuns.outputConversationId], references: [conversations.id] }),
-}));
 
 // ==========================================
 // TODOS / GOALS（P2-7：会话级待办与目标）

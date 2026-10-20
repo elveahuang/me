@@ -411,8 +411,6 @@ export function sanitizeStorageConfig(row: StorageConfig) {
     };
 }
 
-export type SanitizedStorageConfig = ReturnType<typeof sanitizeStorageConfig>;
-
 /** 允许的 MIME 前缀校验；列表为空表示不限制 */
 export function isMimeAllowed(config: Pick<StorageConfig, 'allowedMimeTypes'>, mimeType: string): boolean {
     const allowed = config.allowedMimeTypes ?? [];
