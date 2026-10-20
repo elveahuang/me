@@ -10,14 +10,14 @@
         "typecheck": "vue-tsc --noEmit"
     },
     "dependencies": {
-        "@ai-sdk/vue": "^4.0.143",
+        "@ai-sdk/vue": "^4.0.146",
         "@capacitor/camera": "8.2.6",
         "@comark/vue": "^0.7.0",
         "@ionic/core": "^9.0.8",
         "@ionic/vue": "^9.0.8",
         "@ionic/vue-router": "^9.0.8",
         "@repo/commons": "workspace:*",
-        "ai": "^7.0.143",
+        "ai": "^7.0.146",
         "better-auth": "^1.7.11",
         "ionicons": "^8.1.0",
         "konsta": "^5.5.0",

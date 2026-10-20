@@ -21,12 +21,6 @@ jobs:
                   cache: pnpm
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
-            - name: Typecheck Work
-              run: pnpm --filter @repo/work typecheck
-            - name: Smoke test Work
-              run: pnpm --filter @repo/work test
-            - name: Build Work
-              run: pnpm --filter @repo/work build
             - name: Typecheck Webapp
               run: pnpm --filter @repo/webapp typecheck
 

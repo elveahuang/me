@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "session_runs_request_active_idx" ON "session_runs" USING btree ("conversation_id","request_id") WHERE "session_runs"."request_id" <> '' AND "session_runs"."status" IN ('running', 'completed');
