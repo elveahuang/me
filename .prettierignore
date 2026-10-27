@@ -3,4 +3,5 @@ dist
 auto-imports.d.ts
 typed-router.d.ts
 packages/webapp/app/utils/app-icons.ts
+packages/work/app/utils/app-icons.ts
 pnpm-lock.yaml
