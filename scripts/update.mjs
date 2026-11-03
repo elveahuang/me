@@ -6,7 +6,9 @@ const root = resolve(process.cwd());
 console.log(`Current workspace - ${root}`);
 // 更新模块依赖
 await updateModule(resolve(root, 'packages/commons'));
+await updateModule(resolve(root, 'packages/console'));
 await updateModule(resolve(root, 'packages/config'));
+await updateModule(resolve(root, 'packages/lite'));
 await updateModule(resolve(root, 'packages/mobile'));
 await updateModule(resolve(root, 'packages/webapp'));
 await updateModule(resolve(root, 'packages/work'));

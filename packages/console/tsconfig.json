@@ -1,0 +1,7 @@
+{
+    "extends": "@repo/config/typescript/node.json",
+    "compilerOptions": {
+        "types": ["node"]
+    },
+    "include": ["src/**/*.ts", "x18n.config.ts"]
+}

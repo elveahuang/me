@@ -1,0 +1,24 @@
+{
+    "name": "@repo/console",
+    "version": "26.4.0",
+    "private": true,
+    "type": "module",
+    "bin": {
+        "console": "./src/cli.ts"
+    },
+    "scripts": {
+        "start": "tsx src/cli.ts",
+        "i18n": "x18n",
+        "i18n:check": "x18n check",
+        "i18n:init": "x18n init",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@repo/config": "workspace:*",
+        "@types/node": "^26.6.6",
+        "@x18n/cli": "^0.1.8",
+        "@x18n/core": "^0.1.8",
+        "tsx": "^4.23.15",
+        "typescript": "6.0.3"
+    }
+}

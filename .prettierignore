@@ -1,5 +1,8 @@
 .nuxt
 dist
+# Void 生成目录与构建产物（packages/lite）
+.void
+.cloudflare
 auto-imports.d.ts
 typed-router.d.ts
 packages/webapp/app/utils/app-icons.ts

@@ -1,0 +1,7 @@
+{
+    "greeting": "来自 @repo/console 的问候！",
+    "usage": "用法：console [status]",
+    "commands": {
+        "status": "一切正常（示例输出）。"
+    }
+}

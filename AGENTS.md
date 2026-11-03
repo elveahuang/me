@@ -25,6 +25,8 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | `packages/work`            | 本机 AI 工作台（独立 Nuxt 应用 + 独立数据库 mw）；**没有账号体系**，靠回环绑定保护 |
 | `packages/mobile`          | Ionic + Vue + Vite 前端、Capacitor 原生壳；调用 Web 后端                           |
 | `packages/commons`         | 共享契约、主题及其他可复用资产；修改前确认实际消费者                               |
+| `packages/lite`            | Void (+Vue) 最小 HelloWorld 子项目（Pages 模式，无数据库/无服务端代码）            |
+| `packages/console`         | 基于 `@x18n/cli` 的多语言文案工具 + 运维 CLI 种子项目（纯 Node，无框架依赖）       |
 | `packages/config`          | ESLint、Prettier、Stylelint、TypeScript 等共享配置                                 |
 | `scripts`、`tools`         | 运维/依赖/数据库辅助脚本；不是默认安全初始化入口                                   |
 | `.github/workflows/ci.yml` | CI 的真实步骤与运行版本                                                            |
@@ -57,7 +59,7 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | `pnpm mobile:start`                                      | 启动移动端 Vite 开发服务；后端仍需单独启动                                                     |
 | `pnpm webapp:build`                                      | Nuxt 生产构建                                                                                  |
 | `pnpm mobile:build`                                      | 执行移动端包的构建脚本；不等于完成原生平台打包                                                 |
-| `pnpm typecheck`                                         | 依次 Web → Work → Mobile；前一个失败会阻止后一个                                               |
+| `pnpm typecheck`                                         | 依次 Web → Work → Mobile → Lite → Console；前一个失败会阻止后一个                              |
 | `pnpm lint`                                              | ESLint；覆盖 Web server/app、Work server/app、Mobile src、Commons src                          |
 | `pnpm test`                                              | Web 的 `smoke-test`，不是端到端测试；Work 另跑 `pnpm --filter @repo/work test`                 |
 | `pnpm --filter @repo/webapp typecheck`                   | 仅 Web 类型检查                                                                                |
@@ -72,6 +74,9 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 | `pnpm work:db:generate` / `:migrate` / `:seed` / `:init` | 与 webapp 同名命令同理，但目标库由 `packages/work/.env` 的 `POSTGRES_URL` 决定；都有真实副作用 |
 | `pnpm --filter @repo/work test`                          | Work 的 `scripts/smoke-test.ts`（纯函数 + locales 对齐；数据库不可用时只警告跳过）             |
 | `pnpm webapp:auth:secret`                                | 生成 Better Auth 会话密钥（转调 webapp 包同名脚本）；只输出密钥，不写库、不改配置              |
+| `pnpm lite:start` / `pnpm lite:build`                    | Void + Vue 最小项目 dev / 生产构建（Vite 驱动，产物在 `packages/lite/.cloudflare`）            |
+| `pnpm console:start`                                     | 运行 Console CLI（`tsx src/cli.ts`，支持 `--locale=zh-CN` 或 `CONSOLE_LOCALE`）                |
+| `pnpm console:i18n` / `console:i18n:check`               | x18n 文案状态 / 检查（缺失、未使用、占位符不一致；有错误时 exit 1，可进 CI）                   |
 
 - `webapp:start:pro` 实际仍是 dev；`webapp:build:dev`、`webapp:build:pro` 当前与普通 build 相同，不能据命名假设加载不同环境。
 - `pnpm format` 是全仓库 `prettier --write`，`pnpm stylelint` 带 `--fix`；小改动不要用它们制造全仓库格式变更。优先 `pnpm exec prettier --check <文件>`，需要时只格式化本次文件。
@@ -385,6 +390,28 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   冒烟测试第 16 节除了 zh/en 键集合对齐，还常驻断言 **两张唯一表**（`WORK_NAV_LINKS`、`WORK_SETTINGS_PAGES`）引用的 `labelKey/descKey` 在 locales 里存在、
   `icon` 在 `APP_ICONS` 里已打包、`to` 有对应页面文件；这三类都是动态取值或字符串路由，类型检查与构建都不会报，坏了的表现是侧栏渲染出裸键名、图标位置一个空方框、点进去 404。`app/locales/{zh-CN,en-US}.ts` 的键集合对齐 / 空文案 /
   插值名成对已由冒烟测试第 16 节常驻断言；删整页时 locales 要 **双向** 收敛（只删页面不删 key 留下死键，只删一边语言的 key 则会被这一节直接测红），新增文案同理，两种语言同批改。
+
+### packages/lite：Void + Vue 最小示例
+
+- 目录形态是 `void init --toolchain vite --framework vue --starter static --deploy none` 的产物：`pages/` 放 Vue 页面（文件即路由，`pages/index.vue` 是 HelloWorld），
+  `vite.config.ts` 挂 `voidPlugin()` + `voidVue()`，`void.config.ts` 只声明 worker `compatibility_date`。当前是 **Pages 模式**：没有数据库、没有 `pages/*.server.ts`、
+  没有 `routes/`；要长成全栈应用时再加这些目录，不要把 Nuxt 的 `server/api` 约定套进来。
+- `void prepare`（挂在 `prepare` 脚本，`pnpm install` 时自动跑）生成 `.void/routes.d.ts` 与 `.void/tsconfig.json`，`tsconfig.json` 通过 `extends: "./.void/tsconfig.json"`
+  拿到 `void/routes` 的类型；`.void/` 是生成目录，已在 `.gitignore` 里，不要手改、也不要提交。首次 clone 后若 IDE 报找不到 `void/routes`，跑一次
+  `pnpm --filter @repo/lite prepare` 即可。
+- 构建是 Vite 双环境（`void_worker` + client），产物落 `packages/lite/.cloudflare/output/`；`vite build` 通过不代表 `void deploy` 可用——那是另一个需要平台账号的步骤。
+- `workerd` 必须在根 `pnpm-workspace.yaml` 的 `allowBuilds` 里放行（已加）：未放行时 `pnpm install` 会以 `ERR_PNPM_IGNORED_BUILDS` 直接失败，而不是只打警告。
+
+### packages/console：x18n 文案工具 + 运维 CLI 种子
+
+- 这是一个 **纯 Node CLI**（`tsx src/cli.ts`，`bin` 名 `console`），不依赖 Vue/Nuxt，也不读取 monorepo 现有翻译；后续运维能力直接往 `src/` 加模块与子命令。
+- 多语言由 [`@x18n/cli`](https://x18n.dev/) 负责检查，配置在 `x18n.config.ts`：`sourceLocale: 'en-US'`、`resources` 指向 `src/locales/{locale}.json`、
+  `usage.calls` 声明翻译函数名 `t`。**新增语言时要在 `src/locales/` 放同名 JSON，并同步 `src/i18n.ts` 的 `LOCALES` 与 `RESOURCES`**，否则运行时不会加载；
+  x18n 只按文件发现问题，不生成运行时代码。
+- `src/i18n.ts` 是最小实现：`createTranslator(locale)` 按点号路径查 key，缺失回落 `en-US`，再缺失回显 key 本身。`t` 这个函数名必须与 `usage.calls` 一致，
+  改名时两边一起改，否则 x18n 会把所有文案报成 unused。
+- `pnpm console:i18n:check` 是 CI 可用的门禁：缺失 key、未使用 key、占位符不匹配都会报，`error` 级问题 exit 1（`warning` 不会）。语言选择走 `--locale=` 或
+  `CONSOLE_LOCALE`，只认 `LOCALES` 里的值，其他值静默回落 `en-US`。
 
 ## 6. 服务端定位原则
 
