@@ -2,6 +2,7 @@ minimumReleaseAge: 0
 
 packages:
     - packages/*
+    - apps/*
 
 overrides:
     h3: 1.15.11

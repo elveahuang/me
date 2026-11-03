@@ -624,6 +624,128 @@ importers:
         specifier: ^3.3.14
         version: 3.3.14(typescript@6.0.3)
 
+  apps/web:
+    dependencies:
+      '@ai-sdk/mcp':
+        specifier: ^2.0.90
+        version: 2.0.90(zod@4.6.7)
+      '@ai-sdk/openai':
+        specifier: ^4.0.108
+        version: 4.0.108(zod@4.6.7)
+      '@ai-sdk/vue':
+        specifier: ^4.0.162
+        version: 4.0.162(vue@3.5.44(typescript@6.0.3))(zod@4.6.7)
+      '@aws-sdk/client-s3':
+        specifier: ^3.1161.0
+        version: 3.1161.0
+      '@aws-sdk/s3-presigned-post':
+        specifier: ^3.1161.0
+        version: 3.1161.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1161.0
+        version: 3.1161.0
+      '@comark/nuxt':
+        specifier: ^0.8.1
+        version: 0.8.1(@nuxt/schema@4.6.4)(confbox@0.3.2)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(katex@0.18.11)(magic-string@1.4.5)(mlly@1.8.2)(nuxt@4.6.4(21d259da1a009700fb6382daec138bf1))(oxc-parser@0.155.0)(rolldown@1.2.16)(shiki@4.6.0)(unplugin@3.7.0(esbuild@0.28.2)(rolldown@1.2.16)(rollup@4.67.4)(vite@8.3.5))(vue@3.5.44(typescript@6.0.3))
+      '@comark/vue':
+        specifier: ^0.8.1
+        version: 0.8.1(katex@0.18.11)(shiki@4.6.0)(vue@3.5.44(typescript@6.0.3))
+      '@json-render/core':
+        specifier: ^0.21.4
+        version: 0.21.4(zod@4.6.7)
+      '@json-render/vue':
+        specifier: ^0.21.4
+        version: 0.21.4(vue@3.5.44(typescript@6.0.3))(zod@4.6.7)
+      '@nuxt/icon':
+        specifier: ^2.6.2
+        version: 2.6.2(@nuxt/schema@4.6.4)(confbox@0.3.2)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magic-string@1.4.5)(oxc-parser@0.155.0)(rolldown@1.2.16)(unplugin@3.7.0(esbuild@0.28.2)(rolldown@1.2.16)(rollup@4.67.4)(vite@8.3.5))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))
+      '@nuxt/ui':
+        specifier: ^4.12.0
+        version: 4.12.0(54eceeb52ab686311a5eb9db3b8c7136)
+      '@repo/commons':
+        specifier: workspace:*
+        version: link:../../packages/commons
+      ai:
+        specifier: ^7.0.162
+        version: 7.0.162(zod@4.6.7)
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@cloudflare/workers-types@5.20261103.1)(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.8)(mysql2@3.24.6(@types/node@26.6.6))(pg@8.23.1)(postgres@4.0.0)
+      h3:
+        specifier: 1.15.11
+        version: 1.15.11
+      nuxt:
+        specifier: ^4.6.4
+        version: 4.6.4(21d259da1a009700fb6382daec138bf1)
+      postgres:
+        specifier: ^4.0.0
+        version: 4.0.0
+      redis:
+        specifier: ^6.3.1
+        version: 6.3.1
+      tailwindcss:
+        specifier: ^4.3.4
+        version: 4.3.4
+      vue:
+        specifier: ^3.5.44
+        version: 3.5.44(typescript@6.0.3)
+      vue-i18n:
+        specifier: ^11.4.18
+        version: 11.4.18(vue@3.5.44(typescript@6.0.3))
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@nuxt/devtools':
+        specifier: ^4.1.0
+        version: 4.1.0(a3f23839495f3b114dfd296ac8840b57)
+      '@tailwindcss/postcss':
+        specifier: ^4.3.4
+        version: 4.3.4
+      '@tailwindcss/vite':
+        specifier: ^4.3.4
+        version: 4.3.4(vite@8.3.5)
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      drizzle-kit:
+        specifier: ^0.31.11
+        version: 0.31.11
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.6.6)(@vitejs/devtools@0.8.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.107.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
+
+  apps/www:
+    dependencies:
+      hono:
+        specifier: ^4.13.16
+        version: 4.13.16
+      vue:
+        specifier: ^3.5.44
+        version: 3.5.44(typescript@6.0.3)
+    devDependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@void/vue':
+        specifier: ^1.5.0
+        version: 1.5.0(vite@8.3.5)(void@1.5.0(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/node@26.6.6)(@types/pg@8.23.1)(arktype@2.2.9)(kysely@0.29.8)(postgres@4.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(valibot@1.5.0(typescript@6.0.3))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))(workerd@1.20261103.1)(zod@4.6.7))(vue@3.5.44(typescript@6.0.3))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.6.6)(@vitejs/devtools@0.8.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.107.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
+      void:
+        specifier: 1.5.0
+        version: 1.5.0(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/node@26.6.6)(@types/pg@8.23.1)(arktype@2.2.9)(kysely@0.29.8)(postgres@4.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(valibot@1.5.0(typescript@6.0.3))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))(workerd@1.20261103.1)(zod@4.6.7)
+
   packages/commons:
     dependencies:
       tailwindcss:
@@ -756,31 +878,6 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
-
-  packages/lite:
-    dependencies:
-      hono:
-        specifier: ^4.13.16
-        version: 4.13.16
-      vue:
-        specifier: ^3.5.44
-        version: 3.5.44(typescript@6.0.3)
-    devDependencies:
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../config
-      '@void/vue':
-        specifier: ^1.5.0
-        version: 1.5.0(vite@8.3.5)(void@1.5.0(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/node@26.6.6)(@types/pg@8.23.1)(arktype@2.2.9)(kysely@0.29.8)(postgres@4.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(valibot@1.5.0(typescript@6.0.3))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))(workerd@1.20261103.1)(zod@4.6.7))(vue@3.5.44(typescript@6.0.3))
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vite:
-        specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.6.6)(@vitejs/devtools@0.8.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.107.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
-      void:
-        specifier: 1.5.0
-        version: 1.5.0(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/node@26.6.6)(@types/pg@8.23.1)(arktype@2.2.9)(kysely@0.29.8)(postgres@4.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(valibot@1.5.0(typescript@6.0.3))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))(workerd@1.20261103.1)(zod@4.6.7)
 
   packages/mobile:
     dependencies:
@@ -984,103 +1081,6 @@ importers:
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
-      drizzle-kit:
-        specifier: ^0.31.11
-        version: 0.31.11
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vite:
-        specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.6.6)(@vitejs/devtools@0.8.0)(esbuild@0.28.2)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass@1.107.1)(stylus@0.62.0(supports-color@10.2.2))(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
-
-  packages/work:
-    dependencies:
-      '@ai-sdk/mcp':
-        specifier: ^2.0.90
-        version: 2.0.90(zod@4.6.7)
-      '@ai-sdk/openai':
-        specifier: ^4.0.108
-        version: 4.0.108(zod@4.6.7)
-      '@ai-sdk/vue':
-        specifier: ^4.0.162
-        version: 4.0.162(vue@3.5.44(typescript@6.0.3))(zod@4.6.7)
-      '@aws-sdk/client-s3':
-        specifier: ^3.1161.0
-        version: 3.1161.0
-      '@aws-sdk/s3-presigned-post':
-        specifier: ^3.1161.0
-        version: 3.1161.0
-      '@aws-sdk/s3-request-presigner':
-        specifier: ^3.1161.0
-        version: 3.1161.0
-      '@comark/nuxt':
-        specifier: ^0.8.1
-        version: 0.8.1(@nuxt/schema@4.6.4)(confbox@0.3.2)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(katex@0.18.11)(magic-string@1.4.5)(mlly@1.8.2)(nuxt@4.6.4(21d259da1a009700fb6382daec138bf1))(oxc-parser@0.155.0)(rolldown@1.2.16)(shiki@4.6.0)(unplugin@3.7.0(esbuild@0.28.2)(rolldown@1.2.16)(rollup@4.67.4)(vite@8.3.5))(vue@3.5.44(typescript@6.0.3))
-      '@comark/vue':
-        specifier: ^0.8.1
-        version: 0.8.1(katex@0.18.11)(shiki@4.6.0)(vue@3.5.44(typescript@6.0.3))
-      '@json-render/core':
-        specifier: ^0.21.4
-        version: 0.21.4(zod@4.6.7)
-      '@json-render/vue':
-        specifier: ^0.21.4
-        version: 0.21.4(vue@3.5.44(typescript@6.0.3))(zod@4.6.7)
-      '@nuxt/icon':
-        specifier: ^2.6.2
-        version: 2.6.2(@nuxt/schema@4.6.4)(confbox@0.3.2)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magic-string@1.4.5)(oxc-parser@0.155.0)(rolldown@1.2.16)(unplugin@3.7.0(esbuild@0.28.2)(rolldown@1.2.16)(rollup@4.67.4)(vite@8.3.5))(vite@8.3.5)(vue@3.5.44(typescript@6.0.3))
-      '@nuxt/ui':
-        specifier: ^4.12.0
-        version: 4.12.0(54eceeb52ab686311a5eb9db3b8c7136)
-      '@repo/commons':
-        specifier: workspace:*
-        version: link:../commons
-      ai:
-        specifier: ^7.0.162
-        version: 7.0.162(zod@4.6.7)
-      drizzle-orm:
-        specifier: ^0.45.4
-        version: 0.45.4(@cloudflare/workers-types@5.20261103.1)(@electric-sql/pglite@0.5.14)(@prisma/client@5.22.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.8)(mysql2@3.24.6(@types/node@26.6.6))(pg@8.23.1)(postgres@4.0.0)
-      h3:
-        specifier: 1.15.11
-        version: 1.15.11
-      nuxt:
-        specifier: ^4.6.4
-        version: 4.6.4(21d259da1a009700fb6382daec138bf1)
-      postgres:
-        specifier: ^4.0.0
-        version: 4.0.0
-      redis:
-        specifier: ^6.3.1
-        version: 6.3.1
-      tailwindcss:
-        specifier: ^4.3.4
-        version: 4.3.4
-      vue:
-        specifier: ^3.5.44
-        version: 3.5.44(typescript@6.0.3)
-      vue-i18n:
-        specifier: ^11.4.18
-        version: 11.4.18(vue@3.5.44(typescript@6.0.3))
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@nuxt/devtools':
-        specifier: ^4.1.0
-        version: 4.1.0(a3f23839495f3b114dfd296ac8840b57)
-      '@tailwindcss/postcss':
-        specifier: ^4.3.4
-        version: 4.3.4
-      '@tailwindcss/vite':
-        specifier: ^4.3.4
-        version: 4.3.4(vite@8.3.5)
-      '@types/node':
-        specifier: ^26.6.6
-        version: 26.6.6
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11

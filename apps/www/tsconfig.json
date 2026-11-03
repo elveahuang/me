@@ -1,0 +1,16 @@
+{
+    "extends": "./.void/tsconfig.json",
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["void/env"],
+        "jsx": "preserve",
+        "allowJs": true,
+        "checkJs": false
+    },
+    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db", "vite.config.ts", "void.config.ts"]
+}

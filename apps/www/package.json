@@ -1,0 +1,24 @@
+{
+    "name": "@repo/www",
+    "version": "26.4.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "prepare": "void prepare",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "hono": "^4.13.16",
+        "vue": "^3.5.44"
+    },
+    "devDependencies": {
+        "@repo/config": "workspace:*",
+        "@void/vue": "^1.5.0",
+        "typescript": "6.0.3",
+        "vite": "^8.3.5",
+        "void": "1.5.0"
+    }
+}
