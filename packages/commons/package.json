@@ -10,7 +10,7 @@
         "./styles/theme.css": "./src/styles/theme.css"
     },
     "dependencies": {
-        "tailwindcss": "^4.3.3",
+        "tailwindcss": "^4.3.4",
         "typescript": "6.0.3",
         "vue": "^3.5.44"
     },
