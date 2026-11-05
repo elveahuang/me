@@ -10,15 +10,15 @@
         "typecheck": "vue-tsc --noEmit"
     },
     "dependencies": {
-        "@ai-sdk/vue": "^4.0.162",
+        "@ai-sdk/vue": "^4.0.163",
         "@capacitor/camera": "8.2.6",
         "@comark/vue": "^0.8.1",
         "@ionic/core": "^9.0.10",
         "@ionic/vue": "^9.0.10",
         "@ionic/vue-router": "^9.0.10",
         "@repo/commons": "workspace:*",
-        "ai": "^7.0.162",
-        "better-auth": "^1.7.15",
+        "ai": "^7.0.163",
+        "better-auth": "^1.7.17",
         "ionicons": "^8.1.0",
         "konsta": "^5.5.0",
         "qrcode": "^1.5.4",
@@ -33,7 +33,7 @@
         "@vitejs/plugin-vue": "^6.0.10",
         "tailwindcss": "^4.3.4",
         "typescript": "~5.9.0",
-        "vite": "^8.3.5",
+        "vite": "^8.3.6",
         "vue-tsc": "^3.3.14"
     }
 }

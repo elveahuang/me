@@ -16,8 +16,8 @@
     "devDependencies": {
         "@repo/config": "workspace:*",
         "@types/node": "^26.6.6",
-        "@x18n/cli": "^0.1.8",
-        "@x18n/core": "^0.1.8",
+        "@x18n/cli": "^0.1.11",
+        "@x18n/core": "^0.1.11",
         "tsx": "^4.23.15",
         "typescript": "6.0.3"
     }

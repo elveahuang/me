@@ -21,22 +21,22 @@
         "test": "tsx scripts/smoke-test.ts"
     },
     "dependencies": {
-        "@ai-sdk/mcp": "^2.0.90",
-        "@ai-sdk/openai": "^4.0.108",
-        "@ai-sdk/vue": "^4.0.162",
-        "@aws-sdk/client-s3": "^3.1161.0",
-        "@aws-sdk/s3-presigned-post": "^3.1161.0",
-        "@aws-sdk/s3-request-presigner": "^3.1161.0",
+        "@ai-sdk/mcp": "^2.0.91",
+        "@ai-sdk/openai": "^4.0.109",
+        "@ai-sdk/vue": "^4.0.163",
+        "@aws-sdk/client-s3": "^3.1162.0",
+        "@aws-sdk/s3-presigned-post": "^3.1162.0",
+        "@aws-sdk/s3-request-presigner": "^3.1162.0",
         "@comark/nuxt": "^0.8.1",
         "@comark/vue": "^0.8.1",
-        "@json-render/core": "^0.21.4",
-        "@json-render/vue": "^0.21.4",
+        "@json-render/core": "^0.22.0",
+        "@json-render/vue": "^0.22.0",
         "@nuxt/icon": "^2.6.2",
         "@nuxt/ui": "^4.12.0",
         "@repo/commons": "workspace:*",
-        "ai": "^7.0.162",
+        "ai": "^7.0.163",
         "drizzle-orm": "^0.45.4",
-        "h3": "1.15.11",
+        "h3": "2.0.8",
         "nuxt": "^4.6.4",
         "postgres": "^4.0.0",
         "redis": "^6.3.1",
@@ -53,6 +53,6 @@
         "drizzle-kit": "^0.31.11",
         "tsx": "^4.23.15",
         "typescript": "6.0.3",
-        "vite": "^8.3.5"
+        "vite": "^8.3.6"
     }
 }

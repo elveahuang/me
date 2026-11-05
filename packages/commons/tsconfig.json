@@ -7,13 +7,6 @@
             "@commons/webapp/*": ["../webapp/src/*"]
         }
     },
-    "include": [
-        "./src/**/*.js",
-        "./src/**/*.jsx",
-        "./src/**/*.ts",
-        "./src/**/*.tsx",
-        "./src/**/*.d.ts",
-        "./src/**/*.vue"
-    ],
+    "include": ["./src/**/*.js", "./src/**/*.jsx", "./src/**/*.ts", "./src/**/*.tsx", "./src/**/*.d.ts", "./src/**/*.vue"],
     "exclude": ["node_modules"]
 }
