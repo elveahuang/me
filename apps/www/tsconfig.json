@@ -8,9 +8,7 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "types": ["void/env"],
-        "jsx": "preserve",
-        "allowJs": true,
-        "checkJs": false
+        "jsx": "preserve"
     },
-    "include": ["src", "pages", "routes", "middleware", "crons", "queues", "db", "vite.config.ts", "void.config.ts"]
+    "include": ["pages", "vite.config.ts", "void.config.ts"]
 }

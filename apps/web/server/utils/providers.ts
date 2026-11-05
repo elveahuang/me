@@ -12,10 +12,25 @@ import { lockDefaultSlot } from './unique-default';
  * （DeepSeek / 通义 / OpenAI / 自建网关等，改 baseUrl 即可）。
  */
 
-/** 环境变量里的 DeepSeek Key（过滤掉 .env.example 的占位符） */
+/**
+ * 环境变量里的 DeepSeek Key（过滤掉 .env.example 的占位符）
+ */
 function envDeepseekKey(): string {
     const raw = (process.env.NUXT_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || '').trim();
     return raw && !raw.includes('xxxx') ? raw : '';
+}
+
+/**
+ * 供应商 API Key 的展示掩码。
+ *
+ * 列表（`settings/providers.ts`）与详情（`settings/providers/[id].ts`）必须永远同口径：
+ * PATCH 分支用 `maskKey(当前值) === 请求里的值` 判定「掩码未变 = 不改密钥」，
+ * 两处实现漂开就会出现「只改了个名字，密钥被清空」。
+ */
+export function maskApiKey(key: string): string {
+    const plain = openSecret(key);
+    if (!plain) return '';
+    return plain.length <= 8 ? '****' : `${plain.slice(0, 4)}****${plain.slice(-4)}`;
 }
 
 /**

@@ -29,6 +29,21 @@ export function routeId(event: H3Event, name = 'id', label = name): string {
 }
 
 /**
+ * 带前缀的主键（`job_<uuid>`、`jc_<uuid>`）。
+ *
+ * 前缀必须显式列出，不能退化成「任意字符串」——那样这条闸门就只剩判空，
+ * 又回到把 NUL / 超长段直送驱动的老路。只放行「已知前缀 + 合法 UUID」这一种形状。
+ */
+export function prefixedRouteId(event: H3Event, prefix: string, name = 'id', label = name): string {
+    const raw = getRouterParam(event, name);
+    const value = typeof raw === 'string' ? raw : '';
+    if (!value.startsWith(prefix) || !UUID_PATTERN.test(value.slice(prefix.length))) {
+        throw createError({ statusCode: 400, statusMessage: `${label}不是合法的 id` });
+    }
+    return value;
+}
+
+/**
  * 路径参数除了 UUID 还允许少量固定字面量（例如默认空间 id='default'）。
  * 字面量必须显式列出，不能把它放宽成「任意字符串」。
  */

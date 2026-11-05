@@ -6,16 +6,10 @@ import { db } from '../../utils/db';
 import { requireMethod } from '../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../utils/outbound';
 import { safeTrim, stripNull } from '../../utils/pg-text';
-import { ensureDefaultProvider } from '../../utils/providers';
+import { ensureDefaultProvider, maskApiKey } from '../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../utils/request-body';
-import { openSecret, sealSecret } from '../../utils/secret-box';
+import { sealSecret } from '../../utils/secret-box';
 import { lockDefaultSlot } from '../../utils/unique-default';
-
-function maskKey(key: string) {
-    const plain = openSecret(key);
-    if (!plain) return '';
-    return plain.length <= 8 ? '****' : `${plain.slice(0, 4)}****${plain.slice(-4)}`;
-}
 
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
@@ -60,10 +54,10 @@ export default defineEventHandler(async (event) => {
             });
         });
         const [row] = await db.select().from(providers).where(eq(providers.id, id));
-        return { ...row!, apiKey: maskKey(row!.apiKey) };
+        return { ...row!, apiKey: maskApiKey(row!.apiKey) };
     }
 
     await ensureDefaultProvider();
     const rows = await db.select().from(providers).orderBy(asc(providers.createdAt));
-    return rows.map((p) => ({ ...p, apiKey: maskKey(p.apiKey) }));
+    return rows.map((p) => ({ ...p, apiKey: maskApiKey(p.apiKey) }));
 });

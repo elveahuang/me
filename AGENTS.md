@@ -287,6 +287,9 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   整机模式仍是每张表一次性 `db.select()`；带 `?table=&after=&limit=` 时走 [backup-pages.ts](apps/web/server/utils/backup-pages.ts) 的主键游标分页（默认 500、上限 2000，`tableEnd` 回 `hasMore/nextAfter`，复合主键按列字典序比较、游标列数不匹配直接 400），单表峰值降到一页；`backupTables` 必须与 `backupBuilders` 键一一对应。**NDJSON 导入**是 `POST /api/import/ndjson`（[backup-import-ndjson.ts](apps/web/server/utils/backup-import-ndjson.ts)）：只接受 `mode=all` 整机导出，逐行校验 `meta/table/row/tableEnd/end`、表名、行数与 `end.checksum`（按 `{type:'row',table,row}\n` 重算），再重组为 JSON 形状复用 `importWorkBackup()`；单表分片会 400（缺其余表）。ZIP、50MB 自动分片、事件分片与导出前 flush 活会话未做。
   恢复入口是 `POST /api/import`（`server/api/import.post.ts` + `server/utils/backup-import.ts`）：导出版本为 5、导入兼容 1–5，最大 20MB，合并导入、同主键行跳过，按外键依赖顺序在单个事务里执行；导出带 `checksum`（顶层键排序后的 sha256），导入若带该字段则先校验，不匹配 400；
   `messages.seq` 由序列重新生成，timestamp 字符串在导入前转成 Date。密钥、附件二进制与向量索引仍不在备份里，导入后要重新填密钥并重建索引。空库迁移演练（备份 → 新建空库 → `drizzle-kit migrate` 18 条迁移 → 导入整份 JSON → 校验计数 → 删库）已在本机真实执行过一次。
+- **路径参数一律过 `server/utils/route-id.ts`，不要裸用 `getRouterParam`**：`normalizeRouteId/routeId` 只放行 UUID 形状，`routeId` 之外有 `routeIdAllowing`（少量固定字面量，如默认空间 `default`）与
+  `prefixedRouteId`（`job_<uuid>` 这类带前缀的主键）。少这一步时 `GET /api/schedules/%00` 会把带 NUL 的串交给驱动，PostgreSQL 拒绝 `0x00` 后 drizzle 把整条
+  `Failed query: select "id", "title", ...` 连同列清单写进响应体——一条 URL 就透出全表结构。新增 handler 时按「`requireMethod` → `capBody` → `routeId` → 业务」的顺序写。
 - **本地文件工具默认关闭**：只有 `.env` 配置 `WEB_FILE_ROOTS`（多个目录用英文分号分隔）时才向模型注入 `local_roots / local_list_files / local_read_file / local_search_files`。
   全部只读；路径必须绝对路径，`local-files.ts` 会先 `realpath` 再判断是否位于白名单内，符号链接不能越界。聊天与定时任务共用 `buildLocalFileTools()`；未配置时这些工具完全不出现。
   **写能力再叠一层开关**：`WEB_FILE_WRITE=1` 才注入 `local_write_file / local_edit_file / local_mkdir`，写入仍是同目录临时文件 + rename，`expectedVersion` 不匹配返回 409 `FS_STALE_VERSION`，单文件上限 200KB。

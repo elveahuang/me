@@ -20,3 +20,14 @@ deploy/.env
 
 # curl -c 之类命令产生的 cookie 残留（曾误提交过一次）
 /site-settings
+
+# x18n 运行产物（packages/console）。报告与缓存是本地产物；
+# check-baseline.json / reviews.yml 属于需要提交的基线，单独放行。
+.x18n/report
+.x18n/cache
+
+# 通用杂物
+*.log
+**/*.log
+*.tsbuildinfo
+.wrangler

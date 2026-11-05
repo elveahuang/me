@@ -13,13 +13,7 @@
         "./src/**/*.ts",
         "./src/**/*.tsx",
         "./src/**/*.d.ts",
-        "./src/**/*.vue",
-        "../packages/*/src/**/*.js",
-        "../packages/*/src/**/*.jsx",
-        "../packages/*/src/**/*.ts",
-        "../packages/*/src/**/*.tsx",
-        "../packages/*/src/**/*.d.ts",
-        "../packages/*/src/**/*.vue"
+        "./src/**/*.vue"
     ],
     "exclude": ["node_modules"]
 }

@@ -29,8 +29,15 @@ jobs:
               run: pnpm --filter @repo/web build
             - name: Typecheck Webapp
               run: pnpm --filter @repo/webapp typecheck
+            - name: Typecheck www
+              run: pnpm --filter @repo/www typecheck
+            - name: Typecheck console
+              run: pnpm --filter @repo/console typecheck
+            - name: Check console locales
+              run: pnpm console:i18n:check
 
     build-and-push:
+        needs: verify
         runs-on: ubuntu-26.04
         permissions:
             contents: read
@@ -46,7 +53,7 @@ jobs:
                   node-version: 24
                   cache: pnpm
             - name: Install dependencies
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
             - name: Set image tags
               id: meta
               run: |

@@ -6,8 +6,9 @@
         "access": "public"
     },
     "exports": {
-        ".": "./src/index.ts",
-        "./styles/theme.css": "./src/styles/theme.css"
+        "./styles/theme.css": "./src/styles/theme.css",
+        "./contract": "./src/contract/index.ts",
+        "./markdown-export": "./src/markdown-export.ts"
     },
     "dependencies": {
         "tailwindcss": "^4.3.4",

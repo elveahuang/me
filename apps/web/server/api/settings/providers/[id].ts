@@ -6,16 +6,11 @@ import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { assertAbsoluteHttpUrl } from '../../../utils/outbound';
 import { safeTrim, stripNull } from '../../../utils/pg-text';
+import { maskApiKey } from '../../../utils/providers';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
 import { routeId } from '../../../utils/route-id';
-import { openSecret, sealSecret } from '../../../utils/secret-box';
+import { sealSecret } from '../../../utils/secret-box';
 import { lockDefaultSlot } from '../../../utils/unique-default';
-
-function maskKey(key: string) {
-    const plain = openSecret(key);
-    if (!plain) return '';
-    return plain.length <= 8 ? '****' : `${plain.slice(0, 4)}****${plain.slice(-4)}`;
-}
 
 export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
@@ -65,7 +60,7 @@ export default defineEventHandler(async (event) => {
     if (incomingKey) {
         const [current] = await db.select({ apiKey: providers.apiKey }).from(providers).where(eq(providers.id, id));
         if (!current) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
-        if (incomingKey !== maskKey(current.apiKey)) patch.apiKey = sealSecret(incomingKey);
+        if (incomingKey !== maskApiKey(current.apiKey)) patch.apiKey = sealSecret(incomingKey);
     }
 
     const becomesDefault = patch.isDefault === true;
@@ -89,5 +84,5 @@ export default defineEventHandler(async (event) => {
     const [row] = await db.select().from(providers).where(eq(providers.id, id));
     // 提交后仍可能被并发删除：没有行就不要回一个 undefined 展开出来的空对象
     if (!row) throw createError({ statusCode: 404, statusMessage: '供应商不存在' });
-    return { ...row, apiKey: maskKey(row.apiKey) };
+    return { ...row, apiKey: maskApiKey(row.apiKey) };
 });

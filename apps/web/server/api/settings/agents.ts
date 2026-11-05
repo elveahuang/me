@@ -65,16 +65,19 @@ export default defineEventHandler(async (event) => {
     await capBody(event, ADMIN_BODY_LIMIT_BYTES);
     if (method === 'POST') return createAgent(event);
 
-    const rows = await db.select().from(agents).orderBy(desc(agents.createdAt));
-    const allSkills = await db.select().from(skills);
-    const allTools = await db.select().from(tools);
-    const bindings = await db.select().from(agentSkills);
-    const toolBindings = await db.select().from(agentTools);
-    const kbBindings = await db.select().from(agentKnowledgeBases);
-    const allKbs = await db.select({ id: knowledgeBases.id, name: knowledgeBases.name }).from(knowledgeBases);
-    const mcpBindings = await db.select().from(agentMcpServers);
-    const allMcp = await db.select({ id: mcpServers.id, name: mcpServers.name }).from(mcpServers);
-    const providerRows = await db.select({ id: providers.id, name: providers.name, models: providers.models }).from(providers);
+    // 这 10 条查询互不依赖，并发发出；逐个 await 会让管理端「智能体」页固定累加 10 次往返。
+    const [rows, allSkills, allTools, bindings, toolBindings, kbBindings, allKbs, mcpBindings, allMcp, providerRows] = await Promise.all([
+        db.select().from(agents).orderBy(desc(agents.createdAt)),
+        db.select().from(skills),
+        db.select().from(tools),
+        db.select().from(agentSkills),
+        db.select().from(agentTools),
+        db.select().from(agentKnowledgeBases),
+        db.select({ id: knowledgeBases.id, name: knowledgeBases.name }).from(knowledgeBases),
+        db.select().from(agentMcpServers),
+        db.select({ id: mcpServers.id, name: mcpServers.name }).from(mcpServers),
+        db.select({ id: providers.id, name: providers.name, models: providers.models }).from(providers),
+    ]);
 
     // 预分组，避免对每个 agent 遍历全部绑定并对每条绑定 .find（O(agents × bindings)）：
     // 按 agentId 建一次索引，实体表按 id 建 Map，列表组装退化为线性拼接。

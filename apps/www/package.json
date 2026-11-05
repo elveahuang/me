@@ -6,19 +6,17 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "preview": "vite preview",
         "prepare": "void prepare",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "vue-tsc --noEmit"
     },
     "dependencies": {
-        "hono": "^4.13.16",
         "vue": "^3.5.44"
     },
     "devDependencies": {
-        "@repo/config": "workspace:*",
-        "@void/vue": "^1.5.0",
+        "@void/vue": "1.5.0",
         "typescript": "6.0.3",
         "vite": "^8.3.5",
-        "void": "1.5.0"
+        "void": "1.5.0",
+        "vue-tsc": "^3.3.14"
     }
 }
