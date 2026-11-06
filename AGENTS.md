@@ -516,9 +516,14 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - `server/middleware/auth.ts` 把 `/api/auth` **整段前缀**交给 `auth.handler`，而 better-auth 的 router 对未注册路径直接回 404；Nitro 中间件先于文件路由执行，所以自建端点若也放在
   `/api/auth` 下（现状：`/api/auth/wechat`、`/api/auth/wechat/{status,callback}`），必须同时登记进该文件的 `OWN_PREFIXES`，否则 handler 永远收不到请求、对外只是静默
   404。新增 `/api/auth/*` 端点时优先换个前缀（如 `/api/wechat`），避免再依赖这份白名单。
-- `server/middleware/cors.ts` 已不再向带凭证请求反射 `*`：`resolveOrigins()` 把 `*` 从允许列表剔除、仅记录 `wildcardConfigured` 并一次性告警，只有 origin
+- `server/middleware/00-cors.ts` 已不再向带凭证请求反射 `*`：`*` 从允许列表剔除、仅记录 `wildcardConfigured` 并一次性告警，只有 origin
   **显式命中允许列表**才回写 `Access-Control-Allow-Origin`（带 `Vary: Origin`，并 expose `set-auth-token`、`x-conversation-id`），`OPTIONS` 直接 204。允许列表来自
-  `CORS_ORIGINS` + `BETTER_AUTH_URL` + 默认值。改 API/前端域名或原生回调协议时三处一起核对。
+  `CORS_ORIGINS` + `BETTER_AUTH_URL` + 默认值（进程内解析一次，非每请求重算）。改 API/前端域名或原生回调协议时三处一起核对。 **文件名必须带 `00-` 前缀**：Nitro
+  中间件按文件名字典序执行、返回非 undefined 即短路整条链——它曾叫 `cors.ts`，排在 `auth.ts` 之后，而 auth.ts 对 `/api/auth/*` 直接 `return auth.handler(...)`，
+  导致 better-auth 全部端点一个 CORS 头都拿不到（`capacitor://localhost` 原生壳的登录/改密/探针被浏览器层拦截，实测修复后预检与 GET 都带回白名单头）。
+- `server/api/chat.post.ts` 的 `onFinish` 必须 **自带 catch**：ai@7 的 `callOnEnd` 从 TransformStream flush/cancel 被 await 且无兜底 try/catch，assistant 消息
+  落库失败（jsonb 约束、连接闪断）会沿流传播成 unhandledRejection，撞上 `plugins/error-guard.ts` 的 `process.exit(1)`——一次持久化失败带走全部在途流。同理
+  **微信回调 `amount.total` 缺失直接回 FAIL**（`pay/notify/wechat.post.ts`），不要用 `typeof === 'number' &&` 的写法把「缺字段」静默跳过金额比对。
 - `server/utils/tools.ts` 的 HTTP 工具调用 `outbound.ts` 的 URL/DNS 校验，15 秒超时、输出截取 4000 字符；`ALLOW_PRIVATE_OUTBOUND=true` 可绕过校验。这不是覆盖
   MCP、embedding 等全部请求的全局出站保护。`outbound.ts` 现行三件套：`fillAndPinOrigin()` 做 URL 模板填充时拒绝把值注入 host 段（参数值只能落在 path/query），
   `safeOutboundFetch()` 是替代裸 fetch 的出站入口（先 `assertSafeOutboundUrl` 预检，再用 `guardedLookup` 建连，连接时二次校验解析出的 IP，堵 DNS 重绑定），

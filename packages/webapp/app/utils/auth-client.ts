@@ -1,14 +1,11 @@
+import type { SessionUser } from '@commons/contract';
 import { createAuthClient } from 'better-auth/vue';
 
 export const authClient = createAuthClient();
 
-export interface SessionUser {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    image?: string | null;
-}
+// 会话用户形状以 contract 为唯一事实源（contract 版本多出的 banned/emailVerified 是
+// better-auth 实际返回的字段，探针响应里本就存在，只是早先这里抄了一份缺字段的子集）。
+export type { SessionUser };
 
 /**
  * 会话探测结果。
@@ -27,8 +24,8 @@ function isRejectedByAuth(error: unknown): boolean {
 
 export async function resolveSession(headers?: Record<string, string>): Promise<SessionOutcome> {
     try {
-        const res = await $fetch<any>('/api/auth/get-session', headers ? { headers } : undefined);
-        return res?.user ? { status: 'signed-in', session: res } : { status: 'anonymous' };
+        const res = await $fetch<{ user?: SessionUser } | null>('/api/auth/get-session', headers ? { headers } : undefined);
+        return res?.user ? { status: 'signed-in', session: res as { user: SessionUser } } : { status: 'anonymous' };
     } catch (error) {
         return isRejectedByAuth(error) ? { status: 'anonymous' } : { status: 'error' };
     }

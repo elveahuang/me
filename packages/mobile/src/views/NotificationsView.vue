@@ -5,6 +5,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, apiUrl, extractApiError } from '../api/auth';
+import AppPagination from '../components/AppPagination.vue';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 import { useFlashSuccess } from '../composables/useFlashSuccess';
 import { useUnread } from '../composables/useUnread';
 import PageShell from './PageShell.vue';
@@ -18,8 +20,8 @@ const unread = ref(0);
 const { setUnread } = useUnread();
 const page = ref(1);
 const pageSize = 15;
-const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
-const error = ref('');
+// 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+const { loading, error, begin } = useSequencedLoad();
 const { success, flashSuccess } = useFlashSuccess();
 const filterUnread = ref(false);
 const type = ref('all');
@@ -49,33 +51,30 @@ const levelBorder: Record<string, string> = {
     danger: 'border-l-2 border-l-[color:var(--danger)]',
 };
 
-/** 未读/类型筛选、搜索与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来 */
-let loadSeq = 0;
-
+/** 未读/类型筛选、搜索与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来（守卫在 useSequencedLoad） */
 async function load(reset = false) {
-    const seq = ++loadSeq;
+    const guard = begin();
     if (reset) page.value = 1;
-    loading.value = true;
-    error.value = '';
     try {
         const query = new URLSearchParams({ page: String(page.value), pageSize: String(pageSize) });
         if (filterUnread.value) query.set('unread', '1');
         if (type.value !== 'all') query.set('type', type.value);
         const res = await api<NotificationsResponse>(`/api/notifications?${query.toString()}`);
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         items.value = res.items;
         total.value = res.total;
         unread.value = res.unread;
         setUnread(res.unread);
     } catch (e) {
-        // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"没有消息"
-        items.value = [];
+        if (guard.isStale()) return;
+        // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"没有消息"；
         // 分页脚注按 total 渲染，留着上一次成功的 total 会与错误横幅并存且页码可点；
         // unread 角标是独立权威值，失败时保留不清零
+        items.value = [];
         total.value = 0;
-        error.value = extractApiError(e, t('common.error'));
+        error.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 
@@ -247,33 +246,18 @@ function openLink(item: NotificationRecord) {
                     <p class="mt-1">{{ t('notifications.emptyHint') }}</p>
                 </div>
 
-                <div v-if="totalPages > 1" class="flex items-center justify-center gap-3 pt-2 text-xs">
-                    <button
-                        type="button"
-                        class="app-btn app-btn-outline !px-3 !py-1"
-                        :disabled="page <= 1"
-                        :aria-label="t('common.prevPage')"
-                        @click="
-                            page -= 1;
-                            load();
-                        "
-                    >
-                        ‹
-                    </button>
-                    <span>{{ page }} / {{ totalPages }}</span>
-                    <button
-                        type="button"
-                        class="app-btn app-btn-outline !px-3 !py-1"
-                        :disabled="page >= totalPages"
-                        :aria-label="t('common.nextPage')"
-                        @click="
-                            page += 1;
-                            load();
-                        "
-                    >
-                        ›
-                    </button>
-                </div>
+                <AppPagination
+                    :page="page"
+                    :total-pages="totalPages"
+                    @prev="
+                        page -= 1;
+                        load();
+                    "
+                    @next="
+                        page += 1;
+                        load();
+                    "
+                />
             </div>
         </ion-content>
 

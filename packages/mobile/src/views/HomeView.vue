@@ -3,8 +3,9 @@ import type { AgentSummary } from '@commons/contract';
 import { IonContent, IonHeader, IonRefresher, IonRefresherContent, IonSearchbar, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, extractApiError, fetchSession } from '../api/auth';
+import { api, fetchSession } from '../api/auth';
 import BulletinBanner from '../components/BulletinBanner.vue';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 import { useTheme } from '../composables/useTheme';
 import { useUnread } from '../composables/useUnread';
 import PageShell from './PageShell.vue';
@@ -15,29 +16,25 @@ const { unread, refresh: refreshUnread } = useUnread();
 
 const agents = ref<AgentSummary[]>([]);
 const searchKeyword = ref('');
-const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
-const error = ref('');
 const favorites = ref<string[]>([]);
 const userName = ref('');
+// 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+const { loading, error, begin } = useSequencedLoad();
 
-/** 下拉刷新与标签页回场刷新并发：先发后回的旧响应会把新列表写回去（与附件/通知页同用序号守卫） */
-let loadSeq = 0;
-
+/** 下拉刷新与标签页回场刷新并发：先发后回的旧响应会把新列表写回去（守卫在 useSequencedLoad） */
 async function loadAgents() {
-    const seq = ++loadSeq;
-    loading.value = true;
-    error.value = '';
+    const guard = begin();
     try {
         const res = await api<AgentSummary[]>('/api/agents');
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         agents.value = res;
     } catch (e) {
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         // 失败时清空列表：否则只剩空态文案，"接口挂了"会被读成"还没有智能体"
         agents.value = [];
-        error.value = extractApiError(e, t('common.error'));
+        error.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 

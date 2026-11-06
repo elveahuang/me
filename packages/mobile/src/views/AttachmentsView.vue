@@ -12,8 +12,10 @@ import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherConten
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, apiUrl, extractApiError } from '../api/auth';
+import AppPagination from '../components/AppPagination.vue';
 import { useDialog } from '../composables/useDialog';
 import { useFlashSuccess } from '../composables/useFlashSuccess';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 import { isNativeShell, pickFiles, uploadAttachment } from '../composables/useUpload';
 import PageShell from './PageShell.vue';
 
@@ -27,9 +29,9 @@ const items = ref<AttachmentRecord[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = 10;
-const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+// 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+const { loading, error, begin } = useSequencedLoad();
 const uploading = ref(false);
-const error = ref('');
 const { success, flashSuccess } = useFlashSuccess(3000);
 const keyword = ref('');
 const category = ref('all');
@@ -52,20 +54,16 @@ const categoryActions = computed(() => [
     { text: t('common.cancel'), role: 'cancel' },
 ]);
 
-/** 分类切换、搜索防抖与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来 */
-let loadSeq = 0;
-
+/** 分类切换、搜索防抖与下拉刷新共用 load()：先发后回的旧响应会把上一个条件的列表写回来（守卫在 useSequencedLoad） */
 async function load(reset = false) {
-    const seq = ++loadSeq;
+    const guard = begin();
     if (reset) page.value = 1;
-    loading.value = true;
-    error.value = '';
     try {
         const query = new URLSearchParams({ page: String(page.value), pageSize: String(pageSize) });
         if (category.value !== 'all') query.set('category', category.value);
         if (keyword.value.trim()) query.set('keyword', keyword.value.trim());
         const data = await api<AttachmentsResponse>(`/api/attachments?${query.toString()}`);
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         items.value = data.attachments;
         total.value = data.total;
         // 删除末页最后一条后 page 会越界，钳回最后一页而不是停在越界的空页
@@ -76,13 +74,14 @@ async function load(reset = false) {
             return;
         }
     } catch (e) {
-        // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"还没有附件"
-        items.value = [];
+        if (guard.isStale()) return;
+        // 失败时清空列表：否则列表走空态，"接口挂了"会被读成"还没有附件"；
         // 分页脚注按 total 渲染，留着上一次成功的 total 会与错误横幅并存且页码可点
+        items.value = [];
         total.value = 0;
-        error.value = extractApiError(e, t('common.error'));
+        error.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 
@@ -275,33 +274,18 @@ function preview(item: AttachmentRecord) {
                 </div>
 
                 <!-- 分页 -->
-                <div v-if="totalPages > 1" class="flex items-center justify-center gap-3 pt-2 text-xs">
-                    <button
-                        type="button"
-                        class="app-btn app-btn-outline !px-3 !py-1"
-                        :disabled="page <= 1"
-                        :aria-label="t('common.prevPage')"
-                        @click="
-                            page -= 1;
-                            load();
-                        "
-                    >
-                        ‹
-                    </button>
-                    <span>{{ page }} / {{ totalPages }}</span>
-                    <button
-                        type="button"
-                        class="app-btn app-btn-outline !px-3 !py-1"
-                        :disabled="page >= totalPages"
-                        :aria-label="t('common.nextPage')"
-                        @click="
-                            page += 1;
-                            load();
-                        "
-                    >
-                        ›
-                    </button>
-                </div>
+                <AppPagination
+                    :page="page"
+                    :total-pages="totalPages"
+                    @prev="
+                        page -= 1;
+                        load();
+                    "
+                    @next="
+                        page += 1;
+                        load();
+                    "
+                />
             </div>
         </ion-content>
 

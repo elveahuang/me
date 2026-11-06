@@ -23,6 +23,8 @@ const editing = ref<Partial<AdminPlan> | null>(null);
 const errorMessage = ref<string | null>(null);
 /** 提交中标记：抽屉页脚原本没有 disabled，双击会创建两条重复套餐 */
 const saving = ref(false);
+/** 保存/启停后都会重拉列表，旧请求晚到会把已改的套餐写回旧值 */
+let loadSeq = 0;
 
 const form = reactive({
     code: '',
@@ -37,10 +39,14 @@ const form = reactive({
 });
 
 async function load() {
+    const seq = ++loadSeq;
     try {
-        plans.value = await $fetch<AdminPlan[]>('/api/admin/plans');
+        const res = await $fetch<AdminPlan[]>('/api/admin/plans');
+        if (seq !== loadSeq) return;
+        plans.value = res;
         errorMessage.value = null;
     } catch (e) {
+        if (seq !== loadSeq) return;
         // 失败时清空并提示：否则表格空态会被读成「还没有套餐」
         plans.value = [];
         errorMessage.value = extractApiError(e, t('common.loadFailed'));

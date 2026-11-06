@@ -66,7 +66,14 @@ export default defineEventHandler(async (event) => {
                     console.error('[wechat-pay] 收到未知订单的支付通知:', data.out_trade_no, data.transaction_id);
                     return { code: 'SUCCESS', message: '已忽略未知订单' };
                 }
-                if (typeof data.amount?.total === 'number' && order.amountCents !== data.amount.total) {
+                if (typeof data.amount?.total !== 'number') {
+                    // 本端点是全服务唯一的匿名入口：TRANSACTION.SUCCESS 却缺金额字段属于契约异常，
+                    // 宁可回 FAIL 让微信按重试策略再送，也不能没对过账就开通会员。
+                    console.error('[wechat-pay] 回调缺少 amount.total，拒绝入账:', data.out_trade_no);
+                    setResponseStatus(event, 500);
+                    return { code: 'FAIL', message: '金额字段缺失' };
+                }
+                if (order.amountCents !== data.amount.total) {
                     console.error('[wechat-pay] 回调金额不一致:', data.out_trade_no, data.amount.total, '!=', order.amountCents);
                     setResponseStatus(event, 500);
                     return { code: 'FAIL', message: '金额不一致' };

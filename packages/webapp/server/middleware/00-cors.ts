@@ -7,12 +7,19 @@
  * 凭据安全：本平台接口一律依赖 Cookie / Bearer 凭据，因此只按显式白名单回显 Origin。
  * `*` 与 Access-Control-Allow-Credentials:true 不能共存——回显任意来源 + 允许携带凭据，
  * 等于让任意网站带着用户会话跨域读取响应，所以配置了 `*` 也不放行未列出的来源。
+ *
+ * 文件名带 `00-` 前缀：Nitro 中间件按文件名字典序执行、返回非 undefined 即短路整条链。
+ * 之前它叫 cors.ts，排在 auth.ts 之后，而 auth.ts 对 /api/auth/* 直接 `return auth.handler(...)`，
+ * 导致 better-auth 的全部端点（sign-in/email、get-session、change-password）一个 CORS 头都拿不到
+ * ——`capacitor://localhost` 上的原生壳用 credentials:'include' 调这些端点会被浏览器层直接拦下。
+ * 排到最前后，OPTIONS 预检与白名单回显先落好头，auth.ts 再接管 /api/auth/*。
  */
 const DEFAULT_ORIGINS = ['http://localhost:3000', 'http://localhost:4173', 'http://localhost:5173', 'capacitor://localhost', 'https://localhost'];
 
 let wildcardWarned = false;
 
-function resolveOrigins(): { allowList: string[]; wildcardConfigured: boolean } {
+/** 来源全来自 env（静态值），进程生命周期内只需解析一次；每请求 split/Set 是纯浪费。 */
+const RESOLVED_ORIGINS = (() => {
     const fromEnv = (process.env.CORS_ORIGINS ?? '')
         .split(',')
         .map((s) => s.trim())
@@ -21,11 +28,11 @@ function resolveOrigins(): { allowList: string[]; wildcardConfigured: boolean } 
     const base = process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.replace(/\/+$/, '')] : [];
     const allowList = [...new Set([...fromEnv.filter((o) => o !== '*'), ...base, ...DEFAULT_ORIGINS])];
     return { allowList, wildcardConfigured };
-}
+})();
 
 export default defineEventHandler((event) => {
     const origin = getRequestHeader(event, 'origin');
-    const { allowList, wildcardConfigured } = resolveOrigins();
+    const { allowList, wildcardConfigured } = RESOLVED_ORIGINS;
     if (wildcardConfigured && !wildcardWarned) {
         wildcardWarned = true;
         console.warn('[cors] CORS_ORIGINS 含 `*`；因接口需携带凭据，通配符已被忽略，请改为显式白名单');

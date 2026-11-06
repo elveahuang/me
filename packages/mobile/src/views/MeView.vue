@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { extractApiError, formatDate, formatYuan, orderStatusLabelKey, orderStatusTone, type MeResponse, type OrdersResponse } from '@commons/contract';
+import { formatDate, formatYuan, orderStatusLabelKey, orderStatusTone, type MeResponse, type OrdersResponse } from '@commons/contract';
 import { IonActionSheet, IonContent, IonHeader, IonRefresher, IonRefresherContent, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router';
 import { api, fetchSession, signOut, type SessionPayload } from '../api/auth';
 import ThemeSettings from '../components/ThemeSettings.vue';
 import ChangePasswordModal from '../components/ChangePasswordModal.vue';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 import { useDialog } from '../composables/useDialog';
 import { useUnread } from '../composables/useUnread';
 import { setMobileLocale } from '../i18n';
@@ -23,8 +24,8 @@ const orders = ref<OrdersResponse['orders']>([]);
 const showLanguageSheet = ref(false);
 /** 修改密码弹层:走 Better Auth 内置 change-password,组件自含表单与成功态 */
 const showChangePassword = ref(false);
-const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
-const error = ref('');
+// 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+const { loading, error, begin } = useSequencedLoad();
 
 const membership = computed(() => me.value?.membership ?? null);
 const stats = computed(() => me.value?.stats);
@@ -39,27 +40,23 @@ const languageActions = computed(() => [
     { text: t('common.cancel'), role: 'cancel' },
 ]);
 
-/** 下拉刷新与进入页面可能并发触发，旧请求后回会把新数据写回旧结果（同 MembershipView 护栏） */
-let loadSeq = 0;
-
+/** 下拉刷新与进入页面可能并发触发，旧请求后回会把新数据写回旧结果（守卫在 useSequencedLoad） */
 async function loadData() {
-    const seq = ++loadSeq;
-    loading.value = true;
-    error.value = '';
+    const guard = begin();
     try {
         const s = await fetchSession();
         const [meRes, orderRes] = await Promise.all([api<MeResponse>('/api/me'), api<OrdersResponse>('/api/billing/orders')]);
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         session.value = s;
         me.value = meRes;
         orders.value = orderRes.orders;
         // 未读角标为辅助信息，失败不影响个人中心其余内容
         void refreshUnread(true);
     } catch (e) {
-        if (seq !== loadSeq) return;
-        error.value = extractApiError(e, t('common.error'));
+        if (guard.isStale()) return;
+        error.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 

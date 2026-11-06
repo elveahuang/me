@@ -78,15 +78,3 @@ export async function performUserAction(
 export async function removeAuthUser(headers: HeadersInit, userId: string): Promise<void> {
     await callAuthApi(() => auth.api.removeUser({ body: { userId }, headers }));
 }
-
-export async function banUser(headers: HeadersInit, userId: string, banReason: string | undefined): Promise<void> {
-    await callAuthApi(() => auth.api.banUser({ body: { userId, banReason }, headers }));
-}
-
-export async function unbanUser(headers: HeadersInit, userId: string): Promise<void> {
-    await callAuthApi(() => auth.api.unbanUser({ body: { userId }, headers }));
-}
-
-export async function removeUser(headers: HeadersInit, userId: string): Promise<void> {
-    await callAuthApi(() => auth.api.removeUser({ body: { userId }, headers }));
-}

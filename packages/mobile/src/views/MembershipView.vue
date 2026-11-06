@@ -21,6 +21,7 @@ import QRCode from 'qrcode';
 import { computed, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api/auth';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 
 const { t } = useI18n();
 
@@ -28,7 +29,9 @@ const status = ref<MembershipStatus | null>(null);
 const plans = ref<Plan[]>([]);
 const orders = ref<OrderRecord[]>([]);
 const period = ref<'monthly' | 'yearly'>('monthly');
-const loading = ref(true); // 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧
+// 首帧即加载态：数据要等 onMounted/onIonViewWillEnter 之后的请求，初值 false 会让「暂无…」空态先闪一帧。
+// error 以 loadError 名字解构：与支付弹层内的 payError 分开，避免失败被只在弹层渲染的文案吞掉
+const { loading, error: loadError, begin } = useSequencedLoad();
 const paying = ref(false);
 const payModalOpen = ref(false);
 const activeOrder = ref<CreateOrderResponse | null>(null);
@@ -40,31 +43,25 @@ const payError = ref('');
 const paySuccess = ref(false);
 /** 模拟支付提交中标记，防止连点重复下单 */
 const mockPaying = ref(false);
-/** 页面级加载错误：与支付弹层内的 payError 分开，避免失败被只在弹层渲染的文案吞掉 */
-const loadError = ref('');
 
-/** 下拉刷新与标签页回场刷新并发：先发后回的旧响应会把上一轮数据写回来（与附件/通知页同用序号守卫） */
-let loadSeq = 0;
-
+/** 下拉刷新与标签页回场刷新并发：先发后回的旧响应会把上一轮数据写回来（守卫在 useSequencedLoad） */
 async function loadData() {
-    const seq = ++loadSeq;
-    loading.value = true;
-    loadError.value = '';
+    const guard = begin();
     try {
         const [sRes, pRes, oRes] = await Promise.all([
             api<MembershipStatus>('/api/billing/membership'),
             api<PlansResponse>('/api/plans'),
             api<OrdersResponse>('/api/billing/orders'),
         ]);
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         status.value = sRes;
         plans.value = pRes.plans.filter((p) => p.enabled);
         orders.value = oRes.orders;
     } catch (e) {
-        if (seq !== loadSeq) return;
-        loadError.value = extractApiError(e, t('common.error'));
+        if (guard.isStale()) return;
+        loadError.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 

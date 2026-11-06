@@ -92,7 +92,11 @@ async function resolveMedia(id: string) {
 
 function mediaUrl(seg: Extract<ChatSegment, { kind: 'file' }>): string {
     const id = seg.attachmentId ?? attachmentIdOf(seg.url);
-    return (id ? mediaUrls.value.get(id) : undefined) ?? apiUrl(seg.url);
+    const presigned = id ? mediaUrls.value.get(id) : undefined;
+    if (presigned) return presigned;
+    // 兜底只放行附件 raw 地址：seg.url 来自模型/历史可控的消息 part，未校验就交给 apiUrl
+    // 会让原生壳带着用户凭证去 GET 任意同源路径（如 /api/admin/...）。形状不符则不渲染该段。
+    return attachmentIdOf(seg.url) ? apiUrl(seg.url) : '';
 }
 
 const asText = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -476,8 +480,8 @@ async function handleSubmit(overrideText?: string) {
          * 预检 await 期间用户可以从会话列表切走或开新对话：那两步都会换掉 chat.value
          * 与 conversationId。原样往下发就会把在 A 里敲的消息塞进 B（新实例的 transport 带的是
          * B 的 conversationId），既污染了另一段会话的模型上下文，又白扣一次额度。
-         * 第三道比对堵的是相反方向的缝：switchConversation 在 216 行就把 conversationId 改成了 B，
-         * 而 chat.value 要等历史请求回来（220 行）才换——这个窗口里下滑关掉列表弹窗再点发送，
+         * 第三道比对堵的是相反方向的缝：switchConversation 先把 conversationId 改成 B，
+         * 而 chat.value 要等历史请求回来才换——这个窗口里下滑关掉列表弹窗再点发送，
          * 前两道都成立，消息却会从 A 的实例发出去（transport 闭包带的是 A），
          * 紧接着 B 的历史响应到了又把 A 连同这条流一起丢弃：额度已扣、界面毫无痕迹。
          */
@@ -655,8 +659,9 @@ async function copyConversationMarkdown() {
                                     >
                                         💭 {{ seg.value }}
                                     </div>
-                                    <!-- 附件：图片可点开大图，其他文件给下载入口 -->
-                                    <div v-else-if="seg.kind === 'file'" class="my-1 flex flex-wrap gap-2">
+                                    <!-- 附件：图片可点开大图，其他文件给下载入口；
+                                         url 解析不出（非附件 raw 形状且换不到预签名）时整块不渲染 -->
+                                    <div v-else-if="seg.kind === 'file' && mediaUrl(seg)" class="my-1 flex flex-wrap gap-2">
                                         <button
                                             v-if="seg.isImage"
                                             type="button"

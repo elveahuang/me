@@ -4,37 +4,33 @@ import { IonBackButton, IonButtons, IonContent, IonHeader, IonRefresher, IonRefr
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { api, extractApiError } from '../api/auth';
+import { api } from '../api/auth';
 import MobileMarkdownContent from '../components/MobileMarkdownContent.vue';
+import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
 import PageShell from './PageShell.vue';
 
 const { t, locale } = useI18n();
 const route = useRoute();
 
 const article = ref<NewsDetailResponse | null>(null);
-const loading = ref(true);
-const error = ref('');
+const { loading, error, begin } = useSequencedLoad();
 
-/** 切换文章与下拉刷新共用 load()：先发后回的旧响应会把上一篇的正文写回当前地址下 */
-let loadSeq = 0;
-
+/** 切换文章与下拉刷新共用 load()：先发后回的旧响应会把上一篇的正文写回当前地址下（守卫在 useSequencedLoad） */
 async function load(id: string) {
-    const seq = ++loadSeq;
-    loading.value = true;
-    error.value = '';
+    const guard = begin();
     try {
         // id 来自路由参数：vue-router 会把 %2F 解码成真正的 `/`，不编进单段的话
         // 一个深链就能让应用带着登录凭证去请求用户没选过的路径
         const res = await api<NewsDetailResponse>(`/api/news/${encodeURIComponent(id)}`);
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         article.value = res;
     } catch (e) {
-        if (seq !== loadSeq) return;
+        if (guard.isStale()) return;
         // 清掉旧正文：失败时 article 仍属于另一篇文章，会和当前 URL 对不上
         article.value = null;
-        error.value = extractApiError(e, t('common.error'));
+        error.value = loadErrorMessage(e);
     } finally {
-        if (seq === loadSeq) loading.value = false;
+        guard.finish();
     }
 }
 

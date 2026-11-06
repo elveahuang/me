@@ -297,30 +297,30 @@ export default defineEventHandler(async (event) => {
     await consumeChatQuota(session.user.id);
 
     // 4. 加载智能体绑定的 Skills / Tools / 知识库 / MCP 服务器
-    const boundSkills = await db
-        .select({
-            id: skills.id,
-            name: skills.name,
-            description: skills.description,
-            instructions: skills.instructions,
-            enabled: skills.enabled,
-        })
-        .from(agentSkills)
-        .innerJoin(skills, eq(skills.id, agentSkills.skillId))
-        .where(and(eq(agentSkills.agentId, agentId), eq(skills.enabled, true)));
-
-    const boundTools = await db
-        .select({ tool: toolsTable })
-        .from(agentTools)
-        .innerJoin(toolsTable, eq(toolsTable.id, agentTools.toolId))
-        .where(and(eq(agentTools.agentId, agentId), eq(toolsTable.enabled, true)));
-
-    const boundKbIds = (await db.select({ kbId: agentKnowledgeBases.kbId }).from(agentKnowledgeBases).where(eq(agentKnowledgeBases.agentId, agentId))).map(
-        (r) => r.kbId,
-    );
-    const boundMcpIds = (await db.select({ mcpServerId: agentMcpServers.mcpServerId }).from(agentMcpServers).where(eq(agentMcpServers.agentId, agentId))).map(
-        (r) => r.mcpServerId,
-    );
+    //    四条查询只依赖 agentId 且互不依赖，逐个 await 是聊天首字延迟里的四次串行往返，
+    //    并发发出（范式同 attachments.get.ts 的列表装配）。
+    const [boundSkills, boundTools, kbRows, mcpRows] = await Promise.all([
+        db
+            .select({
+                id: skills.id,
+                name: skills.name,
+                description: skills.description,
+                instructions: skills.instructions,
+                enabled: skills.enabled,
+            })
+            .from(agentSkills)
+            .innerJoin(skills, eq(skills.id, agentSkills.skillId))
+            .where(and(eq(agentSkills.agentId, agentId), eq(skills.enabled, true))),
+        db
+            .select({ tool: toolsTable })
+            .from(agentTools)
+            .innerJoin(toolsTable, eq(toolsTable.id, agentTools.toolId))
+            .where(and(eq(agentTools.agentId, agentId), eq(toolsTable.enabled, true))),
+        db.select({ kbId: agentKnowledgeBases.kbId }).from(agentKnowledgeBases).where(eq(agentKnowledgeBases.agentId, agentId)),
+        db.select({ mcpServerId: agentMcpServers.mcpServerId }).from(agentMcpServers).where(eq(agentMcpServers.agentId, agentId)),
+    ]);
+    const boundKbIds = kbRows.map((r) => r.kbId);
+    const boundMcpIds = mcpRows.map((r) => r.mcpServerId);
 
     // 5. 会话处理
     let row = conversationId ? (await db.select().from(conversations).where(eq(conversations.id, conversationId)))[0] : undefined;
@@ -540,6 +540,11 @@ export default defineEventHandler(async (event) => {
                             console.info(`[chat] 用户中断生成，已保存已产出的部分回复（conversation=${conversation.id}）`);
                         }
                     }
+                } catch (error) {
+                    // onFinish 由 ai 的 flush/cancel await 且无兜底 catch：这里不接住，落库失败
+                    // （jsonb 约束、连接闪断）会沿流传播成 unhandledRejection，撞上 error-guard
+                    // 的 process.exit(1)——一次持久化失败带走全部在途流。
+                    console.error('[chat] 助手消息持久化失败（流已正常结束）:', error);
                 } finally {
                     await closeMcpOnce();
                 }
