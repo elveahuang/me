@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { skills } from '../../../db/schema';
 import { normalizeAdminBoolean } from '../../../utils/admin-boolean';
 import { SKILL_DESCRIPTION_MAX, SKILL_INSTRUCTIONS_MAX, normalizeSkillName, normalizeSkillText } from '../../../utils/admin-skill-input';
+import { assertDeleted } from '../../../utils/api-not-found';
 import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
@@ -13,9 +14,7 @@ export default defineEventHandler(async (event) => {
     const id = routeId(event, 'id', '技能');
 
     if (method === 'DELETE') {
-        // 0 行影响也要报出来：否则 id 抄错或行已被另一个管理员删掉时，界面照样提示「已删除」
-        const deleted = await db.delete(skills).where(eq(skills.id, id)).returning({ id: skills.id });
-        if (!deleted.length) throw createError({ statusCode: 404, statusMessage: '技能不存在' });
+        assertDeleted(await db.delete(skills).where(eq(skills.id, id)).returning({ id: skills.id }), '技能');
         return { ok: true };
     }
 

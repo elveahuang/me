@@ -22,7 +22,9 @@ for (const path of ['.env', '.env.local', '../../.env', '../../.env.local']) {
 const { asc, eq } = await import('drizzle-orm');
 const { db, closeDbClient } = await import('../server/utils/db');
 const { conversations, messages, sessionEvents } = await import('../server/db/schema');
-const { appendSessionEvents, deriveMessages, readSessionEvents } = await import('../server/agent/session/events');
+const { appendSessionEvents, readSessionEvents } = await import('../server/agent/session/events');
+// 投影与事件写是两件事：deriveMessages 的唯一出处是 projection.ts，不要经 events 再导出
+const { deriveMessages } = await import('../server/agent/session/projection');
 
 const BATCH_SIZE = 100;
 

@@ -1,5 +1,6 @@
 import { generateText, type LanguageModel } from 'ai';
-import { appendSessionEvents, deriveMessages, readAllSessionEvents, type DerivedSessionMessage } from './events';
+import { appendSessionEvents, readAllSessionEvents } from './events';
+import { deriveMessages, type DerivedSessionMessage } from './projection';
 import { estimateTokens } from './token-meter';
 
 /**

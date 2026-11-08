@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { mcpServers } from '../../../db/schema';
 import { normalizeAdminBoolean } from '../../../utils/admin-boolean';
+import { assertDeleted } from '../../../utils/api-not-found';
 import { db } from '../../../utils/db';
 import {
     findMcpNamespaceConflict,
@@ -24,9 +25,7 @@ export default defineEventHandler(async (event) => {
     const id = routeId(event, 'id', 'MCP 服务');
 
     if (method === 'DELETE') {
-        // 0 行影响也要报出来：否则 id 抄错或行已被另一个管理员删掉时，界面照样提示「已删除」
-        const deleted = await db.delete(mcpServers).where(eq(mcpServers.id, id)).returning({ id: mcpServers.id });
-        if (!deleted.length) throw createError({ statusCode: 404, statusMessage: 'MCP Server 不存在' });
+        assertDeleted(await db.delete(mcpServers).where(eq(mcpServers.id, id)).returning({ id: mcpServers.id }), 'MCP Server');
         return { ok: true };
     }
 

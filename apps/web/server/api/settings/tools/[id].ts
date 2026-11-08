@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { tools } from '../../../db/schema';
 import { normalizeAdminBoolean } from '../../../utils/admin-boolean';
 import { normalizeToolConfig, normalizeToolDescription, normalizeToolName, normalizeToolType } from '../../../utils/admin-tool-input';
+import { assertDeleted } from '../../../utils/api-not-found';
 import { db } from '../../../utils/db';
 import { requireMethod } from '../../../utils/method';
 import { ADMIN_BODY_LIMIT_BYTES, capBody } from '../../../utils/request-body';
@@ -13,9 +14,7 @@ export default defineEventHandler(async (event) => {
     const id = routeId(event, 'id', '工具');
 
     if (method === 'DELETE') {
-        // 0 行影响也要报出来：否则 id 抄错或行已被另一个管理员删掉时，界面照样提示「已删除」
-        const deleted = await db.delete(tools).where(eq(tools.id, id)).returning({ id: tools.id });
-        if (!deleted.length) throw createError({ statusCode: 404, statusMessage: '工具不存在' });
+        assertDeleted(await db.delete(tools).where(eq(tools.id, id)).returning({ id: tools.id }), '工具');
         return { ok: true };
     }
 

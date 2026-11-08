@@ -2,8 +2,6 @@ import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import { conversations, sessionEvents, type SessionEventType, type SessionSurfaceOp } from '../../db/schema';
 import { db } from '../../utils/db';
 
-export { deriveMessages, type DerivedSessionMessage } from './projection';
-
 /**
  * 事件源会话的首版落点（P1-1）。
  *

@@ -15,3 +15,14 @@ export function throwApiNotFound(event: H3Event): never {
     const path = event.path.split('?')[0];
     throw createError({ statusCode: 404, statusMessage: `接口不存在：${event.method} ${path}` });
 }
+
+/**
+ * DELETE 按 id 命中 0 行时抛 404。
+ *
+ * 0 行影响也要报出来：否则 id 抄错或行已被另一个管理员删掉时，界面照样提示「已删除」。
+ * `delete(...).returning({ id })` 的结果直接交给它；带引用检查/事务的删除（如 agents）
+ * 有自己的 404 判定位置，不经过这里。
+ */
+export function assertDeleted(deleted: ReadonlyArray<{ id: string }>, label: string): void {
+    if (!deleted.length) throw createError({ statusCode: 404, statusMessage: `${label}不存在` });
+}

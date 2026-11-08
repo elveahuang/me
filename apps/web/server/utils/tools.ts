@@ -91,7 +91,7 @@ function jsonValueText(value: unknown): string {
  * - 位于字符串外 → 替换为完整 JSON 值（字符串补引号，数字/布尔原样）。
  * 非 JSON 模板（表单编码等）没有结构可破坏，保持直替语义不变。
  */
-export function fillTemplate(template: string, values: Record<string, unknown>): string {
+function fillTemplate(template: string, values: Record<string, unknown>): string {
     if (!/^\s*[[{]/.test(template)) return fillUrlTemplate(template, values);
 
     let out = '';

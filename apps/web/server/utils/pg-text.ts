@@ -15,7 +15,7 @@ export function stripNull(value: string): string {
 }
 
 /** 未知入参 → 安全文本：非字符串按空串处理，顺带剔掉 NUL。 */
-export function toText(raw: unknown): string {
+function toText(raw: unknown): string {
     return typeof raw === 'string' ? stripNull(raw) : '';
 }
 /**

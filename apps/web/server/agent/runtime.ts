@@ -11,7 +11,6 @@ import {
     tools as toolsTable,
     type Agent,
     type Skill,
-    type Tool,
 } from '../db/schema';
 import { ASSIST_TOOL_SUMMARY } from '../utils/assist-tools';
 import { COMMAND_TOOL_SUMMARY, buildCommandTools, isCommandEnabled } from '../utils/command-tools';
@@ -42,8 +41,6 @@ import { applyToolRegistry } from './tool-registry';
 export interface AgentCapabilities {
     /** 当前智能体可见的完整 Skill 行（已过滤 enabled） */
     skills: Skill[];
-    /** 当前智能体绑定的工具行（已过滤 enabled） */
-    tools: Tool[];
     /** 绑定的 MCP server id；连接由调用方建立 */
     mcpServerIds: string[];
     /** 该空间 + 全局的知识库 id；`null` 空间只取全局 */
@@ -130,7 +127,6 @@ export async function loadAgentCapabilities(agent: Agent, spaceId: string | null
 
     return {
         skills: boundSkills.map((row) => row.skill),
-        tools: boundTools.map((row) => row.tool),
         mcpServerIds: boundMcpIds,
         spaceKbIds,
         space,

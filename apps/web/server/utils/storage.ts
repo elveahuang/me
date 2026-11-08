@@ -547,5 +547,3 @@ export async function registerAttachmentWithinQuota(
         return { id: row.id, duplicateOf: null };
     });
 }
-
-export { DEFAULT_PRESIGN_EXPIRES };
