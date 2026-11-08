@@ -54,7 +54,7 @@ watch(conversations, (list) => {
 watch(agentId, () => {
     activeConversationId.value = null;
     autoSelectPending.value = true;
-    historyOpen.value = false;
+    workspace.value?.closeHistory();
 });
 
 // SPA 跳转可以把 ?c= 换到另一条会话（组件不会重建）：同样只在它属于当前智能体时跟随
@@ -73,10 +73,8 @@ function onSelectConversation(payload: { id: string }) {
     activeConversationId.value = payload.id;
 }
 
-/* ---------------- 移动端会话历史抽屉 ----------------
- * 与 HomeChat 共用 ChatHistoryDrawer；open 由这里持有，useCloseDrawerOnWide 必须传 md 的 query。 */
-const historyOpen = ref(false);
-useCloseDrawerOnWide(historyOpen, '(min-width: 768px)');
+/** 抽屉 open 状态收在 ConversationWorkspace 内：路由参数变化时经 ref 关掉 */
+const workspace = ref<{ closeHistory(): void; openHistory(): void } | null>(null);
 
 function onCreateConversation() {
     autoSelectPending.value = false;
@@ -105,19 +103,18 @@ function onConversationDeleted(id: string) {
             <NuxtLink to="/chat" class="app-btn app-btn-soft shrink-0 !py-1.5">{{ t('nav.agents') }} →</NuxtLink>
         </div>
 
-        <!-- dvh：移动浏览器地址栏收展时 100vh 大于可视高度，会把输入栏顶出屏幕 -->
-        <div class="flex h-[calc(100dvh-8.5rem)] gap-4">
-            <ConversationList
-                :conversations="conversations"
-                :active-id="activeConversationId"
-                :loading="conversationsPending"
-                :error="conversationError"
-                @select="onSelectConversation"
-                @create="onCreateConversation"
-                @changed="refreshConversations()"
-                @deleted="onConversationDeleted"
-            />
-
+        <!-- 侧栏/抽屉三件套装配见 ConversationWorkspace；本页的差异只有：列表按 agentId 收窄 + `?c=` 深链 -->
+        <ConversationWorkspace
+            ref="workspace"
+            :conversations="conversations"
+            :active-conversation-id="activeConversationId"
+            :conversations-pending="conversationsPending"
+            :conversation-error="conversationError"
+            @select="onSelectConversation"
+            @create="onCreateConversation"
+            @changed="refreshConversations()"
+            @deleted="onConversationDeleted"
+        >
             <ChatPane
                 :agent-id="agentId"
                 :conversation-id="activeConversationId"
@@ -125,22 +122,8 @@ function onConversationDeleted(id: string) {
                 bulletin-position="chat"
                 @update:conversation-id="onActiveConversationChange"
                 @conversation-list-stale="refreshConversations()"
-                @open-history="historyOpen = true"
+                @open-history="workspace?.openHistory()"
             />
-        </div>
-
-        <!-- 移动端会话历史抽屉（< md）：只列当前智能体的会话，与桌面侧栏数据同源 -->
-        <ChatHistoryDrawer
-            :open="historyOpen"
-            :conversations="conversations"
-            :active-id="activeConversationId"
-            :loading="conversationsPending"
-            :error="conversationError"
-            @close="historyOpen = false"
-            @select="onSelectConversation"
-            @create="onCreateConversation"
-            @changed="refreshConversations()"
-            @deleted="onConversationDeleted"
-        />
+        </ConversationWorkspace>
     </div>
 </template>

@@ -43,11 +43,8 @@ function selectConversation(payload: { id: string; agentId: string }) {
     activeConversationId.value = payload.id;
 }
 
-/* ---------------- 移动端会话历史抽屉 ----------------
- * 会话侧栏（ConversationList）< md 隐藏，手机上由 ChatPane 头部的历史按钮打开 ChatHistoryDrawer。
- * open 由这里持有：useCloseDrawerOnWide 必须传 md 的 query（断点不是默认的 lg）。 */
-const historyOpen = ref(false);
-useCloseDrawerOnWide(historyOpen, '(min-width: 768px)');
+/** ChatPane 头部的历史按钮：中继到工作台组件的抽屉（open 状态在 ConversationWorkspace 内部） */
+const workspace = ref<{ openHistory(): void } | null>(null);
 
 /** 换智能体：会话归属随之作废，回到全新对话（ChatPane 也会把自己的归属清空） */
 function switchAgent(id: string) {
@@ -77,20 +74,19 @@ function retry() {
             <button type="button" class="app-btn app-btn-soft shrink-0 !py-1.5" @click="retry">{{ t('common.retry') }}</button>
         </div>
 
-        <!-- dvh：移动浏览器地址栏收展时 100vh 大于可视高度，会把输入栏顶出屏幕 -->
-        <div class="flex h-[calc(100dvh-8.5rem)] gap-4">
-            <ConversationList
-                :conversations="conversations"
-                :active-id="activeConversationId"
-                :loading="conversationsPending"
-                :error="conversationError"
-                show-agent-name
-                @select="selectConversation"
-                @create="activeConversationId = null"
-                @changed="refreshConversations()"
-                @deleted="onConversationDeleted"
-            />
-
+        <!-- 侧栏/抽屉三件套装配见 ConversationWorkspace；首页的差异只有：列表跨智能体（show-agent-name）+ 可切智能体 -->
+        <ConversationWorkspace
+            ref="workspace"
+            :conversations="conversations"
+            :active-conversation-id="activeConversationId"
+            :conversations-pending="conversationsPending"
+            :conversation-error="conversationError"
+            show-agent-name
+            @select="selectConversation"
+            @create="activeConversationId = null"
+            @changed="refreshConversations()"
+            @deleted="onConversationDeleted"
+        >
             <ChatPane
                 :agent-id="activeAgentId"
                 :conversation-id="activeConversationId"
@@ -98,23 +94,8 @@ function retry() {
                 @update:agent-id="switchAgent"
                 @update:conversation-id="(id: string | null) => (activeConversationId = id)"
                 @conversation-list-stale="refreshConversations()"
-                @open-history="historyOpen = true"
+                @open-history="workspace?.openHistory()"
             />
-        </div>
-
-        <!-- 移动端会话历史抽屉（< md）：与桌面侧栏是两个实例，数据同源、搜索词各自独立 -->
-        <ChatHistoryDrawer
-            :open="historyOpen"
-            :conversations="conversations"
-            :active-id="activeConversationId"
-            :loading="conversationsPending"
-            :error="conversationError"
-            show-agent-name
-            @close="historyOpen = false"
-            @select="selectConversation"
-            @create="activeConversationId = null"
-            @changed="refreshConversations()"
-            @deleted="onConversationDeleted"
-        />
+        </ConversationWorkspace>
     </div>
 </template>
