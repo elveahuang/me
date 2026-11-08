@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router';
 import { api } from '../api/auth';
 import MobileMarkdownContent from '../components/MobileMarkdownContent.vue';
 import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
+import { renderableMediaUrl } from '../utils/media-url';
 import PageShell from './PageShell.vue';
 
 const { t, locale } = useI18n();
@@ -96,7 +97,13 @@ async function handleRefresh(event: CustomEvent) {
                         </div>
                     </div>
 
-                    <img v-if="article.coverImage" :src="article.coverImage" :alt="article.title" class="max-h-72 w-full rounded-xl object-cover" />
+                    <!-- 相对地址在原生壳解析到 capacitor://localhost 必裂图：守卫返回空串时整块隐藏 -->
+                    <img
+                        v-if="renderableMediaUrl(article.coverImage)"
+                        :src="renderableMediaUrl(article.coverImage)"
+                        :alt="article.title"
+                        class="max-h-72 w-full rounded-xl object-cover"
+                    />
 
                     <p v-if="article.summary" class="text-muted-2 rounded-xl bg-[color:var(--surface-3)] p-3 text-[11px] leading-relaxed">
                         {{ article.summary }}

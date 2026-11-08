@@ -197,9 +197,7 @@ export default {
         pollTimeout: '等待支付超时，请稍后在「我的 → 我的订单」查看结果',
         hotBadge: '热门',
         plansEmpty: '暂无可购买的套餐',
-    },
-    admin: {
-        tableEmpty: '暂无记录',
+        ordersEmpty: '暂无订单记录',
     },
     profile: {
         memberLevel: '会员特权',

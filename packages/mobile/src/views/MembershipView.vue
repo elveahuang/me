@@ -439,7 +439,7 @@ function planActionLabel(plan: Plan): string {
                                 <span :class="['app-badge mt-1', orderStatusTone(o.status)]">{{ t(orderStatusLabelKey(o.status)) }}</span>
                             </div>
                         </li>
-                        <li v-if="!orders.length" class="text-faint py-6 text-center text-xs">{{ t('admin.tableEmpty') }}</li>
+                        <li v-if="!orders.length" class="text-faint py-6 text-center text-xs">{{ t('billing.ordersEmpty') }}</li>
                     </ul>
                 </div>
             </div>

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, apiUrl } from '../api/auth';
+import { renderableMediaUrl } from '../utils/media-url';
 
 /**
  * 宣传栏（移动端）。位置语义与服务端一致：global 全站可见，home/chat 各自命中。
@@ -73,8 +74,14 @@ function dismiss(id: string) {
 <template>
     <div v-if="visible.length" class="space-y-2 px-4 pt-3">
         <div v-for="item in visible" :key="item.id" :class="['app-alert flex items-start gap-2', levelClass[item.level] ?? levelClass.info]">
-            <!-- 站内相对地址在原生壳里会解析到 capacitor://localhost 而 404，统一经 apiUrl 绝对化（绝对 http(s) 原样返回） -->
-            <img v-if="item.imageUrl" :src="apiUrl(item.imageUrl)" :alt="item.title" class="h-10 w-10 shrink-0 rounded-lg object-cover" />
+            <!-- 相对地址在原生壳会解析到 capacitor://localhost 而 404：renderableMediaUrl 在原生壳下
+                 对非 http(s) 地址返回空串（整块隐藏），浏览器同源照常渲染 -->
+            <img
+                v-if="renderableMediaUrl(item.imageUrl)"
+                :src="renderableMediaUrl(item.imageUrl)"
+                :alt="item.title"
+                class="h-10 w-10 shrink-0 rounded-lg object-cover"
+            />
             <div class="min-w-0 flex-1">
                 <p class="text-[11px] font-bold">{{ item.title }}</p>
                 <p v-if="item.content" class="text-muted-2 mt-0.5 line-clamp-2 text-[10px] leading-relaxed">{{ item.content }}</p>

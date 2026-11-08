@@ -195,9 +195,7 @@ export default {
         pollTimeout: 'Timed out waiting for payment — check Me → Orders shortly',
         hotBadge: 'POPULAR',
         plansEmpty: 'No plans available',
-    },
-    admin: {
-        tableEmpty: 'No records yet',
+        ordersEmpty: 'No orders yet',
     },
     profile: {
         memberLevel: 'Membership',

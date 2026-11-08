@@ -7,6 +7,7 @@ import { api } from '../api/auth';
 import BulletinBanner from '../components/BulletinBanner.vue';
 import AppPagination from '../components/AppPagination.vue';
 import { loadErrorMessage, useSequencedLoad } from '../composables/useSequencedLoad';
+import { renderableMediaUrl } from '../utils/media-url';
 import PageShell from './PageShell.vue';
 
 const { t } = useI18n();
@@ -101,7 +102,13 @@ function onSearch() {
                         class="app-card app-card-hover block overflow-hidden transition-transform active:scale-[0.98]"
                     >
                         <div class="relative h-36 bg-[color:var(--surface-3)]">
-                            <img v-if="item.coverImage" :src="item.coverImage" :alt="item.title" class="h-full w-full object-cover" />
+                            <!-- 相对地址在原生壳解析到 capacitor://localhost 必裂图：守卫返回空串时回退到占位图标 -->
+                            <img
+                                v-if="renderableMediaUrl(item.coverImage)"
+                                :src="renderableMediaUrl(item.coverImage)"
+                                :alt="item.title"
+                                class="h-full w-full object-cover"
+                            />
                             <div v-else class="text-faint flex h-full items-center justify-center text-3xl">📰</div>
                             <span v-if="item.pinned" class="app-chip app-chip-brand absolute top-2 left-2 !text-[9px]">{{ t('agents.topPin') }}</span>
                         </div>
