@@ -115,21 +115,26 @@ export async function upsertWechatUser(openid: string, profile: { nickname?: str
         const [created] = await tx.select({ id: user.id }).from(user).where(eq(user.email, email));
         if (!created) throw new Error('微信用户创建失败');
 
-        const [bound] = await tx
-            .select({ userId: account.userId })
-            .from(account)
-            .where(and(eq(account.providerId, 'wechat'), eq(account.accountId, openid)));
-        if (!bound) {
-            await tx.insert(account).values({
+        // account 表有 (provider_id, account_id) 唯一索引：并发回调里只有一方插得进去，
+        // 落败方 onConflictDoNothing 后复查拿到胜出行——不再有「先查后插」的并发双行窗口。
+        await tx
+            .insert(account)
+            .values({
                 id: crypto.randomUUID(),
                 accountId: openid,
                 providerId: 'wechat',
                 userId: created.id,
                 accessToken: null,
                 scope: 'snsapi_userinfo',
-            });
-        }
-        return created.id;
+            })
+            .onConflictDoNothing();
+
+        const [bound] = await tx
+            .select({ userId: account.userId })
+            .from(account)
+            .where(and(eq(account.providerId, 'wechat'), eq(account.accountId, openid)));
+        if (!bound) throw new Error('微信账号绑定失败');
+        return bound.userId;
     });
 }
 

@@ -34,24 +34,33 @@ export const session = pgTable('session', {
     impersonatedBy: text('impersonated_by'),
 });
 
-export const account = pgTable('account', {
-    id: text('id').primaryKey(),
-    accountId: text('account_id').notNull(),
-    providerId: text('provider_id').notNull(),
-    issuer: text('issuer'),
-    userId: text('user_id')
-        .notNull()
-        .references(() => user.id, { onDelete: 'cascade' }),
-    accessToken: text('access_token'),
-    refreshToken: text('refresh_token'),
-    idToken: text('id_token'),
-    accessTokenExpiresAt: timestamp('access_token_expires_at'),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
-    scope: text('scope'),
-    password: text('password'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+export const account = pgTable(
+    'account',
+    {
+        id: text('id').primaryKey(),
+        accountId: text('account_id').notNull(),
+        providerId: text('provider_id').notNull(),
+        issuer: text('issuer'),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        accessToken: text('access_token'),
+        refreshToken: text('refresh_token'),
+        idToken: text('id_token'),
+        accessTokenExpiresAt: timestamp('access_token_expires_at'),
+        refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+        scope: text('scope'),
+        password: text('password'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    // 同一第三方身份在同一 provider 下只允许绑定一行：微信回调的「查 account → 无则插」
+    // 没有任何锁，两个并发回调此前可以各自插一行（user 侧因 email 由 openid 哈希派生 +
+    // unique 不会重复，account 会双行），后续 findWechatAccount 任取一行、行为不致。
+    // credential 登录的 accountId 是 userId 本身，天然满足唯一性，不受影响。
+    // 注意：存量库若已有重复 (provider_id, account_id) 行，应用该迁移会失败，需先清重。
+    (t) => [uniqueIndex('account_provider_account_idx').on(t.providerId, t.accountId)],
+);
 
 export const verification = pgTable('verification', {
     id: text('id').primaryKey(),

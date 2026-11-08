@@ -8,6 +8,13 @@
             "when": 1792510253753,
             "tag": "0000_first_yellowjacket",
             "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "7",
+            "when": 1794153096238,
+            "tag": "0001_faulty_hardball",
+            "breakpoints": true
         }
     ]
 }
