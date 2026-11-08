@@ -1,3 +1,4 @@
+import type { AttachmentsResponse } from '@commons/contract';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { StorageConfig } from '../db/schema';
 import { attachments } from '../db/schema';
@@ -9,8 +10,9 @@ import { buildPublicUrl, pickStorageConfig, presignDownload, resolveStorageConfi
 /**
  * 当前用户的附件列表。
  * 私有桶返回限时预签名 URL（签名在本地计算，不产生存储侧请求）。
+ * 返回值 satisfies 契约（import type 编译期擦除，不触碰 server 运行时边界），Date 字段显式转 ISO。
  */
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<AttachmentsResponse> => {
     const session = await requireUser(event);
     const query = getQuery(event);
     const category = typeof query.category === 'string' && query.category !== 'all' ? query.category : undefined;
@@ -74,7 +76,7 @@ export default defineEventHandler(async (event) => {
                 mimeType: row.mimeType,
                 size: row.size,
                 category: row.category,
-                createdAt: row.createdAt,
+                createdAt: row.createdAt.toISOString(),
                 url,
                 isImage: row.mimeType.startsWith('image/'),
             };

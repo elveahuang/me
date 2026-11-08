@@ -1,5 +1,4 @@
 import {
-    applyThemeToElement,
     DEFAULT_BRAND,
     DEFAULT_MODE,
     parseTheme,
@@ -8,8 +7,27 @@ import {
     THEME_STORAGE_KEY,
     type ThemeBrand,
     type ThemeMode,
+    type ThemeState,
 } from '@commons/contract';
 import { readonly, ref } from 'vue';
+
+/**
+ * 把主题写到 <html> 上（从 contract 搬回唯一消费方）：
+ * - `.dark` 类：Tailwind / Nuxt UI / Ionic 深色主题开关
+ * - `ion-palette-dark`：Ionic 的深色调色板
+ * - `data-brand`：四色主题令牌（theme.css 中的 --brand-*）
+ * - `color-scheme`：让浏览器原生控件（滚动条、输入框）跟随
+ *
+ * contract 是服务端也会 import 的共享层，不能引用 DOM 类型（server tsconfig 无 DOM lib，
+ * 此前这一函数让 webapp 服务端标注契约返回值时直接编译报错）。
+ */
+function applyThemeToElement(el: HTMLElement, state: ThemeState, prefersDark: boolean): void {
+    const dark = resolveDarkClass(state.mode, prefersDark);
+    el.classList.toggle('dark', dark);
+    el.classList.toggle('ion-palette-dark', dark);
+    el.dataset.brand = state.brand;
+    el.style.colorScheme = dark ? 'dark' : 'light';
+}
 
 /**
  * 移动端主题：与 webapp 使用同一套契约（浅色/深色/跟随系统 + 蓝绿黄红四色），

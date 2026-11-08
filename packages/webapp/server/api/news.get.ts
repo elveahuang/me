@@ -1,3 +1,4 @@
+import type { NewsListResponse, NewsSummary } from '@commons/contract';
 import { and, asc, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { news } from '../db/schema';
 import { db } from '../utils/db';
@@ -6,10 +7,35 @@ import { intParam, likePattern } from '../utils/query';
 
 /**
  * 用户端资讯列表：只返回已发布内容。
- * `pinned` 优先排序；分页字段与共享契约 NewsListResponse 保持一致。
+ * `pinned` 优先排序；返回值 satisfies 共享契约 NewsListResponse（import type 编译期擦除，
+ * 不触碰 server 运行时边界），Date 字段显式转 ISO——线上形状本就是 JSON 序列化结果。
  * 列表不返回正文，避免首屏传输大量 Markdown。
  */
-export default defineEventHandler(async (event) => {
+const toSummary = (row: {
+    id: string;
+    title: string;
+    summary: string | null;
+    coverImage: string | null;
+    category: string;
+    tags: string[] | null;
+    pinned: boolean;
+    viewCount: number;
+    publishedAt: Date | null;
+    createdAt: Date;
+}): NewsSummary => ({
+    id: row.id,
+    title: row.title,
+    summary: row.summary ?? '',
+    coverImage: row.coverImage ?? '',
+    category: row.category,
+    tags: row.tags ?? [],
+    pinned: row.pinned,
+    viewCount: row.viewCount,
+    publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+});
+
+export default defineEventHandler(async (event): Promise<NewsListResponse> => {
     await requireUser(event);
     const query = getQuery(event);
     const page = intParam(query.page, 1, 1, 1e6);
@@ -56,7 +82,7 @@ export default defineEventHandler(async (event) => {
     ]);
 
     return {
-        items,
+        items: items.map(toSummary),
         total: totalRow?.count ?? 0,
         page,
         pageSize,

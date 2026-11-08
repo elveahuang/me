@@ -676,20 +676,6 @@ export function resolveDarkClass(mode: ThemeMode, prefersDark: boolean): boolean
     return prefersDark;
 }
 
-/**
- * 把主题写到 <html> 上：
- * - `.dark` 类：Tailwind / Nuxt UI / Ionic 深色主题开关
- * - `data-brand`：四色主题令牌（theme.css 中的 --brand-*）
- * - `color-scheme`：让浏览器原生控件（滚动条、输入框）跟随
- */
-export function applyThemeToElement(el: HTMLElement, state: ThemeState, prefersDark: boolean): void {
-    const dark = resolveDarkClass(state.mode, prefersDark);
-    el.classList.toggle('dark', dark);
-    el.classList.toggle('ion-palette-dark', dark);
-    el.dataset.brand = state.brand;
-    el.style.colorScheme = dark ? 'dark' : 'light';
-}
-
 /** 四色主题的展示信息（两端切换器共用） */
 export const BRAND_PRESETS: { value: ThemeBrand; label: string; labelEn: string; swatch: string }[] = [
     // swatch 取各品牌自身的 --brand-500（theme.css 中的 html[data-brand='x']），
