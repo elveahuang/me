@@ -9,7 +9,7 @@
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
         "db:seed": "tsx server/db/seed.ts",
-        "auth:secret": "npx auth@latest secret",
+        "auth:secret": "better-auth secret",
         "smoke-test": "tsx scripts/smoke-test.ts",
         "icons": "node scripts/generate-icons.mjs",
         "icons:check": "node scripts/generate-icons.mjs --check",

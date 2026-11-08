@@ -8,7 +8,6 @@ overrides:
     h3: 1.15.11
 
 allowBuilds:
-    '@capacitor/background-runner': true
     '@parcel/watcher': true
     '@prisma/client': true
     better-sqlite3: true
