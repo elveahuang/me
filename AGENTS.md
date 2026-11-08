@@ -133,10 +133,10 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   agent 与 conversationId，否则会看到「新智能体 + 旧会话」的中间态。
 - **移动端会话历史走抽屉，不是缩侧栏**：`ConversationList` 根元素 < md 是 `hidden`，手机上原本完全看不到会话历史。现在它有 `variant` 两种形态（`sidebar`
   桌面侧栏默认值 / `drawer` 填满移动抽屉容器），抽屉本体是共享组件 `app/components/ChatHistoryDrawer.vue`（`md:hidden` + `app-drawer` + 内置 `useDrawerFocus`
-  ；选中/新建会话后组件自行 emit `close`），`HomeChat.vue` 与 `pages/chat/[agentId].vue` 各挂一份、open 状态由父级持有并调
-  `useCloseDrawerOnWide(open, '(min-width: 768px)')`—— **这两个页面的抽屉断点是 md 不是 lg，后者必须显式传 md 的 query**。入口是 ChatPane 头部 `md:hidden`
-  的历史按钮（emit `open-history`，由父级打开抽屉）。新增配会话侧栏的聊天页面时，父级要同时接 `@open-history` 并照抄这套接法；`[agentId]` 页路由参数变化复用组件，watch
-  里要顺带关抽屉。
+  ；选中/新建会话后组件自行 emit `close`）。`HomeChat.vue` 与 `pages/chat/[agentId].vue` 的「侧栏 + 对话主体 + 抽屉」装配已收口到
+  [ConversationWorkspace.vue](packages/webapp/app/components/ConversationWorkspace.vue)：抽屉 open 状态与 `useCloseDrawerOnWide(open, '(min-width: 768px)')`
+  集中在该组件内（**抽屉断点是 md 不是 lg**），defineExpose 的 `openHistory()/closeHistory()` 由页面经 ref 调用——ChatPane 的 `open-history` 经 ref 中继，
+  `[agentId]` 页路由参数变化复用组件时在 watch 里调 `closeHistory()`。新增配会话侧栏的聊天页面直接用 ConversationWorkspace，不要照抄两份装配。
 - Mobile 聊天页：`packages/mobile/src/views/ChatView.vue`；路由与导航先从移动端入口及 router 目录定位，不套用 Nuxt 自动路由约定。
 - 双端聊天使用 AI SDK 的 `Chat<UIMessage>` 与 `DefaultChatTransport`，请求 `/api/chat`，携带 `agentId`、`conversationId`、`messages`。
 - **生成期间不能再发第二条消息，护栏要放在提交函数而不是按钮**：`ai@7` 的 `Chat`（实际从 `@ai-sdk/vue` 导出，`ai` 包本身不导出 `Chat`）对并发 `sendMessage`
