@@ -39,11 +39,17 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - 实际共享契约是 `packages/commons/src/contract/index.ts`，业务代码使用 `@commons/contract`。
 - 共享主题是 `packages/commons/src/styles/theme.css`，通过 `@repo/commons/styles/theme.css` 使用。
 - Web 的 `@commons` 别名配置在 `packages/webapp/nuxt.config.ts` 顶层 `alias`（不是 `nitro.alias`，也没有独立 `nitro` 块），指向 `../commons/src`。Nuxt 4 会把顶层
-  `alias` 一并写入 `tsconfig.server.json`，但 **服务端运行时能否解析 `@commons` 尚未经真实构建验证**；当前约定是 `server/` 从不 import 共享契约，
-  `server/utils/billing.ts` 仍本地重复声明 `BillingPeriod`/`Plan`/`MembershipStatus`（与 contract 同名同形，是刻意复制而非依赖）。要在服务端复用契约前，先确认运行时解析确实生效，不要凭别名存在就认定可用。
+  `alias` 一并写入 `tsconfig.server.json`，但 **服务端运行时能否解析 `@commons` 尚未经真实构建验证**；当前约定是 `server/` 可以 `import type`（编译期擦除，
+  不产生运行时解析），**仍禁止 import 运行时值**。`me.get.ts` / `billing/orders.get.ts` / `notifications.get.ts` / `news.get.ts` / `attachments.get.ts`
+  五个 handler 的返回值已 `satisfies` 契约类型（服务端改响应字段忘记同步契约时编译期即报错）；`server/utils/billing.ts` 仍本地重复声明
+  `BillingPeriod`/`Plan`/`MembershipStatus`（与 contract 同名同形，是刻意复制而非运行时依赖）；`orders.get.ts` 的 `toOrderRecord` 里
+  `row.period as BillingPeriod` 的断言以「写入侧白名单归一后才落库」为依据。
 - `packages/commons/src` 里有消费者的是 `contract/`、`styles/theme.css` 与 `markdown-export.ts`（会话 Markdown 导出序列化，Web `ChatPane` 与 Mobile `ChatView`
-  共用；导出文案由调用方经 `labels` 传入，commons 内不硬编码中文）；其余（`api/ types/ store/ hooks/ utils/ components/ i18n/ router/ services/` 等）均无消费者，是遗留结构；
-  `commons/package.json` 的 exports map 也没有 `./contract` 条目，靠别名访问。修改前先确认实际消费者，不要假定两端已全面接入这些旧目录。
+  共用；导出文案由调用方经 `labels` 传入，commons 内不硬编码中文）；其余（`api/ types/ store/ hooks/ utils/ components/ i18n/ router/ services/` 等）均无消费者，是遗留结构。
+  **contract 必须保持零 DOM 引用**：server 侧 import type 时会整文件参与类型检查，`applyThemeToElement(el: HTMLElement)` 曾因此让 webapp 服务端
+  typecheck 直接报错，已搬回唯一消费方 mobile 的 `useTheme.ts`；往 contract 加函数前先想它会不会在 server 的 tsconfig（无 DOM lib）下编译。
+  exports 条目此前只有 `"."` 且指向不存在的 src/index.ts，已改为 `./contract` / `./markdown-export` / `./styles/theme.css` 三个真实入口。
+  修改前先确认实际消费者，不要假定两端已全面接入这些旧目录。
 - Mobile 的 `@commons/*` 在 `packages/mobile/tsconfig.json`，Vite 使用 `resolve.tsconfigPaths: true`。
 - 根依赖列表很大，不代表所有库都已用于核心链路；不要仅凭依赖名推断功能。
 
@@ -315,8 +321,11 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
   （localStorage `work_conversation_read` 的 `{initialized, seen}` 表，`updatedAt` 不等即未读）。两个坑已踩过：`ensureSeeded` **空列表不播种**
   （否则「请求还在飞」被当成「这台机器没有历史」，满屏未读点）；改名等 `changed` 事件 **必须带 id 并回写已读**（PATCH 无条件顶 `updatedAt`，否则用户改个标题就把那条点成未读）。
 - **事件源会话与压缩（P1-2/P1-3）**：`server/agent/session/events.ts` + [projection.ts](apps/web/server/agent/session/projection.ts) 把每轮 user/assistant 消息、`run/start|end`、`request/header`、`tool/call|result` 追加进
-  `session_events`（append-only，`seq` 在会话行锁内按 `max(seq)+1` 分配）。`/api/chat` 与 `schedule-runner` 两条链路都写事件；事件写失败只记日志、不影响聊天。`deriveMessages()` 是纯函数，
-  已对 `surface_op=replace` 做区间遮蔽；`pairToolEvents()/unpairedToolCalls()` 按 `toolCallId` 审计工具配对。`pnpm --filter @repo/web events:backfill` 幂等回填旧消息并逐会话对账。
+  `session_events`（append-only，`seq` 在会话行锁内按 `max(seq)+1` 分配）。`/api/chat` 与 `schedule-runner` 两条链路都写事件；事件写失败只记日志、不影响聊天。`deriveMessages()` 是纯函数、
+  唯一出处是 projection.ts（events.ts 不再再导出），已对 `surface_op=replace` 做区间遮蔽；`pairToolEvents()/unpairedToolCalls()` 按 `toolCallId` 审计工具配对（recovery.ts 的恢复
+  配对限定在「未收尾轮次」，语义不同，不要合并）。`pnpm --filter @repo/web events:backfill` 幂等回填旧消息并逐会话对账。
+  `/api/chat` 的入参清洗与预算常量在 [chat-input.ts](apps/web/server/utils/chat-input.ts)（part 白名单、站内附件存在性、条数/字节/深度预算及全部踩坑注释），
+  路由文件只留编排；改清洗规则改这一处。
   工具入参/输出裁剪到 20K 字符；每步写 `assistant/message` 检查点（有最终消息时投影丢弃），`run/end` 带累计 usage；[token-meter.ts](apps/web/server/agent/session/token-meter.ts) 提供 4 字符/token 估算与 128K×0.7 预算，`request/header` 记 `estimatedContextTokens` 与 `contextSource`。
   压缩在 [compaction.ts](apps/web/server/agent/session/compaction.ts)：`POST /api/conversations/{id}/compact` 写 `compaction/start → system/message(compaction) → compaction/end(surface_op=replace)`，摘要排到保留消息之前；**`/api/chat` 每轮取历史后会按 `shouldAutoCompact()` 自动压缩**（窗口估算 > 70% 预算或达到 24 条读取上限），压缩成功再重读上下文，失败只记日志、本轮继续用原窗口；`WEB_AUTO_COMPACT=0` 可关闭，手动压缩接口不受影响。`GET …/context` 给 UI 返回预算占用。[context.ts](apps/web/server/agent/session/context.ts) **仅在存在 `compaction/end` 标记时**切事件投影，其余会话继续读 `messages`——不要在没有压缩的会话上强制切读路径。启动时 `recoverInterruptedToolCalls()` 只给「有 run/start、无 run/end」的未配对工具补 `TOOL_OUTCOME_UNKNOWN` + `system/message`，不自动重跑。**会话 API v2（P3-1 部分）**：`server/api/sessions/` 提供列表/创建、`snapshot`（`asOfSeq` 截断投影）、`events` 分页、`follow`（SSE 先 snapshot 后按 `id: seq` 推事件，1.5s 轮询、支持 `Last-Event-ID`）与 `fork`（按 seq 把投影消息复制到新会话，并把分叉点之前的 `session_runs` 一并复制；源运行仍 `running` 时复制为 `interrupted` + `FORKED_RUNNING`）；发送/停止/压缩继续只用旧端点 `/api/chat`、`/api/chat/{id}/stop`、`/api/conversations/{id}/compact`；`/api/chat` 支持正文 `requestId`（8–128 位字母数字/`._-`），同会话同 id 的 running/completed 轮次返回 409，不重复调用模型，failed/aborted/interrupted 可重试；`0017` 的 `session_runs_request_active_idx` 是**部分唯一索引**（仅非空 requestId + running/completed），真正并发的同 id 请求由数据库拦成 409，`startSessionRun` 在装配工具前先占位，把 SQLSTATE 23505 转成同样的 409。**不要删掉应用层预检**——它负责快速返回已有的 runId，唯一索引只兜真正的并发窗口。
 - **工具审批（P1-4）**：`agents.approval_mode` 三档 `auto/ask/never`（默认 auto）；[approval.ts](apps/web/server/agent/policy/approval.ts) 按工具名推导 `read/write/network/execute`，`ask` 下非读工具写 `approvals` 行 + `approval/asked` 事件并挂起 execute，`POST /api/approvals/{id}/decide` 更新行/唤醒；超时或进程重启失败关闭。聊天在 MCP 合并后统一 `wrapToolsWithApproval()`，定时任务传 `noAnswerer:true`（ask 模式的非读工具立即 `TOOL_DENIED`，不让后台等 5 分钟）。前端 [ApprovalCard.vue](apps/web/app/components/ApprovalCard.vue) 轮询 `GET /api/approvals?conversationId=`，Enter 允许 / Esc 拒绝。`approvals`、`jobs`、`job_chunks`、`todos`、`goals` 已进 export/import（备份版本 5）。
@@ -516,6 +525,9 @@ ME 是智能体对话平台。Web 和移动端共享业务契约与同一套 Nux
 - `server/middleware/auth.ts` 把 `/api/auth` **整段前缀**交给 `auth.handler`，而 better-auth 的 router 对未注册路径直接回 404；Nitro 中间件先于文件路由执行，所以自建端点若也放在
   `/api/auth` 下（现状：`/api/auth/wechat`、`/api/auth/wechat/{status,callback}`），必须同时登记进该文件的 `OWN_PREFIXES`，否则 handler 永远收不到请求、对外只是静默
   404。新增 `/api/auth/*` 端点时优先换个前缀（如 `/api/wechat`），避免再依赖这份白名单。
+- **微信账号绑定依赖 account 表的 `(provider_id, account_id)` 唯一索引**（`0001_faulty_hardball.sql`）：`upsertWechatUser` 的「查 account → 无则插」没有任何锁，
+  并发回调此前可插出双行；现改为 `insert onConflictDoNothing` + 复查胜出行（两事务经同一 email 收敛到同一 user 行）。credential 登录的 accountId 是 userId 本身，
+  天然满足唯一性。**存量库若有重复行，应用该迁移会失败，需先清重**；迁移已生成但未应用到任何库，部署时 `pnpm webapp:db:migrate`。
 - `server/middleware/00-cors.ts` 已不再向带凭证请求反射 `*`：`*` 从允许列表剔除、仅记录 `wildcardConfigured` 并一次性告警，只有 origin
   **显式命中允许列表**才回写 `Access-Control-Allow-Origin`（带 `Vary: Origin`，并 expose `set-auth-token`、`x-conversation-id`），`OPTIONS` 直接 204。允许列表来自
   `CORS_ORIGINS` + `BETTER_AUTH_URL` + 默认值（进程内解析一次，非每请求重算）。改 API/前端域名或原生回调协议时三处一起核对。 **文件名必须带 `00-` 前缀**：Nitro
